@@ -22,12 +22,22 @@ Scope:
 
 How to pick a skill:
 
-- Route trees or layouts -> `@skills/router/routing-and-nesting`
-- Search params or filters -> `@skills/router/search-params`
-- Loaders or prefetching -> `@skills/router/loaders-and-prefetching`
-- Errors or not-found -> `@skills/router/error-boundaries`
-- File-based routing -> `@skills/router/file-based-routing`
-- SSR or Start -> `@skills/router/ssr-and-start`
+- Defining the overall route hierarchy, parent/child relationships, or nested shells -> `@skills/router/route-trees`
+- Creating a shared UI shell (nav, sidebar, tabs) across child routes -> `@skills/router/layouts`
+- Stabilizing references when paths change or you need stable route identifiers -> `@skills/router/route-ids`
+- Reading path params like `$projectId` or using them in loaders/components -> `@skills/router/params`
+- Validating search params with schemas or adapters -> `@skills/router/search-validation`
+- Setting defaults for search params or keeping URL state stable -> `@skills/router/search-defaults`
+- Fetching route-critical data before render -> `@skills/router/loaders`
+- Passing dependencies like API clients/query clients to loaders -> `@skills/router/route-context`
+- Warming data before navigation or hover -> `@skills/router/prefetching`
+- Handling loader/render errors with dedicated UI -> `@skills/router/error-boundaries`
+- Handling missing data or unmatched routes -> `@skills/router/not-found-boundaries`
+- Choosing file-based routing or organizing routes by files -> `@skills/router/file-based-routing`
+- Adding typed, declarative navigation links -> `@skills/router/links`
+- Navigating programmatically after a submit or action -> `@skills/router/navigation`
+- Showing pending UI or transition state -> `@skills/router/router-state`
+- Ensuring loader data is serializable for SSR -> `@skills/router/ssr-loaders`
 
 Next:
 

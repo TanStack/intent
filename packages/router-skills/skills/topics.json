@@ -1,9 +1,20 @@
 [
   "index.md",
-  "routing-and-nesting.md",
-  "search-params.md",
-  "loaders-and-prefetching.md",
+  "route-trees.md",
+  "layouts.md",
+  "route-ids.md",
+  "params.md",
+  "search-validation.md",
+  "search-defaults.md",
+  "loaders.md",
+  "route-context.md",
+  "prefetching.md",
   "error-boundaries.md",
+  "not-found-boundaries.md",
   "file-based-routing.md",
-  "ssr-and-start.md"
+  "links.md",
+  "navigation.md",
+  "router-state.md",
+  "ssr-loaders.md",
+  "ssr-loaders.md"
 ]

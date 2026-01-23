@@ -4,36 +4,34 @@ title: Error and Not-Found Boundaries
 versions:
   - latest
   - ">=1 <2"
-summary: Localize route errors and missing data with boundaries.
+summary: Localize route errors with error boundaries.
 api:
   - https://tanstack.com/router/latest/docs/guide/error-handling
   - https://tanstack.com/router/latest/docs/api/router/create-route
 ---
 
-# Error and Not-Found Boundaries
+# Error Boundaries
 
 Purpose:
 
-- Provide resilient UX for loader errors and unknown routes.
+- Provide resilient UX for loader and render errors.
 
 Scope:
 
-- Use when setting per-route error or not-found UI.
+- Use when setting per-route error UI.
 
 Guidelines:
 
 - Define boundaries close to where errors occur.
-- Use not-found boundaries for missing data or routes.
 - Keep error UI consistent within a layout.
 
 Examples:
 
-- Route-specific boundaries:
+- Route-specific boundary:
   ```ts
   const route = createRoute({
     getParentRoute: () => rootRoute,
     path: "projects/$projectId",
     errorComponent: ProjectError,
-    notFoundComponent: ProjectNotFound,
   })
   ```
