@@ -22,10 +22,15 @@
   "use-matches.md",
   "use-match.md",
   "use-search.md",
+  "use-router.md",
   "redirects.md",
   "route-masking.md",
   "router-provider.md",
+  "use-link-props.md",
+  "outlet.md",
   "pending-ui.md",
   "invalidation.md",
-  "navigate-options.md"
+  "navigate-options.md",
+  "use-navigate.md",
+  "route-meta.md"
 ]

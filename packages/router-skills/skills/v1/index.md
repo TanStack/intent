@@ -44,12 +44,17 @@ How to pick a skill:
 - Reading loader data inside a route -> `@skills/router/use-loader-data`
 - Reading router context values -> `@skills/router/use-route-context`
 - Reading the full location (pathname, search, hash) -> `@skills/router/use-location`
+- Accessing the router instance directly -> `@skills/router/use-router`
 - Redirecting from loaders/actions -> `@skills/router/redirects`
 - Presenting friendly URLs for internal routes -> `@skills/router/route-masking`
 - Wiring the router into your app root -> `@skills/router/router-provider`
+- Building custom link components -> `@skills/router/use-link-props`
+- Rendering child routes in layouts -> `@skills/router/outlet`
 - Showing pending UI during navigation -> `@skills/router/pending-ui`
 - Revalidating data after mutations -> `@skills/router/invalidation`
 - Using replace/state/hash when navigating -> `@skills/router/navigate-options`
+- Navigating imperatively with a hook -> `@skills/router/use-navigate`
+- Attaching route metadata for UI or analytics -> `@skills/router/route-meta`
 
 Next:
 
