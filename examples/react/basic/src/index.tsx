@@ -1,0 +1,22 @@
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { createTemplate } from '@tanstack/template'
+import { useTemplate } from '@tanstack/react-template'
+
+function App() {
+  const template = React.useMemo(
+    () => createTemplate({ message: 'Hello from React!' }),
+    [],
+  )
+  const state = useTemplate(template)
+
+  return (
+    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
+      <h1>TanStack Template - React Basic Example</h1>
+      <p>Message: {state.message}</p>
+      <button onClick={() => template.greet()}>Greet (check console)</button>
+    </div>
+  )
+}
+
+ReactDOM.createRoot(document.getElementById('root')!).render(<App />)
