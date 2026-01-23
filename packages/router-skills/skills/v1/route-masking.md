@@ -25,12 +25,20 @@ Guidelines:
 - Keep masks aligned with params and search.
 - Document masks to avoid confusion.
 
-Example:
+Examples:
 
 ```ts
 const route = createRoute({
   getParentRoute: () => rootRoute,
   path: "projects/$projectId",
   mask: "/p/$projectId",
+})
+```
+
+```ts
+const route = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "users/$userId",
+  mask: "/u/$userId",
 })
 ```

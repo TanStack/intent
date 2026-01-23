@@ -4,7 +4,7 @@ title: File-Based Routing
 versions:
   - latest
   - ">=1 <2"
-summary: Organize routes by files and colocate route modules.
+summary: Organize routes by files, layouts, and route groups.
 resources:
   - https://tanstack.com/router/latest/docs/guide/file-based-routing
 ---
@@ -13,7 +13,7 @@ resources:
 
 Purpose:
 
-- Organize routes with files and colocated route modules.
+- Organize routes with files, layouts, and route groups.
 
 Scope:
 
@@ -22,15 +22,24 @@ Scope:
 Guidelines:
 
 - Group routes by feature to keep layouts and loaders close to UI.
-- Keep route modules small and focused on a single path.
+- Use layout files for shared shells.
+- Use index files for default child routes.
+- Use `$param` filenames for dynamic segments.
+- Use route groups for structure without URL changes.
 - Document file conventions to avoid routing drift.
 
 Examples:
 
-- File layout:
-  ```text
-  routes/
-    _layout.tsx
-    projects/
-      $projectId.tsx
-  ```
+```text
+routes/
+  _layout.tsx
+  projects/
+    index.tsx
+    $projectId.tsx
+```
+
+```text
+routes/
+  (admin)/
+    users.tsx
+```

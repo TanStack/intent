@@ -26,12 +26,20 @@ Guidelines:
 - Avoid browser-only APIs in loaders.
 - Keep server-only dependencies in context.
 
-Example:
+Examples:
 
 ```ts
 const route = createRoute({
   getParentRoute: () => rootRoute,
   path: "settings",
   loader: ({ context }) => context.api.getSettings(),
+})
+```
+
+```ts
+const route = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "profile",
+  loader: ({ context }) => ({ user: context.user }),
 })
 ```

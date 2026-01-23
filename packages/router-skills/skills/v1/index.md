@@ -22,40 +22,52 @@ Scope:
 
 How to pick a skill:
 
-- Defining the overall route hierarchy, parent/child relationships, or nested shells -> `@skills/router/route-trees`
-- Creating a shared UI shell (nav, sidebar, tabs) across child routes -> `@skills/router/layouts`
-- Stabilizing references when paths change or you need stable route identifiers -> `@skills/router/route-ids`
-- Reading path params like `$projectId` or using them in loaders/components -> `@skills/router/params`
-- Validating search params with schemas or adapters -> `@skills/router/search-validation`
-- Setting defaults for search params or keeping URL state stable -> `@skills/router/search-defaults`
+Core setup and structure:
+
+- Creating and mounting the router -> `@skills/router/router-setup`
+- Defining the overall route hierarchy -> `@skills/router/route-trees`
+- Creating a shared UI shell across child routes -> `@skills/router/layouts`
+- Stabilizing references when paths change -> `@skills/router/route-ids`
+- Attaching route metadata for UI or analytics -> `@skills/router/route-meta`
+
+Routing params and search:
+
+- Reading path params and splats -> `@skills/router/params`
+- Validating, defaulting, and reading search params -> `@skills/router/search-params`
+
+Data loading and refresh:
+
 - Fetching route-critical data before render -> `@skills/router/loaders`
-- Passing dependencies like API clients/query clients to loaders -> `@skills/router/route-context`
-- Warming data before navigation or hover -> `@skills/router/prefetching`
-- Handling loader/render errors with dedicated UI -> `@skills/router/error-boundaries`
-- Handling missing data or unmatched routes -> `@skills/router/not-found-boundaries`
-- Choosing file-based routing or organizing routes by files -> `@skills/router/file-based-routing`
+- Passing dependencies like API clients to loaders -> `@skills/router/route-context`
+- Prefetching and invalidating after mutations -> `@skills/router/data-refresh`
+
+Navigation and links:
+
 - Adding typed, declarative navigation links -> `@skills/router/links`
-- Navigating programmatically after a submit or action -> `@skills/router/navigation`
+- Navigating programmatically after actions -> `@skills/router/navigation`
+
+Matching and router state:
+
+- Reading matches and the current location -> `@skills/router/matching-and-location`
 - Showing pending UI or transition state -> `@skills/router/router-state`
-- Ensuring loader data is serializable for SSR -> `@skills/router/ssr-loaders`
-- Reading a route match or match metadata -> `@skills/router/use-match`
-- Reading all active matches -> `@skills/router/use-matches`
-- Reading validated search params -> `@skills/router/use-search`
-- Reading loader data inside a route -> `@skills/router/use-loader-data`
-- Reading router context values -> `@skills/router/use-route-context`
-- Reading the full location (pathname, search, hash) -> `@skills/router/use-location`
-- Accessing the router instance directly -> `@skills/router/use-router`
+
+Errors, redirects, and masking:
+
+- Handling loader/render errors -> `@skills/router/error-boundaries`
+- Handling missing data or unmatched routes -> `@skills/router/not-found-boundaries`
 - Redirecting from loaders/actions -> `@skills/router/redirects`
 - Presenting friendly URLs for internal routes -> `@skills/router/route-masking`
-- Wiring the router into your app root -> `@skills/router/router-provider`
-- Building custom link components -> `@skills/router/use-link-props`
-- Rendering child routes in layouts -> `@skills/router/outlet`
-- Showing pending UI during navigation -> `@skills/router/pending-ui`
-- Revalidating data after mutations -> `@skills/router/invalidation`
-- Using replace/state/hash when navigating -> `@skills/router/navigate-options`
-- Navigating imperatively with a hook -> `@skills/router/use-navigate`
-- Attaching route metadata for UI or analytics -> `@skills/router/route-meta`
+
+File-based routing:
+
+- Choosing file-based routing or organizing routes by files -> `@skills/router/file-based-routing`
+
+Rendering and runtime:
+
+- Ensuring loader data is serializable for SSR -> `@skills/router/ssr-loaders`
+- Lazy-loading route modules for code-splitting -> `@skills/router/route-lazy-loading`
+- Inspecting routes and matches during development -> `@skills/router/router-devtools`
 
 Next:
 
-- After picking a skill, follow its API links and guidance.
+- After picking a skill, follow its resource links and guidance.

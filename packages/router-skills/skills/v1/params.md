@@ -14,20 +14,28 @@ resources:
 
 Purpose:
 
-- Read and type-check path params.
+- Read and type-check path params, including splats.
 
 Scope:
 
-- Use when accessing `$param` segments in routes.
+- Use when accessing `$param` segments or splat params in routes.
 
 Guidelines:
 
 - Keep params in the path, not in search.
 - Validate or coerce params in loaders if needed.
 - Use router hooks to read params.
+- Use splats only for catch-all routes.
 
-Example:
+Examples:
 
 ```ts
 const { projectId } = route.useParams()
+```
+
+```ts
+const route = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "docs/*splat",
+})
 ```

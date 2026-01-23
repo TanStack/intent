@@ -8,6 +8,7 @@ summary: Fetch route-critical data before render.
 resources:
   - https://tanstack.com/router/latest/docs/guide/loaders
   - https://tanstack.com/router/latest/docs/api/router/create-route
+  - https://tanstack.com/router/latest/docs/api/router/use-loader-data
 ---
 
 # Route Loaders
@@ -25,8 +26,9 @@ Guidelines:
 - Keep loaders focused on required data.
 - Return serializable values when SSR is needed.
 - Use loader context for dependencies.
+- Read loader results with `useLoaderData`.
 
-Example:
+Examples:
 
 ```ts
 const route = createRoute({
@@ -34,4 +36,8 @@ const route = createRoute({
   path: "projects",
   loader: ({ context }) => context.api.getProjects(),
 })
+```
+
+```ts
+const projects = route.useLoaderData()
 ```

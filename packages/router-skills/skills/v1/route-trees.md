@@ -26,8 +26,9 @@ Guidelines:
 - Start with a root route, then add children.
 - Keep parent routes responsible for shared UI.
 - Keep the tree shallow unless layouts require depth.
+- Group routes by feature for readability.
 
-Example:
+Examples:
 
 ```ts
 const rootRoute = createRootRoute({ component: RootLayout })
@@ -35,5 +36,12 @@ const appRoute = createRoute({ getParentRoute: () => rootRoute, path: "app" })
 const projectRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "projects/$projectId",
+})
+```
+
+```ts
+const settingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "settings",
 })
 ```

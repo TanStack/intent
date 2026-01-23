@@ -26,8 +26,12 @@ Guidelines:
 - Preserve intent with `search` or `hash`.
 - Avoid redirect loops.
 
-Example:
+Examples:
 
 ```ts
 throw redirect({ to: "/login" })
+```
+
+```ts
+throw redirect({ to: "/login", search: { next: "/projects" } })
 ```

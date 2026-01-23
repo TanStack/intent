@@ -4,10 +4,11 @@ title: Navigation
 versions:
   - latest
   - ">=1 <2"
-summary: Navigate imperatively when links are not enough.
+summary: Navigate imperatively with hooks and options.
 resources:
   - https://tanstack.com/router/latest/docs/guide/navigation
   - https://tanstack.com/router/latest/docs/api/router/use-navigate
+  - https://tanstack.com/router/latest/docs/api/router/navigate
 ---
 
 # Navigation
@@ -23,12 +24,22 @@ Scope:
 Guidelines:
 
 - Prefer links for simple navigation.
-- Keep navigation target typed and stable.
+- Keep navigation targets typed and stable.
 - Avoid triggering navigation during render.
+- Use `replace` for non-history transitions.
+- Pass `state` for transient UI intent.
 
-Example:
+Examples:
 
 ```ts
 const navigate = useNavigate()
 navigate({ to: "/projects" })
+```
+
+```ts
+navigate({ to: "/projects", replace: true })
+```
+
+```ts
+navigate({ to: "/projects", state: { from: "create" } })
 ```

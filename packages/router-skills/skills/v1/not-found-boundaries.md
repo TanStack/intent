@@ -8,6 +8,7 @@ summary: Handle missing data or unmatched routes.
 resources:
   - https://tanstack.com/router/latest/docs/guide/not-found
   - https://tanstack.com/router/latest/docs/api/router/create-route
+  - https://tanstack.com/router/latest/docs/api/router/not-found
 ---
 
 # Not-Found Boundaries
@@ -26,7 +27,7 @@ Guidelines:
 - Keep not-found UI consistent within a layout.
 - Use loaders to decide when data is missing.
 
-Example:
+Examples:
 
 ```ts
 const route = createRoute({
@@ -34,4 +35,8 @@ const route = createRoute({
   path: "projects/$projectId",
   notFoundComponent: ProjectNotFound,
 })
+```
+
+```ts
+throw notFound({ routeId: "projects.detail" })
 ```

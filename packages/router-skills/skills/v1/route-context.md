@@ -7,6 +7,7 @@ versions:
 summary: Pass shared dependencies into loaders and routes.
 resources:
   - https://tanstack.com/router/latest/docs/guide/router-context
+  - https://tanstack.com/router/latest/docs/api/router/use-route-context
 ---
 
 # Route Context
@@ -17,19 +18,24 @@ Purpose:
 
 Scope:
 
-- Use when providing API clients or caches.
+- Use when providing API clients, caches, or environment data.
 
 Guidelines:
 
 - Define context once at router creation.
 - Keep context stable across navigations.
 - Use context in loaders to avoid module globals.
+- Read context with route hooks instead of imports.
 
-Example:
+Examples:
 
 ```ts
 const router = createRouter({
   routeTree,
   context: { api, queryClient },
 })
+```
+
+```ts
+const { api } = route.useRouteContext()
 ```

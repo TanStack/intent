@@ -8,6 +8,7 @@ summary: Keep route identifiers stable across refactors.
 resources:
   - https://tanstack.com/router/latest/docs/guide/route-ids
   - https://tanstack.com/router/latest/docs/api/router/create-route
+  - https://tanstack.com/router/latest/docs/api/router/use-match
 ---
 
 # Route IDs
@@ -26,7 +27,7 @@ Guidelines:
 - Avoid deriving IDs from paths that may change.
 - Keep IDs short and human-readable.
 
-Example:
+Examples:
 
 ```ts
 const route = createRoute({
@@ -34,4 +35,8 @@ const route = createRoute({
   id: "projects.detail",
   path: "projects/$projectId",
 })
+```
+
+```ts
+const match = useMatch({ from: "projects.detail" })
 ```

@@ -35,3 +35,12 @@ Examples:
     errorComponent: ProjectError,
   })
   ```
+
+- Layout-level boundary:
+  ```ts
+  const layoutRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "app",
+    errorComponent: AppError,
+  })
+  ```
