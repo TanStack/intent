@@ -5,7 +5,7 @@ title: Template
 
 # Class: Template
 
-Defined in: [hello.ts:4](https://github.com/TanStack/template/blob/main/packages/template/src/hello.ts#L4)
+Defined in: [hello.ts:4](https://github.com/TanStack/agents/blob/main/packages/template/src/hello.ts#L4)
 
 ## Constructors
 
@@ -15,7 +15,7 @@ Defined in: [hello.ts:4](https://github.com/TanStack/template/blob/main/packages
 new Template(options?): Template;
 ```
 
-Defined in: [hello.ts:7](https://github.com/TanStack/template/blob/main/packages/template/src/hello.ts#L7)
+Defined in: [hello.ts:7](https://github.com/TanStack/agents/blob/main/packages/template/src/hello.ts#L7)
 
 #### Parameters
 
@@ -37,7 +37,7 @@ store: Store<{
 }>;
 ```
 
-Defined in: [hello.ts:5](https://github.com/TanStack/template/blob/main/packages/template/src/hello.ts#L5)
+Defined in: [hello.ts:5](https://github.com/TanStack/agents/blob/main/packages/template/src/hello.ts#L5)
 
 ## Methods
 
@@ -47,7 +47,7 @@ Defined in: [hello.ts:5](https://github.com/TanStack/template/blob/main/packages
 greet(): void;
 ```
 
-Defined in: [hello.ts:12](https://github.com/TanStack/template/blob/main/packages/template/src/hello.ts#L12)
+Defined in: [hello.ts:12](https://github.com/TanStack/agents/blob/main/packages/template/src/hello.ts#L12)
 
 #### Returns
 

@@ -9,7 +9,7 @@ title: useTemplate
 function useTemplate(template): object;
 ```
 
-Defined in: [react-template/src/useTemplate.ts:5](https://github.com/TanStack/template/blob/main/packages/react-template/src/useTemplate.ts#L5)
+Defined in: [react-template/src/useTemplate.ts:5](https://github.com/TanStack/agents/blob/main/packages/react-template/src/useTemplate.ts#L5)
 
 ## Parameters
 

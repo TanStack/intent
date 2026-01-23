@@ -5,7 +5,7 @@ title: TemplateOptions
 
 # Interface: TemplateOptions
 
-Defined in: [types.ts:1](https://github.com/TanStack/template/blob/main/packages/template/src/types.ts#L1)
+Defined in: [types.ts:1](https://github.com/TanStack/agents/blob/main/packages/template/src/types.ts#L1)
 
 ## Properties
 
@@ -15,4 +15,4 @@ Defined in: [types.ts:1](https://github.com/TanStack/template/blob/main/packages
 optional message: string;
 ```
 
-Defined in: [types.ts:2](https://github.com/TanStack/template/blob/main/packages/template/src/types.ts#L2)
+Defined in: [types.ts:2](https://github.com/TanStack/agents/blob/main/packages/template/src/types.ts#L2)

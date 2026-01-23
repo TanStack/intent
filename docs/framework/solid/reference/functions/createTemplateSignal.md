@@ -10,7 +10,7 @@ function createTemplateSignal(template): Accessor<{
 }>;
 ```
 
-Defined in: [solid-template/src/createTemplate.ts:5](https://github.com/TanStack/template/blob/main/packages/solid-template/src/createTemplate.ts#L5)
+Defined in: [solid-template/src/createTemplate.ts:5](https://github.com/TanStack/agents/blob/main/packages/solid-template/src/createTemplate.ts#L5)
 
 ## Parameters
 
