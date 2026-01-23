@@ -1,0 +1,21 @@
+{
+  "package": "@tanstack/start/skills",
+  "topics": "skills/topics.json",
+  "versions": {
+    "v1": {
+      "index": "skills/v1/index.md",
+      "files": [
+        "skills/v1/adapters.md",
+        "skills/v1/deployment.md",
+        "skills/v1/environment-config.md",
+        "skills/v1/file-structure.md",
+        "skills/v1/index.md",
+        "skills/v1/middleware.md",
+        "skills/v1/router-integration.md",
+        "skills/v1/server-functions.md",
+        "skills/v1/start-setup.md",
+        "skills/v1/streaming-ssr.md"
+      ]
+    }
+  }
+}

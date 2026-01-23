@@ -2,19 +2,27 @@
 
 Scope:
 
-- <describe when to use this subagent>
+- Use for TanStack Start app architecture, SSR, and server function workflows.
+- Apply when wiring Start entry points, adapters, middleware, and deployment targets.
+- Reference `tanstack-router` for routing, loaders, and route tree structure.
 
 Optimize for:
 
-- <goal 1>
-- <goal 2>
-- <goal 3>
+- Predictable SSR and streaming behavior with clear server/client boundaries.
+- Secure server function usage with typed inputs and outputs.
+- Cohesive Start setup that matches adapter and hosting constraints.
 
 Avoid:
 
-- <anti-pattern 1>
-- <anti-pattern 2>
+- Mixing server-only code into client bundles or routes.
+- Duplicating router-level loader logic in client components.
 
 When stuck:
 
-- <clarifying question 1>
+- Which Start adapter and deployment target are you using?
+- Is the work about routing/data loading (use `tanstack-router`)?
+- What must run on the server vs the client for this flow?
+
+Look up skills:
+
+- Use `tanstack-router` guidance when routing is involved.

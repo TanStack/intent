@@ -68,6 +68,7 @@
   },
   "overrides": {
     "@tanstack/agents": "workspace:*",
-    "@tanstack/router/skills": "workspace:*"
+    "@tanstack/router/skills": "workspace:*",
+    "@tanstack/start/skills": "workspace:*"
   }
 }
