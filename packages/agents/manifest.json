@@ -1,0 +1,14 @@
+{
+  "rules": {
+    "tanstack/safety": "rules/safety.md",
+    "tanstack/style": "rules/style.md",
+    "tanstack/conventions": "rules/tanstack-conventions.md",
+    "tanstack/staging-migration": "rules/staging-migration.md"
+  },
+  "subagents": {
+    "tanstack-router": "subagents/tanstack-router.md"
+  },
+  "skills": {
+    "tanstack": "skills/tanstack/SKILL.md"
+  }
+}

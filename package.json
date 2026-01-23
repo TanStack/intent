@@ -67,6 +67,7 @@
     "vitest": "^4.0.17"
   },
   "overrides": {
-    "@tanstack/agents": "workspace:*"
+    "@tanstack/agents": "workspace:*",
+    "@tanstack/router/skills": "workspace:*"
   }
 }
