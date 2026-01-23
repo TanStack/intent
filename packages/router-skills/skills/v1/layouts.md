@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Use layout routes to share UI and state.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/route-trees
   - https://tanstack.com/router/latest/docs/guide/route-layouts
 ---

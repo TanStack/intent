@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Handle missing data or unmatched routes.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/not-found
   - https://tanstack.com/router/latest/docs/api/router/create-route
 ---

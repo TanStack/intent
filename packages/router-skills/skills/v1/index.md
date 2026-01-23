@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Choose the right Router skill based on the task at hand.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/overview
 ---
 

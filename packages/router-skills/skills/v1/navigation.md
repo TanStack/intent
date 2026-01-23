@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Navigate imperatively when links are not enough.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/navigation
   - https://tanstack.com/router/latest/docs/api/router/use-navigate
 ---

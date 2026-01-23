@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Define the parent-child route tree.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/route-trees
   - https://tanstack.com/router/latest/docs/api/router/create-root-route
   - https://tanstack.com/router/latest/docs/api/router/create-route

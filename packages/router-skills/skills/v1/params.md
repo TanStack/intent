@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Work with path params safely.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/route-params
   - https://tanstack.com/router/latest/docs/api/router/use-params
 ---

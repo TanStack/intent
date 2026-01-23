@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Organize routes by files and colocate route modules.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/file-based-routing
 ---
 

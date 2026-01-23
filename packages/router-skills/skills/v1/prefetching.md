@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Warm route data before navigation.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/prefetching
   - https://tanstack.com/router/latest/docs/api/router/preload
 ---

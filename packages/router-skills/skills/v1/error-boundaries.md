@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Localize route errors with error boundaries.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/error-handling
   - https://tanstack.com/router/latest/docs/api/router/create-route
 ---

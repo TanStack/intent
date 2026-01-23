@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Read pending navigation and status.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/router-state
   - https://tanstack.com/router/latest/docs/api/router/use-router-state
 ---

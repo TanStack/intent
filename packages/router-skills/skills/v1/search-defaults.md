@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Define defaults for stable search state.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/search-params
 ---
 

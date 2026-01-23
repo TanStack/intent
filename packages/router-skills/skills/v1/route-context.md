@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Pass shared dependencies into loaders and routes.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/router-context
 ---
 

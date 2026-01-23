@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Use typed links for declarative navigation.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/linking
   - https://tanstack.com/router/latest/docs/api/router/link
 ---

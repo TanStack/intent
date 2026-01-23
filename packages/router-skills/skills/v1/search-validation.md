@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Validate search params with schema adapters.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/search-params
   - https://tanstack.com/router/latest/docs/api/router/create-route
 ---

@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Fetch route-critical data before render.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/loaders
   - https://tanstack.com/router/latest/docs/api/router/create-route
 ---

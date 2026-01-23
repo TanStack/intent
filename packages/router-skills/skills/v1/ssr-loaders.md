@@ -5,7 +5,7 @@ versions:
   - latest
   - ">=1 <2"
 summary: Keep loader data SSR-safe for hydration.
-api:
+resources:
   - https://tanstack.com/router/latest/docs/guide/ssr
   - https://tanstack.com/router/latest/docs/guide/loaders
 ---
