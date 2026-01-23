@@ -16,5 +16,12 @@
   "navigation.md",
   "router-state.md",
   "ssr-loaders.md",
-  "ssr-loaders.md"
+  "use-match.md",
+  "use-search.md",
+  "redirects.md",
+  "route-masking.md",
+  "router-provider.md",
+  "pending-ui.md",
+  "invalidation.md",
+  "navigate-options.md"
 ]

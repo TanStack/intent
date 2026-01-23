@@ -8,20 +8,28 @@
         "skills/v1/error-boundaries.md",
         "skills/v1/file-based-routing.md",
         "skills/v1/index.md",
+        "skills/v1/invalidation.md",
         "skills/v1/layouts.md",
         "skills/v1/links.md",
         "skills/v1/loaders.md",
+        "skills/v1/navigate-options.md",
         "skills/v1/navigation.md",
         "skills/v1/not-found-boundaries.md",
         "skills/v1/params.md",
+        "skills/v1/pending-ui.md",
         "skills/v1/prefetching.md",
+        "skills/v1/redirects.md",
         "skills/v1/route-context.md",
         "skills/v1/route-ids.md",
+        "skills/v1/route-masking.md",
         "skills/v1/route-trees.md",
+        "skills/v1/router-provider.md",
         "skills/v1/router-state.md",
         "skills/v1/search-defaults.md",
         "skills/v1/search-validation.md",
-        "skills/v1/ssr-loaders.md"
+        "skills/v1/ssr-loaders.md",
+        "skills/v1/use-match.md",
+        "skills/v1/use-search.md"
       ]
     }
   }

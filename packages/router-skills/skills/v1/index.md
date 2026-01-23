@@ -38,6 +38,14 @@ How to pick a skill:
 - Navigating programmatically after a submit or action -> `@skills/router/navigation`
 - Showing pending UI or transition state -> `@skills/router/router-state`
 - Ensuring loader data is serializable for SSR -> `@skills/router/ssr-loaders`
+- Reading a route match or match metadata -> `@skills/router/use-match`
+- Reading validated search params -> `@skills/router/use-search`
+- Redirecting from loaders/actions -> `@skills/router/redirects`
+- Presenting friendly URLs for internal routes -> `@skills/router/route-masking`
+- Wiring the router into your app root -> `@skills/router/router-provider`
+- Showing pending UI during navigation -> `@skills/router/pending-ui`
+- Revalidating data after mutations -> `@skills/router/invalidation`
+- Using replace/state/hash when navigating -> `@skills/router/navigate-options`
 
 Next:
 
