@@ -1,1 +1,9 @@
-["template.md"]
+[
+  "index.md",
+  "routing-and-nesting.md",
+  "search-params.md",
+  "loaders-and-prefetching.md",
+  "error-boundaries.md",
+  "file-based-routing.md",
+  "ssr-and-start.md"
+]

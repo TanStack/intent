@@ -3,7 +3,16 @@
   "topics": "skills/topics.json",
   "versions": {
     "v1": {
-      "index": "skills/v1/template.md"
+      "index": "skills/v1/index.md",
+      "files": [
+        "skills/v1/error-boundaries.md",
+        "skills/v1/file-based-routing.md",
+        "skills/v1/index.md",
+        "skills/v1/loaders-and-prefetching.md",
+        "skills/v1/routing-and-nesting.md",
+        "skills/v1/search-params.md",
+        "skills/v1/ssr-and-start.md"
+      ]
     }
   }
 }
