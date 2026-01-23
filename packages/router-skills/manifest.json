@@ -1,0 +1,9 @@
+{
+  "package": "@tanstack/router/skills",
+  "topics": "skills/topics.json",
+  "versions": {
+    "v1": {
+      "index": "skills/v1/template.md"
+    }
+  }
+}
