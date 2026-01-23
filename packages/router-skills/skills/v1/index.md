@@ -25,6 +25,8 @@ How to pick a skill:
 Core setup and structure:
 
 - Creating and mounting the router -> `@skills/router/router-setup`
+- Choosing installation tooling -> `@skills/router/installation-guides`
+- Scaffolding routes with the Router CLI -> `@skills/router/router-cli`
 - Defining the overall route hierarchy -> `@skills/router/route-trees`
 - Creating a shared UI shell across child routes -> `@skills/router/layouts`
 - Stabilizing references when paths change -> `@skills/router/route-ids`
@@ -35,6 +37,7 @@ Routing params and search:
 
 - Reading path params and splats -> `@skills/router/params`
 - Validating, defaulting, and reading search params -> `@skills/router/search-params`
+- Customizing search param serialization -> `@skills/router/custom-search-serialization`
 
 Data loading and refresh:
 
@@ -42,11 +45,17 @@ Data loading and refresh:
 - Passing dependencies like API clients to loaders -> `@skills/router/route-context`
 - Prefetching and invalidating after mutations -> `@skills/router/data-refresh`
 - Handling deferred/external data or mutations -> `@skills/router/data-loading-advanced`
+- Deferring non-critical data -> `@skills/router/deferred-data-loading`
+- Loading data from external caches -> `@skills/router/external-data-loading`
+- Integrating TanStack Query -> `@skills/router/query-integration`
 
 Navigation and links:
 
 - Adding typed, declarative navigation links -> `@skills/router/links`
+- Configuring link behavior -> `@skills/router/link-options`
+- Building custom design-system links -> `@skills/router/custom-links`
 - Navigating programmatically after actions -> `@skills/router/navigation`
+- Preloading navigation targets -> `@skills/router/preloading`
 
 Matching and router state:
 
@@ -78,6 +87,8 @@ Rendering and runtime:
 - Attaching static route data -> `@skills/router/static-route-data`
 - Improving render performance -> `@skills/router/render-optimizations`
 - Tightening type safety and utilities -> `@skills/router/type-safety`
+- Applying Router ESLint rules -> `@skills/router/eslint-plugin-router`
+- Adding view transitions -> `@skills/router/view-transitions`
 
 Next:
 

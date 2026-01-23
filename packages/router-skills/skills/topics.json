@@ -1,6 +1,8 @@
 [
   "index.md",
   "router-setup.md",
+  "installation-guides.md",
+  "router-cli.md",
   "routing-strategies.md",
   "route-trees.md",
   "layouts.md",
@@ -13,10 +15,16 @@
   "route-context.md",
   "data-refresh.md",
   "data-loading-advanced.md",
+  "deferred-data-loading.md",
+  "external-data-loading.md",
+  "query-integration.md",
   "error-boundaries.md",
   "not-found-boundaries.md",
   "links.md",
+  "link-options.md",
+  "custom-links.md",
   "navigation.md",
+  "preloading.md",
   "router-state.md",
   "matching-and-location.md",
   "redirects.md",
@@ -32,5 +40,7 @@
   "history-types.md",
   "static-route-data.md",
   "render-optimizations.md",
-  "type-safety.md"
+  "type-safety.md",
+  "eslint-plugin-router.md",
+  "view-transitions.md"
 ]
