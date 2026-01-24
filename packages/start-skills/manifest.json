@@ -5,15 +5,25 @@
     "v1": {
       "index": "skills/v1/index.md",
       "files": [
-        "skills/v1/adapters.md",
+        "skills/v1/authentication.md",
+        "skills/v1/databases.md",
         "skills/v1/deployment.md",
         "skills/v1/environment-config.md",
+        "skills/v1/error-boundaries.md",
+        "skills/v1/execution-model.md",
         "skills/v1/file-structure.md",
         "skills/v1/index.md",
         "skills/v1/middleware.md",
+        "skills/v1/observability.md",
+        "skills/v1/path-aliases.md",
+        "skills/v1/routing.md",
         "skills/v1/router-integration.md",
+        "skills/v1/selective-ssr.md",
+        "skills/v1/server-entry-point.md",
         "skills/v1/server-functions.md",
+        "skills/v1/server-routes.md",
         "skills/v1/start-setup.md",
+        "skills/v1/static-prerendering.md",
         "skills/v1/streaming-ssr.md"
       ]
     }

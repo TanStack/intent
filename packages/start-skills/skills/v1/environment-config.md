@@ -1,26 +1,40 @@
 ---
 id: environment-config
-title: Start Environment Config
+title: Environment
 versions:
   - latest
-  - ">=1 <2"
-summary: Manage environment variables and secrets for Start runtimes.
+summary: Configure environment variables and runtime helpers.
 resources:
   - https://tanstack.com/start/latest/docs/overview
 ---
 
-# Start Environment Config
+# Environment
 
 Purpose:
 
-- Keep secrets and runtime settings consistent across environments.
+- Define environment variables and runtime helpers safely.
 
 Scope:
 
-- Use when wiring environment variables for adapters and server functions.
+- Use when wiring environment variables, secrets, and runtime helpers.
 
 Guidelines:
 
 - Validate required environment variables at startup.
 - Keep secrets server-only and never expose them to client bundles.
-- Coordinate per-environment overrides with the deployment target.
+- Keep environment helpers in server entry files or server functions.
+- Validate helpers against the selected adapter runtime.
+
+Examples:
+
+```ts
+const requireEnv = (key: string) => {
+  const value = process.env[key]
+  if (!value) throw new Error(`Missing ${key}`)
+  return value
+}
+
+export const env = {
+  databaseUrl: requireEnv('DATABASE_URL'),
+}
+```

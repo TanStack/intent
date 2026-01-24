@@ -1,15 +1,14 @@
 ---
 id: server-functions
-title: Start Server Functions
+title: Server Functions
 versions:
   - latest
-  - ">=1 <2"
 summary: Create typed server functions with secure inputs and outputs.
 resources:
   - https://tanstack.com/start/latest/docs/overview
 ---
 
-# Start Server Functions
+# Server Functions
 
 Purpose:
 
@@ -23,4 +22,14 @@ Guidelines:
 
 - Validate inputs before executing server logic.
 - Return serializable data for hydration and streaming.
+- Use `@skills/router/loaders` for route-level data reads.
 - Coordinate cache invalidation with `@skills/router/data-refresh`.
+
+Examples:
+
+```ts
+export const updateProfile = serverFn(async (input) => {
+  await requireSession()
+  return updateUser(input)
+})
+```

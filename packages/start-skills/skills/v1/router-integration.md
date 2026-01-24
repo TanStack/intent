@@ -1,16 +1,15 @@
 ---
 id: router-integration
-title: Start Router Integration
+title: Router Integration
 versions:
   - latest
-  - ">=1 <2"
 summary: Connect Start runtime concerns with TanStack Router setup.
 resources:
   - https://tanstack.com/router/latest/docs/guide/overview
   - https://tanstack.com/start/latest/docs/overview
 ---
 
-# Start Router Integration
+# Router Integration
 
 Purpose:
 
@@ -25,3 +24,16 @@ Guidelines:
 - Build the route tree and loaders with Router-first patterns.
 - Use `@skills/router/loaders` for data that must load before render.
 - Coordinate SSR requirements with `@skills/router/ssr-loaders`.
+
+Examples:
+
+```ts
+const router = createRouter({
+  routeTree,
+})
+
+export default defineStartApp({
+  router,
+  adapter,
+})
+```

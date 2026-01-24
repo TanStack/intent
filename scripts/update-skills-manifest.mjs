@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
@@ -30,6 +30,7 @@ if (versionDirs.length === 0) {
 }
 
 const versions = {}
+const versionFiles = new Map()
 
 for (const version of versionDirs) {
   const versionRoot = resolve(skillsRoot, version)
@@ -41,6 +42,8 @@ for (const version of versionDirs) {
   if (files.length === 0) {
     throw new Error(`No markdown skills found for ${version}.`)
   }
+
+  versionFiles.set(version, files)
 
   const defaultIndex = `skills/${version}/index.md`
   const fallbackIndex = manifest.versions?.[version]?.index
@@ -64,5 +67,21 @@ const nextManifest = {
 }
 
 await writeFile(manifestPath, `${JSON.stringify(nextManifest, null, 2)}\n`)
+
+if (manifest.topics) {
+  const latestVersion = versionDirs[versionDirs.length - 1]
+  const files = versionFiles.get(latestVersion) ?? []
+  const sortedTopics = files
+    .map((file) => basename(file))
+    .sort((a, b) => {
+      if (a === 'index.md') return -1
+      if (b === 'index.md') return 1
+      return a.localeCompare(b)
+    })
+
+  const topicsPath = resolve(packageRoot, manifest.topics)
+  await writeFile(topicsPath, `${JSON.stringify(sortedTopics, null, 2)}\n`)
+  console.log(`Updated topics list: ${topicsPath}`)
+}
 
 console.log(`Updated skills manifest: ${manifestPath}`)

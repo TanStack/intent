@@ -1,15 +1,14 @@
 ---
 id: file-structure
-title: Start File Structure
+title: File Structure
 versions:
   - latest
-  - ">=1 <2"
 summary: Organize Start entry points, routes, and shared modules.
 resources:
   - https://tanstack.com/start/latest/docs/overview
 ---
 
-# Start File Structure
+# File Structure
 
 Purpose:
 
@@ -23,4 +22,21 @@ Guidelines:
 
 - Keep entry files and route modules minimal and focused.
 - Separate shared utilities, server-only helpers, and client-only components.
+- Group runtime-only code (server functions, middleware, server routes) together.
 - Use `@skills/router/file-based-routing` if you lean on Router file routing.
+
+Examples:
+
+```
+app/
+  routes/
+    index.tsx
+    settings.tsx
+  entry-client.tsx
+  entry-server.tsx
+server/
+  routes/
+  middleware/
+shared/
+  formatting.ts
+```

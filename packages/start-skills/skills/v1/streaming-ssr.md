@@ -1,15 +1,14 @@
 ---
 id: streaming-ssr
-title: Start Streaming SSR
+title: Streaming SSR
 versions:
   - latest
-  - ">=1 <2"
 summary: Configure streaming SSR, suspense boundaries, and serialization.
 resources:
   - https://tanstack.com/start/latest/docs/overview
 ---
 
-# Start Streaming SSR
+# Streaming SSR
 
 Purpose:
 

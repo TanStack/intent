@@ -1,15 +1,14 @@
 ---
 id: deployment
-title: Start Deployment
+title: Deployment
 versions:
   - latest
-  - ">=1 <2"
-summary: Deploy Start apps with the right adapter and build outputs.
+summary: Deploy Start apps to hosting targets.
 resources:
   - https://tanstack.com/start/latest/docs/overview
 ---
 
-# Start Deployment
+# Deployment
 
 Purpose:
 
@@ -22,5 +21,5 @@ Scope:
 Guidelines:
 
 - Confirm adapter compatibility with the hosting provider.
-- Validate SSR streaming requirements and response limits.
+- Validate SSR requirements with `@skills/router/ssr-loaders`.
 - Ensure server functions are deployed to the correct runtime.
