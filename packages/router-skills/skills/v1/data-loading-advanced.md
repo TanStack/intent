@@ -35,14 +35,14 @@ Examples:
 const route = createRoute({
   getParentRoute: () => rootRoute,
   path: "dashboard",
-  loader: () => ({
-    summary: fetchSummary(),
-    details: defer(fetchDetails()),
+  loader: async () => ({
+    summary: await fetchSummary(),
+    detailsPromise: fetchDetails()
   }),
 })
 ```
 
 ```ts
 await mutateProject(projectId, payload)
-router.invalidate({ to: "/projects" })
+router.invalidate()
 ```

@@ -10,7 +10,6 @@ resources:
   - https://tanstack.com/router/latest/docs/framework/react/installation/with-vite
   - https://tanstack.com/router/latest/docs/framework/react/installation/with-webpack
   - https://tanstack.com/router/latest/docs/framework/react/installation/with-esbuild
-  - https://tanstack.com/router/latest/docs/framework/react/installation/with-router-cli
 ---
 
 # Installation Guides

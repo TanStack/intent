@@ -31,8 +31,12 @@ Examples:
 const route = createRoute({
   getParentRoute: () => rootRoute,
   path: "projects/$projectId",
-  head: ({ loaderData }) => ({
-    title: loaderData.project.name,
+   head: () => ({
+    meta: [
+      {
+        title: loaderData.project.name,
+      },
+    ],
   }),
 })
 ```

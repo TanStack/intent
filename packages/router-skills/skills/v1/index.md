@@ -26,11 +26,9 @@ Core setup and structure:
 
 - Creating and mounting the router -> `@skills/router/router-setup`
 - Choosing installation tooling -> `@skills/router/installation-guides`
-- Scaffolding routes with the Router CLI -> `@skills/router/router-cli`
 - Defining the overall route hierarchy -> `@skills/router/route-trees`
 - Creating a shared UI shell across child routes -> `@skills/router/layouts`
 - Stabilizing references when paths change -> `@skills/router/route-ids`
-- Attaching route metadata for UI or analytics -> `@skills/router/route-meta`
 - Picking a routing strategy -> `@skills/router/routing-strategies`
 
 Routing params and search:

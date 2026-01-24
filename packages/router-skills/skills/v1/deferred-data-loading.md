@@ -32,13 +32,13 @@ Examples:
 const route = createRoute({
   getParentRoute: () => rootRoute,
   path: "dashboard",
-  loader: () => ({
-    summary: fetchSummary(),
-    details: defer(fetchDetails()),
+  loader: async () => ({
+    summary: await fetchSummary(),
+    detailsPromise: fetchDetails(),
   }),
 })
 ```
 
 ```tsx
-const { summary, details } = route.useLoaderData()
+const { summary, detailsPromise } = route.useLoaderData()
 ```
