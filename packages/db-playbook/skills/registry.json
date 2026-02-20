@@ -1,0 +1,64 @@
+{
+  "skills": [
+    {
+      "name": "tanstack-db",
+      "package": "db",
+      "internal": false,
+      "description": ""
+    },
+    {
+      "name": "tanstack-db/collections",
+      "package": "db",
+      "internal": false,
+      "description": ""
+    },
+    {
+      "name": "tanstack-db/electric",
+      "package": "db",
+      "internal": false,
+      "description": ""
+    },
+    {
+      "name": "tanstack-db/live-queries",
+      "package": "db",
+      "internal": false,
+      "description": ""
+    },
+    {
+      "name": "tanstack-db/mutations",
+      "package": "db",
+      "internal": false,
+      "description": ""
+    },
+    {
+      "name": "tanstack-db/powersync",
+      "package": "db",
+      "internal": false,
+      "description": ""
+    },
+    {
+      "name": "tanstack-db/query",
+      "package": "db",
+      "internal": false,
+      "description": ""
+    },
+    {
+      "name": "tanstack-db/rxdb",
+      "package": "db",
+      "internal": false,
+      "description": ""
+    },
+    {
+      "name": "tanstack-db/schemas",
+      "package": "db",
+      "internal": false,
+      "description": ""
+    },
+    {
+      "name": "tanstack-db/trailbase",
+      "package": "db",
+      "internal": false,
+      "description": ""
+    }
+  ]
+}
