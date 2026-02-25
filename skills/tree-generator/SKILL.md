@@ -9,7 +9,7 @@ description: >
   skill accuracy. Takes domain_map.yaml and skill_spec.md from
   skill-domain-discovery as primary inputs.
 metadata:
-  version: "2.1"
+  version: "3.0"
   category: meta-tooling
   input_artifacts:
     - domain_map.yaml
@@ -25,10 +25,18 @@ you create is read directly by AI coding agents across Claude, GPT-4+,
 Gemini, Cursor, Copilot, Codex, and open-source models. Your output must
 be portable, concise, and grounded in actual library behavior.
 
-Skills are split into two layers:
+### Skill types
 
-- **Core skills** — framework-agnostic concepts, configuration, and patterns
-- **Framework skills** — framework-specific bindings, hooks, components
+Every skill has a `type` field in its frontmatter. Valid types:
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| `core` | Framework-agnostic concepts, configuration, patterns | `db-core` |
+| `sub-skill` | A focused sub-topic within a core or framework skill | `db-core/live-queries` |
+| `framework` | Framework-specific bindings, hooks, components | `react-db` |
+| `lifecycle` | Cross-cutting developer journey (getting started, go-live) | `electric-quickstart` |
+| `composition` | Integration between two or more libraries | `electric-drizzle` |
+| `security` | Audit checklist or security validation | `electric-security-check` |
 
 Agents discover skills via `tanstack playbook list` and read them directly
 from `node_modules`. Framework skills declare a `requires` dependency on
@@ -98,7 +106,25 @@ produce one reference file per adapter with its specific config,
 setup, and gotchas. The SKILL.md covers what's common; each
 `references/[adapter].md` covers what's unique.
 
-**Skill output structure:**
+**Flat vs nested structure:**
+
+Choose the structure that matches how the domain map's skills are shaped.
+
+Use **nested** (`[lib]-core/[domain]/SKILL.md`) when:
+- Developer tasks cluster cleanly into 3–5 conceptual domains
+- The library has a clear core + framework adapter split
+- Skills build on each other in a layered way
+
+Use **flat** (`skills/[skill-name]/SKILL.md`) when:
+- Developer tasks are task-focused and don't nest into domains
+- The domain discovery process recommended task-focused skills
+- Skills map 1:1 to distinct developer intents with minimal overlap
+
+Both are valid. The domain map's `type` field and structure will signal
+which fits. When in doubt, prefer flat — it's simpler and each skill
+is independently discoverable.
+
+**Nested structure:**
 
 ```
 skills/
@@ -120,6 +146,33 @@ skills/
 ├── vue-[lib]/                    # Vue framework skill (if applicable)
 │   └── SKILL.md
 ```
+
+**Flat structure:**
+
+```
+skills/
+├── [lib]-shapes/                 # Task-focused skill
+│   ├── SKILL.md
+│   └── references/
+│       └── shape-options.md
+├── [lib]-auth/                   # Another task skill
+│   └── SKILL.md
+├── [lib]-proxy/
+│   └── SKILL.md
+├── [lib]-quickstart/             # Lifecycle skill
+│   └── SKILL.md
+├── [lib]-go-live/                # Lifecycle skill
+│   └── SKILL.md
+├── [lib]-drizzle/                # Composition skill
+│   └── SKILL.md
+```
+
+**Router skill:** A router skill (lightweight entry point with a decision
+table) is optional. If the playbook CLI provides `list` and `show`
+commands, agents can discover skills directly without a router. Only
+create a router skill if the skill set is large enough (15+) that
+browsing the list is insufficient, or if the nested structure needs
+an entry point to guide agents to the right sub-skill.
 
 **Source repository layout for npm distribution:**
 
@@ -444,10 +497,21 @@ Read their core and framework skills first.
 Do not duplicate content from either library's individual skills. Focus
 exclusively on the seam between them.
 
-### Step 7 — Write security/go-live skills (where applicable)
+### Step 7 — Write checklist/audit skills (where applicable)
 
-For libraries that have security-sensitive surface area (server functions,
-auth, data exposure):
+Some skills don't fit the standard body structure (Setup → Core Patterns
+→ Common Mistakes). Security, go-live, and some lifecycle skills are
+audit-oriented — the agent runs through a checklist to verify correctness
+rather than learning patterns. Use the alternative body structure below
+for these skill types.
+
+**When to use the checklist body:**
+- `security` type skills — pre-deploy security validation
+- `lifecycle` type skills focused on verification (go-live, migration)
+- Any skill where the primary action is "check these things" not "learn
+  these patterns"
+
+**Frontmatter:**
 
 ```yaml
 ---
@@ -463,11 +527,51 @@ requires:
 ---
 ```
 
-Structure as a checklist the agent can run through before deployment:
+**Alternative body template (checklist/audit):**
 
-1. **Validation checks** — What to verify, with code showing correct config
-2. **Common security mistakes** — Wrong/correct pairs specific to this library
-3. **Pre-deploy checklist** — Ordered list of verifications
+```markdown
+# [Library Name] — [Security | Go-Live | Migration] Checklist
+
+Run through each section before [deploying | releasing | migrating].
+
+## [Category 1] Checks
+
+### Check: [what to verify]
+
+Expected:
+```[lang]
+// correct configuration or code
+```
+
+Fail condition: [what indicates this check failed]
+Fix: [one-line remediation]
+
+### Check: [what to verify]
+
+[same structure]
+
+## [Category 2] Checks
+
+[same structure]
+
+## Common Security Mistakes
+
+[Wrong/correct pairs specific to this library, same format as
+Common Mistakes in standard skills]
+
+## Pre-Deploy Summary
+
+- [ ] [Verification 1]
+- [ ] [Verification 2]
+- [ ] [Verification 3]
+```
+
+The key differences from the standard body:
+- No "Setup" section — the agent already has the app running
+- Checks replace "Core Patterns" — each check is a verification, not a
+  teaching pattern
+- The summary checklist at the end gives agents a quick pass/fail list
+- Common Mistakes section is still present for wrong/correct pairs
 
 ### Step 8 — Validate the complete tree
 
@@ -497,6 +601,7 @@ Run every check before outputting. Fix any failures before proceeding.
 | Framework domains decomposed per-package | No single skill covering multiple framework adapters |
 | Adapter-heavy domains have references | 3+ adapters/backends → one reference file per adapter |
 | Dense API surfaces in references | >10 distinct patterns → reference file, not inline |
+| Checklist skills use audit body | Security/go-live skills use checklist template, not Setup → Core Patterns → Common Mistakes |
 
 ---
 
@@ -606,6 +711,7 @@ current_skills:
 | Cross-skill failures duplicated | Each listed skill gets the failure mode |
 | Tensions cross-referenced | Tension notes in each involved skill point to the other |
 | Skills ship with packages | `"skills"` in package.json `files` array |
+| Checklist skills use audit template | Security/go-live skills use checklist body, not standard body |
 
 ---
 
