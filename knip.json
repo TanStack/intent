@@ -4,7 +4,10 @@
   "ignoreBinaries": ["tsx"],
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.mjs"]
+      "entry": ["scripts/*.ts"]
+    },
+    "packages/playbooks": {
+      "ignore": ["meta/**"]
     },
     "packages/react-pacer": {
       "ignore": []

@@ -22,13 +22,10 @@ interface ValidationError {
 
 // ── Constants ──
 
-const SKILLS_DIR = join(process.cwd(), 'packages', 'playbooks', 'skills')
-const PACKAGE_MAP_PATH = join(
-  process.cwd(),
-  'packages',
-  'playbooks',
-  'package_map.yaml',
-)
+const skillsArg = process.argv[2]
+const SKILLS_DIR = skillsArg
+  ? join(process.cwd(), skillsArg)
+  : join(process.cwd(), 'skills')
 const MAX_LINES = 500
 
 const PROHIBITED_PATTERNS: Array<{ pattern: RegExp; description: string }> = [
@@ -44,9 +41,10 @@ const PROHIBITED_PATTERNS: Array<{ pattern: RegExp; description: string }> = [
 ]
 
 const ALLOWED_SHELL_COMMANDS = [
-  'tanstack playbook list',
-  'tanstack playbook feedback',
+  'playbook list',
+  'playbook feedback',
   'npm install @tanstack/',
+  'npx playbook',
 ]
 
 // ── Helpers ──
@@ -83,7 +81,6 @@ function extractFrontmatter(
 
 function skillPathFromFile(filePath: string): string {
   const rel = relative(SKILLS_DIR, filePath)
-  // Remove trailing /SKILL.md and convert separators to /
   return rel
     .replace(/[/\\]SKILL\.md$/, '')
     .split(sep)
@@ -107,7 +104,6 @@ function validateFrontmatter(
     errors.push({ file: rel, message: 'Missing required field: description' })
   }
 
-  // Validate name matches directory path
   if (frontmatter.name) {
     const expectedPath = skillPathFromFile(filePath)
     if (frontmatter.name !== expectedPath) {
@@ -118,7 +114,6 @@ function validateFrontmatter(
     }
   }
 
-  // Framework skills must have requires
   if (frontmatter.type === 'framework' && !frontmatter.requires?.length) {
     errors.push({
       file: rel,
@@ -137,7 +132,6 @@ function validateContent(
   const errors: Array<ValidationError> = []
   const rel = relative(process.cwd(), filePath)
 
-  // Line count
   const lineCount = content.split(/\r?\n/).length
   if (lineCount > MAX_LINES) {
     errors.push({
@@ -146,9 +140,7 @@ function validateContent(
     })
   }
 
-  // Prohibited content
   for (const { pattern, description } of PROHIBITED_PATTERNS) {
-    // Check each line to allow framework setup instructions (npm install @tanstack/...)
     for (const line of body.split(/\r?\n/)) {
       if (pattern.test(line)) {
         const isAllowed = ALLOWED_SHELL_COMMANDS.some((cmd) =>
@@ -168,50 +160,13 @@ function validateContent(
   return errors
 }
 
-function validatePackageMap(): Array<ValidationError> {
-  const errors: Array<ValidationError> = []
-  const rel = relative(process.cwd(), PACKAGE_MAP_PATH)
-
-  if (!existsSync(PACKAGE_MAP_PATH)) {
-    errors.push({ file: rel, message: 'package_map.yaml not found' })
-    return errors
-  }
-
-  try {
-    const content = readFileSync(PACKAGE_MAP_PATH, 'utf-8')
-    const map = parseYaml(content) as Record<string, unknown>
-
-    if (!map.schema_version) {
-      errors.push({ file: rel, message: 'Missing schema_version' })
-    }
-
-    if (!map.package_map || typeof map.package_map !== 'object') {
-      errors.push({ file: rel, message: 'Missing or invalid package_map' })
-    }
-
-    if (!map.always_include || !Array.isArray(map.always_include)) {
-      errors.push({
-        file: rel,
-        message: 'Missing or invalid always_include',
-      })
-    }
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e)
-    errors.push({ file: rel, message: `Invalid YAML: ${message}` })
-  }
-
-  return errors
-}
-
 // ── Main ──
 
 function main(): void {
   const errors: Array<ValidationError> = []
 
-  // Validate package_map.yaml
-  errors.push(...validatePackageMap())
+  console.log(`Validating skills in: ${SKILLS_DIR}`)
 
-  // Find and validate all SKILL.md files
   const skillFiles = findSkillFiles(SKILLS_DIR)
 
   if (skillFiles.length === 0) {
@@ -234,7 +189,6 @@ function main(): void {
     errors.push(...validateContent(filePath, content, parsed.body))
   }
 
-  // Report
   if (errors.length > 0) {
     console.error(`\n❌ Validation failed with ${errors.length} error(s):\n`)
     for (const { file, message } of errors) {

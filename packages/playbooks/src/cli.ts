@@ -1,0 +1,290 @@
+#!/usr/bin/env node
+
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { dirname, join, relative, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { parse as parseYaml } from 'yaml'
+import { scanForPlaybooks } from './scanner.js'
+import type { ScanResult } from './types.js'
+import { findSkillFiles, parseFrontmatter } from './utils.js'
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getMetaDir(): string {
+  // Resolve relative to this file's location in dist/
+  const thisDir = dirname(fileURLToPath(import.meta.url))
+  return join(thisDir, '..', 'meta')
+}
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
+
+async function cmdList(args: string[]): Promise<void> {
+  const jsonOutput = args.includes('--json')
+
+  let result: ScanResult
+  try {
+    result = await scanForPlaybooks()
+  } catch (err) {
+    console.error((err as Error).message)
+    process.exit(1)
+  }
+
+  if (jsonOutput) {
+    console.log(JSON.stringify(result, null, 2))
+    return
+  }
+
+  if (result.packages.length === 0) {
+    console.log('No playbook-enabled packages found.')
+    if (result.warnings.length > 0) {
+      console.log(`\nWarnings:`)
+      for (const w of result.warnings) console.log(`  ⚠ ${w}`)
+    }
+    return
+  }
+
+  console.log(`Playbook-enabled packages (${result.packages.length} found):\n`)
+
+  for (const pkg of result.packages) {
+    const reqStr = pkg.playbook.requires?.length
+      ? `  (requires: ${pkg.playbook.requires.join(', ')})`
+      : ''
+    console.log(`${pkg.name} v${pkg.version}${reqStr}`)
+
+    for (const skill of pkg.skills) {
+      const desc = skill.description ? `  ${skill.description}` : ''
+      console.log(`  ${skill.name.padEnd(32)}${desc}`)
+    }
+    console.log()
+  }
+
+  if (result.warnings.length > 0) {
+    console.log(`Warnings:`)
+    for (const w of result.warnings) console.log(`  ⚠ ${w}`)
+  }
+}
+
+function cmdMeta(): void {
+  const metaDir = getMetaDir()
+
+  if (!existsSync(metaDir)) {
+    console.error('Meta-skills directory not found.')
+    process.exit(1)
+  }
+
+  const entries = readdirSync(metaDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .filter((e) => existsSync(join(metaDir, e.name, 'SKILL.md')))
+
+  if (entries.length === 0) {
+    console.log('No meta-skills found.')
+    return
+  }
+
+  console.log('Meta-skills (for library maintainers):\n')
+
+  for (const entry of entries) {
+    const skillFile = join(metaDir, entry.name, 'SKILL.md')
+    const fm = parseFrontmatter(skillFile)
+    let description = ''
+    if (typeof fm?.description === 'string') {
+      description = fm.description.replace(/\s+/g, ' ').trim()
+    }
+
+    const shortDesc = description.length > 60
+      ? description.slice(0, 57) + '...'
+      : description
+    console.log(`  ${entry.name.padEnd(28)} ${shortDesc}`)
+  }
+
+  console.log(`\nUsage: load the SKILL.md into your AI agent conversation.`)
+  console.log(`Path: node_modules/@tanstack/playbooks/meta/<name>/SKILL.md`)
+}
+
+function cmdValidate(args: string[]): void {
+  const targetDir = args[0] ?? 'skills'
+  const skillsDir = join(process.cwd(), targetDir)
+
+  if (!existsSync(skillsDir)) {
+    console.error(`Skills directory not found: ${skillsDir}`)
+    process.exit(1)
+  }
+
+  interface ValidationError {
+    file: string
+    message: string
+  }
+
+  const errors: ValidationError[] = []
+  const skillFiles = findSkillFiles(skillsDir)
+
+  if (skillFiles.length === 0) {
+    console.error('No SKILL.md files found')
+    process.exit(1)
+  }
+
+  for (const filePath of skillFiles) {
+    const rel = relative(process.cwd(), filePath)
+    const content = readFileSync(filePath, 'utf8')
+    const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)/)
+
+    if (!match) {
+      errors.push({ file: rel, message: 'Missing or invalid frontmatter' })
+      continue
+    }
+
+    let fm: Record<string, unknown>
+    try {
+      fm = parseYaml(match[1]) as Record<string, unknown>
+    } catch {
+      errors.push({ file: rel, message: 'Invalid YAML frontmatter' })
+      continue
+    }
+
+    if (!fm.name) errors.push({ file: rel, message: 'Missing required field: name' })
+    if (!fm.description) errors.push({ file: rel, message: 'Missing required field: description' })
+
+    // Validate name matches directory path
+    if (typeof fm.name === 'string') {
+      const expectedPath = relative(skillsDir, filePath)
+        .replace(/[/\\]SKILL\.md$/, '')
+        .split(sep)
+        .join('/')
+      if (fm.name !== expectedPath) {
+        errors.push({
+          file: rel,
+          message: `name "${fm.name}" does not match directory path "${expectedPath}"`,
+        })
+      }
+    }
+
+    // Framework skills must have requires
+    if (fm.type === 'framework' && !Array.isArray(fm.requires)) {
+      errors.push({ file: rel, message: 'Framework skills must have a "requires" field' })
+    }
+
+    // Line count
+    const lineCount = content.split(/\r?\n/).length
+    if (lineCount > 500) {
+      errors.push({ file: rel, message: `Exceeds 500 line limit (${lineCount} lines)` })
+    }
+  }
+
+  if (errors.length > 0) {
+    console.error(`\n❌ Validation failed with ${errors.length} error(s):\n`)
+    for (const { file, message } of errors) {
+      console.error(`  ${file}: ${message}`)
+    }
+    process.exit(1)
+  }
+
+  console.log(`✅ Validated ${skillFiles.length} skill files — all passed`)
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+const USAGE = `TanStack Playbooks CLI
+
+Usage:
+  playbook list [--json]           Discover playbook-enabled packages
+  playbook meta                    List meta-skills for maintainers
+  playbook validate [<dir>]        Validate skill files (default: skills/)
+  playbook init                    Set up playbook discovery in agent configs
+  playbook stale                   Check skills for staleness
+  playbook feedback --submit --file <path>  Submit feedback`
+
+const command = process.argv[2]
+const commandArgs = process.argv.slice(3)
+
+switch (command) {
+  case 'list':
+    await cmdList(commandArgs)
+    break
+  case 'meta':
+    cmdMeta()
+    break
+  case 'validate':
+    cmdValidate(commandArgs)
+    break
+  case 'init': {
+    const { runInit, detectAgentConfigs } = await import('./init.js')
+    const initRoot = process.cwd()
+    const result = runInit(initRoot)
+
+    for (const f of result.injected) console.log(`✓ Added playbook block to ${f}`)
+    for (const f of result.skipped) console.log(`  Already present in ${f}`)
+    for (const f of result.created) console.log(`✓ Created ${f}`)
+
+    if (result.injected.length === 0 && result.skipped.length === 0) {
+      const detected = detectAgentConfigs(initRoot)
+      if (detected.length === 0) {
+        console.log('No agent config files found (AGENTS.md, CLAUDE.md, .cursorrules, .github/copilot-instructions.md).')
+        console.log('Create one of these files and run playbook init again.')
+      }
+    }
+
+    console.log(`✓ Config: ${result.configPath}`)
+    break
+  }
+  case 'stale': {
+    const { checkStaleness } = await import('./staleness.js')
+    const { scanForPlaybooks: scanStale } = await import('./scanner.js')
+    let staleResult
+    try {
+      staleResult = await scanStale()
+    } catch (err) {
+      console.error((err as Error).message)
+      process.exit(1)
+    }
+
+    if (staleResult.packages.length === 0) {
+      console.log('No playbook-enabled packages found.')
+      break
+    }
+
+    const jsonStale = commandArgs.includes('--json')
+    const reports = await Promise.all(
+      staleResult.packages.map((pkg) => {
+        const pkgDir = join(process.cwd(), 'node_modules', pkg.name)
+        return checkStaleness(pkgDir, pkg.name)
+      }),
+    )
+
+    if (jsonStale) {
+      console.log(JSON.stringify(reports, null, 2))
+      break
+    }
+
+    for (const report of reports) {
+      const driftLabel = report.versionDrift ? ` [${report.versionDrift} drift]` : ''
+      const vLabel = report.skillVersion && report.currentVersion
+        ? ` (${report.skillVersion} → ${report.currentVersion})` : ''
+      console.log(`${report.library}${vLabel}${driftLabel}`)
+
+      const stale = report.skills.filter((s) => s.needsReview)
+      if (stale.length === 0) {
+        console.log('  All skills up-to-date')
+      } else {
+        for (const skill of stale) {
+          console.log(`  ⚠ ${skill.name}: ${skill.reasons.join(', ')}`)
+        }
+      }
+      console.log()
+    }
+    break
+  }
+  case 'feedback': {
+    const { runFeedback } = await import('./feedback.js')
+    runFeedback(commandArgs)
+    break
+  }
+  default:
+    console.log(USAGE)
+    process.exit(command ? 1 : 0)
+}

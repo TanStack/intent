@@ -20,7 +20,6 @@
     "copy:readme": "cp README.md packages/agents/README.md",
     "dev": "pnpm run watch",
     "format": "prettier --experimental-cli --ignore-unknown '**/*' --write",
-    "generate-docs": "node scripts/generate-docs.ts && pnpm run copy:readme",
     "lint:fix": "nx affected --target=lint:fix --exclude=examples/**",
     "lint:fix:all": "nx run-many --targets=lint --fix",
     "test": "pnpm run test:ci",
@@ -47,7 +46,6 @@
     "@faker-js/faker": "^10.2.0",
     "@svitejs/changesets-changelog-github-compact": "^1.2.0",
     "@tanstack/eslint-config": "0.3.4",
-    "@tanstack/typedoc-config": "0.3.3",
     "@types/node": "^25.0.7",
     "eslint": "^9.39.2",
     "eslint-plugin-unused-imports": "^4.3.0",
@@ -63,9 +61,5 @@
     "vitest": "^4.0.17",
     "yaml": "^2.7.0"
   },
-  "overrides": {
-    "@tanstack/agents": "workspace:*",
-    "@tanstack/router/skills": "workspace:*",
-    "@tanstack/start/skills": "workspace:*"
-  }
+  "overrides": {}
 }
