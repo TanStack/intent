@@ -56,13 +56,16 @@ skill-domain-discovery skill — prefer running that when time permits.
 
 1. Build a concept inventory (every export, config key, constraint, warning)
 2. Group into 4–7 capability domains using work-oriented names
-3. Extract 3+ failure modes per domain (plausible, silent, grounded)
-4. Proceed to Step 1 below
+3. Enumerate 10–20 task-focused skills from the intersection of domains
+   and developer tasks
+4. Extract 3+ failure modes per skill (plausible, silent, grounded)
+5. Proceed to Step 1 below
 
 ### Step 1 — Plan the file tree
 
-From the domain map, determine which skills are core (framework-agnostic)
-and which are framework-specific.
+From the domain map, each entry in the `skills` list becomes a SKILL.md
+file. The `type` field on each skill (`core`, `framework`, `lifecycle`,
+`composition`) determines where it goes. Determine the file tree:
 
 **Core vs framework decision:**
 
@@ -242,9 +245,9 @@ Minimum working example for this domain.
 Each `failure_mode` entry from the domain map becomes a Common Mistake
 entry in the SKILL file. Minimum 3 entries. Complex domains target 5–6.
 
-**Cross-domain failure modes:** The domain map may contain failure modes
-with a `domains` list naming multiple domain slugs. Write these into
-every SKILL file whose domain is listed. A developer loading the SSR
+**Cross-skill failure modes:** The domain map may contain failure modes
+with a `skills` list naming multiple skill slugs. Write these into
+every SKILL file whose skill is listed. A developer loading the SSR
 skill and a developer loading the state management skill both need to
 see "stale state during hydration" — the same advice must appear in
 both files. Do not deduplicate across skills at the cost of coverage.
@@ -472,7 +475,7 @@ Run every check before outputting. Fix any failures before proceeding.
 
 | Check | Rule |
 |-------|------|
-| Every domain from domain_map has a skill | No orphaned domains |
+| Every skill from domain_map has a SKILL.md | No orphaned skills |
 | Core/framework split is clean | No framework hooks in core skills |
 | Every framework skill has `requires` | Links to its core skill |
 | Framework skill opens with dependency note | "builds on [core]" prose line |
@@ -489,7 +492,7 @@ Run every check before outputting. Fix any failures before proceeding.
 | Composition skills don't repeat individual skills | Only the seam |
 | `name` matches directory path | `router-core/search-params` → `router-core/search-params/SKILL.md` |
 | `sources` filled in sub-skills | At least one repo:path per sub-skill |
-| Cross-domain failures in all relevant skills | Failure modes with multiple `domains` appear in each listed skill |
+| Cross-skill failures in all relevant files | Failure modes with multiple `skills` appear in each listed SKILL.md |
 | Tensions noted in affected skills | Each tension has notes in all involved domain skills |
 | Framework domains decomposed per-package | No single skill covering multiple framework adapters |
 | Adapter-heavy domains have references | 3+ adapters/backends → one reference file per adapter |
@@ -600,7 +603,7 @@ current_skills:
 | Composition skills require all dependencies | Lists all core + framework skills |
 | `name` matches directory | `router-core/search-params` → file at that path |
 | `library_version` in every frontmatter | Which version the skill targets |
-| Cross-domain failures duplicated | Each listed domain gets the failure mode |
+| Cross-skill failures duplicated | Each listed skill gets the failure mode |
 | Tensions cross-referenced | Tension notes in each involved skill point to the other |
 | Skills ship with packages | `"skills"` in package.json `files` array |
 
