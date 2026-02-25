@@ -180,9 +180,10 @@ different skills but need the same advice. When a failure mode spans
 domains, list all relevant domain slugs in its `domains` field. The
 skill-tree-generator will write it into every corresponding SKILL file.
 
-Do not force failure modes into a single domain for tidiness. If the
-advice is needed by someone working in domain A and also by someone
-working in domain B, it belongs in both.
+List a cross-domain failure mode once, under its primary domain. Set
+the `domains` field to all domain slugs it applies to. Do not duplicate
+the entry in the YAML — the skill-tree-generator handles duplication
+into multiple SKILL files at generation time.
 
 ### 2f — Identify cross-domain tensions
 
@@ -225,7 +226,7 @@ for import patterns. For each frequently co-used library, log:
 - Whether it's a required or optional integration
 - Any example code showing the integration pattern
 
-These become targeted composition questions in Phase 3f.
+These become targeted composition questions in Phase 3e.
 
 ### 2i — Produce the draft domain map
 
@@ -432,26 +433,63 @@ gaps:
 
 ### 2. skill_spec.md
 
-A human-readable companion that includes:
+A human-readable companion document. Follow this structure:
 
-- Library overview (2–3 sentences, no marketing)
-- Domain table with coverage matrix
-- Full failure mode inventory grouped by domain, distinguishing
-  doc-sourced vs maintainer-sourced failure modes. Flag cross-domain
-  failure modes and list which SKILL files each should appear in.
-- Tensions inventory with the domains in conflict and agent implications
-- Remaining gaps (if any) needing further input
-- Recommended skill file structure: which domains become tier 1 stubs,
-  which become tier 2 sub-skills, which need references/ directories
-- Composition opportunities: which other libraries this one interacts
-  with and what composition skills are needed
+```markdown
+# [Library Name] — Skill Spec
 
-Format the domain table as:
+[2–3 sentences: what this library is, what problem it solves. Factual,
+not promotional.]
 
-```
+## Domain Coverage
+
 | Domain | Skill name | What it covers | Failure modes | Tier |
 |--------|------------|----------------|---------------|------|
 | [name] | [lib]/[slug] | [exhaustive list] | [count] | [1|2] |
+
+## Failure Mode Inventory
+
+### [Domain name] ([count] failure modes)
+
+| # | Mistake | Priority | Source | Cross-domain? |
+|---|---------|----------|--------|---------------|
+| 1 | [phrase] | CRITICAL | [doc/source/interview] | [other domain slugs or —] |
+
+[Repeat table for each domain.]
+
+## Tensions
+
+| Tension | Domains | Agent implication |
+|---------|---------|-------------------|
+| [short phrase] | [slug-a] ↔ [slug-b] | [what agents get wrong] |
+
+## Subsystems & Reference Candidates
+
+| Domain | Subsystems | Reference candidates |
+|--------|------------|---------------------|
+| [slug] | [adapter1, adapter2, ...] or — | [topic needing depth] or — |
+
+## Remaining Gaps
+
+| Domain | Question | Status |
+|--------|----------|--------|
+| [slug] | [what still needs input] | open |
+
+[Omit this section if all gaps were resolved in the interview.]
+
+## Recommended Skill File Structure
+
+- **Core skills:** [list which domains become core sub-skills]
+- **Framework skills:** [list per-framework skills needed]
+- **Composition skills:** [list integration seams needing composition skills]
+- **Reference files:** [list domains needing references/ based on subsystems
+  or dense API surfaces]
+
+## Composition Opportunities
+
+| Library | Integration points | Composition skill needed? |
+|---------|-------------------|--------------------------|
+| [name] | [what interacts] | [yes/no — if yes, skill name] |
 ```
 
 ---

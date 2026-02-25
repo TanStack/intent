@@ -50,7 +50,9 @@ You need one of:
 - Raw library documentation and source code (run a compressed domain
   discovery first)
 
-If starting from raw docs without a domain map:
+If starting from raw docs without a domain map, run a compressed
+discovery. This produces lower-fidelity output than the full
+skill-domain-discovery skill — prefer running that when time permits.
 
 1. Build a concept inventory (every export, config key, constraint, warning)
 2. Group into 4–7 capability domains using work-oriented names
@@ -237,7 +239,8 @@ Minimum working example for this domain.
 
 **3. Common Mistakes**
 
-Minimum 3 entries. Complex domains target 5–6.
+Each `failure_mode` entry from the domain map becomes a Common Mistake
+entry in the SKILL file. Minimum 3 entries. Complex domains target 5–6.
 
 **Cross-domain failure modes:** The domain map may contain failure modes
 with a `domains` list naming multiple domain slugs. Write these into
@@ -271,10 +274,8 @@ Priority levels:
 - **HIGH** — Incorrect behavior under common conditions.
 - **MEDIUM** — Incorrect under specific conditions or edge cases.
 
-Every mistake must be:
-- **Plausible** — An agent would generate this because it looks correct
-- **Silent** — No immediate crash; fails at runtime or conditionally
-- **Grounded** — Traceable to a specific doc page, source, or issue
+Every mistake must be plausible (an agent would generate it), silent
+(no immediate crash), and grounded (traceable to doc or source).
 
 **Failure mode status from domain map:** The domain map may include a
 `status` field on failure modes. Handle as follows:
@@ -402,6 +403,10 @@ toward the related skill where the other side of the tension lives.
 
 ### Step 6 — Write composition skills (if applicable)
 
+Use the `compositions` entries from `domain_map.yaml` (populated during
+skill-domain-discovery Phase 2h) to identify which composition skills
+to produce.
+
 Composition skills cover how two or more libraries work together. These
 are framework-specific by default (the integration patterns depend on
 framework hooks and providers).
@@ -483,7 +488,7 @@ Run every check before outputting. Fix any failures before proceeding.
 | Framework skills don't repeat core content | Only framework-specific |
 | Composition skills don't repeat individual skills | Only the seam |
 | `name` matches directory path | `router-core/search-params` → `router-core/search-params/SKILL.md` |
-| metadata.sources filled | At least one repo:path per sub-skill |
+| `sources` filled in sub-skills | At least one repo:path per sub-skill |
 | Cross-domain failures in all relevant skills | Failure modes with multiple `domains` appear in each listed skill |
 | Tensions noted in affected skills | Each tension has notes in all involved domain skills |
 | Framework domains decomposed per-package | No single skill covering multiple framework adapters |
@@ -558,16 +563,7 @@ current_skills:
    registry
 4. Bump `library_version`
 
-### Step 3 — Update package_map.yaml (only if needed)
-
-The `package_map.yaml` only needs updating when:
-- A new package is added to the library
-- A new framework adapter is published
-- A skill is renamed or removed
-
-For content updates within existing skills, `package_map.yaml` does not change.
-
-### Step 4 — Produce a changelog entry
+### Step 3 — Produce a changelog entry
 
 ```markdown
 ## [date]
@@ -592,7 +588,7 @@ For content updates within existing skills, `package_map.yaml` does not change.
 |-------|------|
 | Under 500 lines per SKILL.md | Move excess to references/; also create references for content depth |
 | Real imports in every code block | Exact package, correct adapter |
-| No concept explanations | No TypeScript/React/framework tutorials |
+| No external concept explanations | No "TypeScript is...", no "React hooks are..." — library-specific concepts are fine |
 | No marketing prose | First body line is heading, code, or dependency note |
 | Complete code blocks | Every block works without modification |
 | Common Mistakes are silent | Not obvious compile errors |
@@ -643,5 +639,4 @@ When updating:
 
 1. staleness_report.yaml
 2. Updated SKILL.md files (core then framework)
-3. Updated package_map.yaml (only if structure changed)
-4. CHANGELOG.md entry
+3. CHANGELOG.md entry
