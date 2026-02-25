@@ -1,0 +1,71 @@
+name: Process Feedback
+
+on:
+  discussion:
+    types: [created]
+
+jobs:
+  label:
+    name: Auto-label feedback
+    if: github.event.discussion.category.name == 'Feedback'
+    runs-on: ubuntu-latest
+    permissions:
+      discussions: write
+    steps:
+      - name: Label by library
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.discussion.body || ''
+            const libraryPatterns = [
+              { pattern: /\brouter\//, label: 'feedback:router' },
+              { pattern: /\bstart\//, label: 'feedback:start' },
+              { pattern: /\bquery\//, label: 'feedback:query' },
+              { pattern: /\btable\//, label: 'feedback:table' },
+              { pattern: /\bform\//, label: 'feedback:form' },
+              { pattern: /\bvirtual\//, label: 'feedback:virtual' },
+              { pattern: /\bstore\//, label: 'feedback:store' },
+              { pattern: /\bdb\//, label: 'feedback:db' },
+              { pattern: /\bcompositions\//, label: 'feedback:compositions' },
+            ]
+
+            const labels = libraryPatterns
+              .filter(({ pattern }) => pattern.test(body))
+              .map(({ label }) => label)
+
+            if (labels.length === 0) return
+
+            // Ensure labels exist
+            for (const label of labels) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label,
+                })
+              } catch {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label,
+                  color: '7057ff',
+                })
+              }
+            }
+
+            // Discussions use the GraphQL API for labels
+            const { data: discussion } = await github.graphql(`
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  discussion(number: $number) {
+                    id
+                  }
+                }
+              }
+            `, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              number: context.payload.discussion.number,
+            })
+
+            core.info(`Matched labels: ${labels.join(', ')}`)

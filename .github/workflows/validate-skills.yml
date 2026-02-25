@@ -1,0 +1,27 @@
+name: Validate Skills
+
+on:
+  pull_request:
+    paths:
+      - 'packages/playbooks/skills/**'
+      - 'packages/playbooks/package_map.yaml'
+      - 'scripts/validate-skills.ts'
+
+jobs:
+  validate:
+    name: Validate skill files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install yaml
+
+      - name: Run validation
+        run: npx tsx scripts/validate-skills.ts

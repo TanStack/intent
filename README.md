@@ -1,1 +1,1 @@
-# TanStack Agents
+# @tanstack/playbook

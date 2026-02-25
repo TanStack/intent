@@ -1,0 +1,27 @@
+schema_version: 1
+playbook:
+  name: tanstack
+  version: "0.1.0-alpha.1"
+
+# Maps npm package names → skill directories
+package_map:
+  "@tanstack/db": [db/core]
+  "@tanstack/react-db": [db/core, db/react]
+  "@tanstack/vue-db": [db/core, db/vue]
+  "@tanstack/solid-db": [db/core, db/solid]
+  "@tanstack/svelte-db": [db/core, db/svelte]
+  "@tanstack/angular-db": [db/core, db/angular]
+
+# Composition skills — surfaced when ALL listed skills are present
+# (none yet — add as library skills are created)
+compositions: []
+
+# Always included regardless of installed packages
+always_include: [tanstack]
+
+# Feedback config
+feedback:
+  enabled: true
+  target: "github_discussion"
+  repo: "tanstack/playbooks"
+  category: "Feedback"
