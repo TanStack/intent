@@ -25,86 +25,27 @@ you create is read directly by AI coding agents across Claude, GPT-4+,
 Gemini, Cursor, Copilot, Codex, and open-source models. Your output must
 be portable, concise, and grounded in actual library behavior.
 
-Skills are split into two layers:
+### Skill types
 
-- **Core skills** — framework-agnostic concepts, configuration, and patterns
-- **Framework skills** — framework-specific bindings, hooks, components
+Every skill has a `type` field in its frontmatter. Valid types:
 
-All generated skills live in the `tanstack/playbooks` repository and publish
-as part of the `@tanstack/playbooks` npm package. Skills do NOT live in the
-library's source repo. The playbooks repo is the single source of truth for
-all TanStack agent skills.
+| Type | Purpose | Example |
+|------|---------|---------|
+| `core` | Framework-agnostic concepts, configuration, patterns | `db-core` |
+| `sub-skill` | A focused sub-topic within a core or framework skill | `db-core/live-queries` |
+| `framework` | Framework-specific bindings, hooks, components | `react-db` |
+| `lifecycle` | Cross-cutting developer journey (getting started, go-live) | `electric-quickstart` |
+| `composition` | Integration between two or more libraries | `electric-drizzle` |
+| `security` | Audit checklist or security validation | `electric-security-check` |
 
 Agents discover skills via `tanstack playbook list` and read them directly
-from `node_modules/@tanstack/playbooks/skills/`. Framework skills declare
-a `requires` dependency on their core skill so agents load them in the right
-order.
+from `node_modules`. Framework skills declare a `requires` dependency on
+their core skill so agents load them in the right order.
 
 There are two workflows. Detect which applies.
 
 **Workflow A — Generate:** Build a complete skill tree from a domain map.
 **Workflow B — Update:** Diff a library version change and update skills.
-
----
-
-## Directory Convention
-
-Every library follows the same directory structure inside `skills/`. This
-convention is mandatory — both new and updated skills must follow it. When
-updating existing skills, check the existing directory structure first and
-place files accordingly.
-
-```
-skills/
-├── [lib]/                        # One directory per library
-│   ├── core/                     # Core skills (framework-agnostic)
-│   │   ├── SKILL.md              # Core overview + sub-skill registry
-│   │   ├── [domain-1]/
-│   │   │   └── SKILL.md          # Core sub-skill
-│   │   ├── [domain-2]/
-│   │   │   └── SKILL.md
-│   │   └── references/           # Optional overflow content
-│   │       └── options.md
-│   ├── react/                    # React framework skill
-│   │   ├── SKILL.md              # React overview + sub-skill registry
-│   │   ├── [domain-1]/
-│   │   │   └── SKILL.md          # React-specific sub-skill
-│   │   └── references/
-│   ├── solid/                    # Solid framework skill (if applicable)
-│   │   └── SKILL.md
-│   └── vue/                      # Vue framework skill (if applicable)
-│       └── SKILL.md
-├── compositions/                  # Cross-library skills
-│   ├── router-query/
-│   │   └── SKILL.md
-│   └── start-query/
-│       └── SKILL.md
-└── tanstack/                      # Ecosystem router (always present)
-    └── SKILL.md
-```
-
-**Examples:**
-
-```
-skills/router/core/SKILL.md                    → Router core overview
-skills/router/core/search-params/SKILL.md      → Core sub-skill
-skills/router/react/SKILL.md                   → React Router overview
-skills/router/react/ssr-patterns/SKILL.md      → React-specific sub-skill
-skills/query/core/SKILL.md                     → Query core overview
-skills/query/react/SKILL.md                    → React Query overview
-skills/db/core/SKILL.md                        → DB core overview
-skills/db/react/SKILL.md                       → React DB overview
-skills/compositions/router-query/SKILL.md      → Router + Query integration
-```
-
-Libraries with no framework adapters (e.g. Store) only have `[lib]/core/`.
-Libraries with only one framework (e.g. Start is React-only) have
-`[lib]/react/` with no `core/` unless there are framework-agnostic concepts
-worth separating.
-
-**When updating existing skills:** Always check what exists under
-`skills/[lib]/` first. Place new files into the existing structure. Do not
-create a new layout or rename directories.
 
 ---
 
@@ -117,51 +58,165 @@ You need one of:
 - Raw library documentation and source code (run a compressed domain
   discovery first)
 
-If starting from raw docs without a domain map:
+If starting from raw docs without a domain map, run a compressed
+discovery. This produces lower-fidelity output than the full
+skill-domain-discovery skill — prefer running that when time permits.
 
 1. Build a concept inventory (every export, config key, constraint, warning)
 2. Group into 4–7 capability domains using work-oriented names
-3. Extract 3+ failure modes per domain (plausible, silent, grounded)
-4. Proceed to Step 1 below
+3. Enumerate 10–20 task-focused skills from the intersection of domains
+   and developer tasks
+4. Extract 3+ failure modes per skill (plausible, silent, grounded)
+5. Proceed to Step 1 below
 
 ### Step 1 — Plan the file tree
 
-From the domain map, determine which skills are core and which are
-framework-specific.
+From the domain map, each entry in the `skills` list becomes a SKILL.md
+file. The `type` field on each skill (`core`, `framework`, `lifecycle`,
+`composition`) determines where it goes. Determine the file tree:
 
 **Core vs framework decision:**
 
 | Content | Goes in... |
 |---------|-----------|
-| Mental models, concepts, lifecycle | `[lib]/core/` |
-| Configuration options and their effects | `[lib]/core/` |
-| Type system, generics, inference | `[lib]/core/` |
-| Common mistakes that apply to all frameworks | `[lib]/core/` |
-| Hooks (`useX`, `createX`) | `[lib]/[framework]/` |
-| Components (`<Link>`, `<Outlet>`) | `[lib]/[framework]/` |
-| Provider setup and wiring | `[lib]/[framework]/` |
-| SSR/hydration patterns specific to a framework | `[lib]/[framework]/` |
-| Framework-specific gotchas | `[lib]/[framework]/` |
+| Mental models, concepts, lifecycle | Core |
+| Configuration options and their effects | Core |
+| Type system, generics, inference | Core |
+| Common mistakes that apply to all frameworks | Core |
+| Hooks (`useX`, `createX`) | Framework |
+| Components (`<Link>`, `<Outlet>`) | Framework |
+| Provider setup and wiring | Framework |
+| SSR/hydration patterns specific to a framework | Framework |
+| Framework-specific gotchas | Framework |
+
+If a library has no framework adapters (e.g. Store, DB), produce only
+core skills.
 
 **Framework-integration domain decomposition:** If the domain map from
 skill-domain-discovery contains a single "Framework Integration" domain
-(or similar) that covers multiple frameworks, and the library has separate
-framework adapter packages, decompose it into per-framework skills. Each
-framework adapter gets its own skill under `[lib]/[framework]/`. Do not
-combine multiple frameworks into a single skill.
+and the library has separate framework adapter packages, decompose it
+into per-framework skills co-located with each adapter package. Do not
+produce a single monolithic framework-integration skill that covers
+React, Vue, Solid, etc. in one file.
 
-If a library has no framework adapters, produce only `[lib]/core/` skills.
+**Adapter-heavy domains:** When a domain covers multiple backends or
+adapters with distinct config interfaces (e.g. 5 sync adapters, 3
+database drivers), keep one SKILL.md for the shared patterns but
+produce one reference file per adapter with its specific config,
+setup, and gotchas. The SKILL.md covers what's common; each
+`references/[adapter].md` covers what's unique.
 
-### Step 2 — Write the core overview skill
+**Flat vs nested structure:**
 
-The core overview is the entry point for the library's core skills. It
-covers framework-agnostic concepts and contains the sub-skill registry.
+Choose the structure that matches how the domain map's skills are shaped.
+
+Use **nested** (`[lib]-core/[domain]/SKILL.md`) when:
+- Developer tasks cluster cleanly into 3–5 conceptual domains
+- The library has a clear core + framework adapter split
+- Skills build on each other in a layered way
+
+Use **flat** (`skills/[skill-name]/SKILL.md`) when:
+- Developer tasks are task-focused and don't nest into domains
+- The domain discovery process recommended task-focused skills
+- Skills map 1:1 to distinct developer intents with minimal overlap
+
+Both are valid. The domain map's `type` field and structure will signal
+which fits. When in doubt, prefer flat — it's simpler and each skill
+is independently discoverable.
+
+**Nested structure:**
+
+```
+skills/
+├── [lib]-core/                   # Core skill for the library
+│   ├── SKILL.md                  # Core overview + sub-skill registry
+│   ├── [domain-1]/
+│   │   └── SKILL.md             # Core sub-skill
+│   ├── [domain-2]/
+│   │   └── SKILL.md
+│   └── references/              # Optional overflow content
+│       └── options.md
+├── react-[lib]/                  # React framework skill
+│   ├── SKILL.md                  # React overview + sub-skill registry
+│   ├── [domain-1]/
+│   │   └── SKILL.md             # React-specific sub-skill
+│   └── references/
+├── solid-[lib]/                  # Solid framework skill (if applicable)
+│   └── SKILL.md
+├── vue-[lib]/                    # Vue framework skill (if applicable)
+│   └── SKILL.md
+```
+
+**Flat structure:**
+
+```
+skills/
+├── [lib]-shapes/                 # Task-focused skill
+│   ├── SKILL.md
+│   └── references/
+│       └── shape-options.md
+├── [lib]-auth/                   # Another task skill
+│   └── SKILL.md
+├── [lib]-proxy/
+│   └── SKILL.md
+├── [lib]-quickstart/             # Lifecycle skill
+│   └── SKILL.md
+├── [lib]-go-live/                # Lifecycle skill
+│   └── SKILL.md
+├── [lib]-drizzle/                # Composition skill
+│   └── SKILL.md
+```
+
+**Router skill:** A router skill (lightweight entry point with a decision
+table) is optional. If the playbook CLI provides `list` and `show`
+commands, agents can discover skills directly without a router. Only
+create a router skill if the skill set is large enough (15+) that
+browsing the list is insufficient, or if the nested structure needs
+an entry point to guide agents to the right sub-skill.
+
+**Source repository layout for npm distribution:**
+
+Skills must ship with their respective packages so they're available in
+`node_modules` after install. In a monorepo, co-locate skills with the
+package they document:
+
+```
+packages/
+├── [lib]/                        # Core package
+│   ├── src/
+│   ├── skills/                   # Core skills live here
+│   │   ├── [lib]-core/
+│   │   │   ├── SKILL.md
+│   │   │   └── [domain]/SKILL.md
+│   │   └── compositions/        # Composition skills with co-used libs
+│   └── package.json             # Add "skills" to files array
+├── react-[lib]/                  # React adapter package
+│   ├── src/
+│   ├── skills/                   # React framework skills live here
+│   │   └── react-[lib]/
+│   │       └── SKILL.md
+│   └── package.json             # Add "skills" to files array
+```
+
+Add `"skills"` to each package's `files` array in `package.json` so
+skill files are included in the published npm tarball:
+
+```json
+{
+  "files": ["dist", "src", "skills"]
+}
+```
+
+### Step 2 — Write the core skill
+
+The core skill is the foundational overview for the library. It covers
+framework-agnostic concepts and contains the sub-skill registry.
 
 **Frontmatter:**
 
 ```yaml
 ---
-name: [lib]/core
+name: [lib]-core
 description: >
   [1–3 sentences. What this library does and the framework-agnostic
   concepts it provides. Pack with keywords: function names, config
@@ -184,14 +239,14 @@ not promotional. Framework-agnostic.]
 
 | Need to... | Read |
 |------------|------|
-| [task 1] | [lib]/core/[domain-1]/SKILL.md |
-| [task 2] | [lib]/core/[domain-2]/SKILL.md |
+| [task 1] | [lib]-core/[domain-1]/SKILL.md |
+| [task 2] | [lib]-core/[domain-2]/SKILL.md |
 
 ## Quick Decision Tree
 
-- Setting up for the first time? → [lib]/core/[setup-domain]
-- Working with [concept]? → [lib]/core/[concept-domain]
-- Debugging [issue]? → [lib]/core/[domain] § Common Mistakes
+- Setting up for the first time? → [lib]-core/[setup-domain]
+- Working with [concept]? → [lib]-core/[concept-domain]
+- Debugging [issue]? → [lib]-core/[domain] § Common Mistakes
 
 ## Version
 
@@ -206,7 +261,7 @@ One SKILL.md per domain. Follow this structure exactly.
 
 ```yaml
 ---
-name: [lib]/core/[domain-slug]
+name: [lib]-core/[domain-slug]
 description: >
   [1–3 sentences. What this domain covers AND when to load it. Name
   specific functions, options, or APIs. Dense routing key.]
@@ -228,7 +283,7 @@ Minimum working example for this domain.
 - Real package imports with exact names
 - No `// ...` or `[your code here]` — complete and copy-pasteable
 - If a concept is better explained with a framework hook, reference the
-  framework skill: "For React usage, see `[lib]/react/SKILL.md`"
+  framework skill: "For React usage, see `react-[lib]/SKILL.md`"
 
 **2. Core Patterns**
 
@@ -240,7 +295,17 @@ Minimum working example for this domain.
 
 **3. Common Mistakes**
 
-Minimum 3 entries. Complex domains target 5–6. Format:
+Each `failure_mode` entry from the domain map becomes a Common Mistake
+entry in the SKILL file. Minimum 3 entries. Complex domains target 5–6.
+
+**Cross-skill failure modes:** The domain map may contain failure modes
+with a `skills` list naming multiple skill slugs. Write these into
+every SKILL file whose skill is listed. A developer loading the SSR
+skill and a developer loading the state management skill both need to
+see "stale state during hydration" — the same advice must appear in
+both files. Do not deduplicate across skills at the cost of coverage.
+
+Format:
 
 ```markdown
 ### [PRIORITY] [What goes wrong — 5–8 word phrase]
@@ -265,14 +330,16 @@ Priority levels:
 - **HIGH** — Incorrect behavior under common conditions.
 - **MEDIUM** — Incorrect under specific conditions or edge cases.
 
-Every mistake must be:
-- **Plausible** — An agent would generate this because it looks correct
-- **Silent** — No immediate crash; fails at runtime or conditionally
-- **Grounded** — Traceable to a specific doc page, source, or issue
+Every mistake must be plausible (an agent would generate it), silent
+(no immediate crash), and grounded (traceable to doc or source).
 
-Prioritize failure modes with `confidence: confirmed` and
-`status: active` from the domain map. Include `fixed-but-legacy-risk`
-items when agents are likely to have seen the old pattern in training data.
+**Failure mode status from domain map:** The domain map may include a
+`status` field on failure modes. Handle as follows:
+- `active` — Include as a normal Common Mistake entry
+- `fixed-but-legacy-risk` — Include with a note: "Fixed in v[X] but
+  agents trained on older code may still generate this pattern"
+- `removed` — Do not include. The bug is fixed and the pattern is no
+  longer relevant.
 
 **4. References** (only when needed)
 
@@ -282,7 +349,21 @@ items when agents are likely to have seen the old pattern in training data.
 - [Complete option reference](references/options.md)
 ```
 
-Use references/ when the skill would exceed 500 lines without them.
+Create reference files when any of these apply — not just length overflow:
+
+- **Length:** The skill would exceed 500 lines without them
+- **Multiple subsystems:** The domain covers 3+ independent backends,
+  adapters, or providers with distinct config interfaces. Create one
+  reference file per subsystem (e.g. `references/electric-adapter.md`,
+  `references/query-adapter.md`)
+- **Dense API surface:** A topic has >10 distinct API patterns, operators,
+  or option shapes that agents need for implementation. Move the full
+  reference to `references/` and keep only the most common 2–3 in the
+  SKILL.md
+- **Deep validation/schema patterns:** If the library has schema
+  validation, type transforms (TInput/TOutput), or similar deep
+  configuration surfaces, give them a dedicated reference file even if
+  they technically fit in the parent skill
 
 ### Step 4 — Write framework skills
 
@@ -290,15 +371,11 @@ Framework skills build on their core skill. They cover only what is
 specific to the framework — hooks, components, providers, and
 framework-specific patterns and mistakes.
 
-**One skill per framework adapter.** If the library has `@tanstack/react-db`,
-`@tanstack/vue-db`, and `@tanstack/solid-db`, produce three separate
-framework skills at `db/react/`, `db/vue/`, and `db/solid/`.
-
 **Frontmatter:**
 
 ```yaml
 ---
-name: [lib]/react
+name: react-[lib]
 description: >
   [1–3 sentences. React-specific bindings for [library]. Name the hooks,
   components, and providers. Mention React-specific patterns like SSR
@@ -308,14 +385,14 @@ library: [lib]
 framework: react
 library_version: "[version]"
 requires:
-  - [lib]/core
+  - [lib]-core
 ---
 ```
 
 **Body template:**
 
 ```markdown
-This skill builds on [lib]/core. Read [lib]/core first for foundational
+This skill builds on [lib]-core. Read [lib]-core first for foundational
 concepts before applying React-specific patterns.
 
 # [Library Name] — React
@@ -345,7 +422,7 @@ with the framework frontmatter:
 
 ```yaml
 ---
-name: [lib]/react/[domain-slug]
+name: react-[lib]/[domain-slug]
 description: >
   [React-specific description for this domain.]
 type: sub-skill
@@ -353,14 +430,38 @@ library: [lib]
 framework: react
 library_version: "[version]"
 requires:
-  - [lib]/core
-  - [lib]/core/[domain-slug]
+  - [lib]-core
+  - [lib]-core/[domain-slug]
 ---
 
-This skill builds on [lib]/core/[domain-slug]. Read the core skill first.
+This skill builds on [lib]-core/[domain-slug]. Read the core skill first.
 ```
 
-### Step 5 — Write composition skills (if applicable)
+### Step 5 — Write cross-domain tension notes
+
+The domain map may contain a `tensions` section listing design conflicts
+between domains. For each tension, add a brief note to the Common
+Mistakes section of every SKILL file whose domain is involved. Format:
+
+```markdown
+### HIGH Tension: [short phrase]
+
+This domain's patterns conflict with [other domain]. [One sentence
+describing the pull.] Agents optimizing for [this domain's goal]
+tend to [specific mistake] because they don't account for [other
+domain's constraint].
+
+See also: [lib]-core/[other-domain]/SKILL.md § Common Mistakes
+```
+
+The cross-reference ensures agents that load one skill are pointed
+toward the related skill where the other side of the tension lives.
+
+### Step 6 — Write composition skills (if applicable)
+
+Use the `compositions` entries from `domain_map.yaml` (populated during
+skill-domain-discovery Phase 2h) to identify which composition skills
+to produce.
 
 Composition skills cover how two or more libraries work together. These
 are framework-specific by default (the integration patterns depend on
@@ -377,10 +478,10 @@ description: >
 type: composition
 library_version: "[version of primary lib]"
 requires:
-  - [lib-a]/core
-  - [lib-a]/react
-  - [lib-b]/core
-  - [lib-b]/react
+  - [lib-a]-core
+  - react-[lib-a]
+  - [lib-b]-core
+  - react-[lib-b]
 ---
 
 This skill requires familiarity with both [lib-a] and [lib-b].
@@ -390,20 +491,31 @@ Read their core and framework skills first.
 **Body structure:**
 
 1. **Integration Setup** — How to wire the two libraries together
-2. **Core Integration Patterns** — 2–4 patterns showing them working together
+2. **Core Integration Patterns** — 2–4 patterns showing them working in concert
 3. **Common Mistakes** — Mistakes that only occur at the integration boundary
 
 Do not duplicate content from either library's individual skills. Focus
 exclusively on the seam between them.
 
-### Step 6 — Write security/go-live skills (where applicable)
+### Step 7 — Write checklist/audit skills (where applicable)
 
-For libraries with security-sensitive surface area (server functions,
-auth, data exposure):
+Some skills don't fit the standard body structure (Setup → Core Patterns
+→ Common Mistakes). Security, go-live, and some lifecycle skills are
+audit-oriented — the agent runs through a checklist to verify correctness
+rather than learning patterns. Use the alternative body structure below
+for these skill types.
+
+**When to use the checklist body:**
+- `security` type skills — pre-deploy security validation
+- `lifecycle` type skills focused on verification (go-live, migration)
+- Any skill where the primary action is "check these things" not "learn
+  these patterns"
+
+**Frontmatter:**
 
 ```yaml
 ---
-name: [lib]/react/security
+name: react-[lib]/security
 description: >
   Go-live security validation for [library]. Checks [specific concerns].
 type: security
@@ -411,28 +523,66 @@ library: [lib]
 framework: react
 library_version: "[version]"
 requires:
-  - [lib]/react
+  - react-[lib]
 ---
 ```
 
-Structure as a checklist the agent can run through before deployment:
+**Alternative body template (checklist/audit):**
 
-1. **Validation checks** — What to verify, with code showing correct config
-2. **Common security mistakes** — Wrong/correct pairs specific to this library
-3. **Pre-deploy checklist** — Ordered list of verifications
+```markdown
+# [Library Name] — [Security | Go-Live | Migration] Checklist
 
-### Step 7 — Validate the complete tree
+Run through each section before [deploying | releasing | migrating].
+
+## [Category 1] Checks
+
+### Check: [what to verify]
+
+Expected:
+```[lang]
+// correct configuration or code
+```
+
+Fail condition: [what indicates this check failed]
+Fix: [one-line remediation]
+
+### Check: [what to verify]
+
+[same structure]
+
+## [Category 2] Checks
+
+[same structure]
+
+## Common Security Mistakes
+
+[Wrong/correct pairs specific to this library, same format as
+Common Mistakes in standard skills]
+
+## Pre-Deploy Summary
+
+- [ ] [Verification 1]
+- [ ] [Verification 2]
+- [ ] [Verification 3]
+```
+
+The key differences from the standard body:
+- No "Setup" section — the agent already has the app running
+- Checks replace "Core Patterns" — each check is a verification, not a
+  teaching pattern
+- The summary checklist at the end gives agents a quick pass/fail list
+- Common Mistakes section is still present for wrong/correct pairs
+
+### Step 8 — Validate the complete tree
 
 Run every check before outputting. Fix any failures before proceeding.
 
 | Check | Rule |
 |-------|------|
-| Every domain from domain_map has a skill | No orphaned domains |
-| Directory convention followed | `skills/[lib]/core/`, `skills/[lib]/react/`, etc. |
+| Every skill from domain_map has a SKILL.md | No orphaned skills |
 | Core/framework split is clean | No framework hooks in core skills |
-| Framework-integration decomposed | One skill per framework adapter, not combined |
 | Every framework skill has `requires` | Links to its core skill |
-| Framework skill opens with dependency note | "builds on [lib]/core" prose line |
+| Framework skill opens with dependency note | "builds on [core]" prose line |
 | Every skill under 500 lines | Move excess to references/ |
 | Every code block has real imports | Exact package name, correct adapter |
 | No concept explanations | No "TypeScript is...", no "React hooks are..." |
@@ -444,19 +594,18 @@ Run every check before outputting. Fix any failures before proceeding.
 | Core skills reference framework skills | "For React usage, see..." |
 | Framework skills don't repeat core content | Only framework-specific |
 | Composition skills don't repeat individual skills | Only the seam |
-| `name` matches directory path | `router/core/search-params` → that path |
-| sources filled | At least one repo:path per sub-skill |
+| `name` matches directory path | `router-core/search-params` → `router-core/search-params/SKILL.md` |
+| `sources` filled in sub-skills | At least one repo:path per sub-skill |
+| Cross-skill failures in all relevant files | Failure modes with multiple `skills` appear in each listed SKILL.md |
+| Tensions noted in affected skills | Each tension has notes in all involved domain skills |
+| Framework domains decomposed per-package | No single skill covering multiple framework adapters |
+| Adapter-heavy domains have references | 3+ adapters/backends → one reference file per adapter |
+| Dense API surfaces in references | >10 distinct patterns → reference file, not inline |
+| Checklist skills use audit body | Security/go-live skills use checklist template, not Setup → Core Patterns → Common Mistakes |
 
 ---
 
 ## Workflow B — Update existing skills
-
-### Before you start
-
-Check the existing directory structure under `skills/[lib]/`. Your updates
-must fit into the existing layout. Do not rename directories, reorganize
-the tree, or create a parallel structure. If the library already has skills,
-you are editing files in place and adding new ones where needed.
 
 ### Trigger conditions
 
@@ -484,7 +633,6 @@ library_version_current: "[new]"
 
 stale_skills:
   - skill: "[skill name]"
-    path: "skills/[lib]/[core|framework]/[file]"
     reason: "[what changed]"
     severity: "[BREAKING | DEPRECATION | BEHAVIORAL | ADDITIVE]"
     changelog_entry: "[relevant entry]"
@@ -519,27 +667,11 @@ current_skills:
 **ADDITIVE changes:**
 1. Evaluate if new feature belongs in existing domain or needs a new skill
 2. If existing: add to Core Patterns or references/
-3. If new skill needed: create it under the existing `skills/[lib]/` tree
-   and update the parent skill's sub-skill registry
+3. If new skill needed: create it and update the parent skill's sub-skill
+   registry
 4. Bump `library_version`
 
-**New framework adapter:**
-1. Create `skills/[lib]/[framework]/SKILL.md`
-2. Use the existing React (or first) framework skill as a structural
-   reference — same sections, same depth
-3. Add `requires: [lib]/core` to frontmatter
-4. Update `package_map.yaml` with the new package → skill mapping
-
-### Step 3 — Update package_map.yaml (only if needed)
-
-The `package_map.yaml` only needs updating when:
-- A new package is added to the library
-- A new framework adapter is published
-- A skill is renamed or removed
-
-For content updates within existing skills, `package_map.yaml` does not change.
-
-### Step 4 — Produce a changelog entry
+### Step 3 — Produce a changelog entry
 
 ```markdown
 ## [date]
@@ -562,11 +694,9 @@ For content updates within existing skills, `package_map.yaml` does not change.
 
 | Check | Rule |
 |-------|------|
-| Under 500 lines per SKILL.md | Move excess to references/ |
-| Directory convention followed | `skills/[lib]/core/`, `skills/[lib]/[framework]/` |
-| Existing structure preserved (updates) | No renames, no reorganization |
+| Under 500 lines per SKILL.md | Move excess to references/; also create references for content depth |
 | Real imports in every code block | Exact package, correct adapter |
-| No concept explanations | No TypeScript/React/framework tutorials |
+| No external concept explanations | No "TypeScript is...", no "React hooks are..." — library-specific concepts are fine |
 | No marketing prose | First body line is heading, code, or dependency note |
 | Complete code blocks | Every block works without modification |
 | Common Mistakes are silent | Not obvious compile errors |
@@ -575,10 +705,13 @@ For content updates within existing skills, `package_map.yaml` does not change.
 | Core skills are framework-agnostic | No hooks, no components, no providers |
 | Framework skills have `requires` | Lists core dependency |
 | Framework skills open with dependency note | First prose line references core |
-| Framework-integration decomposed | One skill per adapter, not combined |
-| Composition skills require all dependencies | Lists all core + framework |
-| `name` matches directory | `router/core/search-params` → file at that path |
+| Composition skills require all dependencies | Lists all core + framework skills |
+| `name` matches directory | `router-core/search-params` → file at that path |
 | `library_version` in every frontmatter | Which version the skill targets |
+| Cross-skill failures duplicated | Each listed skill gets the failure mode |
+| Tensions cross-referenced | Tension notes in each involved skill point to the other |
+| Skills ship with packages | `"skills"` in package.json `files` array |
+| Checklist skills use audit template | Security/go-live skills use checklist body, not standard body |
 
 ---
 
@@ -602,18 +735,17 @@ Output is consumed by all major AI coding agents. To ensure consistency:
 
 When generating a complete skill tree:
 
-1. Core overview SKILL.md — `skills/[lib]/core/SKILL.md`
-2. Core sub-skills in domain order — `skills/[lib]/core/[domain]/SKILL.md`
-3. Framework overview for each framework — `skills/[lib]/react/SKILL.md`
-4. Framework sub-skills — `skills/[lib]/react/[domain]/SKILL.md`
-5. Composition skills — `skills/compositions/[name]/SKILL.md`
-6. Security skills — `skills/[lib]/[framework]/security/SKILL.md`
+1. Core overview SKILL.md — entry point for the library
+2. Core sub-skills in domain order
+3. Framework overview SKILL.md for each framework
+4. Framework sub-skills
+5. Composition skills (if applicable)
+6. Security skills (if applicable)
 7. references/ files for any skill that needs them
 8. CHANGELOG.md entry
 
 When updating:
 
 1. staleness_report.yaml
-2. Updated SKILL.md files (core then framework, in existing directories)
-3. Updated package_map.yaml (only if structure changed)
-4. CHANGELOG.md entry
+2. Updated SKILL.md files (core then framework)
+3. CHANGELOG.md entry
