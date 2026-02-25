@@ -9,7 +9,7 @@ description: >
   Produces a domain_map.yaml and skill_spec.md that feed directly into
   the skill-tree-generator skill.
 metadata:
-  version: "3.0"
+  version: "3.1"
   category: meta-tooling
   output_artifacts:
     - domain_map.yaml
@@ -147,6 +147,14 @@ Read in this order. Each step builds context for the next.
    assertions and invariant checks. For monorepos, read the 2–3 core
    packages deeply. For adapter packages, read one representative adapter
    deeply, then scan others for deviations from the pattern.
+7. **Peer dependency integration guides** — for each peer dependency or
+   frequently co-used framework (identified from package.json or examples),
+   read enough of its documentation to understand: initialization lifecycle,
+   rendering model (SSR vs CSR), state management patterns, and known
+   integration constraints. Focus on the peer dependency's "getting started"
+   and "framework integration" guides, not its full API reference. Framework
+   integration failure modes are often the highest-value findings and are
+   invisible from the library's own docs alone.
 
 ### What to log
 
@@ -180,7 +188,22 @@ Version boundary: [e.g. "v4 → v5"]
 
 These become high-priority failure modes.
 
-### 3a — Group concepts into domains
+### 3a — Identify the primary audience
+
+Before grouping, determine who will load these skills:
+
+- **App developer** — uses the library's client API to build features
+- **Library integrator** — builds framework bindings or adapters
+- **Protocol implementor** — builds a conforming server or client in
+  a new language
+- **Operator** — deploys and monitors the system in production
+
+Group for the primary audience. Content for secondary audiences should
+be flagged as separate-tier or out-of-scope. Most libraries target app
+developers; don't mix protocol internals or operator runbooks into
+skills meant for feature developers.
+
+### 3b — Group concepts into domains
 
 Move concept inventory items into groups. Two items belong together when:
 - A developer reasons about them together when solving a problem
@@ -188,7 +211,11 @@ Move concept inventory items into groups. Two items belong together when:
 - They share a lifecycle, configuration scope, or architectural tradeoff
 - Getting one wrong tends to produce bugs in the other
 
-Target 4–7 domains. These are conceptual groupings, not the final skills.
+Target the minimum number of domains where each represents work a
+developer does independently. For most libraries this is 3–7, but
+simpler libraries may have 2 and complex libraries may need 8+. The
+test is "Does each domain represent work a developer does
+independently?" not "Have I hit a specific count?"
 
 Do not create a group for:
 - A single hook, function, or class
@@ -198,7 +225,7 @@ Do not create a group for:
 
 Name each domain as work being performed, not what the library provides.
 
-### 3b — Map domains × tasks → skills
+### 3c — Map domains × tasks → skills
 
 Merge your conceptual domains with the maintainer's task list from
 Phase 2. Each skill should match a specific developer moment while
@@ -223,7 +250,25 @@ Also consider:
   co-usage with another library, output a full skill for the
   integration, not a footnote on a domain.
 
-### 3c — Flag subsystems within skills
+### 3d — Validate skills against developer tasks
+
+For each pair of skills that share a domain or an adjacent concern, ask:
+"Would a developer working on a single feature commonly need to load
+both of these skills?" If the answer is often yes, merge them — the
+cost of a larger skill (more context tokens) is lower than the cost of
+a developer needing to discover and load multiple skills for one task.
+
+Signals that skills should merge:
+- The library's Quick Start guide covers both in sequence
+- Example code in the README crosses the skill boundary
+- The three most common developer tasks each touch both skills
+
+Signals that skills should stay separate:
+- A developer can complete their task using only one skill
+- The skills target different moments in the development lifecycle
+- Loading both would exceed 500 lines of combined content
+
+### 3e — Flag subsystems within skills
 
 Check each skill area for internal diversity. A skill may be
 conceptually unified but contain multiple independent subsystems with
@@ -240,7 +285,7 @@ Also flag dense API surfaces — if a topic has >10 distinct operators,
 option shapes, or patterns (e.g. query operators, schema validation
 rules), note it as a `reference_candidates` entry.
 
-### 3d — Extract failure modes
+### 3f — Extract failure modes
 
 For each skill, extract failure modes that pass all three tests:
 
@@ -259,6 +304,9 @@ For each skill, extract failure modes that pass all three tests:
 | Default values | Undocumented or surprising defaults that cause wrong behavior |
 | Type precision | Source type more restrictive than docs imply |
 | Environment branches | `typeof window`, SSR flags, `NODE_ENV` — behavior differs silently |
+| Peer dependency docs | Lifecycle constraints, initialization requirements, rendering model conflicts |
+| Platform constraints | Browser connection limits, mobile backgrounding, SSR restrictions |
+| Project workflow | .gitignore entries, dev server orchestration, CI setup requirements |
 
 Target 3 failure modes per skill minimum. Complex skills target 5–6.
 
@@ -274,7 +322,14 @@ the `skills` field to all skill slugs it applies to. Do not duplicate
 the entry in the YAML — the skill-tree-generator handles duplication
 into multiple SKILL files at generation time.
 
-### 3e — Identify cross-skill tensions
+**Code pattern pairs.** When you can show concrete code for a failure
+mode, include `wrong_pattern` and `correct_pattern` fields. These
+feed directly into the tree-generator's WRONG/CORRECT blocks. Not
+every failure mode has code (some are configuration or architectural),
+but migration guide failures almost always do — the old pattern is
+the wrong code, the new pattern is the correct code.
+
+### 3g — Identify cross-skill tensions
 
 Look for places where design forces between skills conflict. A tension
 is not a failure mode — it's a structural pull where optimizing for one
@@ -292,7 +347,7 @@ only considers one side.
 Target 2–4 tensions. If you find none, the skills may be too isolated —
 revisit whether you're missing cross-connections.
 
-### 3f — Identify gaps
+### 3h — Identify gaps
 
 For each skill, explicitly list what you could NOT determine from docs
 and source alone. These become interview questions in Phase 4.
@@ -305,7 +360,7 @@ Common gaps:
 - "GitHub issues show confusion about X but docs don't address it"
 - "I found two patterns for doing X — unclear which is current/preferred"
 
-### 3g — Discover composition targets
+### 3i — Discover composition targets
 
 Scan `package.json` for peer dependencies, optional dependencies, and
 `peerDependenciesMeta`. Scan example directories and integration tests
@@ -315,9 +370,12 @@ for import patterns. For each frequently co-used library, log:
 - Whether it's a required or optional integration
 - Any example code showing the integration pattern
 
-These become targeted composition questions in Phase 4e.
+These become targeted composition questions in Phase 4e. Also note
+any cases where a peer dependency's API looks similar to the library's
+own API (or to a well-known library agents are trained on) — these
+are candidates for composition safety warnings in the interview.
 
-### 3h — Produce the draft
+### 3j — Produce the draft
 
 Write the full `domain_map.yaml` (format in Output Artifacts below) with
 a `status: draft` field. Flag every gap in the `gaps` section.
@@ -359,8 +417,15 @@ Follow up on any corrections. Then:
 
 ### 4b — Gap-targeted questions (3–8 questions)
 
-For each gap flagged in Phase 3f, ask a specific question. These are not
-generic — they reference what you found:
+For each gap flagged in Phase 3h, ask a specific question. These are not
+generic — they reference what you found.
+
+**Research before asking.** If a gap question can be answered by reading
+code, investigate first and present your findings to the maintainer.
+Questions of the form "I found X in the code — is this intentional?"
+yield better answers than "What happens when X?" The research detour
+often uncovers concrete issues (implementation divergences, missing
+tests, undocumented edge cases) that pure questioning misses.
 
 **Instead of:** "What do developers get wrong?"
 **Ask:** "I noticed the migration guide from v4 to v5 changed how [X] works,
@@ -411,6 +476,12 @@ the most critical failure modes.
   that require understanding unstated context, or where the 'obvious'
   approach from reading the API surface is wrong."
 
+**Minimum yield:** Phase 4c should produce at least 3 new failure modes
+not already found in Phase 3. If the maintainer's answers mostly confirm
+what you already found, probe deeper — the highest-value failure modes
+are the ones autonomous reading cannot surface. Mark these with
+`source_type: "implicit_knowledge"` in the domain map.
+
 ### 4d — Implicit knowledge extraction (3–5 questions)
 
 These surface knowledge that doesn't appear in any docs:
@@ -424,9 +495,17 @@ These surface knowledge that doesn't appear in any docs:
 - "Is there anything you'd change about the API design if you could break
   backwards compatibility? What's the current workaround?"
 
+**Pre-1.0 library adaptation:** For libraries that haven't reached 1.0
+or have limited production usage, implicit knowledge extraction has
+lower yield — usage patterns haven't crystallized yet. In this case,
+shorten 4d (1–2 questions) and extend 4b (gap-targeted) and 4c
+(agent-specific) instead. The maintainer of a pre-1.0 library has more
+to say about "what agents get wrong with the current API" than "what
+senior developers know from experience."
+
 ### 4e — Composition questions (if library interacts with others)
 
-Use what you discovered in Phase 3g. For each integration target
+Use what you discovered in Phase 3i. For each integration target
 identified from peer dependencies and example code, ask targeted
 questions:
 
@@ -436,6 +515,18 @@ questions:
   patterns that only matter when both are present?"
 - "I found [specific integration pattern] in the examples. Is this the
   recommended approach, or is there a better way that isn't documented?"
+
+**Composition safety warnings.** Explicitly probe whether similar-looking
+APIs transfer correctly between libraries. Agents trained on popular
+libraries will apply those patterns to less-known ones — sometimes
+correctly, sometimes dangerously:
+
+- "Are there well-known libraries whose API looks similar to yours but
+  behaves differently? For example, can agents safely apply [popular
+  library] patterns when using your library, or does that lead to
+  subtle bugs?"
+- "When agents have experience with [peer dependency], which of its
+  patterns transfer to your library and which are dangerous to assume?"
 
 ---
 
@@ -482,7 +573,7 @@ skills:
     slug: "[kebab-case]"
     domain: "[parent domain slug]"
     description: "[what a developer is doing — matches a specific task/moment]"
-    type: "[core | framework | lifecycle | composition]"
+    type: "[core | sub-skill | framework | lifecycle | composition | security]"
     covers:
       - "[API/hook/concept 1]"
       - "[API/hook/concept 2]"
@@ -501,10 +592,15 @@ skills:
       - mistake: "[5-10 word phrase]"
         mechanism: "[one sentence]"
         source: "[doc page, source file, issue link, or maintainer interview]"
+        source_type: "[documented | implicit_knowledge]"  # documented = found in docs/source; implicit_knowledge = surfaced in maintainer interview
         priority: "[CRITICAL | HIGH | MEDIUM]"
         status: "[active | fixed-but-legacy-risk | removed]"
         version_context: "[e.g. 'Fixed in v5.2 but agents trained on older code still generate this']"
         skills: ["[this-skill-slug]"]  # list all skills this belongs to; omit if single-skill
+        wrong_pattern: |              # optional — concrete code that agents generate
+          [code that looks correct but isn't]
+        correct_pattern: |            # optional — what should be generated instead
+          [code that works]
     compositions:
       - library: "[other library name]"
         skill: "[composition skill name if applicable]"
@@ -548,9 +644,9 @@ not promotional.]
 
 ### [Skill name] ([count] failure modes)
 
-| # | Mistake | Priority | Source | Cross-skill? |
-|---|---------|----------|--------|--------------|
-| 1 | [phrase] | CRITICAL | [doc/source/interview] | [other skill slugs or —] |
+| # | Mistake | Priority | Source | Source type | Cross-skill? | Code pair? |
+|---|---------|----------|--------|-------------|--------------|------------|
+| 1 | [phrase] | CRITICAL | [doc/source/interview] | documented | [other skill slugs or —] | yes/no |
 
 [Repeat table for each skill.]
 
@@ -614,6 +710,15 @@ not promotional.]
 | Subsystems flagged | Skills with 3+ adapters/backends list them as subsystems |
 | Dense surfaces flagged | Topics with >10 patterns noted as reference_candidates |
 | Lifecycle skills considered | Suggest journey skills when docs have the material |
+| Primary audience identified | Group for the primary audience; flag secondary audiences as out-of-scope |
+| Skills validated against tasks | Adjacent skills checked for merge — would a developer need both? |
+| Peer deps read for integration | Read peer dependency docs for lifecycle, rendering, and platform constraints |
+| Code patterns on failure modes | Include wrong_pattern/correct_pattern when concrete code exists |
+| source_type on failure modes | Mark documented vs implicit_knowledge to distinguish interview-sourced findings |
+| 3+ new failure modes from interview | Phase 4c produces at least 3 failure modes not found in Phase 3 |
+| Research before asking | Gap questions investigated in code before presenting to maintainer |
+| Composition safety probed | Ask whether similar-looking APIs from other libraries transfer correctly |
+| Pre-1.0 adaptations applied | Shorten implicit-knowledge, extend gap-targeted for pre-1.0 libraries |
 
 ---
 
