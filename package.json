@@ -3,7 +3,7 @@
   "private": true,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/TanStack/agents.git"
+    "url": "git+https://github.com/TanStack/playbooks.git"
   },
   "packageManager": "pnpm@10.26.1",
   "type": "module",
