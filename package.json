@@ -17,7 +17,7 @@
     "clean": "find agents -name 'dist' -type d -prune -exec rm -rf {} +",
     "clean:node_modules": "find agents -name 'node_modules' -type d -prune -exec rm -rf {} +",
     "clean:all": "pnpm run clean && pnpm run clean:node_modules",
-    "copy:readme": "cp README.md packages/agents/README.md",
+    "copy:readme": "cp README.md packages/playbooks/README.md",
     "dev": "pnpm run watch",
     "format": "prettier --experimental-cli --ignore-unknown '**/*' --write",
     "lint:fix": "nx affected --target=lint:fix --exclude=examples/**",
