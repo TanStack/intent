@@ -1,7 +1,7 @@
 {
   "name": "@tanstack/playbooks",
   "version": "0.1.0-alpha.1",
-  "description": "Toolkit for generating, discovering, and maintaining AI coding agent skills",
+  "description": "Ship compositional knowledge for AI coding agents alongside your npm packages",
   "license": "MIT",
   "type": "module",
   "repository": {

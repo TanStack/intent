@@ -1,8 +1,10 @@
 # @tanstack/playbooks
 
-Toolkit for generating, discovering, and maintaining AI coding agent skills for libraries.
+Ship compositional knowledge for AI coding agents alongside your npm packages.
 
-Playbooks let library maintainers ship SKILL.md files alongside their packages — structured instructions that AI coding agents can discover and follow when working with the library.
+Playbooks are npm packages of skills — encoding how tools work together, what patterns apply for which goals, and what to avoid. Skills travel with the tool via `npm update`, not the model's training cutoff.
+
+`@tanstack/playbooks` is the toolkit for generating, discovering, and maintaining skills for your library.
 
 ## Install
 
