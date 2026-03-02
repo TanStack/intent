@@ -12,10 +12,14 @@
     ".": {
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
+    },
+    "./playbook-library": {
+      "import": "./dist/playbook-library.mjs"
     }
   },
   "bin": {
-    "playbook": "dist/cli.mjs"
+    "playbook": "dist/cli.mjs",
+    "playbook-library": "dist/playbook-library.mjs"
   },
   "files": [
     "dist",
@@ -28,7 +32,7 @@
     "tsdown": "^0.19.0"
   },
   "scripts": {
-"build": "tsdown src/index.ts src/cli.ts src/setup.ts --format esm --dts",
+"build": "tsdown src/index.ts src/cli.ts src/setup.ts src/playbook-library.ts src/library-scanner.ts --format esm --dts",
     "test:lib": "vitest run"
   }
 }

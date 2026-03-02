@@ -80,7 +80,7 @@ describe('runSetup', () => {
     const result = runSetup(root, metaDir, [])
     expect(result.workflows).toHaveLength(0)
     expect(result.oz).toHaveLength(0)
-    expect(result.skipped).toHaveLength(2)
+    expect(result.skipped).toHaveLength(3)
   })
 
   it('handles missing templates directory gracefully', () => {
