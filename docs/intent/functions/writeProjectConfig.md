@@ -9,7 +9,7 @@ title: writeProjectConfig
 function writeProjectConfig(root): string;
 ```
 
-Defined in: [init.ts:75](https://github.com/TanStack/intent/blob/main/packages/intent/src/init.ts#L75)
+Defined in: [init.ts:77](https://github.com/TanStack/intent/blob/main/packages/intent/src/init.ts#L77)
 
 ## Parameters
 

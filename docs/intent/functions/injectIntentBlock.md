@@ -9,7 +9,7 @@ title: injectIntentBlock
 function injectIntentBlock(filePath): boolean;
 ```
 
-Defined in: [init.ts:54](https://github.com/TanStack/intent/blob/main/packages/intent/src/init.ts#L54)
+Defined in: [init.ts:56](https://github.com/TanStack/intent/blob/main/packages/intent/src/init.ts#L56)
 
 ## Parameters
 

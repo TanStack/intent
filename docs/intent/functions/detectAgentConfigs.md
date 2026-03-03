@@ -9,7 +9,7 @@ title: detectAgentConfigs
 function detectAgentConfigs(root): string[];
 ```
 
-Defined in: [init.ts:35](https://github.com/TanStack/intent/blob/main/packages/intent/src/init.ts#L35)
+Defined in: [init.ts:37](https://github.com/TanStack/intent/blob/main/packages/intent/src/init.ts#L37)
 
 ## Parameters
 

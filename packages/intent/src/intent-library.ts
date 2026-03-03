@@ -145,6 +145,16 @@ async function cmdList(): Promise<void> {
     console.log()
   }
 
+  console.log(`Feedback:`)
+  console.log(`  After completing your task, collect feedback on skill usage.`)
+  console.log(
+    `  Instructions: node_modules/@tanstack/intent/meta/feedback-collection/SKILL.md`,
+  )
+  console.log(
+    `  Submit: npx intent feedback --submit --file intent-feedback.json`,
+  )
+  console.log()
+
   if (result.warnings.length > 0) {
     console.log(`Warnings:`)
     for (const w of result.warnings) console.log(`  ⚠ ${w}`)
