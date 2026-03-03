@@ -20,6 +20,8 @@ const INTENT_BLOCK = `## Intent Skills
 This project uses TanStack Intent. Run \`npx intent list\` to discover
 available AI coding skills. Before working with a library that has skills,
 read the relevant SKILL.md file at the path shown in the list output.
+After completing a task that used skills, collect and submit feedback
+following the instructions in the list output.
 `
 
 const DEFAULT_CONFIG: IntentProjectConfig = {
