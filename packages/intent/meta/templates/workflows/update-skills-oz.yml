@@ -1,0 +1,98 @@
+# update-skills-oz.yml — Drop this into your library repo's .github/workflows/
+#
+# Triggered on new version releases. Oz evaluates whether skills need
+# updating based on changelog/migration guide changes, and opens PRs
+# for any stale skills.
+#
+# Requirements:
+#   - WARP_API_KEY repository secret
+#   - Skills must already exist in the repo (run generate-skills-oz first)
+#
+# Template variables (replaced by `intent setup`):
+#   {{PACKAGE_NAME}}  — e.g. @tanstack/query
+#   {{REPO}}          — e.g. TanStack/query
+
+name: Update Skills (Oz)
+
+on:
+  release:
+    types: [published]
+
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to check against (e.g. 5.62.0)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Check and update skills
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install @tanstack/intent yaml
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Oz agent
+        uses: warpdotdev/oz-agent-action@v1
+        with:
+          prompt: |
+            You are checking whether AI coding agent skills for {{PACKAGE_NAME}}
+            need updating after a new release.
+
+            ## Setup
+
+            1. Read the meta-skill at node_modules/@tanstack/intent/meta/skill-staleness-check/SKILL.md
+            2. The package is {{PACKAGE_NAME}} in repo {{REPO}}
+            3. The new version is ${{ steps.version.outputs.version }}
+
+            ## Task
+
+            Follow the staleness check skill instructions:
+
+            1. Find all SKILL.md files under skills/ in this repo
+            2. Compare each skill's library_version against the new version
+            3. Read the CHANGELOG or migration guide for changes between versions
+            4. Classify each skill: no-impact, version-bump-only, content-update, or breaking-change
+            5. For skills needing updates, read the generate-skill meta-skill at
+               node_modules/@tanstack/intent/meta/generate-skill/SKILL.md and
+               use regeneration mode (surgical updates, not full rewrites)
+
+            ## Output
+
+            If no skills need updating, exit silently — no PR, no noise.
+
+            If skills need updating:
+            1. Update the affected SKILL.md files
+            2. Run `npx intent validate skills/` to verify
+            3. Create branch `skills/update-${{ steps.version.outputs.version }}`
+            4. Open a PR with:
+               - Title: "skill: update for {{PACKAGE_NAME}}@${{ steps.version.outputs.version }}"
+               - Body with: what changed in the source, what changed in skills, review checklist
+               - Co-Authored-By: Oz <oz-agent@warp.dev>
+          warp_api_key: ${{ secrets.WARP_API_KEY }}
+          profile: ${{ vars.WARP_AGENT_PROFILE || '' }}
