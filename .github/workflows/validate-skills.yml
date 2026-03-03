@@ -3,8 +3,8 @@ name: Validate Skills
 on:
   pull_request:
     paths:
-      - 'packages/playbooks/skills/**'
-      - 'packages/playbooks/package_map.yaml'
+      - 'packages/intent/skills/**'
+      - 'packages/intent/package_map.yaml'
       - 'scripts/validate-skills.ts'
 
 jobs:

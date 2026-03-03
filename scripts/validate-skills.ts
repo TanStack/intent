@@ -40,10 +40,10 @@ const PROHIBITED_PATTERNS: Array<{ pattern: RegExp; description: string }> = [
 ]
 
 const ALLOWED_SHELL_COMMANDS = [
-  'playbook list',
-  'playbook feedback',
+  'intent list',
+  'intent feedback',
   'npm install @tanstack/',
-  'npx playbook',
+  'npx intent',
 ]
 
 // ── Helpers ──

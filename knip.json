@@ -6,7 +6,7 @@
     ".": {
       "entry": ["scripts/*.ts"]
     },
-    "packages/playbooks": {
+    "packages/intent": {
       "ignore": ["meta/**"]
     }
   }

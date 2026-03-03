@@ -7,10 +7,10 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url))
 await generateReferenceDocs({
   packages: [
     {
-      name: 'playbooks',
-      entryPoints: [resolve(__dirname, '../packages/playbooks/src/index.ts')],
-      tsconfig: resolve(__dirname, '../packages/playbooks/tsconfig.docs.json'),
-      outputDir: resolve(__dirname, '../docs/playbooks'),
+      name: 'intent',
+      entryPoints: [resolve(__dirname, '../packages/intent/src/index.ts')],
+      tsconfig: resolve(__dirname, '../packages/intent/tsconfig.docs.json'),
+      outputDir: resolve(__dirname, '../docs/intent'),
     },
   ],
 })
