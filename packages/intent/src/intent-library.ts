@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-import { spawnSync } from 'node:child_process'
-import { release } from 'node:os'
 import type { LibraryScanResult } from './library-scanner.js'
 import { scanLibrary } from './library-scanner.js'
 
@@ -49,30 +47,6 @@ async function cmdList(): Promise<void> {
 }
 
 function cmdInstall(): void {
-  function tryCopyToClipboard(text: string): boolean {
-    const platform = process.platform
-    const isWsl =
-      platform === 'linux' &&
-      (Boolean(process.env.WSL_DISTRO_NAME) ||
-        Boolean(process.env.WSL_INTEROP) ||
-        release().toLowerCase().includes('microsoft'))
-
-    const tryCommand = (command: string, args: string[] = []) => {
-      const result = spawnSync(command, args, { input: text })
-      return result.status === 0
-    }
-
-    if (platform === 'darwin') return tryCommand('pbcopy')
-    if (platform === 'win32') return tryCommand('clip')
-    if (isWsl) return tryCommand('clip.exe')
-
-    return (
-      tryCommand('wl-copy') ||
-      tryCommand('xclip', ['-selection', 'clipboard']) ||
-      tryCommand('xsel', ['--clipboard', '--input'])
-    )
-  }
-
   const prompt = `You are an AI assistant helping a developer set up skill-to-task mappings for their project.
 
 Follow these steps in order:
@@ -120,16 +94,7 @@ skills:
    - Keep entries concise — this block is read on every agent task
    - Preserve all content outside the block tags unchanged`
 
-  console.log('🚀 Intent Install')
-  console.log('✨ Copy the prompt below into your AI agent:\n')
   console.log(prompt)
-
-  const copied = tryCopyToClipboard(prompt)
-  if (copied) {
-    console.log('\n✅ Copied prompt to clipboard')
-  } else {
-    console.log('\n⚠ Tip: Manually copy the prompt above into your agent')
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +105,8 @@ const USAGE = `TanStack Intent
 
 Usage:
   intent list        List all available skills from this library and its dependencies
-  intent install     Set up skill-to-task mappings in your agent config`
+  intent install     Print a skill that guides your coding agent to scan the project
+                     and set up skill-to-task mappings in your agent config`
 
 const command = process.argv[2]
 
