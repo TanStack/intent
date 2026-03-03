@@ -47,6 +47,10 @@ You will receive:
 If the maintainer uses a custom skills root, replace `skills/` in any paths
 below with their chosen directory.
 
+**Monorepo:** When the skill tree entry has a `package` field, write the
+SKILL.md into that package's skills directory (e.g.
+`packages/client/skills/core/SKILL.md`), not a shared root.
+
 1. **Skill name** — format `library-group/skill-name` (e.g. `tanstack-query/core`,
    `tanstack-router/loaders`, `db/core/live-queries`)
 2. **Skill description** — what the skill covers and when an agent should load it

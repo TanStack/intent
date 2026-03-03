@@ -106,6 +106,7 @@ skills:
     type: 'core | sub-skill | framework | lifecycle | composition | security'
     domain: '[domain slug]'
     path: 'skills/[path]/SKILL.md'
+    package: '[package directory, e.g. packages/client]' # monorepo only — which package this skill belongs to
     description: '[1–2 sentence agent-facing routing key]'
     requires:
       - '[other skill slugs]' # omit if none
@@ -117,6 +118,11 @@ skills:
     references:
       - 'references/[file].md' # omit if none
 ```
+
+**Monorepo layout:** For monorepos, each skill's `path` is relative to its
+package directory (e.g. `packages/client/skills/core/SKILL.md`). Set the
+`package` field so generate-skill knows where to write the file. The domain
+map artifacts stay at the repo root.
 
 ### Step 1 — Plan the file tree
 

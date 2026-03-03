@@ -504,6 +504,11 @@ Update `status: draft` to `status: reviewed`.
 If the maintainer uses a custom skills root, replace `skills/` in the paths
 below with their chosen directory.
 
+**Monorepo layout:** For monorepos, domain map artifacts go at the REPO ROOT
+(e.g. `_artifacts/domain_map.yaml`) since they describe the whole library.
+Skills are generated per-package later by the tree-generator and generate-skill
+steps.
+
 ### 1. skills/\_artifacts/domain_map.yaml
 
 ```yaml
