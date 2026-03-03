@@ -9,13 +9,13 @@ description: >
   Produces a domain_map.yaml and skill_spec.md that feed directly into
   the skill-tree-generator skill.
 metadata:
-  version: '3.0'
+  version: "3.0"
   category: meta-tooling
   output_artifacts:
     - skills/_artifacts/domain_map.yaml
     - skills/_artifacts/skill_spec.md
   skills:
-    - tree-generator
+    - skill-tree-generator
 ---
 
 # Domain Discovery & Maintainer Interview
@@ -60,7 +60,6 @@ reading exhaustively yet.
 ### 1b — Note initial impressions
 
 Log (but do not group yet):
-
 - What the library does in one sentence
 - The core abstractions a developer interacts with
 - Which frameworks it supports
@@ -154,7 +153,6 @@ Read in this order. Each step builds context for the next.
 Produce a flat concept inventory. One item per line. No grouping yet.
 
 Log every:
-
 - Named concept, abstraction, or lifecycle stage
 - Public export: function, hook, class, type, constant
 - Configuration key, its type, and its default value
@@ -185,7 +183,6 @@ These become high-priority failure modes.
 ### 3a — Group concepts into domains
 
 Move concept inventory items into groups. Two items belong together when:
-
 - A developer reasons about them together when solving a problem
 - Solving one correctly requires understanding how the other works
 - They share a lifecycle, configuration scope, or architectural tradeoff
@@ -194,7 +191,6 @@ Move concept inventory items into groups. Two items belong together when:
 Target 4–7 domains. These are conceptual groupings, not the final skills.
 
 Do not create a group for:
-
 - A single hook, function, or class
 - A single doc or reference page
 - "Miscellaneous", "Advanced", or "Other"
@@ -209,7 +205,6 @@ Phase 2. Each skill should match a specific developer moment while
 carrying the conceptual depth of its parent domain(s).
 
 A skill is well-shaped when:
-
 - A developer would ask for it by name ("help me set up sync")
 - It covers enough for the agent to complete the task end-to-end
 - It doesn't require loading 3 other skills to be useful
@@ -220,7 +215,6 @@ span domains (a "go-live" checklist touches security, performance, and
 configuration). Both are fine.
 
 Also consider:
-
 - **Lifecycle/journey skills** — if the library's docs include a
   quickstart guide, go-to-production checklist, or migration path,
   suggest these as standalone skills. Don't force them if the docs
@@ -257,13 +251,13 @@ For each skill, extract failure modes that pass all three tests:
 
 **Where to find them:**
 
-| Source               | What to extract                                                    |
-| -------------------- | ------------------------------------------------------------------ |
-| Migration guides     | Every breaking change → old pattern is the wrong code              |
-| Doc callouts         | Any "note", "warning", "avoid" with surrounding context            |
-| Source assertions    | `throw` and `invariant()` messages describe the failure            |
-| Default values       | Undocumented or surprising defaults that cause wrong behavior      |
-| Type precision       | Source type more restrictive than docs imply                       |
+| Source | What to extract |
+|--------|----------------|
+| Migration guides | Every breaking change → old pattern is the wrong code |
+| Doc callouts | Any "note", "warning", "avoid" with surrounding context |
+| Source assertions | `throw` and `invariant()` messages describe the failure |
+| Default values | Undocumented or surprising defaults that cause wrong behavior |
+| Type precision | Source type more restrictive than docs imply |
 | Environment branches | `typeof window`, SSR flags, `NODE_ENV` — behavior differs silently |
 
 Target 3 failure modes per skill minimum. Complex skills target 5–6.
@@ -304,7 +298,6 @@ For each skill, explicitly list what you could NOT determine from docs
 and source alone. These become interview questions in Phase 4.
 
 Common gaps:
-
 - "Docs describe X but don't explain when you'd choose X over Y"
 - "Migration guide mentions this changed but doesn't say what the old
   behavior was"
@@ -476,60 +469,60 @@ below with their chosen directory.
 # Status: [draft | reviewed]
 
 library:
-  name: '[package-name]'
-  version: '[version]'
-  repository: '[repo URL]'
-  description: '[one line]'
-  primary_framework: '[React | Vue | Svelte | framework-agnostic]'
+  name: "[package-name]"
+  version: "[version]"
+  repository: "[repo URL]"
+  description: "[one line]"
+  primary_framework: "[React | Vue | Svelte | framework-agnostic]"
 
 domains:
-  - name: '[work-oriented domain name]'
-    slug: '[kebab-case]'
-    description: '[conceptual grouping — what a developer is reasoning about]'
+  - name: "[work-oriented domain name]"
+    slug: "[kebab-case]"
+    description: "[conceptual grouping — what a developer is reasoning about]"
 
 skills:
-  - name: '[task-focused skill name]'
-    slug: '[kebab-case]'
-    domain: '[parent domain slug]'
-    description: '[what a developer is doing — matches a specific task/moment]'
-    type: '[core | framework | lifecycle | composition]'
+  - name: "[task-focused skill name]"
+    slug: "[kebab-case]"
+    domain: "[parent domain slug]"
+    description: "[what a developer is doing — matches a specific task/moment]"
+    type: "[core | framework | lifecycle | composition]"
     covers:
-      - '[API/hook/concept 1]'
-      - '[API/hook/concept 2]'
+      - "[API/hook/concept 1]"
+      - "[API/hook/concept 2]"
     tasks:
-      - '[example task 1]'
-      - '[example task 2]'
-      - '[example task 3]'
-    subsystems: # omit if skill has no independent subsystems
-      - name: '[adapter/backend name]'
-        package: '[npm package if separate]'
-        config_surface: '[brief description of unique config]'
-    reference_candidates: # omit if no dense API surfaces
-      - topic: '[e.g. query operators, schema validation]'
-        reason: '[e.g. >10 distinct operators with signatures]'
+      - "[example task 1]"
+      - "[example task 2]"
+      - "[example task 3]"
+    subsystems:                    # omit if skill has no independent subsystems
+      - name: "[adapter/backend name]"
+        package: "[npm package if separate]"
+        config_surface: "[brief description of unique config]"
+    reference_candidates:          # omit if no dense API surfaces
+      - topic: "[e.g. query operators, schema validation]"
+        reason: "[e.g. >10 distinct operators with signatures]"
     failure_modes:
-      - mistake: '[5-10 word phrase]'
-        mechanism: '[one sentence]'
-        source: '[doc page, source file, issue link, or maintainer interview]'
-        priority: '[CRITICAL | HIGH | MEDIUM]'
-        status: '[active | fixed-but-legacy-risk | removed]'
+      - mistake: "[5-10 word phrase]"
+        mechanism: "[one sentence]"
+        source: "[doc page, source file, issue link, or maintainer interview]"
+        priority: "[CRITICAL | HIGH | MEDIUM]"
+        status: "[active | fixed-but-legacy-risk | removed]"
         version_context: "[e.g. 'Fixed in v5.2 but agents trained on older code still generate this']"
-        skills: ['[this-skill-slug]'] # list all skills this belongs to; omit if single-skill
+        skills: ["[this-skill-slug]"]  # list all skills this belongs to; omit if single-skill
     compositions:
-      - library: '[other library name]'
-        skill: '[composition skill name if applicable]'
+      - library: "[other library name]"
+        skill: "[composition skill name if applicable]"
 
 tensions:
-  - name: '[short phrase describing the pull]'
-    skills: ['[skill-slug-a]', '[skill-slug-b]']
-    description: '[what conflicts — one sentence]'
-    implication: '[what an agent gets wrong when it only considers one side]'
+  - name: "[short phrase describing the pull]"
+    skills: ["[skill-slug-a]", "[skill-slug-b]"]
+    description: "[what conflicts — one sentence]"
+    implication: "[what an agent gets wrong when it only considers one side]"
 
 gaps:
-  - skill: '[skill slug]'
-    question: '[what still needs input]'
-    context: '[why this matters]'
-    status: '[open | resolved]'
+  - skill: "[skill slug]"
+    question: "[what still needs input]"
+    context: "[why this matters]"
+    status: "[open | resolved]"
 ```
 
 ### 2. skills/\_artifacts/skill_spec.md
@@ -544,43 +537,43 @@ not promotional.]
 
 ## Domains
 
-| Domain | Description           | Skills                  |
-| ------ | --------------------- | ----------------------- |
+| Domain | Description | Skills |
+|--------|-------------|--------|
 | [name] | [conceptual grouping] | [skill-1, skill-2, ...] |
 
 ## Skill Inventory
 
-| Skill  | Type                                   | Domain   | What it covers | Failure modes |
-| ------ | -------------------------------------- | -------- | -------------- | ------------- |
-| [name] | [core/framework/lifecycle/composition] | [domain] | [list]         | [count]       |
+| Skill | Type | Domain | What it covers | Failure modes |
+|-------|------|--------|----------------|---------------|
+| [name] | [core/framework/lifecycle/composition] | [domain] | [list] | [count] |
 
 ## Failure Mode Inventory
 
 ### [Skill name] ([count] failure modes)
 
-| #   | Mistake  | Priority | Source                 | Cross-skill?             |
-| --- | -------- | -------- | ---------------------- | ------------------------ |
-| 1   | [phrase] | CRITICAL | [doc/source/interview] | [other skill slugs or —] |
+| # | Mistake | Priority | Source | Cross-skill? |
+|---|---------|----------|--------|--------------|
+| 1 | [phrase] | CRITICAL | [doc/source/interview] | [other skill slugs or —] |
 
 [Repeat table for each skill.]
 
 ## Tensions
 
-| Tension        | Skills              | Agent implication       |
-| -------------- | ------------------- | ----------------------- |
+| Tension | Skills | Agent implication |
+|---------|--------|-------------------|
 | [short phrase] | [slug-a] ↔ [slug-b] | [what agents get wrong] |
 
 ## Subsystems & Reference Candidates
 
-| Skill  | Subsystems                     | Reference candidates       |
-| ------ | ------------------------------ | -------------------------- |
+| Skill | Subsystems | Reference candidates |
+|-------|------------|---------------------|
 | [slug] | [adapter1, adapter2, ...] or — | [topic needing depth] or — |
 
 ## Remaining Gaps
 
-| Skill  | Question                 | Status |
-| ------ | ------------------------ | ------ |
-| [slug] | [what still needs input] | open   |
+| Skill | Question | Status |
+|-------|----------|--------|
+| [slug] | [what still needs input] | open |
 
 [Omit this section if all gaps were resolved in the interview.]
 
@@ -595,35 +588,35 @@ not promotional.]
 
 ## Composition Opportunities
 
-| Library | Integration points | Composition skill needed?     |
-| ------- | ------------------ | ----------------------------- |
-| [name]  | [what interacts]   | [yes/no — if yes, skill name] |
+| Library | Integration points | Composition skill needed? |
+|---------|-------------------|--------------------------|
+| [name] | [what interacts] | [yes/no — if yes, skill name] |
 ```
 
 ---
 
 ## Constraints
 
-| Check                                 | Rule                                                                       |
-| ------------------------------------- | -------------------------------------------------------------------------- |
-| Quick scan before interview           | Never interview without at least reading README and package structure      |
-| High-level interview before deep read | The maintainer's task map informs what you read deeply                     |
-| Batch only confirmations              | Yes/no questions may batch 2–3; open-ended questions get their own message |
-| Questions reference findings          | No generic questions — cite what you found                                 |
-| Skills are task-focused               | Each skill matches a developer moment, not a conceptual area               |
-| 3+ failure modes per skill            | Complex skills target 5–6                                                  |
-| Every failure mode sourced            | Doc page, source file, issue link, or maintainer interview                 |
-| Gaps are explicit                     | Unknown areas flagged, not guessed                                         |
-| No marketing prose                    | Library description is factual, not promotional                            |
-| domain_map.yaml is valid YAML         | Parseable by any YAML parser                                               |
-| Draft before detail interview         | Present draft for review before Phase 4                                    |
-| Agent-specific failures probed        | Always ask AI-agent-specific questions in Phase 4c                         |
-| Compositions discovered from code     | Scan peer deps and examples before asking composition questions            |
-| Cross-skill failure modes tagged      | Failure modes spanning skills list all relevant slugs                      |
-| Tensions identified                   | 2–4 cross-skill tensions; if none found, revisit skill boundaries          |
-| Subsystems flagged                    | Skills with 3+ adapters/backends list them as subsystems                   |
-| Dense surfaces flagged                | Topics with >10 patterns noted as reference_candidates                     |
-| Lifecycle skills considered           | Suggest journey skills when docs have the material                         |
+| Check | Rule |
+|-------|------|
+| Quick scan before interview | Never interview without at least reading README and package structure |
+| High-level interview before deep read | The maintainer's task map informs what you read deeply |
+| Batch only confirmations | Yes/no questions may batch 2–3; open-ended questions get their own message |
+| Questions reference findings | No generic questions — cite what you found |
+| Skills are task-focused | Each skill matches a developer moment, not a conceptual area |
+| 3+ failure modes per skill | Complex skills target 5–6 |
+| Every failure mode sourced | Doc page, source file, issue link, or maintainer interview |
+| Gaps are explicit | Unknown areas flagged, not guessed |
+| No marketing prose | Library description is factual, not promotional |
+| domain_map.yaml is valid YAML | Parseable by any YAML parser |
+| Draft before detail interview | Present draft for review before Phase 4 |
+| Agent-specific failures probed | Always ask AI-agent-specific questions in Phase 4c |
+| Compositions discovered from code | Scan peer deps and examples before asking composition questions |
+| Cross-skill failure modes tagged | Failure modes spanning skills list all relevant slugs |
+| Tensions identified | 2–4 cross-skill tensions; if none found, revisit skill boundaries |
+| Subsystems flagged | Skills with 3+ adapters/backends list them as subsystems |
+| Dense surfaces flagged | Topics with >10 patterns noted as reference_candidates |
+| Lifecycle skills considered | Suggest journey skills when docs have the material |
 
 ---
 

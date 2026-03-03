@@ -9,7 +9,7 @@ description: >
   skill accuracy. Takes domain_map.yaml and skill_spec.md from
   skill-domain-discovery as primary inputs.
 metadata:
-  version: '3.0'
+  version: "3.0"
   category: meta-tooling
   input_artifacts:
     - skills/_artifacts/domain_map.yaml
@@ -31,14 +31,14 @@ be portable, concise, and grounded in actual library behavior.
 
 Every skill has a `type` field in its frontmatter. Valid types:
 
-| Type          | Purpose                                                    | Example                   |
-| ------------- | ---------------------------------------------------------- | ------------------------- |
-| `core`        | Framework-agnostic concepts, configuration, patterns       | `db-core`                 |
-| `sub-skill`   | A focused sub-topic within a core or framework skill       | `db-core/live-queries`    |
-| `framework`   | Framework-specific bindings, hooks, components             | `react-db`                |
-| `lifecycle`   | Cross-cutting developer journey (getting started, go-live) | `electric-quickstart`     |
-| `composition` | Integration between two or more libraries                  | `electric-drizzle`        |
-| `security`    | Audit checklist or security validation                     | `electric-security-check` |
+| Type | Purpose | Example |
+|------|---------|---------|
+| `core` | Framework-agnostic concepts, configuration, patterns | `db-core` |
+| `sub-skill` | A focused sub-topic within a core or framework skill | `db-core/live-queries` |
+| `framework` | Framework-specific bindings, hooks, components | `react-db` |
+| `lifecycle` | Cross-cutting developer journey (getting started, go-live) | `electric-quickstart` |
+| `composition` | Integration between two or more libraries | `electric-drizzle` |
+| `security` | Audit checklist or security validation | `electric-security-check` |
 
 Agents discover skills via `tanstack playbook list` and read them directly
 from `node_modules`. Framework skills declare a `requires` dependency on
@@ -91,31 +91,31 @@ Use this format:
 ```yaml
 # skills/_artifacts/skill_tree.yaml
 library:
-  name: '[package-name]'
-  version: '[version]'
-  repository: '[repo URL]'
-  description: '[one line]'
+  name: "[package-name]"
+  version: "[version]"
+  repository: "[repo URL]"
+  description: "[one line]"
 generated_from:
-  domain_map: 'skills/_artifacts/domain_map.yaml'
-  skill_spec: 'skills/_artifacts/skill_spec.md'
-generated_at: '[ISO date]'
+  domain_map: "skills/_artifacts/domain_map.yaml"
+  skill_spec: "skills/_artifacts/skill_spec.md"
+generated_at: "[ISO date]"
 
 skills:
-  - name: '[task-focused skill name]'
-    slug: '[kebab-case]'
-    type: 'core | sub-skill | framework | lifecycle | composition | security'
-    domain: '[domain slug]'
-    path: 'skills/[path]/SKILL.md'
-    description: '[1–2 sentence agent-facing routing key]'
+  - name: "[task-focused skill name]"
+    slug: "[kebab-case]"
+    type: "core | sub-skill | framework | lifecycle | composition | security"
+    domain: "[domain slug]"
+    path: "skills/[path]/SKILL.md"
+    description: "[1–2 sentence agent-facing routing key]"
     requires:
-      - '[other skill slugs]' # omit if none
+      - "[other skill slugs]" # omit if none
     sources:
-      - '[Owner/repo]:docs/[path].md'
-      - '[Owner/repo]:src/[path].ts'
+      - "[Owner/repo]:docs/[path].md"
+      - "[Owner/repo]:src/[path].ts"
     subsystems:
-      - '[adapter/backend name]' # omit if none
+      - "[adapter/backend name]" # omit if none
     references:
-      - 'references/[file].md' # omit if none
+      - "references/[file].md" # omit if none
 ```
 
 ### Step 1 — Plan the file tree
@@ -126,17 +126,17 @@ file. The `type` field on each skill (`core`, `framework`, `lifecycle`,
 
 **Core vs framework decision:**
 
-| Content                                        | Goes in... |
-| ---------------------------------------------- | ---------- |
-| Mental models, concepts, lifecycle             | Core       |
-| Configuration options and their effects        | Core       |
-| Type system, generics, inference               | Core       |
-| Common mistakes that apply to all frameworks   | Core       |
-| Hooks (`useX`, `createX`)                      | Framework  |
-| Components (`<Link>`, `<Outlet>`)              | Framework  |
-| Provider setup and wiring                      | Framework  |
-| SSR/hydration patterns specific to a framework | Framework  |
-| Framework-specific gotchas                     | Framework  |
+| Content | Goes in... |
+|---------|-----------|
+| Mental models, concepts, lifecycle | Core |
+| Configuration options and their effects | Core |
+| Type system, generics, inference | Core |
+| Common mistakes that apply to all frameworks | Core |
+| Hooks (`useX`, `createX`) | Framework |
+| Components (`<Link>`, `<Outlet>`) | Framework |
+| Provider setup and wiring | Framework |
+| SSR/hydration patterns specific to a framework | Framework |
+| Framework-specific gotchas | Framework |
 
 If a library has no framework adapters (e.g. Store, DB), produce only
 core skills.
@@ -160,13 +160,11 @@ setup, and gotchas. The SKILL.md covers what's common; each
 Choose the structure that matches how the domain map's skills are shaped.
 
 Use **nested** (`[lib]-core/[domain]/SKILL.md`) when:
-
 - Developer tasks cluster cleanly into 3–5 conceptual domains
 - The library has a clear core + framework adapter split
 - Skills build on each other in a layered way
 
 Use **flat** (`skills/[skill-name]/SKILL.md`) when:
-
 - Developer tasks are task-focused and don't nest into domains
 - The domain discovery process recommended task-focused skills
 - Skills map 1:1 to distinct developer intents with minimal overlap
@@ -288,10 +286,10 @@ not promotional. Framework-agnostic.]
 
 ## Sub-Skills
 
-| Need to... | Read                           |
-| ---------- | ------------------------------ |
-| [task 1]   | [lib]-core/[domain-1]/SKILL.md |
-| [task 2]   | [lib]-core/[domain-2]/SKILL.md |
+| Need to... | Read |
+|------------|------|
+| [task 1] | [lib]-core/[domain-1]/SKILL.md |
+| [task 2] | [lib]-core/[domain-2]/SKILL.md |
 
 ## Quick Decision Tree
 
@@ -330,7 +328,6 @@ sources:
 **1. Setup**
 
 Minimum working example for this domain.
-
 - Use the library's core API, not framework-specific hooks
 - Real package imports with exact names
 - No `// ...` or `[your code here]` — complete and copy-pasteable
@@ -340,7 +337,6 @@ Minimum working example for this domain.
 **2. Core Patterns**
 
 2–4 patterns. For each:
-
 - One-line heading: what it accomplishes
 - Complete code block using core API
 - One sentence of explanation only if not self-explanatory
@@ -360,18 +356,15 @@ both files. Do not deduplicate across skills at the cost of coverage.
 
 Format:
 
-````markdown
+```markdown
 ### [PRIORITY] [What goes wrong — 5–8 word phrase]
 
 Wrong:
-
 ```[lang]
 // code that looks correct but isn't
 ```
-````
 
 Correct:
-
 ```[lang]
 // code that works
 ```
@@ -379,8 +372,7 @@ Correct:
 [One sentence: the specific mechanism by which the wrong version fails.]
 
 Source: [doc page or source file:line]
-
-````
+```
 
 Priority levels:
 - **CRITICAL** — Breaks in production. Security risk or data loss.
@@ -404,7 +396,7 @@ Every mistake must be plausible (an agent would generate it), silent
 ## References
 
 - [Complete option reference](references/options.md)
-````
+```
 
 Create reference files when any of these apply — not just length overflow:
 
@@ -563,7 +555,6 @@ rather than learning patterns. Use the alternative body structure below
 for these skill types.
 
 **When to use the checklist body:**
-
 - `security` type skills — pre-deploy security validation
 - `lifecycle` type skills focused on verification (go-live, migration)
 - Any skill where the primary action is "check these things" not "learn
@@ -579,7 +570,7 @@ description: >
 type: security
 library: [lib]
 framework: react
-library_version: '[version]'
+library_version: "[version]"
 requires:
   - react-[lib]
 ---
@@ -587,7 +578,7 @@ requires:
 
 **Alternative body template (checklist/audit):**
 
-````markdown
+```markdown
 # [Library Name] — [Security | Go-Live | Migration] Checklist
 
 Run through each section before [deploying | releasing | migrating].
@@ -597,11 +588,9 @@ Run through each section before [deploying | releasing | migrating].
 ### Check: [what to verify]
 
 Expected:
-
 ```[lang]
 // correct configuration or code
 ```
-````
 
 Fail condition: [what indicates this check failed]
 Fix: [one-line remediation]
@@ -624,8 +613,7 @@ Common Mistakes in standard skills]
 - [ ] [Verification 1]
 - [ ] [Verification 2]
 - [ ] [Verification 3]
-
-````
+```
 
 The key differences from the standard body:
 - No "Setup" section — the agent already has the app running
@@ -703,12 +691,11 @@ stale_skills:
 current_skills:
   - skill: "[skill name]"
     reason: "[no changes affect this domain]"
-````
+```
 
 ### Step 2 — Update stale skills
 
 **BREAKING changes:**
-
 1. Old pattern becomes a new Common Mistake entry (wrong/correct pair)
 2. Update Setup if initialization changed
 3. Update Core Patterns if idiomatic approach changed
@@ -716,20 +703,17 @@ current_skills:
 5. Check both core AND framework skills — breaking changes may affect both
 
 **DEPRECATION changes:**
-
 1. Add Common Mistake: deprecated API as wrong, replacement as correct
 2. Update Core Patterns to use non-deprecated API
 3. Bump `library_version`
 
 **BEHAVIORAL changes:**
-
 1. Default value changed → add Common Mistake entry
 2. Type signature more restrictive → add Common Mistake entry
 3. Update affected code blocks
 4. Bump `library_version`
 
 **ADDITIVE changes:**
-
 1. Evaluate if new feature belongs in existing domain or needs a new skill
 2. If existing: add to Core Patterns or references/
 3. If new skill needed: create it and update the parent skill's sub-skill
@@ -744,15 +728,12 @@ current_skills:
 ### Updated for [library] v[new version]
 
 **Breaking changes:**
-
 - [skill name]: [what changed and why]
 
 **Deprecation updates:**
-
 - [skill name]: [old API] → [new API]
 
 **New skills:**
-
 - [skill name]: [what it covers]
 ```
 
@@ -760,26 +741,26 @@ current_skills:
 
 ## Constraints — verify for every file
 
-| Check                                       | Rule                                                                                |
-| ------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Under 500 lines per SKILL.md                | Move excess to references/; also create references for content depth                |
-| Real imports in every code block            | Exact package, correct adapter                                                      |
-| No external concept explanations            | No "TypeScript is...", no "React hooks are..." — library-specific concepts are fine |
-| No marketing prose                          | First body line is heading, code, or dependency note                                |
-| Complete code blocks                        | Every block works without modification                                              |
-| Common Mistakes are silent                  | Not obvious compile errors                                                          |
-| Common Mistakes are library-specific        | Not generic TS/React mistakes                                                       |
-| Common Mistakes are sourced                 | Traceable to doc or source                                                          |
-| Core skills are framework-agnostic          | No hooks, no components, no providers                                               |
-| Framework skills have `requires`            | Lists core dependency                                                               |
-| Framework skills open with dependency note  | First prose line references core                                                    |
-| Composition skills require all dependencies | Lists all core + framework skills                                                   |
-| `name` matches directory                    | `router-core/search-params` → file at that path                                     |
-| `library_version` in every frontmatter      | Which version the skill targets                                                     |
-| Cross-skill failures duplicated             | Each listed skill gets the failure mode                                             |
-| Tensions cross-referenced                   | Tension notes in each involved skill point to the other                             |
-| Skills ship with packages                   | `"skills"` in package.json `files` array                                            |
-| Checklist skills use audit template         | Security/go-live skills use checklist body, not standard body                       |
+| Check | Rule |
+|-------|------|
+| Under 500 lines per SKILL.md | Move excess to references/; also create references for content depth |
+| Real imports in every code block | Exact package, correct adapter |
+| No external concept explanations | No "TypeScript is...", no "React hooks are..." — library-specific concepts are fine |
+| No marketing prose | First body line is heading, code, or dependency note |
+| Complete code blocks | Every block works without modification |
+| Common Mistakes are silent | Not obvious compile errors |
+| Common Mistakes are library-specific | Not generic TS/React mistakes |
+| Common Mistakes are sourced | Traceable to doc or source |
+| Core skills are framework-agnostic | No hooks, no components, no providers |
+| Framework skills have `requires` | Lists core dependency |
+| Framework skills open with dependency note | First prose line references core |
+| Composition skills require all dependencies | Lists all core + framework skills |
+| `name` matches directory | `router-core/search-params` → file at that path |
+| `library_version` in every frontmatter | Which version the skill targets |
+| Cross-skill failures duplicated | Each listed skill gets the failure mode |
+| Tensions cross-referenced | Tension notes in each involved skill point to the other |
+| Skills ship with packages | `"skills"` in package.json `files` array |
+| Checklist skills use audit template | Security/go-live skills use checklist body, not standard body |
 
 ---
 
