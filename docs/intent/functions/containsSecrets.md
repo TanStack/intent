@@ -9,7 +9,7 @@ title: containsSecrets
 function containsSecrets(text): boolean;
 ```
 
-Defined in: [feedback.ts:24](https://github.com/TanStack/intent/blob/main/packages/intent/src/feedback.ts#L24)
+Defined in: [feedback.ts:26](https://github.com/TanStack/intent/blob/main/packages/intent/src/feedback.ts#L26)
 
 ## Parameters
 

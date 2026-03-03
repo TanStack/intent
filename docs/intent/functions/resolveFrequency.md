@@ -9,7 +9,7 @@ title: resolveFrequency
 function resolveFrequency(root): string;
 ```
 
-Defined in: [feedback.ts:52](https://github.com/TanStack/intent/blob/main/packages/intent/src/feedback.ts#L52)
+Defined in: [feedback.ts:54](https://github.com/TanStack/intent/blob/main/packages/intent/src/feedback.ts#L54)
 
 ## Parameters
 

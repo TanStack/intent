@@ -9,7 +9,7 @@ title: hasGhCli
 function hasGhCli(): boolean;
 ```
 
-Defined in: [feedback.ts:32](https://github.com/TanStack/intent/blob/main/packages/intent/src/feedback.ts#L32)
+Defined in: [feedback.ts:34](https://github.com/TanStack/intent/blob/main/packages/intent/src/feedback.ts#L34)
 
 ## Returns
 

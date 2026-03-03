@@ -9,7 +9,7 @@ title: validatePayload
 function validatePayload(payload): object;
 ```
 
-Defined in: [feedback.ts:95](https://github.com/TanStack/intent/blob/main/packages/intent/src/feedback.ts#L95)
+Defined in: [feedback.ts:97](https://github.com/TanStack/intent/blob/main/packages/intent/src/feedback.ts#L97)
 
 ## Parameters
 
