@@ -76,7 +76,9 @@ describe('meta-skill discovery', () => {
   })
 
   it('should include domain-discovery', () => {
-    expect(metaSkills.find((s) => s.relPath === 'domain-discovery')).toBeDefined()
+    expect(
+      metaSkills.find((s) => s.relPath === 'domain-discovery'),
+    ).toBeDefined()
   })
 
   it('should include tree-generator', () => {
@@ -88,7 +90,9 @@ describe('meta-skill discovery', () => {
   })
 
   it('should include skill-staleness-check', () => {
-    expect(metaSkills.find((s) => s.relPath === 'skill-staleness-check')).toBeDefined()
+    expect(
+      metaSkills.find((s) => s.relPath === 'skill-staleness-check'),
+    ).toBeDefined()
   })
 })
 

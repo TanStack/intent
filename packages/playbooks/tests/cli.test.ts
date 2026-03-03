@@ -32,12 +32,18 @@ describe('playbook meta', () => {
       .filter((e) => existsSync(join(metaDir, e.name, 'SKILL.md')))
 
     for (const entry of entries) {
-      const content = readFileSync(join(metaDir, entry.name, 'SKILL.md'), 'utf8')
+      const content = readFileSync(
+        join(metaDir, entry.name, 'SKILL.md'),
+        'utf8',
+      )
       const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
       expect(match, `${entry.name} should have frontmatter`).not.toBeNull()
 
       const fm = parseYaml(match![1]) as Record<string, unknown>
-      expect(fm.description, `${entry.name} should have a description`).toBeTruthy()
+      expect(
+        fm.description,
+        `${entry.name} should have a description`,
+      ).toBeTruthy()
     }
   })
 })

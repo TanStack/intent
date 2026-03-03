@@ -38,6 +38,7 @@ Ensure every skill from domain_map.yaml has a corresponding SKILL.md file.
 ### After completion
 
 Tell the user:
+
 - "Skill tree generated. [N] skills written to skills/."
 - "Validation: [PASS/FAIL with details]"
 - "Next steps:"

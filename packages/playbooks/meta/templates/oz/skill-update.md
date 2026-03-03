@@ -41,6 +41,7 @@ and follow its instructions.
 If nothing needs updating, say so and exit.
 
 If skills were updated, summarize:
+
 - Which skills were updated and why
 - What sections changed
 - Any new Common Mistake entries added

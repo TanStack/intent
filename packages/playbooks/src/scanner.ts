@@ -31,7 +31,8 @@ function detectPackageManager(root: string): PackageManager {
   }
 
   if (existsSync(join(root, 'pnpm-lock.yaml'))) return 'pnpm'
-  if (existsSync(join(root, 'bun.lockb')) || existsSync(join(root, 'bun.lock'))) return 'bun'
+  if (existsSync(join(root, 'bun.lockb')) || existsSync(join(root, 'bun.lock')))
+    return 'bun'
   if (existsSync(join(root, 'yarn.lock'))) return 'yarn'
   if (existsSync(join(root, 'package-lock.json'))) return 'npm'
   return 'unknown'
@@ -85,15 +86,17 @@ function discoverSkills(skillsDir: string, baseName: string): SkillEntry[] {
       if (existsSync(skillFile)) {
         const fm = parseFrontmatter(skillFile)
         const relName = relative(skillsDir, childDir).split(sep).join('/')
-        const desc = typeof fm?.description === 'string'
-          ? fm.description.replace(/\s+/g, ' ').trim()
-          : ''
+        const desc =
+          typeof fm?.description === 'string'
+            ? fm.description.replace(/\s+/g, ' ').trim()
+            : ''
         skills.push({
           name: typeof fm?.name === 'string' ? fm.name : relName,
           path: skillFile,
           description: desc,
           type: typeof fm?.type === 'string' ? fm.type : undefined,
-          framework: typeof fm?.framework === 'string' ? fm.framework : undefined,
+          framework:
+            typeof fm?.framework === 'string' ? fm.framework : undefined,
         })
         // Recurse for sub-skills
         walk(childDir)
@@ -194,7 +197,8 @@ export async function scanForPlaybooks(root?: string): Promise<ScanResult> {
     }
 
     const pkgName = typeof pkgJson.name === 'string' ? pkgJson.name : 'unknown'
-    const pkgVersion = typeof pkgJson.version === 'string' ? pkgJson.version : '0.0.0'
+    const pkgVersion =
+      typeof pkgJson.version === 'string' ? pkgJson.version : '0.0.0'
 
     // Validate playbook field
     const playbook = validatePlaybookField(pkgName, pkgJson.playbook)

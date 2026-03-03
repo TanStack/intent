@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { runSetup } from '../src/setup.js'
@@ -43,13 +50,19 @@ describe('runSetup', () => {
   })
 
   it('substitutes variables from package.json playbook field', () => {
-    writeFileSync(join(root, 'package.json'), JSON.stringify({
-      name: '@tanstack/query',
-      playbook: { repo: 'TanStack/query', docs: 'docs/' },
-    }))
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: '@tanstack/query',
+        playbook: { repo: 'TanStack/query', docs: 'docs/' },
+      }),
+    )
 
     const result = runSetup(root, metaDir, [])
-    const wfContent = readFileSync(join(root, '.github', 'workflows', 'notify-playbooks.yml'), 'utf8')
+    const wfContent = readFileSync(
+      join(root, '.github', 'workflows', 'notify-playbooks.yml'),
+      'utf8',
+    )
     expect(wfContent).toContain('package: @tanstack/query')
     expect(wfContent).toContain('repo: TanStack/query')
     expect(wfContent).toContain('docs: docs/**')
@@ -80,7 +93,7 @@ describe('runSetup', () => {
     const result = runSetup(root, metaDir, [])
     expect(result.workflows).toHaveLength(0)
     expect(result.oz).toHaveLength(0)
-    expect(result.skipped).toHaveLength(2)
+    expect(result.skipped).toHaveLength(3)
   })
 
   it('handles missing templates directory gracefully', () => {

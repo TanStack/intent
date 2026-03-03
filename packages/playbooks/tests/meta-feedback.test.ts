@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -16,12 +22,17 @@ import type { MetaFeedbackPayload } from '../src/types.js'
 let tmpDir: string
 
 function setupDir(): string {
-  const dir = join(tmpdir(), `playbook-meta-fb-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const dir = join(
+    tmpdir(),
+    `playbook-meta-fb-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  )
   mkdirSync(dir, { recursive: true })
   return dir
 }
 
-function validMetaPayload(overrides: Partial<MetaFeedbackPayload> = {}): MetaFeedbackPayload {
+function validMetaPayload(
+  overrides: Partial<MetaFeedbackPayload> = {},
+): MetaFeedbackPayload {
   return {
     metaSkill: 'domain-discovery',
     library: '@tanstack/query',
@@ -81,36 +92,46 @@ describe('validateMetaPayload', () => {
   })
 
   it('rejects invalid metaSkill', () => {
-    const result = validateMetaPayload(validMetaPayload({ metaSkill: 'not-a-skill' as any }))
+    const result = validateMetaPayload(
+      validMetaPayload({ metaSkill: 'not-a-skill' as any }),
+    )
     expect(result.valid).toBe(false)
     expect(result.errors.some((e) => e.includes('metaSkill'))).toBe(true)
   })
 
   it('rejects invalid agentUsed', () => {
-    const result = validateMetaPayload(validMetaPayload({ agentUsed: 'chatgpt' as any }))
+    const result = validateMetaPayload(
+      validMetaPayload({ agentUsed: 'chatgpt' as any }),
+    )
     expect(result.valid).toBe(false)
     expect(result.errors.some((e) => e.includes('agentUsed'))).toBe(true)
   })
 
   it('rejects invalid userRating', () => {
-    const result = validateMetaPayload(validMetaPayload({ userRating: 'excellent' as any }))
+    const result = validateMetaPayload(
+      validMetaPayload({ userRating: 'excellent' as any }),
+    )
     expect(result.valid).toBe(false)
     expect(result.errors.some((e) => e.includes('userRating'))).toBe(true)
   })
 
   it('rejects payloads containing secrets', () => {
-    const result = validateMetaPayload(validMetaPayload({
-      whatFailed: 'Used token ghp_' + 'A'.repeat(36) + ' and it failed',
-    }))
+    const result = validateMetaPayload(
+      validMetaPayload({
+        whatFailed: 'Used token ghp_' + 'A'.repeat(36) + ' and it failed',
+      }),
+    )
     expect(result.valid).toBe(false)
     expect(result.errors.some((e) => e.includes('secrets'))).toBe(true)
   })
 
   it('accepts optional fields', () => {
-    const result = validateMetaPayload(validMetaPayload({
-      interviewQuality: 'good',
-      failureModeQuality: 'mixed',
-    }))
+    const result = validateMetaPayload(
+      validMetaPayload({
+        interviewQuality: 'good',
+        failureModeQuality: 'mixed',
+      }),
+    )
     expect(result.valid).toBe(true)
   })
 })
@@ -133,10 +154,12 @@ describe('metaToMarkdown', () => {
   })
 
   it('includes optional quality fields when present', () => {
-    const md = metaToMarkdown(validMetaPayload({
-      interviewQuality: 'good',
-      failureModeQuality: 'bad',
-    }))
+    const md = metaToMarkdown(
+      validMetaPayload({
+        interviewQuality: 'good',
+        failureModeQuality: 'bad',
+      }),
+    )
     expect(md).toContain('**Interview quality:** good')
     expect(md).toContain('**Failure mode quality:** bad')
   })

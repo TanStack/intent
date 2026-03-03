@@ -22,7 +22,9 @@ export function findSkillFiles(dir: string): string[] {
 /**
  * Parse YAML frontmatter from a file. Returns null if no frontmatter or on error.
  */
-export function parseFrontmatter(filePath: string): Record<string, unknown> | null {
+export function parseFrontmatter(
+  filePath: string,
+): Record<string, unknown> | null {
   let content: string
   try {
     content = readFileSync(filePath, 'utf8')

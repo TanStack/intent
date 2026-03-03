@@ -1,7 +1,11 @@
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { FeedbackPayload, MetaFeedbackPayload, PlaybookProjectConfig } from './types.js'
+import type {
+  FeedbackPayload,
+  MetaFeedbackPayload,
+  PlaybookProjectConfig,
+} from './types.js'
 
 const META_FEEDBACK_REPO = 'TanStack/playbooks'
 
@@ -10,13 +14,13 @@ const META_FEEDBACK_REPO = 'TanStack/playbooks'
 // ---------------------------------------------------------------------------
 
 const SECRET_PATTERNS = [
-  /(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}/,           // GitHub tokens
-  /(?:sk|pk)[-_](?:live|test)[-_][A-Za-z0-9]{24,}/,       // Stripe keys
-  /AKIA[0-9A-Z]{16}/,                                      // AWS access keys
-  /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/,               // PEM private keys
-  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,           // JWT-like tokens
-  /(?:Bearer|token)\s+[A-Za-z0-9_\-.~+/]{20,}/i,          // Bearer tokens
-  /[A-Za-z0-9]{32,}(?=.*(?:key|secret|token|password))/i,  // Generic secrets near keywords
+  /(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}/, // GitHub tokens
+  /(?:sk|pk)[-_](?:live|test)[-_][A-Za-z0-9]{24,}/, // Stripe keys
+  /AKIA[0-9A-Z]{16}/, // AWS access keys
+  /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/, // PEM private keys
+  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/, // JWT-like tokens
+  /(?:Bearer|token)\s+[A-Za-z0-9_\-.~+/]{20,}/i, // Bearer tokens
+  /[A-Za-z0-9]{32,}(?=.*(?:key|secret|token|password))/i, // Generic secrets near keywords
 ]
 
 export function containsSecrets(text: string): boolean {
@@ -41,24 +45,34 @@ export function hasGhCli(): boolean {
 // ---------------------------------------------------------------------------
 
 function getHomeConfigDir(): string {
-  return process.env.XDG_CONFIG_HOME
-    ?? join(process.env.HOME ?? process.env.USERPROFILE ?? '', '.config')
+  return (
+    process.env.XDG_CONFIG_HOME ??
+    join(process.env.HOME ?? process.env.USERPROFILE ?? '', '.config')
+  )
 }
 
 export function resolveFrequency(root: string): string {
   // 1. User override (~/.config/playbook/config.json)
   const userConfigPath = join(getHomeConfigDir(), 'playbook', 'config.json')
   try {
-    const userCfg = JSON.parse(readFileSync(userConfigPath, 'utf8')) as Partial<PlaybookProjectConfig>
+    const userCfg = JSON.parse(
+      readFileSync(userConfigPath, 'utf8'),
+    ) as Partial<PlaybookProjectConfig>
     if (userCfg.feedback?.frequency) return userCfg.feedback.frequency
-  } catch { /* fallback */ }
+  } catch {
+    /* fallback */
+  }
 
   // 2. Project config
   const projectConfigPath = join(root, 'playbook.config.json')
   try {
-    const projCfg = JSON.parse(readFileSync(projectConfigPath, 'utf8')) as Partial<PlaybookProjectConfig>
+    const projCfg = JSON.parse(
+      readFileSync(projectConfigPath, 'utf8'),
+    ) as Partial<PlaybookProjectConfig>
     if (projCfg.feedback?.frequency) return projCfg.feedback.frequency
-  } catch { /* fallback */ }
+  } catch {
+    /* fallback */
+  }
 
   // 3. Default
   return 'every-5'
@@ -69,12 +83,21 @@ export function resolveFrequency(root: string): string {
 // ---------------------------------------------------------------------------
 
 const REQUIRED_FIELDS: (keyof FeedbackPayload)[] = [
-  'skill', 'package', 'skillVersion', 'task',
-  'whatWorked', 'whatFailed', 'missing',
-  'selfCorrections', 'userRating',
+  'skill',
+  'package',
+  'skillVersion',
+  'task',
+  'whatWorked',
+  'whatFailed',
+  'missing',
+  'selfCorrections',
+  'userRating',
 ]
 
-export function validatePayload(payload: unknown): { valid: boolean; errors: string[] } {
+export function validatePayload(payload: unknown): {
+  valid: boolean
+  errors: string[]
+} {
   const errors: string[] = []
   if (!payload || typeof payload !== 'object') {
     return { valid: false, errors: ['Payload must be a JSON object'] }
@@ -82,12 +105,18 @@ export function validatePayload(payload: unknown): { valid: boolean; errors: str
   const obj = payload as Record<string, unknown>
 
   for (const field of REQUIRED_FIELDS) {
-    if (typeof obj[field] !== 'string' || (obj[field] as string).trim() === '') {
+    if (
+      typeof obj[field] !== 'string' ||
+      (obj[field] as string).trim() === ''
+    ) {
       errors.push(`Missing or empty required field: ${field}`)
     }
   }
 
-  if (obj.userRating && !['good', 'mixed', 'bad'].includes(obj.userRating as string)) {
+  if (
+    obj.userRating &&
+    !['good', 'mixed', 'bad'].includes(obj.userRating as string)
+  ) {
     errors.push('userRating must be one of: good, mixed, bad')
   }
 
@@ -97,7 +126,9 @@ export function validatePayload(payload: unknown): { valid: boolean; errors: str
     .join('\n')
 
   if (containsSecrets(allText)) {
-    errors.push('Payload appears to contain secrets or tokens — submission rejected')
+    errors.push(
+      'Payload appears to contain secrets or tokens — submission rejected',
+    )
   }
 
   return { valid: errors.length === 0, errors }
@@ -108,19 +139,38 @@ export function validatePayload(payload: unknown): { valid: boolean; errors: str
 // ---------------------------------------------------------------------------
 
 const META_REQUIRED_FIELDS: (keyof MetaFeedbackPayload)[] = [
-  'metaSkill', 'library', 'agentUsed', 'artifactQuality',
-  'whatWorked', 'whatFailed', 'suggestions', 'userRating',
+  'metaSkill',
+  'library',
+  'agentUsed',
+  'artifactQuality',
+  'whatWorked',
+  'whatFailed',
+  'suggestions',
+  'userRating',
 ]
 
 const VALID_META_SKILLS = [
-  'domain-discovery', 'tree-generator', 'generate-skill', 'skill-staleness-check',
+  'domain-discovery',
+  'tree-generator',
+  'generate-skill',
+  'skill-staleness-check',
 ]
 
-const VALID_AGENTS = ['oz', 'claude-code', 'cursor', 'copilot', 'codex', 'other']
+const VALID_AGENTS = [
+  'oz',
+  'claude-code',
+  'cursor',
+  'copilot',
+  'codex',
+  'other',
+]
 
 const VALID_QUALITY_RATINGS = ['good', 'mixed', 'bad']
 
-export function validateMetaPayload(payload: unknown): { valid: boolean; errors: string[] } {
+export function validateMetaPayload(payload: unknown): {
+  valid: boolean
+  errors: string[]
+} {
   const errors: string[] = []
   if (!payload || typeof payload !== 'object') {
     return { valid: false, errors: ['Payload must be a JSON object'] }
@@ -128,7 +178,10 @@ export function validateMetaPayload(payload: unknown): { valid: boolean; errors:
   const obj = payload as Record<string, unknown>
 
   for (const field of META_REQUIRED_FIELDS) {
-    if (typeof obj[field] !== 'string' || (obj[field] as string).trim() === '') {
+    if (
+      typeof obj[field] !== 'string' ||
+      (obj[field] as string).trim() === ''
+    ) {
       errors.push(`Missing or empty required field: ${field}`)
     }
   }
@@ -141,11 +194,17 @@ export function validateMetaPayload(payload: unknown): { valid: boolean; errors:
     errors.push(`agentUsed must be one of: ${VALID_AGENTS.join(', ')}`)
   }
 
-  if (obj.artifactQuality && !VALID_QUALITY_RATINGS.includes(obj.artifactQuality as string)) {
+  if (
+    obj.artifactQuality &&
+    !VALID_QUALITY_RATINGS.includes(obj.artifactQuality as string)
+  ) {
     errors.push('artifactQuality must be one of: good, mixed, bad')
   }
 
-  if (obj.userRating && !VALID_QUALITY_RATINGS.includes(obj.userRating as string)) {
+  if (
+    obj.userRating &&
+    !VALID_QUALITY_RATINGS.includes(obj.userRating as string)
+  ) {
     errors.push('userRating must be one of: good, mixed, bad')
   }
 
@@ -155,7 +214,9 @@ export function validateMetaPayload(payload: unknown): { valid: boolean; errors:
     .join('\n')
 
   if (containsSecrets(allText)) {
-    errors.push('Payload appears to contain secrets or tokens — submission rejected')
+    errors.push(
+      'Payload appears to contain secrets or tokens — submission rejected',
+    )
   }
 
   return { valid: errors.length === 0, errors }
@@ -286,7 +347,10 @@ export function submitMetaFeedback(
         `gh issue create --repo ${META_FEEDBACK_REPO} --title "${title.replace(/"/g, '\\"')}" --label "feedback:${payload.metaSkill}" --body -`,
         { input: md, stdio: ['pipe', 'pipe', 'pipe'] },
       )
-      return { method: 'gh', detail: `Submitted issue to ${META_FEEDBACK_REPO}` }
+      return {
+        method: 'gh',
+        detail: `Submitted issue to ${META_FEEDBACK_REPO}`,
+      }
     } catch {
       // Fall through to file
     }
@@ -364,7 +428,9 @@ export function runFeedback(args: string[]): void {
         break
       case 'file':
         console.log(`✓ ${result.detail}`)
-        console.log(`Open a GitHub Discussion at https://github.com/${META_FEEDBACK_REPO}/discussions/new?category=Feedback`)
+        console.log(
+          `Open a GitHub Discussion at https://github.com/${META_FEEDBACK_REPO}/discussions/new?category=Feedback`,
+        )
         break
       case 'stdout':
         console.log('--- Meta-feedback markdown (copy/paste to discussion) ---')

@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -18,12 +24,17 @@ import type { FeedbackPayload } from '../src/types.js'
 let tmpDir: string
 
 function setupDir(): string {
-  const dir = join(tmpdir(), `playbook-fb-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const dir = join(
+    tmpdir(),
+    `playbook-fb-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  )
   mkdirSync(dir, { recursive: true })
   return dir
 }
 
-function validPayload(overrides: Partial<FeedbackPayload> = {}): FeedbackPayload {
+function validPayload(
+  overrides: Partial<FeedbackPayload> = {},
+): FeedbackPayload {
   return {
     skill: 'db-core/live-queries',
     package: '@tanstack/db',
@@ -74,7 +85,11 @@ describe('containsSecrets', () => {
   })
 
   it('does not flag normal text', () => {
-    expect(containsSecrets('This is a perfectly normal feedback message about queries.')).toBe(false)
+    expect(
+      containsSecrets(
+        'This is a perfectly normal feedback message about queries.',
+      ),
+    ).toBe(false)
   })
 
   it('does not flag short strings', () => {
@@ -118,15 +133,19 @@ describe('validatePayload', () => {
   })
 
   it('rejects invalid userRating', () => {
-    const result = validatePayload(validPayload({ userRating: 'excellent' as 'good' }))
+    const result = validatePayload(
+      validPayload({ userRating: 'excellent' as 'good' }),
+    )
     expect(result.valid).toBe(false)
     expect(result.errors.some((e) => e.includes('userRating'))).toBe(true)
   })
 
   it('rejects payloads containing secrets', () => {
-    const result = validatePayload(validPayload({
-      whatFailed: 'Used token ghp_' + 'A'.repeat(36) + ' and it failed',
-    }))
+    const result = validatePayload(
+      validPayload({
+        whatFailed: 'Used token ghp_' + 'A'.repeat(36) + ' and it failed',
+      }),
+    )
     expect(result.valid).toBe(false)
     expect(result.errors.some((e) => e.includes('secrets'))).toBe(true)
   })

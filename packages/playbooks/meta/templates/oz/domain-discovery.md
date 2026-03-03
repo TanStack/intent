@@ -40,12 +40,14 @@ Run the full 5-phase domain discovery process:
 5. **Phase 5 — Finalize:** Produce domain_map.yaml and skill_spec.md
 
 Write the output artifacts to the repository root:
+
 - `domain_map.yaml`
 - `skill_spec.md`
 
 ### After completion
 
 Tell the user:
+
 - "Domain discovery complete. Artifacts written to domain_map.yaml and skill_spec.md."
 - "Next step: load the tree-generator meta-skill to generate SKILL.md files."
 - "Run `npx playbook feedback --meta --interactive` to share how this went."

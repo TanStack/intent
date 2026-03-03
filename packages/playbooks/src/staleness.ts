@@ -19,8 +19,14 @@ function classifyVersionDrift(
   newVer: string,
 ): 'major' | 'minor' | 'patch' | null {
   if (oldVer === newVer) return null
-  const oldParts = oldVer.replace(/[^0-9.]/g, '').split('.').map(Number)
-  const newParts = newVer.replace(/[^0-9.]/g, '').split('.').map(Number)
+  const oldParts = oldVer
+    .replace(/[^0-9.]/g, '')
+    .split('.')
+    .map(Number)
+  const newParts = newVer
+    .replace(/[^0-9.]/g, '')
+    .split('.')
+    .map(Number)
   if ((newParts[0] ?? 0) > (oldParts[0] ?? 0)) return 'major'
   if ((newParts[1] ?? 0) > (oldParts[1] ?? 0)) return 'minor'
   if ((newParts[2] ?? 0) > (oldParts[2] ?? 0)) return 'patch'
@@ -33,7 +39,9 @@ function classifyVersionDrift(
 
 async function fetchNpmVersion(packageName: string): Promise<string | null> {
   try {
-    const res = await fetch(`https://registry.npmjs.org/${encodeURIComponent(packageName)}/latest`)
+    const res = await fetch(
+      `https://registry.npmjs.org/${encodeURIComponent(packageName)}/latest`,
+    )
     if (!res.ok) return null
     const data = (await res.json()) as Record<string, unknown>
     return typeof data.version === 'string' ? data.version : null
@@ -80,23 +88,27 @@ export async function checkStaleness(
       .split(sep)
       .join('/')
     return {
-      name: fm?.name as string ?? relName,
+      name: (fm?.name as string) ?? relName,
       filePath,
       libraryVersion: fm?.library_version as string | undefined,
-      sources: Array.isArray(fm?.sources) ? fm.sources as string[] : undefined,
+      sources: Array.isArray(fm?.sources)
+        ? (fm.sources as string[])
+        : undefined,
     }
   })
 
   // Get the version from frontmatter (use first skill that has it)
-  const skillVersion = skillMetas.find((s) => s.libraryVersion)?.libraryVersion ?? null
+  const skillVersion =
+    skillMetas.find((s) => s.libraryVersion)?.libraryVersion ?? null
 
   // Fetch current npm version
   const currentVersion = await fetchNpmVersion(library)
 
   // Classify drift
-  const versionDrift = skillVersion && currentVersion
-    ? classifyVersionDrift(skillVersion, currentVersion)
-    : null
+  const versionDrift =
+    skillVersion && currentVersion
+      ? classifyVersionDrift(skillVersion, currentVersion)
+      : null
 
   // Read sync state
   const syncState = readSyncState(packageDir)
@@ -106,8 +118,14 @@ export async function checkStaleness(
     const reasons: string[] = []
 
     // Version drift
-    if (currentVersion && skill.libraryVersion && skill.libraryVersion !== currentVersion) {
-      reasons.push(`version drift (${skill.libraryVersion} → ${currentVersion})`)
+    if (
+      currentVersion &&
+      skill.libraryVersion &&
+      skill.libraryVersion !== currentVersion
+    ) {
+      reasons.push(
+        `version drift (${skill.libraryVersion} → ${currentVersion})`,
+      )
     }
 
     // Source SHA changes (from sync-state)

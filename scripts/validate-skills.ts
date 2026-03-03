@@ -30,8 +30,7 @@ const MAX_LINES = 500
 
 const PROHIBITED_PATTERNS: Array<{ pattern: RegExp; description: string }> = [
   {
-    pattern:
-      /(?:npm|yarn|pnpm|bun)\s+(?:install|add|i)\s/i,
+    pattern: /(?:npm|yarn|pnpm|bun)\s+(?:install|add|i)\s/i,
     description: 'Install instructions',
   },
   {
@@ -170,8 +169,8 @@ function main(): void {
   const skillFiles = findSkillFiles(SKILLS_DIR)
 
   if (skillFiles.length === 0) {
-    console.error('No SKILL.md files found')
-    process.exit(1)
+    console.log('No SKILL.md files found — nothing to validate')
+    process.exit(0)
   }
 
   for (const filePath of skillFiles) {

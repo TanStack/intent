@@ -33,9 +33,9 @@ const DEFAULT_CONFIG: PlaybookProjectConfig = {
 // ---------------------------------------------------------------------------
 
 export function detectAgentConfigs(root: string): string[] {
-  return AGENT_CONFIG_FILES
-    .map((f) => join(root, f))
-    .filter((f) => existsSync(f))
+  return AGENT_CONFIG_FILES.map((f) => join(root, f)).filter((f) =>
+    existsSync(f),
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -61,7 +61,8 @@ export function injectPlaybookBlock(filePath: string): boolean {
     content = ''
   }
 
-  const separator = content.length > 0 && !content.endsWith('\n\n') ? '\n\n' : ''
+  const separator =
+    content.length > 0 && !content.endsWith('\n\n') ? '\n\n' : ''
   const updated = content + separator + PLAYBOOK_BLOCK
   writeFileSync(filePath, updated)
   return true

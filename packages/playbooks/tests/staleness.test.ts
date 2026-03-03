@@ -11,7 +11,10 @@ import { checkStaleness } from '../src/staleness.js'
 let tmpDir: string
 
 function setupDir(): string {
-  const dir = join(tmpdir(), `playbook-stale-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const dir = join(
+    tmpdir(),
+    `playbook-stale-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  )
   mkdirSync(dir, { recursive: true })
   return dir
 }
@@ -37,10 +40,7 @@ function writeSkill(
   writeFileSync(join(skillDir, 'SKILL.md'), `---\n${fmStr}\n---\n${body}`)
 }
 
-function writeSyncState(
-  dir: string,
-  state: Record<string, unknown>,
-): void {
+function writeSyncState(dir: string, state: Record<string, unknown>): void {
   const skillsDir = join(dir, 'skills')
   mkdirSync(skillsDir, { recursive: true })
   writeFileSync(join(skillsDir, 'sync-state.json'), JSON.stringify(state))
@@ -83,14 +83,23 @@ describe('checkStaleness', () => {
   })
 
   it('detects skills from SKILL.md files', async () => {
-    writeSkill(tmpDir, 'basics', { name: 'basics', description: 'Core concepts' })
-    writeSkill(tmpDir, 'advanced', { name: 'advanced', description: 'Advanced usage' })
+    writeSkill(tmpDir, 'basics', {
+      name: 'basics',
+      description: 'Core concepts',
+    })
+    writeSkill(tmpDir, 'advanced', {
+      name: 'advanced',
+      description: 'Advanced usage',
+    })
 
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
 
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.skills).toHaveLength(2)
-    expect(report.skills.map((s) => s.name).sort()).toEqual(['advanced', 'basics'])
+    expect(report.skills.map((s) => s.name).sort()).toEqual([
+      'advanced',
+      'basics',
+    ])
   })
 
   it('detects major version drift', async () => {
@@ -199,7 +208,7 @@ describe('checkStaleness', () => {
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.skills[0].needsReview).toBe(true)
     expect(report.skills[0].reasons).toEqual(
-      expect.arrayContaining([expect.stringContaining('new source')])
+      expect.arrayContaining([expect.stringContaining('new source')]),
     )
   })
 
@@ -235,7 +244,9 @@ describe('checkStaleness', () => {
   })
 
   it('uses directory name when frontmatter has no name', async () => {
-    writeSkill(tmpDir, 'my-skill', { description: 'A skill with no name field' })
+    writeSkill(tmpDir, 'my-skill', {
+      description: 'A skill with no name field',
+    })
 
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
 
@@ -245,7 +256,11 @@ describe('checkStaleness', () => {
 
   it('uses skillVersion from first skill that has library_version', async () => {
     writeSkill(tmpDir, 'a', { name: 'a', description: 'No version' })
-    writeSkill(tmpDir, 'b', { name: 'b', description: 'Has version', library_version: '3.5.0' })
+    writeSkill(tmpDir, 'b', {
+      name: 'b',
+      description: 'Has version',
+      library_version: '3.5.0',
+    })
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,

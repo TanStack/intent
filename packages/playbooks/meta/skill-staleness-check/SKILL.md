@@ -7,7 +7,7 @@ description: >
   documented behavior, rewrites stale skills using skill-generate, checks
   cross-skill references, and opens PRs. Silent when nothing needs updating.
 metadata:
-  version: "1.0"
+  version: '1.0'
   category: meta-tooling
   input_artifacts:
     - webhook payload (package name, commit SHA, changed files)
@@ -68,6 +68,7 @@ node scripts/sync-skills.mjs <library>
 ```
 
 This checks:
+
 - Source file SHA drift (compares stored SHAs in `sync-state.json` against
   current remote SHAs via GitHub API)
 - Library version drift (frontmatter `library_version` vs current published
@@ -94,12 +95,12 @@ For each matched skill:
 2. Fetch the file diff from the triggering commit in the source repo
 3. Classify the change:
 
-| Classification | Criteria | Action |
-|----------------|----------|--------|
-| **No impact** | Diff is typo fix, comment change, test-only, or internal refactor with no API/behavior change | Skip — no update needed |
-| **Version bump only** | Diff changes version numbers, dependency ranges, or metadata but no documented behavior | Bump `library_version` in frontmatter |
-| **Content update** | Diff changes API shape, behavior, defaults, types, or patterns that the skill documents | Rewrite affected sections |
-| **Breaking change** | Diff removes, renames, or fundamentally changes an API the skill documents | Rewrite + add old pattern as Common Mistake |
+| Classification        | Criteria                                                                                      | Action                                      |
+| --------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| **No impact**         | Diff is typo fix, comment change, test-only, or internal refactor with no API/behavior change | Skip — no update needed                     |
+| **Version bump only** | Diff changes version numbers, dependency ranges, or metadata but no documented behavior       | Bump `library_version` in frontmatter       |
+| **Content update**    | Diff changes API shape, behavior, defaults, types, or patterns that the skill documents       | Rewrite affected sections                   |
+| **Breaking change**   | Diff removes, renames, or fundamentally changes an API the skill documents                    | Rewrite + add old pattern as Common Mistake |
 
 ### Two-pass classification
 
@@ -189,18 +190,23 @@ For each skill (or group of skills) that was updated:
 
 ```markdown
 ### Triggered by
+
 Changes to: <list of source files that matched>
 
 ### What changed in the source
+
 <summary of the diff — 2–3 sentences max>
 
 ### What changed in the skill
+
 <summary of skill edits — which sections were updated and why>
 
 ### Cross-skill impact
+
 <list any downstream skills checked; note if PRs were opened for them>
 
 ### Review checklist
+
 - [ ] Skill content is accurate
 - [ ] Code examples are complete and copy-pasteable
 - [ ] No other skills need corresponding updates
@@ -233,6 +239,7 @@ Exit silently (no PR, no notification, no issue) when ANY of these are true:
 
 The `sync-skills.mjs` script uses the `gh` CLI for GitHub API access. It
 requires:
+
 - `gh` CLI installed and authenticated
 - Read access to upstream TanStack package repos (query, router, db, form,
   table)
@@ -265,11 +272,11 @@ node scripts/sync-skills.mjs db --mark-synced --all
 
 ## Constraints
 
-| Rule | Detail |
-|------|--------|
-| Silent when nothing changes | No noise — exit cleanly if no updates needed |
-| Surgical updates over full rewrites | Only change sections affected by the diff |
-| One cascade level | Cross-skill checks go one level deep, not recursive |
-| PRs scoped to one library | Never mix libraries in a single PR |
-| Version bumps are separate from content updates | A version-only bump doesn't require regeneration |
-| Commit messages include co-author | `Co-Authored-By: Oz <oz-agent@warp.dev>` |
+| Rule                                            | Detail                                              |
+| ----------------------------------------------- | --------------------------------------------------- |
+| Silent when nothing changes                     | No noise — exit cleanly if no updates needed        |
+| Surgical updates over full rewrites             | Only change sections affected by the diff           |
+| One cascade level                               | Cross-skill checks go one level deep, not recursive |
+| PRs scoped to one library                       | Never mix libraries in a single PR                  |
+| Version bumps are separate from content updates | A version-only bump doesn't require regeneration    |
+| Commit messages include co-author               | `Co-Authored-By: Oz <oz-agent@warp.dev>`            |

@@ -50,16 +50,16 @@ npx playbook setup
 
 ## CLI Commands
 
-| Command | Description |
-|---------|-------------|
-| `playbook init` | Inject playbook discovery into agent config files |
-| `playbook list [--json]` | Discover playbook-enabled packages |
-| `playbook meta` | List meta-skills for library maintainers |
-| `playbook scaffold` | Print the guided skill generation prompt |
-| `playbook validate [dir]` | Validate SKILL.md files |
-| `playbook setup` | Copy CI/Oz workflow templates |
-| `playbook stale [--json]` | Check skills for version drift |
-| `playbook feedback` | Submit skill feedback |
+| Command                   | Description                                       |
+| ------------------------- | ------------------------------------------------- |
+| `playbook init`           | Inject playbook discovery into agent config files |
+| `playbook list [--json]`  | Discover playbook-enabled packages                |
+| `playbook meta`           | List meta-skills for library maintainers          |
+| `playbook scaffold`       | Print the guided skill generation prompt          |
+| `playbook validate [dir]` | Validate SKILL.md files                           |
+| `playbook setup`          | Copy CI/Oz workflow templates                     |
+| `playbook stale [--json]` | Check skills for version drift                    |
+| `playbook feedback`       | Submit skill feedback                             |
 
 ## License
 

@@ -1,4 +1,10 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -119,7 +125,10 @@ describe('writeProjectConfig', () => {
 
   it('does not overwrite existing config', () => {
     const configPath = join(root, 'playbook.config.json')
-    writeFileSync(configPath, JSON.stringify({ feedback: { frequency: 'never' } }))
+    writeFileSync(
+      configPath,
+      JSON.stringify({ feedback: { frequency: 'never' } }),
+    )
 
     writeProjectConfig(root)
     const config = JSON.parse(readFileSync(configPath, 'utf8'))
@@ -154,12 +163,19 @@ describe('runInit', () => {
     expect(existsSync(result.configPath)).toBe(true)
 
     // Verify injection happened
-    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain('## Playbook Skills')
-    expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).toContain('## Playbook Skills')
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+      '## Playbook Skills',
+    )
+    expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).toContain(
+      '## Playbook Skills',
+    )
   })
 
   it('skips already-initialized files', () => {
-    writeFileSync(join(root, 'AGENTS.md'), '## Playbook Skills\n\nAlready done.\n')
+    writeFileSync(
+      join(root, 'AGENTS.md'),
+      '## Playbook Skills\n\nAlready done.\n',
+    )
 
     const result = runInit(root)
     expect(result.injected).toHaveLength(0)

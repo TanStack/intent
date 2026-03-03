@@ -20,7 +20,10 @@ function writeSkillMd(dir: string, frontmatter: Record<string, unknown>): void {
   const yamlLines = Object.entries(frontmatter)
     .map(([k, v]) => `${k}: ${typeof v === 'string' ? `"${v}"` : v}`)
     .join('\n')
-  writeFileSync(join(dir, 'SKILL.md'), `---\n${yamlLines}\n---\n\nSkill content here.\n`)
+  writeFileSync(
+    join(dir, 'SKILL.md'),
+    `---\n${yamlLines}\n---\n\nSkill content here.\n`,
+  )
 }
 
 // ── Setup / Teardown ──
@@ -78,7 +81,9 @@ describe('scanForPlaybooks', () => {
     expect(result.packages[0]!.version).toBe('0.5.2')
     expect(result.packages[0]!.skills).toHaveLength(1)
     expect(result.packages[0]!.skills[0]!.name).toBe('db-core')
-    expect(result.packages[0]!.skills[0]!.description).toBe('Core database concepts')
+    expect(result.packages[0]!.skills[0]!.description).toBe(
+      'Core database concepts',
+    )
   })
 
   it('discovers sub-skills', async () => {
@@ -91,7 +96,10 @@ describe('scanForPlaybooks', () => {
     const coreDir = createDir(pkgDir, 'skills', 'db-core')
     writeSkillMd(coreDir, { name: 'db-core', description: 'Core' })
     const subDir = createDir(coreDir, 'live-queries')
-    writeSkillMd(subDir, { name: 'db-core/live-queries', description: 'Queries' })
+    writeSkillMd(subDir, {
+      name: 'db-core/live-queries',
+      description: 'Queries',
+    })
 
     const result = await scanForPlaybooks(root)
     expect(result.packages[0]!.skills).toHaveLength(2)
@@ -153,7 +161,10 @@ describe('scanForPlaybooks', () => {
       },
     })
     const reactSkill = createDir(reactDir, 'skills', 'react-db')
-    writeSkillMd(reactSkill, { name: 'react-db', description: 'React bindings' })
+    writeSkillMd(reactSkill, {
+      name: 'react-db',
+      description: 'React bindings',
+    })
 
     const result = await scanForPlaybooks(root)
     expect(result.packages).toHaveLength(2)
@@ -220,6 +231,8 @@ describe('package manager detection', () => {
   it('throws for Deno without node_modules', async () => {
     writeFileSync(join(root, 'deno.json'), '{}')
     // No node_modules dir
-    await expect(scanForPlaybooks(root)).rejects.toThrow('Deno without node_modules')
+    await expect(scanForPlaybooks(root)).rejects.toThrow(
+      'Deno without node_modules',
+    )
   })
 })
