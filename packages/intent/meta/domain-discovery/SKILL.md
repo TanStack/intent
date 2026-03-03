@@ -57,7 +57,26 @@ reading exhaustively yet.
    guidance, read it. This is high-signal for what the maintainer
    considers important
 
-### 1b — Note initial impressions
+### 1b — Read peer dependency constraints
+
+Check `package.json` for `peerDependencies` and `peerDependenciesMeta`.
+For each major peer dependency (React, Vue, Svelte, Next.js, etc.):
+
+1. Note the version range required
+2. Read the peer's docs for integration constraints that affect this
+   library: SSR/hydration rules, component lifecycle boundaries,
+   browser-only APIs, singleton patterns, connection limits
+3. Log framework-specific failure modes — these are the highest-impact
+   failure modes and cannot be discovered from the library's own source
+
+Examples of peer-dependency-driven failure modes:
+
+- SSR: calling browser-only APIs during server render
+- React: breaking hook rules in library wrapper components
+- Connection limits: opening multiple WebSocket connections per tab
+- Singleton patterns: creating multiple client instances in dev mode
+
+### 1c — Note initial impressions
 
 Log (but do not group yet):
 
@@ -191,7 +210,11 @@ Move concept inventory items into groups. Two items belong together when:
 - They share a lifecycle, configuration scope, or architectural tradeoff
 - Getting one wrong tends to produce bugs in the other
 
-Target 4–7 domains. These are conceptual groupings, not the final skills.
+Let library complexity drive the domain count — a focused library may need
+only 2–3 domains, while a large framework may need 7+. Validate by asking:
+"Would a developer working on a single feature need to load skills from
+multiple domains? If so, merge those domains." These are conceptual
+groupings, not the final skills.
 
 Do not create a group for:
 
@@ -201,6 +224,14 @@ Do not create a group for:
 - Configuration knobs that only affect another group's behavior
 
 Name each domain as work being performed, not what the library provides.
+
+**Validation step:** After grouping, check each domain by asking:
+"Would a developer working on a single feature need to load skills from
+multiple domains?" If yes, merge those domains. Group by developer tasks
+(what they're trying to accomplish), not by architecture (how the library
+is organized internally). For example, prefer "writing data" over
+"producer lifecycle" — the former matches a developer's intent, the latter
+matches the codebase structure.
 
 ### 3b — Map domains × tasks → skills
 
@@ -267,6 +298,14 @@ For each skill, extract failure modes that pass all three tests:
 | Environment branches | `typeof window`, SSR flags, `NODE_ENV` — behavior differs silently |
 
 Target 3 failure modes per skill minimum. Complex skills target 5–6.
+
+**Code patterns.** Every failure mode should include `wrong_pattern` and
+`correct_pattern` fields with short code snippets (3–10 lines each).
+The wrong pattern is what an agent would generate; the correct pattern
+is the fix. These feed directly into SKILL.md Common Mistakes sections
+as wrong/correct code pairs. If the failure mode is purely conceptual
+(e.g. an architectural choice) rather than a code pattern, omit both
+fields and explain in `mechanism` instead.
 
 **Cross-skill failure modes.** Some failure modes belong to multiple
 skills. A developer doing SSR work and a developer doing state management
@@ -465,6 +504,11 @@ Update `status: draft` to `status: reviewed`.
 If the maintainer uses a custom skills root, replace `skills/` in the paths
 below with their chosen directory.
 
+**Monorepo layout:** For monorepos, domain map artifacts go at the REPO ROOT
+(e.g. `_artifacts/domain_map.yaml`) since they describe the whole library.
+Skills are generated per-package later by the tree-generator and generate-skill
+steps.
+
 ### 1. skills/\_artifacts/domain_map.yaml
 
 ```yaml
@@ -510,6 +554,10 @@ skills:
     failure_modes:
       - mistake: '[5-10 word phrase]'
         mechanism: '[one sentence]'
+        wrong_pattern: | # the code an agent would incorrectly generate
+          [short code snippet showing the mistake]
+        correct_pattern: | # the code that should be generated instead
+          [short code snippet showing the fix]
         source: '[doc page, source file, issue link, or maintainer interview]'
         priority: '[CRITICAL | HIGH | MEDIUM]'
         status: '[active | fixed-but-legacy-risk | removed]'

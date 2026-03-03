@@ -9,7 +9,7 @@ title: scanForIntents
 function scanForIntents(root?): Promise<ScanResult>;
 ```
 
-Defined in: [scanner.ts:142](https://github.com/TanStack/intent/blob/main/packages/intent/src/scanner.ts#L142)
+Defined in: [scanner.ts:190](https://github.com/TanStack/intent/blob/main/packages/intent/src/scanner.ts#L190)
 
 ## Parameters
 

@@ -66,6 +66,54 @@ function validateIntentField(
   }
 }
 
+/**
+ * Derive an IntentConfig from standard package.json fields when no explicit
+ * `intent` field is present. A package with a `skills/` directory signals
+ * intent support; `repo` and `docs` are derived from `repository` and
+ * `homepage`.
+ */
+function deriveIntentConfig(
+  pkgJson: Record<string, unknown>,
+): IntentConfig | null {
+  // Derive repo from repository field
+  let repo: string | null = null
+  if (typeof pkgJson.repository === 'string') {
+    repo = pkgJson.repository
+  } else if (
+    pkgJson.repository &&
+    typeof pkgJson.repository === 'object' &&
+    typeof (pkgJson.repository as Record<string, unknown>).url === 'string'
+  ) {
+    repo = (pkgJson.repository as Record<string, unknown>).url as string
+    // Normalize git+https://github.com/foo/bar.git → foo/bar
+    repo = repo
+      .replace(/^git\+/, '')
+      .replace(/\.git$/, '')
+      .replace(/^https?:\/\/github\.com\//, '')
+  }
+
+  // Derive docs from homepage field
+  const docs =
+    typeof pkgJson.homepage === 'string' ? pkgJson.homepage : undefined
+
+  // Need at least a repo to be useful
+  if (!repo) return null
+
+  // Derive requires from intent.requires if partially present
+  const intentPartial = pkgJson.intent as Record<string, unknown> | undefined
+  const requires =
+    intentPartial && Array.isArray(intentPartial.requires)
+      ? intentPartial.requires.filter((r): r is string => typeof r === 'string')
+      : undefined
+
+  return {
+    version: 1,
+    repo,
+    docs: docs ?? '',
+    requires,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Skill discovery within a package
 // ---------------------------------------------------------------------------
@@ -207,11 +255,14 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
     const pkgVersion =
       typeof pkgJson.version === 'string' ? pkgJson.version : '0.0.0'
 
-    // Validate intent field
-    const intent = validateIntentField(pkgName, pkgJson.intent)
+    // Validate intent field — explicit config takes priority, then derive from
+    // standard package.json fields (repository, homepage)
+    const intent =
+      validateIntentField(pkgName, pkgJson.intent) ??
+      deriveIntentConfig(pkgJson)
     if (!intent) {
       warnings.push(
-        `${pkgName} has a skills/ directory but missing or invalid "intent" field in package.json`,
+        `${pkgName} has a skills/ directory but could not determine repo/docs from package.json (add a "repository" field or explicit "intent" config)`,
       )
       continue
     }

@@ -67,7 +67,7 @@ discovery. This produces lower-fidelity output than the full
 skill-domain-discovery skill — prefer running that when time permits.
 
 1. Build a concept inventory (every export, config key, constraint, warning)
-2. Group into 4–7 capability domains using work-oriented names
+2. Group into capability domains using work-oriented names (let library complexity drive the count — 2–3 for focused libraries, more for large frameworks)
 3. Enumerate 10–20 task-focused skills from the intersection of domains
    and developer tasks
 4. Extract 3+ failure modes per skill (plausible, silent, grounded)
@@ -106,6 +106,7 @@ skills:
     type: 'core | sub-skill | framework | lifecycle | composition | security'
     domain: '[domain slug]'
     path: 'skills/[path]/SKILL.md'
+    package: '[package directory, e.g. packages/client]' # monorepo only — which package this skill belongs to
     description: '[1–2 sentence agent-facing routing key]'
     requires:
       - '[other skill slugs]' # omit if none
@@ -117,6 +118,11 @@ skills:
     references:
       - 'references/[file].md' # omit if none
 ```
+
+**Monorepo layout:** For monorepos, each skill's `path` is relative to its
+package directory (e.g. `packages/client/skills/core/SKILL.md`). Set the
+`package` field so generate-skill knows where to write the file. The domain
+map artifacts stay at the repo root.
 
 ### Step 1 — Plan the file tree
 
