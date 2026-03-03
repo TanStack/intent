@@ -1,7 +1,7 @@
 name: Skill Staleness Check
 
 # Triggered by repository_dispatch from upstream TanStack package repos.
-# Each package repo has a notify-playbook.yml workflow that fires this
+# Each package repo has a notify-intent.yml workflow that fires this
 # event on merge to main with the list of changed files.
 
 on:

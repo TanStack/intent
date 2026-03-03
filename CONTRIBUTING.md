@@ -7,11 +7,11 @@ id: contributing
 
 ## Questions
 
-If you have questions about implementation details, help or support, then please use our dedicated community forum at [Github Discussions](https://github.com/tanstack/playbooks/discussions) **PLEASE NOTE:** If you choose to instead open an issue for your question, your issue will be immediately closed and redirected to the forum.
+If you have questions about implementation details, help or support, then please use our dedicated community forum at [Github Discussions](https://github.com/tanstack/intent/discussions) **PLEASE NOTE:** If you choose to instead open an issue for your question, your issue will be immediately closed and redirected to the forum.
 
 ## Reporting Issues
 
-If you have found what you think is a bug, please [file an issue](https://github.com/tanstack/playbooks/issues/new). **PLEASE NOTE:** Issues that are identified as implementation questions or non-issues will be immediately closed and redirected to [Github Discussions](https://github.com/tanstack/playbooks/discussions)
+If you have found what you think is a bug, please [file an issue](https://github.com/tanstack/intent/issues/new). **PLEASE NOTE:** Issues that are identified as implementation questions or non-issues will be immediately closed and redirected to [Github Discussions](https://github.com/tanstack/intent/discussions)
 
 ## Suggesting new features
 

@@ -64,7 +64,7 @@ Log (but do not group yet):
 - What the library does in one sentence
 - The core abstractions a developer interacts with
 - Which frameworks it supports
-- Any existing skill files, agent configs, or playbooks
+- Any existing skill files, agent configs, or intents
 - Whether the library is a monorepo and which packages matter
 
 ---

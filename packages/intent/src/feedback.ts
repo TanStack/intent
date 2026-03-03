@@ -339,7 +339,7 @@ export function submitMetaFeedback(
 ): SubmitResult {
   const md = metaToMarkdown(payload)
 
-  // Always route to TanStack/playbooks
+  // Always route to TanStack/intent
   if (opts.ghAvailable) {
     try {
       const title = `Meta-Skill Feedback: ${payload.metaSkill} (${payload.userRating})`
