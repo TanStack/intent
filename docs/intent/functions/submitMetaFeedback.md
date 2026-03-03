@@ -9,7 +9,7 @@ title: submitMetaFeedback
 function submitMetaFeedback(payload, opts): SubmitResult;
 ```
 
-Defined in: [feedback.ts:336](https://github.com/TanStack/intent/blob/main/packages/intent/src/feedback.ts#L336)
+Defined in: [feedback.ts:329](https://github.com/TanStack/intent/blob/main/packages/intent/src/feedback.ts#L329)
 
 ## Parameters
 

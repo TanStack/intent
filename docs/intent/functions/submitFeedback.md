@@ -12,7 +12,7 @@ function submitFeedback(
    opts): SubmitResult;
 ```
 
-Defined in: [feedback.ts:301](https://github.com/TanStack/intent/blob/main/packages/intent/src/feedback.ts#L301)
+Defined in: [feedback.ts:294](https://github.com/TanStack/intent/blob/main/packages/intent/src/feedback.ts#L294)
 
 ## Parameters
 

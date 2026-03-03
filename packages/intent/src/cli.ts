@@ -432,7 +432,7 @@ Usage:
   intent validate [<dir>]        Validate skill files (default: skills/)
   intent init                    Set up intent discovery in agent configs
   intent scaffold                Print maintainer scaffold prompt
-  intent setup [--workflows] [--oz] [--all]  Copy CI/Oz templates into your repo
+  intent setup [--workflows] [--all]  Copy CI templates into your repo
   intent stale                   Check skills for staleness
   intent feedback --submit --file <path>           Submit skill feedback
   intent feedback --meta --submit --file <path>    Submit meta-skill feedback`

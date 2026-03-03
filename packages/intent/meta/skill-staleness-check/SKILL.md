@@ -2,10 +2,10 @@
 name: skill-staleness-check
 description: >
   Evaluate intent skills for staleness when source files change in upstream
-  TanStack package repos. Driven by Oz automation on webhook trigger. Matches
-  changed files against metadata.sources, evaluates whether diffs affect
-  documented behavior, rewrites stale skills using skill-generate, checks
-  cross-skill references, and opens PRs. Silent when nothing needs updating.
+  TanStack package repos. Matches changed files against metadata.sources,
+  evaluates whether diffs affect documented behavior, rewrites stale skills
+  using skill-generate, checks cross-skill references, and opens PRs.
+  Silent when nothing needs updating.
 metadata:
   version: '1.0'
   category: meta-tooling
@@ -21,10 +21,10 @@ metadata:
 
 # Skill Staleness Check
 
-You are an Oz automation agent. Your job is to evaluate whether intent
-skills are stale after upstream source changes, and if so, update them and
-open PRs. You act autonomously end-to-end. PRs contain already-updated
-skill content, not suggestions.
+You are a coding agent. Your job is to evaluate whether intent skills are
+stale after upstream source changes, and if so, update them and open PRs.
+You act autonomously end-to-end. PRs contain already-updated skill
+content, not suggestions.
 
 If nothing needs updating, exit silently. No PR, no notification.
 
@@ -279,4 +279,4 @@ node scripts/sync-skills.mjs db --mark-synced --all
 | One cascade level                               | Cross-skill checks go one level deep, not recursive |
 | PRs scoped to one library                       | Never mix libraries in a single PR                  |
 | Version bumps are separate from content updates | A version-only bump doesn't require regeneration    |
-| Commit messages include co-author               | `Co-Authored-By: Oz <oz-agent@warp.dev>`            |
+| Commit messages include co-author               | Include the coding agent's co-author tag            |

@@ -36,7 +36,7 @@ function validMetaPayload(
   return {
     metaSkill: 'domain-discovery',
     library: '@tanstack/query',
-    agentUsed: 'oz',
+    agentUsed: 'claude-code',
     artifactQuality: 'good',
     whatWorked: 'Interview questions surfaced real failure modes',
     whatFailed: 'Missed some SSR-specific gotchas',
@@ -145,7 +145,7 @@ describe('metaToMarkdown', () => {
     const md = metaToMarkdown(validMetaPayload())
     expect(md).toContain('# Meta-Skill Feedback: domain-discovery')
     expect(md).toContain('**Library:** @tanstack/query')
-    expect(md).toContain('**Agent:** oz')
+    expect(md).toContain('**Agent:** claude-code')
     expect(md).toContain('**Artifact quality:** good')
     expect(md).toContain('**Rating:** mixed')
     expect(md).toContain('## What Worked')

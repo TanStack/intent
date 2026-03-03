@@ -20,15 +20,10 @@ beforeEach(() => {
 
   // Create mock templates
   mkdirSync(join(metaDir, 'templates', 'workflows'), { recursive: true })
-  mkdirSync(join(metaDir, 'templates', 'oz'), { recursive: true })
 
   writeFileSync(
     join(metaDir, 'templates', 'workflows', 'notify-intent.yml'),
     'package: {{PACKAGE_NAME}}\nrepo: {{REPO}}\ndocs: {{DOCS_PATH}}\nsrc: {{SRC_PATH}}',
-  )
-  writeFileSync(
-    join(metaDir, 'templates', 'oz', 'domain-discovery.md'),
-    '# Discovery for {{PACKAGE_NAME}}\nRepo: {{REPO}}',
   )
 })
 
@@ -37,10 +32,9 @@ afterEach(() => {
 })
 
 describe('runSetup', () => {
-  it('copies workflow and oz templates with defaults', () => {
+  it('copies workflow templates with defaults', () => {
     const result = runSetup(root, metaDir, [])
     expect(result.workflows).toHaveLength(1)
-    expect(result.oz).toHaveLength(1)
     expect(result.skipped).toHaveLength(0)
 
     const wfPath = join(root, '.github', 'workflows', 'notify-intent.yml')
@@ -71,19 +65,11 @@ describe('runSetup', () => {
   it('only copies workflows with --workflows flag', () => {
     const result = runSetup(root, metaDir, ['--workflows'])
     expect(result.workflows).toHaveLength(1)
-    expect(result.oz).toHaveLength(0)
   })
 
-  it('only copies oz with --oz flag', () => {
-    const result = runSetup(root, metaDir, ['--oz'])
-    expect(result.workflows).toHaveLength(0)
-    expect(result.oz).toHaveLength(1)
-  })
-
-  it('copies both with --all flag', () => {
+  it('copies all with --all flag', () => {
     const result = runSetup(root, metaDir, ['--all'])
     expect(result.workflows).toHaveLength(1)
-    expect(result.oz).toHaveLength(1)
   })
 
   it('skips existing files', () => {
@@ -92,8 +78,7 @@ describe('runSetup', () => {
     // Second run
     const result = runSetup(root, metaDir, [])
     expect(result.workflows).toHaveLength(0)
-    expect(result.oz).toHaveLength(0)
-    expect(result.skipped).toHaveLength(3)
+    expect(result.skipped).toHaveLength(2)
   })
 
   it('handles missing templates directory gracefully', () => {
@@ -101,6 +86,5 @@ describe('runSetup', () => {
     mkdirSync(emptyMeta)
     const result = runSetup(root, emptyMeta, [])
     expect(result.workflows).toHaveLength(0)
-    expect(result.oz).toHaveLength(0)
   })
 })

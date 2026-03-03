@@ -5,7 +5,7 @@ title: IntentProjectConfig
 
 # Interface: IntentProjectConfig
 
-Defined in: [types.ts:107](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L107)
+Defined in: [types.ts:101](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L101)
 
 ## Properties
 
@@ -15,7 +15,7 @@ Defined in: [types.ts:107](https://github.com/TanStack/intent/blob/main/packages
 feedback: object;
 ```
 
-Defined in: [types.ts:108](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L108)
+Defined in: [types.ts:102](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L102)
 
 #### frequency
 

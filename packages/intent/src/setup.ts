@@ -13,7 +13,6 @@ import { join } from 'node:path'
 
 export interface SetupResult {
   workflows: string[]
-  oz: string[]
   skipped: string[]
   shim: string | null
 }
@@ -145,17 +144,15 @@ export function runSetup(
 ): SetupResult {
   const doAll = args.includes('--all')
   const doWorkflows = doAll || args.includes('--workflows')
-  const doOz = doAll || args.includes('--oz')
   const doShim = doAll || args.includes('--shim')
 
   // If no flags, default to --all
-  const defaultAll = !doWorkflows && !doOz && !doShim
+  const defaultAll = !doWorkflows && !doShim
   const installWorkflows = doWorkflows || defaultAll
-  const installOz = doOz || defaultAll
   const installShim = doShim || defaultAll
 
   const vars = detectVars(root)
-  const result: SetupResult = { workflows: [], oz: [], skipped: [], shim: null }
+  const result: SetupResult = { workflows: [], skipped: [], shim: null }
 
   const templatesDir = join(metaDir, 'templates')
 
@@ -167,21 +164,12 @@ export function runSetup(
     result.skipped.push(...skipped)
   }
 
-  if (installOz) {
-    const srcDir = join(templatesDir, 'oz')
-    const destDir = join(root, '.intent', 'oz')
-    const { copied, skipped } = copyTemplates(srcDir, destDir, vars)
-    result.oz = copied
-    result.skipped.push(...skipped)
-  }
-
   if (installShim) {
     generateShim(root, result)
   }
 
   // Print results
   for (const f of result.workflows) console.log(`✓ Copied workflow: ${f}`)
-  for (const f of result.oz) console.log(`✓ Copied Oz prompt: ${f}`)
   for (const f of result.skipped) console.log(`  Already exists: ${f}`)
 
   if (result.shim) {
@@ -193,12 +181,11 @@ export function runSetup(
 
   if (
     result.workflows.length === 0 &&
-    result.oz.length === 0 &&
     result.shim === null &&
     result.skipped.length === 0
   ) {
     console.log('No templates directory found. Is @tanstack/intent installed?')
-  } else if (result.workflows.length > 0 || result.oz.length > 0) {
+  } else if (result.workflows.length > 0) {
     console.log(`\nTemplate variables applied:`)
     console.log(`  Package:  ${vars.PACKAGE_NAME}`)
     console.log(`  Repo:     ${vars.REPO}`)

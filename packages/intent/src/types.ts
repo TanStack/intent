@@ -79,13 +79,7 @@ export type MetaSkillName =
   | 'generate-skill'
   | 'skill-staleness-check'
 
-export type AgentName =
-  | 'oz'
-  | 'claude-code'
-  | 'cursor'
-  | 'copilot'
-  | 'codex'
-  | 'other'
+export type AgentName = 'claude-code' | 'cursor' | 'copilot' | 'codex' | 'other'
 
 export interface MetaFeedbackPayload {
   metaSkill: MetaSkillName

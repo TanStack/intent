@@ -42,7 +42,7 @@ Validate your skill files:
 npx intent validate
 ```
 
-Copy CI and Oz workflow templates into your repo:
+Copy CI workflow templates into your repo:
 
 ```bash
 npx intent setup
@@ -57,7 +57,7 @@ npx intent setup
 | `intent meta`           | List meta-skills for library maintainers        |
 | `intent scaffold`       | Print the guided skill generation prompt        |
 | `intent validate [dir]` | Validate SKILL.md files                         |
-| `intent setup`          | Copy CI/Oz workflow templates                   |
+| `intent setup`          | Copy CI workflow templates                      |
 | `intent stale [--json]` | Check skills for version drift                  |
 | `intent feedback`       | Submit skill feedback                           |
 

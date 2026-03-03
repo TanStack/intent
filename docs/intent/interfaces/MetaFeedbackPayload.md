@@ -5,7 +5,7 @@ title: MetaFeedbackPayload
 
 # Interface: MetaFeedbackPayload
 
-Defined in: [types.ts:90](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L90)
+Defined in: [types.ts:84](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L84)
 
 ## Properties
 
@@ -15,7 +15,7 @@ Defined in: [types.ts:90](https://github.com/TanStack/intent/blob/main/packages/
 agentUsed: AgentName;
 ```
 
-Defined in: [types.ts:93](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L93)
+Defined in: [types.ts:87](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L87)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: [types.ts:93](https://github.com/TanStack/intent/blob/main/packages/
 artifactQuality: "good" | "mixed" | "bad";
 ```
 
-Defined in: [types.ts:94](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L94)
+Defined in: [types.ts:88](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L88)
 
 ***
 
@@ -35,7 +35,7 @@ Defined in: [types.ts:94](https://github.com/TanStack/intent/blob/main/packages/
 optional failureModeQuality: "good" | "mixed" | "bad" | "not-applicable";
 ```
 
-Defined in: [types.ts:96](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L96)
+Defined in: [types.ts:90](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L90)
 
 ***
 
@@ -45,7 +45,7 @@ Defined in: [types.ts:96](https://github.com/TanStack/intent/blob/main/packages/
 optional interviewQuality: "skipped" | "good" | "mixed" | "bad";
 ```
 
-Defined in: [types.ts:95](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L95)
+Defined in: [types.ts:89](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L89)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: [types.ts:95](https://github.com/TanStack/intent/blob/main/packages/
 library: string;
 ```
 
-Defined in: [types.ts:92](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L92)
+Defined in: [types.ts:86](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L86)
 
 ***
 
@@ -65,7 +65,7 @@ Defined in: [types.ts:92](https://github.com/TanStack/intent/blob/main/packages/
 metaSkill: MetaSkillName;
 ```
 
-Defined in: [types.ts:91](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L91)
+Defined in: [types.ts:85](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L85)
 
 ***
 
@@ -75,7 +75,7 @@ Defined in: [types.ts:91](https://github.com/TanStack/intent/blob/main/packages/
 suggestions: string;
 ```
 
-Defined in: [types.ts:99](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L99)
+Defined in: [types.ts:93](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L93)
 
 ***
 
@@ -85,7 +85,7 @@ Defined in: [types.ts:99](https://github.com/TanStack/intent/blob/main/packages/
 userRating: "good" | "mixed" | "bad";
 ```
 
-Defined in: [types.ts:100](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L100)
+Defined in: [types.ts:94](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L94)
 
 ***
 
@@ -95,7 +95,7 @@ Defined in: [types.ts:100](https://github.com/TanStack/intent/blob/main/packages
 whatFailed: string;
 ```
 
-Defined in: [types.ts:98](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L98)
+Defined in: [types.ts:92](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L92)
 
 ***
 
@@ -105,4 +105,4 @@ Defined in: [types.ts:98](https://github.com/TanStack/intent/blob/main/packages/
 whatWorked: string;
 ```
 
-Defined in: [types.ts:97](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L97)
+Defined in: [types.ts:91](https://github.com/TanStack/intent/blob/main/packages/intent/src/types.ts#L91)

@@ -156,14 +156,7 @@ const VALID_META_SKILLS = [
   'skill-staleness-check',
 ]
 
-const VALID_AGENTS = [
-  'oz',
-  'claude-code',
-  'cursor',
-  'copilot',
-  'codex',
-  'other',
-]
+const VALID_AGENTS = ['claude-code', 'cursor', 'copilot', 'codex', 'other']
 
 const VALID_QUALITY_RATINGS = ['good', 'mixed', 'bad']
 
