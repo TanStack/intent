@@ -67,7 +67,7 @@ discovery. This produces lower-fidelity output than the full
 skill-domain-discovery skill — prefer running that when time permits.
 
 1. Build a concept inventory (every export, config key, constraint, warning)
-2. Group into 4–7 capability domains using work-oriented names
+2. Group into capability domains using work-oriented names (let library complexity drive the count — 2–3 for focused libraries, more for large frameworks)
 3. Enumerate 10–20 task-focused skills from the intersection of domains
    and developer tasks
 4. Extract 3+ failure modes per skill (plausible, silent, grounded)

@@ -294,7 +294,7 @@ function cmdValidate(args: string[]): void {
     if (lineCount > 500) {
       errors.push({
         file: rel,
-        message: `Exceeds 500 line limit (${lineCount} lines)`,
+        message: `Exceeds 500 line limit (${lineCount} lines). Rewrite for conciseness: move API tables to references/, trim verbose examples, and remove content an agent already knows. Do not simply raise the limit.`,
       })
     }
   }
@@ -354,9 +354,10 @@ function cmdScaffold(): void {
   const prompt = `You are an AI assistant helping a library maintainer scaffold Intent skills.
 You MUST use the Intent meta skills in this exact order and follow their output requirements.
 
-Before you start, ask the maintainer for their skills root path.
-- Default: skills/
-- If they choose a different path, replace "skills/" in all output paths below.
+Before you start, ask the maintainer two questions:
+1. Skills root path (default: skills/). If custom, replace "skills/" in all paths below.
+2. Is this a monorepo? If yes, each publishable package needs its own skills/ directory,
+   bin entry, and @tanstack/intent dependency. Run the workflow per-package.
 
 1) Meta skill: domain-discovery
    - Input: library name, repo URL, docs URL(s), scope constraints, target audience.
@@ -382,13 +383,13 @@ Guidance for the maintainer:
 - Use the library's actual terminology from docs and source.
 
 At the end, produce a single Markdown feedback doc with three sections (Domain Discovery, Tree Generator, Generate Skill).
-Ask if the maintainer wants to edit it, then submit it via: npx intent feedback --meta --submit --file <path>
+Ask if the maintainer wants to edit it, then submit it via: npx @tanstack/intent feedback --meta --submit --file <path>
 
 Finish with a short checklist:
-- Run npx intent validate
+- Run npx @tanstack/intent validate
 - Commit skills/ and skills/_artifacts/ (artifacts are repo-only)
-- Exclude skills/_artifacts/ from package publishing
-- Add README snippet: If you use an AI agent, run npx intent init
+- Exclude skills/_artifacts/ from package publishing (add "!skills/_artifacts" to the "files" array in package.json)
+- Add README snippet: If you use an AI agent, run npx @tanstack/intent init
 `
 
   console.log(prompt)

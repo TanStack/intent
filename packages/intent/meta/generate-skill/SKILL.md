@@ -77,6 +77,11 @@ skill-tree-generator for the full spec of each type.
 
 ## Step 2 — Extract content from sources
 
+**Line budget:** Each SKILL.md must stay under 500 lines. Before writing,
+estimate the content size. If a skill has 5+ failure modes, 3+ primary
+patterns, and subsystem details, proactively plan reference files during
+extraction — don't wait until the skill exceeds the limit.
+
 Read through the source documentation. Extract only what a coding agent
 cannot already know:
 
