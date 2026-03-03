@@ -1,6 +1,6 @@
 {
   "name": "@tanstack/playbooks",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0",
   "description": "Ship compositional knowledge for AI coding agents alongside your npm packages",
   "license": "MIT",
   "type": "module",
