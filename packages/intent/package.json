@@ -33,6 +33,7 @@
   },
   "scripts": {
     "build": "tsdown src/index.ts src/cli.ts src/setup.ts src/intent-library.ts src/library-scanner.ts --format esm --dts",
-    "test:lib": "vitest run"
+    "test:lib": "vitest run",
+    "test:types": "tsc --noEmit"
   }
 }

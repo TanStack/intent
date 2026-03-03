@@ -1,3 +1,4 @@
+import type { Dirent } from 'node:fs'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import type { SkillEntry } from './types.js'
@@ -64,9 +65,9 @@ function discoverSkills(skillsDir: string): SkillEntry[] {
   const skills: SkillEntry[] = []
 
   function walk(dir: string): void {
-    let entries: ReturnType<typeof readdirSync>
+    let entries: Dirent<string>[]
     try {
-      entries = readdirSync(dir, { withFileTypes: true })
+      entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
     } catch {
       return
     }

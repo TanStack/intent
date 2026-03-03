@@ -24,5 +24,6 @@
     "target": "ES2020",
     "noErrorTruncation": true
   },
-  "include": ["scripts", "*.config.*", "vitest.workspace.js"]
+  "include": ["scripts", "*.config.*", "vitest.workspace.js"],
+  "exclude": ["eslint.config.js"]
 }

@@ -32,7 +32,7 @@ export function parseFrontmatter(
     return null
   }
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-  if (!match) return null
+  if (!match?.[1]) return null
   try {
     return parseYaml(match[1]) as Record<string, unknown>
   } catch {

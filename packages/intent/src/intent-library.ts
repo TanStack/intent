@@ -10,7 +10,7 @@ import { scanLibrary } from './library-scanner.js'
 async function cmdList(): Promise<void> {
   let result: LibraryScanResult
   try {
-    result = await scanLibrary(process.argv[1])
+    result = await scanLibrary(process.argv[1]!)
   } catch (err) {
     console.error((err as Error).message)
     process.exit(1)

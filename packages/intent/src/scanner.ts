@@ -1,3 +1,4 @@
+import type { Dirent } from 'node:fs'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import type {
@@ -43,7 +44,7 @@ function detectPackageManager(root: string): PackageManager {
 // ---------------------------------------------------------------------------
 
 function validateIntentField(
-  pkgName: string,
+  _pkgName: string,
   intent: unknown,
 ): IntentConfig | null {
   if (!intent || typeof intent !== 'object') return null
@@ -69,13 +70,13 @@ function validateIntentField(
 // Skill discovery within a package
 // ---------------------------------------------------------------------------
 
-function discoverSkills(skillsDir: string, baseName: string): SkillEntry[] {
+function discoverSkills(skillsDir: string, _baseName: string): SkillEntry[] {
   const skills: SkillEntry[] = []
 
   function walk(dir: string): void {
-    let entries: ReturnType<typeof readdirSync>
+    let entries: Dirent<string>[]
     try {
-      entries = readdirSync(dir, { withFileTypes: true })
+      entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
     } catch {
       return
     }
@@ -153,9 +154,12 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
   // Collect all package directories to check
   const packageDirs: Array<{ dirPath: string }> = []
 
-  let topEntries: ReturnType<typeof readdirSync>
+  let topEntries: Dirent<string>[]
   try {
-    topEntries = readdirSync(nodeModulesDir, { withFileTypes: true })
+    topEntries = readdirSync(nodeModulesDir, {
+      withFileTypes: true,
+      encoding: 'utf8',
+    })
   } catch {
     return { packageManager, packages, warnings }
   }
@@ -166,9 +170,12 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
 
     if (entry.name.startsWith('@')) {
       // Scoped package — check children
-      let scopedEntries: ReturnType<typeof readdirSync>
+      let scopedEntries: Dirent<string>[]
       try {
-        scopedEntries = readdirSync(dirPath, { withFileTypes: true })
+        scopedEntries = readdirSync(dirPath, {
+          withFileTypes: true,
+          encoding: 'utf8',
+        })
       } catch {
         continue
       }
