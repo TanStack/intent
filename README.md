@@ -14,7 +14,7 @@ The ecosystem already moves toward agent-readable knowledge — Cursor rules, CL
 
 You ship code, docs, and types. Skills are the fourth artifact — knowledge encoded for the thing writing most of your code.
 
-Skills are npm packages of knowledge — encoding how tools compose, which patterns fit which goals, and what to avoid. They travel with the tool via `npm update`, not the model's training cutoff. Versioned knowledge the maintainer owns, updated when the package updates.
+Skills are npm packages of knowledge — encoding how tools compose, which patterns fit which goals, and what to avoid. When a library ships skills using `@tanstack/intent`, that knowledge travels with the tool via `npm update` — not the model's training cutoff. Versioned knowledge the maintainer owns, updated when the package updates.
 
 Each skill declares its source docs. When those docs change, the CLI flags the skill for review. One source of truth, one derived artifact that stays in sync.
 
