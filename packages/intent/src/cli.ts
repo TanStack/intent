@@ -281,6 +281,14 @@ function cmdValidate(args: string[]): void {
       }
     }
 
+    // Description character limit
+    if (typeof fm.description === 'string' && fm.description.length > 1024) {
+      errors.push({
+        file: rel,
+        message: `Description exceeds 1024 character limit (${fm.description.length} chars)`,
+      })
+    }
+
     // Framework skills must have requires
     if (fm.type === 'framework' && !Array.isArray(fm.requires)) {
       errors.push({
@@ -339,15 +347,70 @@ function cmdValidate(args: string[]): void {
     }
   }
 
+  // Packaging checks — run when package.json exists at cwd
+  const pkgJsonPath = join(process.cwd(), 'package.json')
+  const warnings: string[] = []
+  if (existsSync(pkgJsonPath)) {
+    let pkgJson: Record<string, unknown> = {}
+    try {
+      pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8'))
+    } catch {
+      // skip packaging checks if we can't read package.json
+    }
+
+    if (Object.keys(pkgJson).length > 0) {
+      // Check @tanstack/intent in devDependencies
+      const devDeps = pkgJson.devDependencies as Record<string, string> | undefined
+      if (!devDeps?.['@tanstack/intent']) {
+        warnings.push('@tanstack/intent is not in devDependencies')
+      }
+
+      // Check bin entry
+      const bin = pkgJson.bin as Record<string, string> | undefined
+      if (!bin?.intent) {
+        warnings.push('Missing "bin": { "intent": ... } entry in package.json')
+      }
+
+      // Check shim file exists
+      const shimJs = join(process.cwd(), 'bin', 'intent.js')
+      const shimMjs = join(process.cwd(), 'bin', 'intent.mjs')
+      if (!existsSync(shimJs) && !existsSync(shimMjs)) {
+        warnings.push('No bin/intent.js or bin/intent.mjs shim found (run: npx @tanstack/intent setup --shim)')
+      }
+
+      // Check files array
+      const files = pkgJson.files as string[] | undefined
+      if (Array.isArray(files)) {
+        if (!files.includes('skills')) {
+          warnings.push('"skills" is not in the "files" array — skills won\'t be published')
+        }
+        if (!files.includes('bin')) {
+          warnings.push('"bin" is not in the "files" array — shim won\'t be published')
+        }
+        if (!files.includes('!skills/_artifacts')) {
+          warnings.push('"!skills/_artifacts" is not in the "files" array — artifacts will be published unnecessarily')
+        }
+      }
+    }
+  }
+
   if (errors.length > 0) {
     console.error(`\n❌ Validation failed with ${errors.length} error(s):\n`)
     for (const { file, message } of errors) {
       console.error(`  ${file}: ${message}`)
     }
+    if (warnings.length > 0) {
+      console.error(`\n⚠ Packaging warnings:`)
+      for (const w of warnings) console.error(`  ${w}`)
+    }
     process.exit(1)
   }
 
   console.log(`✅ Validated ${skillFiles.length} skill files — all passed`)
+  if (warnings.length > 0) {
+    console.log(`\n⚠ Packaging warnings:`)
+    for (const w of warnings) console.log(`  ${w}`)
+  }
 }
 
 function cmdScaffold(): void {
