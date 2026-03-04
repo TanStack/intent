@@ -12,7 +12,7 @@ function runSetup(
    args): SetupResult;
 ```
 
-Defined in: [setup.ts:182](https://github.com/TanStack/intent/blob/main/packages/intent/src/setup.ts#L182)
+Defined in: [setup.ts:189](https://github.com/TanStack/intent/blob/main/packages/intent/src/setup.ts#L189)
 
 ## Parameters
 

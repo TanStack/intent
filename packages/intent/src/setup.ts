@@ -155,7 +155,11 @@ function generateShim(root: string, result: SetupResult): void {
 // Label creation
 // ---------------------------------------------------------------------------
 
-function createSkillLabels(root: string, repo: string, result: SetupResult): void {
+function createSkillLabels(
+  root: string,
+  repo: string,
+  result: SetupResult,
+): void {
   const skillsDir = join(root, 'skills')
   if (!existsSync(skillsDir)) return
 
