@@ -337,7 +337,30 @@ only considers one side.
 Target 2–4 tensions. If you find none, the skills may be too isolated —
 revisit whether you're missing cross-connections.
 
-### 3f — Identify gaps
+### 3f — Map cross-references
+
+Beyond tensions (conflicts) and shared failure modes, identify skills
+that illuminate each other without conflicting. A cross-reference means:
+"an agent loading skill A would produce better code if it knew about
+skill B." These become "See also" pointers in the generated SKILL.md
+files.
+
+For each pair, note:
+
+- Which skill references which (can be bidirectional)
+- Why awareness of the other skill improves output
+
+Examples:
+
+- A quickstart skill references the security checklist ("after setup, audit")
+- A state management skill references an SSR skill ("state hydration
+  requires understanding SSR lifecycle")
+- A data writing skill references a data reading skill ("writes affect
+  how queries invalidate")
+
+Output these in the `cross_references` section of domain_map.yaml.
+
+### 3g — Identify gaps
 
 For each skill, explicitly list what you could NOT determine from docs
 and source alone. These become interview questions in Phase 4.
@@ -351,7 +374,7 @@ Common gaps:
 - "GitHub issues show confusion about X but docs don't address it"
 - "I found two patterns for doing X — unclear which is current/preferred"
 
-### 3g — Discover composition targets
+### 3h — Discover composition targets
 
 Scan `package.json` for peer dependencies, optional dependencies, and
 `peerDependenciesMeta`. Scan example directories and integration tests
@@ -363,7 +386,7 @@ for import patterns. For each frequently co-used library, log:
 
 These become targeted composition questions in Phase 4e.
 
-### 3h — Produce the draft
+### 3i — Produce the draft
 
 Write the full `domain_map.yaml` (format in Output Artifacts below) with
 a `status: draft` field. Flag every gap in the `gaps` section.
@@ -405,7 +428,7 @@ Follow up on any corrections. Then:
 
 ### 4b — Gap-targeted questions (3–8 questions)
 
-For each gap flagged in Phase 3f, ask a specific question. These are not
+For each gap flagged in Phase 3g, ask a specific question. These are not
 generic — they reference what you found:
 
 **Instead of:** "What do developers get wrong?"
@@ -472,7 +495,7 @@ These surface knowledge that doesn't appear in any docs:
 
 ### 4e — Composition questions (if library interacts with others)
 
-Use what you discovered in Phase 3g. For each integration target
+Use what you discovered in Phase 3h. For each integration target
 identified from peer dependencies and example code, ask targeted
 questions:
 
@@ -573,6 +596,11 @@ tensions:
     description: '[what conflicts — one sentence]'
     implication: '[what an agent gets wrong when it only considers one side]'
 
+cross_references:
+  - from: '[skill-slug]'
+    to: '[skill-slug]'
+    reason: '[why loading one skill benefits from awareness of the other]'
+
 gaps:
   - skill: '[skill slug]'
     question: '[what still needs input]'
@@ -617,6 +645,12 @@ not promotional.]
 | Tension        | Skills              | Agent implication       |
 | -------------- | ------------------- | ----------------------- |
 | [short phrase] | [slug-a] ↔ [slug-b] | [what agents get wrong] |
+
+## Cross-References
+
+| From   | To     | Reason                                    |
+| ------ | ------ | ----------------------------------------- |
+| [slug] | [slug] | [why awareness of one improves the other] |
 
 ## Subsystems & Reference Candidates
 
@@ -672,6 +706,7 @@ not promotional.]
 | Subsystems flagged                    | Skills with 3+ adapters/backends list them as subsystems                   |
 | Dense surfaces flagged                | Topics with >10 patterns noted as reference_candidates                     |
 | Lifecycle skills considered           | Suggest journey skills when docs have the material                         |
+| Cross-references mapped               | Skills that illuminate each other get "See also" pointers                  |
 
 ---
 

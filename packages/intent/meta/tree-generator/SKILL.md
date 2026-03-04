@@ -520,10 +520,18 @@ See also: [lib]-core/[other-domain]/SKILL.md § Common Mistakes
 The cross-reference ensures agents that load one skill are pointed
 toward the related skill where the other side of the tension lives.
 
+Also check the domain map's `cross_references` section for non-tension
+relationships between skills. For each cross-reference, add a "See also"
+line at the end of the relevant skill's body:
+
+```markdown
+See also: [other-skill]/SKILL.md — [reason]
+```
+
 ### Step 6 — Write composition skills (if applicable)
 
 Use the `compositions` entries from `domain_map.yaml` (populated during
-skill-domain-discovery Phase 2h) to identify which composition skills
+skill-domain-discovery Phase 3h) to identify which composition skills
 to produce.
 
 Composition skills cover how two or more libraries work together. These

@@ -11,14 +11,6 @@ export {
   validateMetaPayload,
   validatePayload,
 } from './feedback.js'
-export {
-  detectAgentConfigs,
-  hasIntentBlock,
-  injectIntentBlock,
-  readProjectConfig,
-  runInit,
-  writeProjectConfig,
-} from './init.js'
 export { findSkillFiles, parseFrontmatter } from './utils.js'
 export { runSetup } from './setup.js'
 export type {

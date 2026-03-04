@@ -1,5 +1,5 @@
-import { execSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync, execSync } from 'node:child_process'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type {
   FeedbackPayload,
@@ -302,13 +302,16 @@ export function submitFeedback(
   if (opts.ghAvailable) {
     try {
       const title = `Skill Feedback: ${payload.skill} (${payload.userRating})`
-      execSync(
-        `gh issue create --repo ${repo} --title "${title.replace(/"/g, '\\"')}" --body -`,
+      execFileSync(
+        'gh',
+        ['issue', 'create', '--repo', repo, '--title', title, '--body', '-'],
         { input: md, stdio: ['pipe', 'pipe', 'pipe'] },
       )
       return { method: 'gh', detail: `Submitted issue to ${repo}` }
-    } catch {
-      // Fall through to file
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`GitHub submission failed: ${msg}`)
+      console.error('Falling back to file output.')
     }
   }
 
@@ -335,16 +338,30 @@ export function submitMetaFeedback(
   if (opts.ghAvailable) {
     try {
       const title = `Meta-Skill Feedback: ${payload.metaSkill} (${payload.userRating})`
-      execSync(
-        `gh issue create --repo ${META_FEEDBACK_REPO} --title "${title.replace(/"/g, '\\"')}" --label "feedback:${payload.metaSkill}" --body -`,
+      execFileSync(
+        'gh',
+        [
+          'issue',
+          'create',
+          '--repo',
+          META_FEEDBACK_REPO,
+          '--title',
+          title,
+          '--label',
+          `feedback:${payload.metaSkill}`,
+          '--body',
+          '-',
+        ],
         { input: md, stdio: ['pipe', 'pipe', 'pipe'] },
       )
       return {
         method: 'gh',
         detail: `Submitted issue to ${META_FEEDBACK_REPO}`,
       }
-    } catch {
-      // Fall through to file
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`GitHub submission failed: ${msg}`)
+      console.error('Falling back to file output.')
     }
   }
 
@@ -354,112 +371,4 @@ export function submitMetaFeedback(
   }
 
   return { method: 'stdout', detail: md }
-}
-
-// ---------------------------------------------------------------------------
-// CLI runner
-// ---------------------------------------------------------------------------
-
-export function runFeedback(args: string[]): void {
-  const isMeta = args.includes('--meta')
-  const submitFlag = args.includes('--submit')
-  const fileIdx = args.indexOf('--file')
-  const filePath = fileIdx !== -1 ? args[fileIdx + 1] : undefined
-
-  if (!submitFlag || !filePath) {
-    if (isMeta) {
-      console.error('Usage: intent feedback --meta --submit --file <path>')
-    } else {
-      console.error('Usage: intent feedback --submit --file <path>')
-    }
-    process.exit(1)
-  }
-
-  if (!existsSync(filePath)) {
-    console.error(`File not found: ${filePath}`)
-    process.exit(1)
-  }
-
-  let raw: unknown
-  try {
-    raw = JSON.parse(readFileSync(filePath, 'utf8'))
-  } catch {
-    console.error('Invalid JSON in feedback file')
-    process.exit(1)
-  }
-
-  const ghAvailable = hasGhCli()
-  const frequency = resolveFrequency(process.cwd())
-
-  if (frequency === 'never') {
-    console.log('Feedback is disabled (frequency: never)')
-    return
-  }
-
-  const dateSuffix = new Date().toISOString().slice(0, 10)
-
-  if (isMeta) {
-    const validation = validateMetaPayload(raw)
-    if (!validation.valid) {
-      console.error('Meta-feedback validation failed:')
-      for (const err of validation.errors) console.error(`  - ${err}`)
-      process.exit(1)
-    }
-
-    const payload = raw as MetaFeedbackPayload
-    const fallbackPath = `intent-meta-feedback-${dateSuffix}.md`
-
-    const result = submitMetaFeedback(payload, {
-      ghAvailable,
-      outputPath: ghAvailable ? undefined : fallbackPath,
-    })
-
-    switch (result.method) {
-      case 'gh':
-        console.log(`✓ ${result.detail}`)
-        break
-      case 'file':
-        console.log(`✓ ${result.detail}`)
-        console.log(
-          `You can manually open an issue at https://github.com/${META_FEEDBACK_REPO}/issues with this content.`,
-        )
-        break
-      case 'stdout':
-        console.log('--- Meta-feedback markdown (copy/paste to issue) ---')
-        console.log(result.detail)
-        break
-    }
-    return
-  }
-
-  // Standard skill feedback
-  const validation = validatePayload(raw)
-  if (!validation.valid) {
-    console.error('Feedback validation failed:')
-    for (const err of validation.errors) console.error(`  - ${err}`)
-    process.exit(1)
-  }
-
-  const payload = raw as FeedbackPayload
-  const repo = payload.package.replace(/^@/, '').replace(/\//, '/')
-  const fallbackPath = `intent-feedback-${dateSuffix}.md`
-
-  const result = submitFeedback(payload, repo, {
-    ghAvailable,
-    outputPath: ghAvailable ? undefined : fallbackPath,
-  })
-
-  switch (result.method) {
-    case 'gh':
-      console.log(`✓ ${result.detail}`)
-      break
-    case 'file':
-      console.log(`✓ ${result.detail}`)
-      console.log('You can manually open an issue with this content.')
-      break
-    case 'stdout':
-      console.log('--- Feedback markdown (copy/paste to issue) ---')
-      console.log(result.detail)
-      break
-  }
 }

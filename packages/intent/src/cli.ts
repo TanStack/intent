@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
+import { computeSkillNameWidth, printSkillTree, printTable } from './display.js'
 import { scanForIntents } from './scanner.js'
 import type { ScanResult } from './types.js'
 import { findSkillFiles, parseFrontmatter } from './utils.js'
@@ -13,7 +14,6 @@ import { findSkillFiles, parseFrontmatter } from './utils.js'
 // ---------------------------------------------------------------------------
 
 function getMetaDir(): string {
-  // Resolve relative to this file's location in dist/
   const thisDir = dirname(fileURLToPath(import.meta.url))
   return join(thisDir, '..', 'meta')
 }
@@ -21,95 +21,6 @@ function getMetaDir(): string {
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
-
-function padColumn(text: string, width: number): string {
-  return text.length >= width ? text + '  ' : text.padEnd(width)
-}
-
-function printTable(headers: string[], rows: string[][]): void {
-  const widths = headers.map(
-    (h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)) + 2,
-  )
-
-  const headerLine = headers.map((h, i) => padColumn(h, widths[i]!)).join('')
-  const separator = widths.map((w) => '─'.repeat(w)).join('')
-
-  console.log(headerLine)
-  console.log(separator)
-  for (const row of rows) {
-    console.log(row.map((cell, i) => padColumn(cell, widths[i]!)).join(''))
-  }
-}
-
-interface SkillDisplay {
-  name: string
-  description: string
-  type?: string
-}
-
-function printSkillTree(
-  skills: SkillDisplay[],
-  opts: { nameWidth: number; showTypes: boolean },
-): void {
-  const roots: string[] = []
-  const children = new Map<string, SkillDisplay[]>()
-
-  for (const skill of skills) {
-    const slashIdx = skill.name.indexOf('/')
-    if (slashIdx === -1) {
-      roots.push(skill.name)
-    } else {
-      const parent = skill.name.slice(0, slashIdx)
-      if (!children.has(parent)) children.set(parent, [])
-      children.get(parent)!.push(skill)
-    }
-  }
-
-  if (roots.length === 0) {
-    for (const skill of skills) {
-      if (!roots.includes(skill.name)) roots.push(skill.name)
-    }
-  }
-
-  for (const rootName of roots) {
-    const rootSkill = skills.find((s) => s.name === rootName)
-    if (!rootSkill) continue
-
-    printSkillLine(rootName, rootSkill, 4, opts)
-
-    for (const sub of children.get(rootName) ?? []) {
-      const childName = sub.name.slice(sub.name.indexOf('/') + 1)
-      printSkillLine(childName, sub, 6, opts)
-    }
-  }
-}
-
-function printSkillLine(
-  displayName: string,
-  skill: SkillDisplay,
-  indent: number,
-  opts: { nameWidth: number; showTypes: boolean },
-): void {
-  const nameStr = ' '.repeat(indent) + displayName
-  const padding = ' '.repeat(Math.max(2, opts.nameWidth - nameStr.length))
-  const typeCol = opts.showTypes
-    ? (skill.type ? `[${skill.type}]` : '').padEnd(14)
-    : ''
-  console.log(`${nameStr}${padding}${typeCol}${skill.description}`)
-}
-
-function computeSkillNameWidth(allPackageSkills: SkillDisplay[][]): number {
-  let max = 0
-  for (const skills of allPackageSkills) {
-    for (const s of skills) {
-      const slashIdx = s.name.indexOf('/')
-      const displayName = slashIdx === -1 ? s.name : s.name.slice(slashIdx + 1)
-      const indent = slashIdx === -1 ? 4 : 6
-      max = Math.max(max, indent + displayName.length)
-    }
-  }
-  return max + 2
-}
 
 async function cmdList(args: string[]): Promise<void> {
   const jsonOutput = args.includes('--json')
@@ -168,10 +79,7 @@ async function cmdList(args: string[]): Promise<void> {
   console.log(`Feedback:`)
   console.log(`  After completing your task, collect feedback on skill usage.`)
   console.log(
-    `  Instructions: node_modules/@tanstack/intent/meta/feedback-collection/SKILL.md`,
-  )
-  console.log(
-    `  Submit: npx intent feedback --submit --file intent-feedback.json`,
+    `  Load: node_modules/@tanstack/intent/meta/feedback-collection/SKILL.md`,
   )
   console.log()
 
@@ -215,6 +123,60 @@ function cmdMeta(): void {
 
   console.log(`\nUsage: load the SKILL.md into your AI agent conversation.`)
   console.log(`Path: node_modules/@tanstack/intent/meta/<name>/SKILL.md`)
+}
+
+function collectPackagingWarnings(root: string): string[] {
+  const pkgJsonPath = join(root, 'package.json')
+  if (!existsSync(pkgJsonPath)) return []
+
+  let pkgJson: Record<string, unknown>
+  try {
+    pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8'))
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return [`Could not parse package.json: ${msg}`]
+  }
+
+  const warnings: string[] = []
+
+  const devDeps = pkgJson.devDependencies as Record<string, string> | undefined
+  if (!devDeps?.['@tanstack/intent']) {
+    warnings.push('@tanstack/intent is not in devDependencies')
+  }
+
+  const bin = pkgJson.bin as Record<string, string> | undefined
+  if (!bin?.intent) {
+    warnings.push('Missing "bin": { "intent": ... } entry in package.json')
+  }
+
+  const shimJs = join(root, 'bin', 'intent.js')
+  const shimMjs = join(root, 'bin', 'intent.mjs')
+  if (!existsSync(shimJs) && !existsSync(shimMjs)) {
+    warnings.push(
+      'No bin/intent.js or bin/intent.mjs shim found (run: npx @tanstack/intent setup --shim)',
+    )
+  }
+
+  const files = pkgJson.files as string[] | undefined
+  if (Array.isArray(files)) {
+    if (!files.includes('skills')) {
+      warnings.push(
+        '"skills" is not in the "files" array — skills won\'t be published',
+      )
+    }
+    if (!files.includes('bin')) {
+      warnings.push(
+        '"bin" is not in the "files" array — shim won\'t be published',
+      )
+    }
+    if (!files.includes('!skills/_artifacts')) {
+      warnings.push(
+        '"!skills/_artifacts" is not in the "files" array — artifacts will be published unnecessarily',
+      )
+    }
+  }
+
+  return warnings
 }
 
 function cmdValidate(args: string[]): void {
@@ -281,6 +243,14 @@ function cmdValidate(args: string[]): void {
       }
     }
 
+    // Description character limit
+    if (typeof fm.description === 'string' && fm.description.length > 1024) {
+      errors.push({
+        file: rel,
+        message: `Description exceeds 1024 character limit (${fm.description.length} chars)`,
+      })
+    }
+
     // Framework skills must have requires
     if (fm.type === 'framework' && !Array.isArray(fm.requires)) {
       errors.push({
@@ -339,70 +309,95 @@ function cmdValidate(args: string[]): void {
     }
   }
 
+  const warnings = collectPackagingWarnings(process.cwd())
+
+  const printWarnings = (log: (...args: unknown[]) => void): void => {
+    if (warnings.length === 0) return
+    log(`\n⚠ Packaging warnings:`)
+    for (const w of warnings) log(`  ${w}`)
+  }
+
   if (errors.length > 0) {
     console.error(`\n❌ Validation failed with ${errors.length} error(s):\n`)
     for (const { file, message } of errors) {
       console.error(`  ${file}: ${message}`)
     }
+    printWarnings(console.error)
     process.exit(1)
   }
 
   console.log(`✅ Validated ${skillFiles.length} skill files — all passed`)
+  printWarnings(console.log)
 }
 
 function cmdScaffold(): void {
-  const prompt = `You are an AI assistant helping a library maintainer scaffold Intent skills.
-You MUST use the Intent meta skills in this exact order and follow their output requirements.
+  const metaDir = getMetaDir()
+  const metaSkillPath = (name: string) => join(metaDir, name, 'SKILL.md')
 
-Before you start, ask the maintainer:
-1. Skills root path (default: skills/). If custom, replace "skills/" in all paths below.
-2. Is this a monorepo? If yes, you need the following layout:
-   - Domain map artifacts live at the REPO ROOT: _artifacts/domain_map.yaml, _artifacts/skill_spec.md, _artifacts/skill_tree.yaml
-   - Skills live INSIDE EACH PACKAGE: packages/<pkg>/skills/<domain>/<skill>/SKILL.md
-   - Each publishable package needs:
-     a. @tanstack/intent as a devDependency
-     b. A bin entry: "bin": { "intent": "./bin/intent.js" }
-     c. The shim file at bin/intent.js (run npx @tanstack/intent setup --shim in each package)
-     d. "skills" and "bin" in the package.json "files" array, with "!skills/_artifacts" to exclude artifacts
-   - Ask the maintainer which packages should get skills (usually client SDKs and primary framework adapters)
+  const prompt = `You are helping a library maintainer scaffold Intent skills.
 
-1) Meta skill: domain-discovery
-   - Input: library name, repo URL, docs URL(s), scope constraints, target audience.
-   - Output files:
-     - Single-repo: skills/_artifacts/domain_map.yaml, skills/_artifacts/skill_spec.md
-     - Monorepo: _artifacts/domain_map.yaml, _artifacts/skill_spec.md (at repo root)
-   - Domain discovery covers the WHOLE library. One domain map for the entire monorepo.
-   - These artifacts are maintainer-owned and should be committed to the repo.
+Run the three meta skills below **one at a time, in order**. For each step:
+1. Load the SKILL.md file specified
+2. Follow its instructions completely
+3. Present outputs to the maintainer for review
+4. Do NOT proceed to the next step until the maintainer confirms
 
-2) Meta skill: tree-generator
-   - Input: domain map + skill spec artifacts
-   - Output file: _artifacts/skill_tree.yaml (same location as domain map)
-   - The skill tree must specify which PACKAGE each skill belongs to.
-   - For monorepos, the tree maps skills to packages: each skill entry should include
-     a "package" field (e.g. packages/client, packages/react-client).
+## Before you start
 
-3) Meta skill: generate-skill
-   - Input: skill tree
-   - Output files:
-     - Single-repo: skills/<domain>/<skill>/SKILL.md
-     - Monorepo: packages/<pkg>/skills/<domain>/<skill>/SKILL.md
-   - Skills are written into the package they describe, not a shared root.
+Gather this context yourself (do not ask the maintainer — agents should never
+ask for information they can discover):
+1. Read package.json for library name, repository URL, and homepage/docs URL
+2. Detect if this is a monorepo (look for workspaces field, packages/ directory, lerna.json)
+3. Use skills/ as the default skills root
+4. For monorepos:
+   - Domain map artifacts go at the REPO ROOT: _artifacts/
+   - Skills go INSIDE EACH PACKAGE: packages/<pkg>/skills/
+   - Identify which packages are client-facing (usually client SDKs and primary framework adapters)
 
-Guidance for the maintainer:
-- If any input is missing, ask for it.
-- After each step, clearly tell the maintainer what files to create and where to save them.
-- Do not skip steps.
-- Use the library's actual terminology from docs and source.
+---
 
-At the end, produce a single Markdown feedback doc with three sections (Domain Discovery, Tree Generator, Generate Skill).
-Ask if the maintainer wants to edit it, then submit it via: npx @tanstack/intent feedback --meta --submit --file <path>
+## Step 1 — Domain Discovery
 
-Finish with a short checklist:
-- Run npx @tanstack/intent validate in each package directory (or for single-repo: at the root)
-- Commit skills/ and artifacts
-- Exclude artifacts from package publishing (add "!skills/_artifacts" to the "files" array in each package.json)
-- For monorepos: ensure each package has @tanstack/intent as devDependency, bin entry, and shim
-- Add README snippet: If you use an AI agent, run npx @tanstack/intent init
+Load and follow: ${metaSkillPath('domain-discovery')}
+
+This produces: domain_map.yaml and skill_spec.md in the artifacts directory.
+Domain discovery covers the WHOLE library (one domain map even for monorepos).
+
+**STOP. Review outputs with the maintainer before continuing.**
+
+---
+
+## Step 2 — Tree Generator
+
+Load and follow: ${metaSkillPath('tree-generator')}
+
+This produces: skill_tree.yaml in the artifacts directory.
+For monorepos, each skill entry should include a \`package\` field.
+
+**STOP. Review outputs with the maintainer before continuing.**
+
+---
+
+## Step 3 — Generate Skills
+
+Load and follow: ${metaSkillPath('generate-skill')}
+
+This produces: individual SKILL.md files.
+- Single-repo: skills/<domain>/<skill>/SKILL.md
+- Monorepo: packages/<pkg>/skills/<domain>/<skill>/SKILL.md
+
+---
+
+## After all skills are generated
+
+1. Run \`npx @tanstack/intent validate\` in each package directory
+2. Commit skills/ and artifacts
+3. For each publishable package, run: \`npx @tanstack/intent setup --shim\`
+4. Ensure each package has \`@tanstack/intent\` as a devDependency
+5. Add \`"skills"\`, \`"bin"\` to the \`"files"\` array in each package.json
+6. Add \`"!skills/_artifacts"\` to exclude artifacts from publishing
+7. Create a \`feedback:<skill-name>\` label on the GitHub repo for each skill (use \`gh label create\`)
+8. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent install\`"
 `
 
   console.log(prompt)
@@ -418,12 +413,10 @@ Usage:
   intent list [--json]           Discover intent-enabled packages
   intent meta                    List meta-skills for maintainers
   intent validate [<dir>]        Validate skill files (default: skills/)
-  intent init                    Set up intent discovery in agent configs
+  intent install                  Print a skill that guides your coding agent to set up skill-to-task mappings
   intent scaffold                Print maintainer scaffold prompt
-  intent setup [--workflows] [--all]  Copy CI templates into your repo
-  intent stale                   Check skills for staleness
-  intent feedback --submit --file <path>           Submit skill feedback
-  intent feedback --meta --submit --file <path>    Submit meta-skill feedback`
+  intent setup [--workflows] [--shim] [--all]  Copy CI templates and generate shim
+  intent stale                   Check skills for staleness`
 
 const command = process.argv[2]
 const commandArgs = process.argv.slice(3)
@@ -438,26 +431,55 @@ switch (command) {
   case 'validate':
     cmdValidate(commandArgs)
     break
-  case 'init': {
-    const { runInit, detectAgentConfigs } = await import('./init.js')
-    const initRoot = process.cwd()
-    const result = runInit(initRoot)
+  case 'install': {
+    const prompt = `You are an AI assistant helping a developer set up skill-to-task mappings for their project.
 
-    for (const f of result.injected) console.log(`✓ Added intent block to ${f}`)
-    for (const f of result.skipped) console.log(`  Already present in ${f}`)
-    for (const f of result.created) console.log(`✓ Created ${f}`)
+Follow these steps in order:
 
-    if (result.injected.length === 0 && result.skipped.length === 0) {
-      const detected = detectAgentConfigs(initRoot)
-      if (detected.length === 0) {
-        console.log(
-          'No agent config files found (AGENTS.md, CLAUDE.md, .cursorrules, .github/copilot-instructions.md).',
-        )
-        console.log('Create one of these files and run intent init again.')
-      }
-    }
+1. CHECK FOR EXISTING MAPPINGS
+   Search the project's agent config files (CLAUDE.md, AGENTS.md, .cursorrules,
+   .github/copilot-instructions.md) for a block delimited by:
+     <!-- intent-skills:start -->
+     <!-- intent-skills:end -->
+   - If found: show the user the current mappings and ask "What would you like to update?"
+     Then skip to step 4 with their requested changes.
+   - If not found: continue to step 2.
 
-    console.log(`✓ Config: ${result.configPath}`)
+2. DISCOVER AVAILABLE SKILLS
+   Run: intent list
+   This outputs each skill's name, description, and full path — grouped by package.
+
+3. SCAN THE REPOSITORY
+   Build a picture of the project's structure and patterns:
+   - Read package.json for library dependencies
+   - Survey the directory layout (src/, app/, routes/, components/, api/, etc.)
+   - Note recurring patterns (routing, data fetching, auth, UI components, etc.)
+
+   Based on this, propose 3–5 skill-to-task mappings. For each one explain:
+   - The task or code area (in plain language the user would recognise)
+   - Which skill applies and why
+
+   Then ask: "What other tasks do you commonly use AI coding agents for?
+   I'll create mappings for those too."
+
+4. WRITE THE MAPPINGS BLOCK
+   Once you have the full set of mappings, write or update the agent config file
+   (prefer CLAUDE.md; create it if none exists) with this exact block:
+
+<!-- intent-skills:start -->
+# Skill mappings — when working in these areas, load the linked skill file into context.
+skills:
+  - task: "describe the task or code area here"
+    load: "node_modules/package-name/skills/skill-name/SKILL.md"
+<!-- intent-skills:end -->
+
+   Rules:
+   - Use the user's own words for task descriptions
+   - Include the exact path from \`intent list\` output so agents can load it directly
+   - Keep entries concise — this block is read on every agent task
+   - Preserve all content outside the block tags unchanged`
+
+    console.log(prompt)
     break
   }
   case 'scaffold': {
@@ -513,11 +535,6 @@ switch (command) {
       }
       console.log()
     }
-    break
-  }
-  case 'feedback': {
-    const { runFeedback } = await import('./feedback.js')
-    runFeedback(commandArgs)
     break
   }
   case 'setup': {
