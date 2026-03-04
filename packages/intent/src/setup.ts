@@ -7,6 +7,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
+import { findSkillFiles, parseFrontmatter } from './utils.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -154,18 +155,20 @@ function generateShim(root: string, result: SetupResult): void {
 // Label creation
 // ---------------------------------------------------------------------------
 
-const META_SKILL_LABELS = [
-  'feedback:domain-discovery',
-  'feedback:tree-generator',
-  'feedback:generate-skill',
-  'feedback:skill-staleness-check',
-]
+function createSkillLabels(root: string, repo: string, result: SetupResult): void {
+  const skillsDir = join(root, 'skills')
+  if (!existsSync(skillsDir)) return
 
-function createLabels(repo: string, result: SetupResult): void {
-  for (const label of META_SKILL_LABELS) {
+  const skillFiles = findSkillFiles(skillsDir)
+  for (const filePath of skillFiles) {
+    const fm = parseFrontmatter(filePath)
+    const name = typeof fm?.name === 'string' ? fm.name : null
+    if (!name) continue
+
+    const label = `feedback:${name}`
     try {
       execSync(
-        `gh label create "${label}" --repo ${repo} --description "Feedback on the ${label.replace('feedback:', '')} meta skill" --color c5def5`,
+        `gh label create "${label}" --repo ${repo} --description "Feedback on the ${name} skill" --color c5def5`,
         { stdio: ['pipe', 'pipe', 'pipe'] },
       )
       result.labels.push(label)
@@ -217,8 +220,7 @@ export function runSetup(
   }
 
   if (doLabels) {
-    const repo = vars.REPO
-    createLabels(repo, result)
+    createSkillLabels(root, vars.REPO, result)
   }
 
   // Print results

@@ -493,7 +493,8 @@ This produces: individual SKILL.md files.
 4. Ensure each package has \`@tanstack/intent\` as a devDependency
 5. Add \`"skills"\`, \`"bin"\` to the \`"files"\` array in each package.json
 6. Add \`"!skills/_artifacts"\` to exclude artifacts from publishing
-7. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent init\`"
+7. Run \`npx @tanstack/intent setup --labels\` to create feedback labels on the GitHub repo
+8. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent init\`"
 `
 
   console.log(prompt)
