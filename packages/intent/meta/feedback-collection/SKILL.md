@@ -156,7 +156,7 @@ not contain project-specific details. Before submission:
 
 1. Strip any project-specific code, file paths, internal API names, service
    URLs, or business logic from all fields
-2. Rewrite the "Task" field to describe the *type* of task generically
+2. Rewrite the "Task" field to describe the _type_ of task generically
    (e.g. "set up authenticated data fetching" not "set up auth for our
    internal billing API at api.acme.corp/billing")
 3. Rewrite "What Failed" and "Missing" entries to reference only the
