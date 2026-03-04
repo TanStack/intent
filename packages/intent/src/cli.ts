@@ -45,6 +45,7 @@ interface SkillDisplay {
   name: string
   description: string
   type?: string
+  path?: string
 }
 
 function printSkillTree(
@@ -96,6 +97,9 @@ function printSkillLine(
     ? (skill.type ? `[${skill.type}]` : '').padEnd(14)
     : ''
   console.log(`${nameStr}${padding}${typeCol}${skill.description}`)
+  if (skill.path) {
+    console.log(`${' '.repeat(indent + 2)}${skill.path}`)
+  }
 }
 
 function computeSkillNameWidth(allPackageSkills: SkillDisplay[][]): number {
