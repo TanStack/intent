@@ -4,12 +4,11 @@ description: >
   Collect structured feedback about skill usage after completing a coding task.
   Activate at the end of any session where one or more SKILL.md files were
   loaded. Captures agent signals (gaps, errors, corrections, human interventions)
-  and brief human input, then submits via the intent feedback CLI.
+  and brief human input, then submits directly via gh CLI or provides manual
+  submission instructions.
 metadata:
-  version: '1.0'
+  version: '2.0'
   category: meta-tooling
-  output_artifacts:
-    - intent-feedback.json
 ---
 
 # Skill Feedback Collection
@@ -83,74 +82,80 @@ If the human gives an explicit rating, use that instead.
 
 ---
 
-## Phase 3 — Build the Payload
+## Phase 3 — Build the Feedback
 
-Construct one JSON payload per skill used. The schema must match exactly:
+Write one Markdown feedback file per skill used. Only include skills that were
+actually used during the session — skip any that were loaded but never
+referenced.
 
-```json
-{
-  "skill": "<skill name from SKILL.md frontmatter>",
-  "package": "<npm package name that contains the skill>",
-  "skillVersion": "<metadata.version from SKILL.md frontmatter, or library_version>",
-  "task": "<one-sentence summary of what the human asked you to do>",
-  "whatWorked": "<patterns/instructions from the skill that were accurate and helpful>",
-  "whatFailed": "<errors from 1b — what the skill got wrong>",
-  "missing": "<gaps from 1a — what the skill should have covered>",
-  "selfCorrections": "<fixes you applied from 1b + interventions from 1c>",
-  "userRating": "good | mixed | bad",
-  "userComments": "<optional — direct quotes or paraphrased human input from Phase 2>"
-}
+### Template
+
+```markdown
+# Skill Feedback: [skill name from SKILL.md frontmatter]
+
+**Package:** [npm package name that contains the skill]
+**Skill version:** [metadata.version or library_version from frontmatter]
+**Rating:** [good | mixed | bad]
+
+## Task
+[one-sentence summary of what the human asked you to do]
+
+## What Worked
+[patterns/instructions from the skill that were accurate and helpful]
+
+## What Failed
+[from 1b — skill instructions that produced errors]
+
+## Missing
+[from 1a — gaps where the skill should have covered]
+
+## Self-Corrections
+[from 1b fixes + 1c human interventions, combined]
+
+## User Comments
+[optional — direct quotes or paraphrased human input from Phase 2]
 ```
 
 ### Field derivation guide
 
-| Field             | Source                                                             |
-| ----------------- | ------------------------------------------------------------------ |
-| `skill`           | Frontmatter `name` field of the SKILL.md you loaded                |
-| `package`         | The npm package the skill lives in (e.g. `@tanstack/query-intent`) |
-| `skillVersion`    | Frontmatter `metadata.version` or `library_version`                |
-| `task`            | Summarize the human's original request in one sentence             |
-| `whatWorked`      | List skill sections/patterns that were correct and useful          |
-| `whatFailed`      | From 1b — skill instructions that produced errors                  |
-| `missing`         | From 1a — gaps where the skill was silent                          |
-| `selfCorrections` | From 1b fixes + 1c human interventions, combined                   |
-| `userRating`      | From Phase 2 sentiment analysis or explicit rating                 |
-| `userComments`    | From Phase 2 answers, keep brief                                   |
-
-### Example
-
-```json
-{
-  "skill": "tanstack-query/core",
-  "package": "@anthropic/tanstack-query-intent",
-  "skillVersion": "1.0",
-  "task": "Add optimistic updates to a mutation with rollback on error",
-  "whatWorked": "Setup pattern was correct. onMutate/onError/onSettled lifecycle was accurate.",
-  "whatFailed": "Cache key format used array syntax that doesn't match v5 — had to switch to queryOptions pattern.",
-  "missing": "No guidance on TypeScript generics for mutation variables. Had to read source.",
-  "selfCorrections": "Fixed cache key format. Human corrected the rollback type to include undefined.",
-  "userRating": "mixed",
-  "userComments": "The optimistic update pattern was helpful but the cache key thing wasted 10 minutes."
-}
-```
-
-If multiple skills were loaded, produce one payload per skill. Only include
-skills that were actually used during the session — skip any that were loaded
-but never referenced.
+| Field            | Source                                                             |
+| ---------------- | ------------------------------------------------------------------ |
+| Skill name       | Frontmatter `name` field of the SKILL.md you loaded                |
+| Package          | The npm package the skill lives in (e.g. `@tanstack/query-intent`) |
+| Skill version    | Frontmatter `metadata.version` or `library_version`                |
+| Task             | Summarize the human's original request in one sentence              |
+| What Worked      | List skill sections/patterns that were correct and useful           |
+| What Failed      | From 1b — skill instructions that produced errors                   |
+| Missing          | From 1a — gaps where the skill was silent                           |
+| Self-Corrections | From 1b fixes + 1c human interventions, combined                    |
+| Rating           | From Phase 2 sentiment analysis or explicit rating                  |
+| User Comments    | From Phase 2 answers, keep brief                                    |
 
 ---
 
 ## Phase 4 — Submit
 
-1. Save the payload to `intent-feedback.json` in the project root.
-   If multiple skills, save as a JSON array.
+Determine the target repo from the skill's package. The repo is typically
+derivable from the `repository` field in the package's `package.json`, or
+from the `sources` field in the SKILL.md frontmatter.
 
-2. Submit:
+### If `gh` CLI is available
 
-   ```bash
-   npx intent feedback --submit --file intent-feedback.json
-   ```
+Submit directly as a GitHub issue:
 
-3. If the submission succeeds, delete `intent-feedback.json`.
+```bash
+gh issue create --repo [owner/repo] --title "Skill Feedback: [skill-name] ([rating])" --label "feedback:[skill-name]" --body-file intent-feedback.md
+```
 
-4. If it fails, tell the human and leave the file for manual retry.
+If the label doesn't exist, omit the `--label` flag — don't let a missing
+label block submission.
+
+If submission succeeds, delete the feedback file.
+
+### If `gh` CLI is not available
+
+Tell the human:
+
+> "I've written skill feedback to `intent-feedback.md`. To submit it,
+> open an issue at https://github.com/[owner/repo]/issues and paste the
+> contents."
