@@ -351,58 +351,71 @@ function cmdValidate(args: string[]): void {
 }
 
 function cmdScaffold(): void {
-  const prompt = `You are an AI assistant helping a library maintainer scaffold Intent skills.
-You MUST use the Intent meta skills in this exact order and follow their output requirements.
+  const metaDir = getMetaDir()
+  const metaSkillPath = (name: string) =>
+    join(metaDir, name, 'SKILL.md')
 
-Before you start, ask the maintainer:
-1. Skills root path (default: skills/). If custom, replace "skills/" in all paths below.
-2. Is this a monorepo? If yes, you need the following layout:
-   - Domain map artifacts live at the REPO ROOT: _artifacts/domain_map.yaml, _artifacts/skill_spec.md, _artifacts/skill_tree.yaml
-   - Skills live INSIDE EACH PACKAGE: packages/<pkg>/skills/<domain>/<skill>/SKILL.md
-   - Each publishable package needs:
-     a. @tanstack/intent as a devDependency
-     b. A bin entry: "bin": { "intent": "./bin/intent.js" }
-     c. The shim file at bin/intent.js (run npx @tanstack/intent setup --shim in each package)
-     d. "skills" and "bin" in the package.json "files" array, with "!skills/_artifacts" to exclude artifacts
-   - Ask the maintainer which packages should get skills (usually client SDKs and primary framework adapters)
+  const prompt = `You are helping a library maintainer scaffold Intent skills.
 
-1) Meta skill: domain-discovery
-   - Input: library name, repo URL, docs URL(s), scope constraints, target audience.
-   - Output files:
-     - Single-repo: skills/_artifacts/domain_map.yaml, skills/_artifacts/skill_spec.md
-     - Monorepo: _artifacts/domain_map.yaml, _artifacts/skill_spec.md (at repo root)
-   - Domain discovery covers the WHOLE library. One domain map for the entire monorepo.
-   - These artifacts are maintainer-owned and should be committed to the repo.
+Run the three meta skills below **one at a time, in order**. For each step:
+1. Load the SKILL.md file specified
+2. Follow its instructions completely
+3. Present outputs to the maintainer for review
+4. Do NOT proceed to the next step until the maintainer confirms
 
-2) Meta skill: tree-generator
-   - Input: domain map + skill spec artifacts
-   - Output file: _artifacts/skill_tree.yaml (same location as domain map)
-   - The skill tree must specify which PACKAGE each skill belongs to.
-   - For monorepos, the tree maps skills to packages: each skill entry should include
-     a "package" field (e.g. packages/client, packages/react-client).
+## Before you start
 
-3) Meta skill: generate-skill
-   - Input: skill tree
-   - Output files:
-     - Single-repo: skills/<domain>/<skill>/SKILL.md
-     - Monorepo: packages/<pkg>/skills/<domain>/<skill>/SKILL.md
-   - Skills are written into the package they describe, not a shared root.
+Ask the maintainer:
+1. Library name, repo URL, and docs URL(s)
+2. Skills root path (default: skills/)
+3. Is this a monorepo? If yes:
+   - Domain map artifacts go at the REPO ROOT: _artifacts/
+   - Skills go INSIDE EACH PACKAGE: packages/<pkg>/skills/
+   - Ask which packages should get skills (usually client SDKs and primary framework adapters)
 
-Guidance for the maintainer:
-- If any input is missing, ask for it.
-- After each step, clearly tell the maintainer what files to create and where to save them.
-- Do not skip steps.
-- Use the library's actual terminology from docs and source.
+---
 
-At the end, produce a single Markdown feedback doc with three sections (Domain Discovery, Tree Generator, Generate Skill).
-Ask if the maintainer wants to edit it, then submit it via: npx @tanstack/intent feedback --meta --submit --file <path>
+## Step 1 — Domain Discovery
 
-Finish with a short checklist:
-- Run npx @tanstack/intent validate in each package directory (or for single-repo: at the root)
-- Commit skills/ and artifacts
-- Exclude artifacts from package publishing (add "!skills/_artifacts" to the "files" array in each package.json)
-- For monorepos: ensure each package has @tanstack/intent as devDependency, bin entry, and shim
-- Add README snippet: If you use an AI agent, run npx @tanstack/intent init
+Load and follow: ${metaSkillPath('domain-discovery')}
+
+This produces: domain_map.yaml and skill_spec.md in the artifacts directory.
+Domain discovery covers the WHOLE library (one domain map even for monorepos).
+
+**STOP. Review outputs with the maintainer before continuing.**
+
+---
+
+## Step 2 — Tree Generator
+
+Load and follow: ${metaSkillPath('tree-generator')}
+
+This produces: skill_tree.yaml in the artifacts directory.
+For monorepos, each skill entry should include a \`package\` field.
+
+**STOP. Review outputs with the maintainer before continuing.**
+
+---
+
+## Step 3 — Generate Skills
+
+Load and follow: ${metaSkillPath('generate-skill')}
+
+This produces: individual SKILL.md files.
+- Single-repo: skills/<domain>/<skill>/SKILL.md
+- Monorepo: packages/<pkg>/skills/<domain>/<skill>/SKILL.md
+
+---
+
+## After all skills are generated
+
+1. Run \`npx @tanstack/intent validate\` in each package directory
+2. Commit skills/ and artifacts
+3. For each publishable package, run: \`npx @tanstack/intent setup --shim\`
+4. Ensure each package has \`@tanstack/intent\` as a devDependency
+5. Add \`"skills"\`, \`"bin"\` to the \`"files"\` array in each package.json
+6. Add \`"!skills/_artifacts"\` to exclude artifacts from publishing
+7. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent init\`"
 `
 
   console.log(prompt)
