@@ -145,6 +145,27 @@ Determine the target repo from the skill's package. The repo is typically
 derivable from the `repository` field in the package's `package.json`, or
 from the `sources` field in the SKILL.md frontmatter.
 
+### Privacy check
+
+Before submitting, determine whether the user's project is public or private.
+Check with `gh repo view --json visibility` or look for a `private` field in
+the project's `package.json`. If you can't determine visibility, assume private.
+
+**Private repos:** Feedback is submitted to a public issue tracker, so it must
+not contain project-specific details. Before submission:
+
+1. Strip any project-specific code, file paths, internal API names, service
+   URLs, or business logic from all fields
+2. Rewrite the "Task" field to describe the *type* of task generically
+   (e.g. "set up authenticated data fetching" not "set up auth for our
+   internal billing API at api.acme.corp/billing")
+3. Rewrite "What Failed" and "Missing" entries to reference only the
+   skill's own APIs and patterns, not the user's code
+4. Show the sanitized feedback to the user and ask them to confirm it's
+   safe to submit before proceeding
+
+**Public repos:** No sanitization needed. Proceed directly to submission.
+
 ### If `gh` CLI is available
 
 Submit directly as a GitHub issue:
