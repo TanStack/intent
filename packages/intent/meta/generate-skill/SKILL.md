@@ -399,3 +399,4 @@ Output is consumed by all major AI coding agents. To ensure consistency:
 After generating all skills, run the `skill-feedback-collection` skill to
 capture feedback about the scaffolding process (domain-discovery,
 tree-generator, and generate-skill).
+```

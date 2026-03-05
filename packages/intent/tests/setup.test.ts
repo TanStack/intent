@@ -180,7 +180,9 @@ describe('runEditPackageJson', () => {
     expect(bin['my-tool']).toBe('./dist/cli.js')
     expect(bin.intent).toMatch(/\.\/bin\/intent\.(js|mjs)/)
     expect(result.added).toEqual(
-      expect.arrayContaining([expect.stringContaining('converted bin from string')]),
+      expect.arrayContaining([
+        expect.stringContaining('converted bin from string'),
+      ]),
     )
   })
 

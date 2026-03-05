@@ -44,9 +44,14 @@ function detectVars(root: string): TemplateVars {
     pkgJson = JSON.parse(readFileSync(pkgPath, 'utf8'))
   } catch (err: unknown) {
     const isNotFound =
-      err && typeof err === 'object' && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT'
+      err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err as NodeJS.ErrnoException).code === 'ENOENT'
     if (!isNotFound) {
-      console.error(`Warning: could not read ${pkgPath}: ${err instanceof Error ? err.message : err}`)
+      console.error(
+        `Warning: could not read ${pkgPath}: ${err instanceof Error ? err.message : err}`,
+      )
     }
   }
 
@@ -141,9 +146,14 @@ function detectShimExtension(root: string): string {
     if (pkg.type === 'module') return 'js'
   } catch (err: unknown) {
     const isNotFound =
-      err && typeof err === 'object' && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT'
+      err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err as NodeJS.ErrnoException).code === 'ENOENT'
     if (!isNotFound) {
-      console.error(`Warning: could not read package.json: ${err instanceof Error ? err.message : err}`)
+      console.error(
+        `Warning: could not read package.json: ${err instanceof Error ? err.message : err}`,
+      )
     }
   }
   return 'mjs'
@@ -180,7 +190,9 @@ export function runAddLibraryBin(root: string): AddLibraryBinResult {
   result.shim = shimPath
 
   console.log(`✓ Generated intent shim: ${shimPath}`)
-  console.log(`\n  Run \`npx @tanstack/intent edit-package-json\` to wire package.json.`)
+  console.log(
+    `\n  Run \`npx @tanstack/intent edit-package-json\` to wire package.json.`,
+  )
 
   return result
 }
@@ -257,7 +269,9 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
         ? pkg.name.replace(/^@[^/]+\//, '')
         : 'unknown'
     pkg.bin = { [pkgName]: pkg.bin, intent: shimRelative }
-    result.added.push(`bin.intent: "${shimRelative}" (converted bin from string to object)`)
+    result.added.push(
+      `bin.intent: "${shimRelative}" (converted bin from string to object)`,
+    )
   }
 
   writeFileSync(pkgPath, JSON.stringify(pkg, null, indentSize) + '\n')

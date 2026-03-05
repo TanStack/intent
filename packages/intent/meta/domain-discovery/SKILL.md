@@ -761,4 +761,3 @@ Gemini, and open-source models. To achieve this:
 - Section boundaries use Markdown headers (##) for navigation and --- for
   phase separation
 - No model-specific features (no XML tags in output, no tool_use assumptions)
-

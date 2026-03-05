@@ -847,4 +847,3 @@ When updating:
 3. CHANGELOG.md entry
 
 ---
-
