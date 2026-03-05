@@ -203,6 +203,33 @@ describe('runEditPackageJson', () => {
     expect(result.alreadyPresent).toHaveLength(0)
   })
 
+  it('skips !skills/_artifacts in monorepo packages', () => {
+    // Simulate monorepo by creating a parent package.json
+    const monoRoot = mkdtempSync(join(tmpdir(), 'mono-root-'))
+    const pkgDir = join(monoRoot, 'packages', 'my-lib')
+    mkdirSync(pkgDir, { recursive: true })
+    writeFileSync(
+      join(monoRoot, 'package.json'),
+      JSON.stringify({ workspaces: ['packages/*'] }),
+    )
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: '@scope/my-lib', files: ['dist'] }, null, 2),
+    )
+
+    const result = runEditPackageJson(pkgDir)
+    expect(result.added).toContain('files: "skills"')
+    expect(result.added).toContain('files: "bin"')
+    expect(result.added).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('!skills/_artifacts')]),
+    )
+
+    const pkg = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'))
+    expect(pkg.files).not.toContain('!skills/_artifacts')
+
+    rmSync(monoRoot, { recursive: true, force: true })
+  })
+
   it('preserves 4-space indentation', () => {
     writeFileSync(
       join(root, 'package.json'),

@@ -230,7 +230,32 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
     pkg.files = []
   }
   const files = pkg.files as string[]
-  const requiredFiles = ['skills', 'bin', '!skills/_artifacts']
+
+  // In monorepos, _artifacts lives at repo root, not under packages —
+  // the negation pattern is a no-op and shouldn't be added.
+  // Detect monorepo by walking up to find a parent package.json with workspaces.
+  const isMonorepo = (() => {
+    let dir = join(root, '..')
+    for (let i = 0; i < 5; i++) {
+      const parentPkg = join(dir, 'package.json')
+      if (existsSync(parentPkg)) {
+        try {
+          const parent = JSON.parse(readFileSync(parentPkg, 'utf8'))
+          if (Array.isArray(parent.workspaces) || parent.workspaces?.packages) {
+            return true
+          }
+        } catch {}
+        return false
+      }
+      const next = join(dir, '..')
+      if (next === dir) break
+      dir = next
+    }
+    return false
+  })()
+  const requiredFiles = isMonorepo
+    ? ['skills', 'bin']
+    : ['skills', 'bin', '!skills/_artifacts']
 
   for (const entry of requiredFiles) {
     if (files.includes(entry)) {
