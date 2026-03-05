@@ -79,6 +79,15 @@ skill-tree-generator for the full spec of each type.
 
 ---
 
+### Subagent guidance for batch generation
+
+When generating multiple skills, spawn a separate subagent for each skill
+(or per-package group). Each subagent receives the domain_map.yaml,
+skill_tree.yaml, and the source docs relevant to its skill. This prevents
+context bleed between skills and allows parallel generation.
+
+---
+
 ## Step 2 — Extract content from sources
 
 **Line budget:** Each SKILL.md must stay under 500 lines. Before writing,
@@ -319,6 +328,10 @@ Run every check before outputting. Fix any failures.
 
 ## Step 6 — Output
 
+Before generating, ask the maintainer: "Would you like to review each skill
+individually before I generate the next one, or should I generate all skills
+and you review them together?" Respect their preference.
+
 Output the complete SKILL.md file content. If reference files are needed,
 output those as well with their relative paths.
 
@@ -381,48 +394,8 @@ Output is consumed by all major AI coding agents. To ensure consistency:
 
 ---
 
-## Meta-skill feedback (alpha default)
+## Meta-skill feedback
 
-After generating the first iteration of skills, complete a single Markdown
-feedback draft for all three meta skills used in scaffolding. If a draft
-exists from previous steps, keep it and fill the **Generate Skill** section.
-If no draft exists, create it using this exact template.
-
-```
-
-# Intent Meta Skill Feedback
-
-## Domain Discovery
-
-- What worked well:
-- What was confusing or missing:
-- Suggestions for improvement:
-- Overall rating: good | mixed | bad
-
-## Tree Generator
-
-- What worked well:
-- What was confusing or missing:
-- Suggestions for improvement:
-- Overall rating: good | mixed | bad
-
-## Generate Skill
-
-- What worked well:
-- What was confusing or missing:
-- Suggestions for improvement:
-- Overall rating: good | mixed | bad
-
-## Context (optional)
-
-- Library:
-- Repo:
-- Docs:
-- Notes:
-
-```
-
-Ask the maintainer if they want to edit the feedback. Then ask if you should
-send it as a GitHub issue to TanStack/intent. Use the issue title:
-`[meta-feedback] intent meta skill`. Only submit if they confirm.
-```
+After generating all skills, run the `skill-feedback-collection` skill to
+capture feedback about the scaffolding process (domain-discovery,
+tree-generator, and generate-skill).

@@ -12,7 +12,16 @@ export {
   validatePayload,
 } from './feedback.js'
 export { findSkillFiles, parseFrontmatter } from './utils.js'
-export { runSetup } from './setup.js'
+export {
+  runAddLibraryBin,
+  runEditPackageJson,
+  runSetupGithubActions,
+} from './setup.js'
+export type {
+  AddLibraryBinResult,
+  EditPackageJsonResult,
+  SetupGithubActionsResult,
+} from './setup.js'
 export type {
   AgentName,
   FeedbackPayload,

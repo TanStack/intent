@@ -11,10 +11,19 @@ import { join } from 'node:path'
 // Types
 // ---------------------------------------------------------------------------
 
-export interface SetupResult {
+export interface AddLibraryBinResult {
+  shim: string | null
+  skipped: string | null
+}
+
+export interface EditPackageJsonResult {
+  added: string[]
+  alreadyPresent: string[]
+}
+
+export interface SetupGithubActionsResult {
   workflows: string[]
   skipped: string[]
-  shim: string | null
 }
 
 interface TemplateVars {
@@ -33,8 +42,12 @@ function detectVars(root: string): TemplateVars {
   let pkgJson: Record<string, unknown> = {}
   try {
     pkgJson = JSON.parse(readFileSync(pkgPath, 'utf8'))
-  } catch {
-    /* fallback to defaults */
+  } catch (err: unknown) {
+    const isNotFound =
+      err && typeof err === 'object' && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT'
+    if (!isNotFound) {
+      console.error(`Warning: could not read ${pkgPath}: ${err instanceof Error ? err.message : err}`)
+    }
   }
 
   const name = typeof pkgJson.name === 'string' ? pkgJson.name : 'unknown'
@@ -109,7 +122,7 @@ function copyTemplates(
 }
 
 // ---------------------------------------------------------------------------
-// Shim generation
+// Shim generation helpers
 // ---------------------------------------------------------------------------
 
 function getShimContent(ext: string): string {
@@ -126,8 +139,12 @@ function detectShimExtension(root: string): string {
   try {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
     if (pkg.type === 'module') return 'js'
-  } catch {
-    // default to .mjs when package.json is unreadable
+  } catch (err: unknown) {
+    const isNotFound =
+      err && typeof err === 'object' && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT'
+    if (!isNotFound) {
+      console.error(`Warning: could not read package.json: ${err instanceof Error ? err.message : err}`)
+    }
   }
   return 'mjs'
 }
@@ -142,12 +159,18 @@ function findExistingShim(root: string): string | null {
   return null
 }
 
-function generateShim(root: string, result: SetupResult): void {
-  const existingShim = findExistingShim(root)
+// ---------------------------------------------------------------------------
+// Command: add-library-bin
+// ---------------------------------------------------------------------------
 
+export function runAddLibraryBin(root: string): AddLibraryBinResult {
+  const result: AddLibraryBinResult = { shim: null, skipped: null }
+
+  const existingShim = findExistingShim(root)
   if (existingShim) {
-    result.skipped.push(existingShim)
-    return
+    result.skipped = existingShim
+    console.log(`  Already exists: ${existingShim}`)
+    return result
   }
 
   const ext = detectShimExtension(root)
@@ -155,63 +178,118 @@ function generateShim(root: string, result: SetupResult): void {
   mkdirSync(join(root, 'bin'), { recursive: true })
   writeFileSync(shimPath, getShimContent(ext))
   result.shim = shimPath
+
+  console.log(`✓ Generated intent shim: ${shimPath}`)
+  console.log(`\n  Run \`npx @tanstack/intent edit-package-json\` to wire package.json.`)
+
+  return result
 }
 
 // ---------------------------------------------------------------------------
-// Main
+// Command: edit-package-json
 // ---------------------------------------------------------------------------
 
-export function runSetup(
-  root: string,
-  metaDir: string,
-  args: string[],
-): SetupResult {
-  const doAll = args.includes('--all')
-  const doWorkflows = doAll || args.includes('--workflows')
-  const doShim = doAll || args.includes('--shim')
+export function runEditPackageJson(root: string): EditPackageJsonResult {
+  const result: EditPackageJsonResult = { added: [], alreadyPresent: [] }
+  const pkgPath = join(root, 'package.json')
 
-  const noFlagsGiven = !doWorkflows && !doShim
-  const installWorkflows = doWorkflows || noFlagsGiven
-  const installShim = doShim || noFlagsGiven
-
-  const vars = detectVars(root)
-  const result: SetupResult = {
-    workflows: [],
-    skipped: [],
-    shim: null,
+  if (!existsSync(pkgPath)) {
+    console.error('No package.json found in ' + root)
+    process.exitCode = 1
+    return result
   }
 
-  const templatesDir = join(metaDir, 'templates')
-
-  if (installWorkflows) {
-    const srcDir = join(templatesDir, 'workflows')
-    const destDir = join(root, '.github', 'workflows')
-    const { copied, skipped } = copyTemplates(srcDir, destDir, vars)
-    result.workflows = copied
-    result.skipped.push(...skipped)
+  const raw = readFileSync(pkgPath, 'utf8')
+  let pkg: Record<string, unknown>
+  try {
+    pkg = JSON.parse(raw) as Record<string, unknown>
+  } catch (err) {
+    const detail = err instanceof SyntaxError ? err.message : String(err)
+    console.error(`Failed to parse ${pkgPath}: ${detail}`)
+    return result
   }
 
-  if (installShim) {
-    generateShim(root, result)
+  // Detect indent size from existing file
+  const indentMatch = raw.match(/^(\s+)"/m)
+  const indentSize = indentMatch ? indentMatch[1].length : 2
+
+  // --- files array ---
+  if (!Array.isArray(pkg.files)) {
+    pkg.files = []
   }
+  const files = pkg.files as string[]
+  const requiredFiles = ['skills', 'bin', '!skills/_artifacts']
+
+  for (const entry of requiredFiles) {
+    if (files.includes(entry)) {
+      result.alreadyPresent.push(`files: "${entry}"`)
+    } else {
+      files.push(entry)
+      result.added.push(`files: "${entry}"`)
+    }
+  }
+
+  // --- bin field ---
+  const existingShim = findExistingShim(root)
+  let ext: string
+  if (existingShim) {
+    ext = existingShim.endsWith('.mjs') ? 'mjs' : 'js'
+  } else {
+    ext = pkg.type === 'module' ? 'js' : 'mjs'
+  }
+  const shimRelative = `./bin/intent.${ext}`
+
+  if (typeof pkg.bin === 'object' && pkg.bin !== null) {
+    const binObj = pkg.bin as Record<string, string>
+    if (binObj.intent) {
+      result.alreadyPresent.push(`bin.intent`)
+    } else {
+      binObj.intent = shimRelative
+      result.added.push(`bin.intent: "${shimRelative}"`)
+    }
+  } else if (!pkg.bin) {
+    pkg.bin = { intent: shimRelative }
+    result.added.push(`bin.intent: "${shimRelative}"`)
+  } else if (typeof pkg.bin === 'string') {
+    // npm string shorthand: "bin": "./cli.js" means { "<name>": "./cli.js" }
+    const pkgName =
+      typeof pkg.name === 'string'
+        ? pkg.name.replace(/^@[^/]+\//, '')
+        : 'unknown'
+    pkg.bin = { [pkgName]: pkg.bin, intent: shimRelative }
+    result.added.push(`bin.intent: "${shimRelative}" (converted bin from string to object)`)
+  }
+
+  writeFileSync(pkgPath, JSON.stringify(pkg, null, indentSize) + '\n')
 
   // Print results
+  for (const a of result.added) console.log(`✓ Added ${a}`)
+  for (const a of result.alreadyPresent) console.log(`  Already present: ${a}`)
+
+  return result
+}
+
+// ---------------------------------------------------------------------------
+// Command: setup-github-actions
+// ---------------------------------------------------------------------------
+
+export function runSetupGithubActions(
+  root: string,
+  metaDir: string,
+): SetupGithubActionsResult {
+  const vars = detectVars(root)
+  const result: SetupGithubActionsResult = { workflows: [], skipped: [] }
+
+  const srcDir = join(metaDir, 'templates', 'workflows')
+  const destDir = join(root, '.github', 'workflows')
+  const { copied, skipped } = copyTemplates(srcDir, destDir, vars)
+  result.workflows = copied
+  result.skipped = skipped
+
   for (const f of result.workflows) console.log(`✓ Copied workflow: ${f}`)
   for (const f of result.skipped) console.log(`  Already exists: ${f}`)
 
-  if (result.shim) {
-    const shimRelative = result.shim.replace(root + '/', './')
-    console.log(`✓ Generated intent shim: ${result.shim}`)
-    console.log(`\n  Add to your package.json:`)
-    console.log(`    "bin": { "intent": "${shimRelative}" }`)
-    console.log(`\n  Add "bin" to your package.json "files" array.`)
-  }
-
-  if (
-    result.workflows.length === 0 &&
-    result.shim === null &&
-    result.skipped.length === 0
-  ) {
+  if (result.workflows.length === 0 && result.skipped.length === 0) {
     console.log('No templates directory found. Is @tanstack/intent installed?')
   } else if (result.workflows.length > 0) {
     console.log(`\nTemplate variables applied:`)

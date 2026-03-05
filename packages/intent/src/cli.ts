@@ -155,7 +155,7 @@ function collectPackagingWarnings(root: string): string[] {
   const shimMjs = join(root, 'bin', 'intent.mjs')
   if (!existsSync(shimJs) && !existsSync(shimMjs)) {
     warnings.push(
-      'No bin/intent.js or bin/intent.mjs shim found (run: npx @tanstack/intent setup --shim)',
+      'No bin/intent.js or bin/intent.mjs shim found (run: npx @tanstack/intent add-library-bin)',
     )
   }
 
@@ -394,12 +394,11 @@ This produces: individual SKILL.md files.
 
 1. Run \`npx @tanstack/intent validate\` in each package directory
 2. Commit skills/ and artifacts
-3. For each publishable package, run: \`npx @tanstack/intent setup --shim\`
-4. Ensure each package has \`@tanstack/intent\` as a devDependency
-5. Add \`"skills"\`, \`"bin"\` to the \`"files"\` array in each package.json
-6. Add \`"!skills/_artifacts"\` to exclude artifacts from publishing
-7. Create a \`feedback:<skill-name>\` label on the GitHub repo for each skill (use \`gh label create\`)
-8. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent install\`"
+3. For each publishable package, run: \`npx @tanstack/intent add-library-bin\`
+4. For each publishable package, run: \`npx @tanstack/intent edit-package-json\`
+5. Ensure each package has \`@tanstack/intent\` as a devDependency
+6. Create a \`feedback:<skill-name>\` label on the GitHub repo for each skill (use \`gh label create\`)
+7. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent install\`"
 `
 
   console.log(prompt)
@@ -417,7 +416,9 @@ Usage:
   intent validate [<dir>]        Validate skill files (default: skills/)
   intent install                  Print a skill that guides your coding agent to set up skill-to-task mappings
   intent scaffold                Print maintainer scaffold prompt
-  intent setup [--workflows] [--shim] [--all]  Copy CI templates and generate shim
+  intent add-library-bin         Generate bin/intent.{js,mjs} bridge file
+  intent edit-package-json       Wire package.json (files, bin) for skill publishing
+  intent setup-github-actions    Copy CI workflow templates to .github/workflows/
   intent stale                   Check skills for staleness`
 
 const command = process.argv[2]
@@ -539,9 +540,19 @@ skills:
     }
     break
   }
-  case 'setup': {
-    const { runSetup } = await import('./setup.js')
-    runSetup(process.cwd(), getMetaDir(), commandArgs)
+  case 'add-library-bin': {
+    const { runAddLibraryBin } = await import('./setup.js')
+    runAddLibraryBin(process.cwd())
+    break
+  }
+  case 'edit-package-json': {
+    const { runEditPackageJson } = await import('./setup.js')
+    runEditPackageJson(process.cwd())
+    break
+  }
+  case 'setup-github-actions': {
+    const { runSetupGithubActions } = await import('./setup.js')
+    runSetupGithubActions(process.cwd(), getMetaDir())
     break
   }
   default:

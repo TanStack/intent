@@ -42,9 +42,12 @@ path applies (see below).
 
 ### Lightweight path (small libraries)
 
-After Phase 1, if the library has **fewer than 5 client-facing skill
-areas** (e.g. a focused utility library, a single-purpose tool, or a
-library with only 2–3 distinct developer tasks), use a compressed flow:
+After Phase 1, decide whether the library warrants the full five-phase
+flow or the compressed flow below. This is a judgment call — lean toward
+full discovery unless the library is obviously small (single-purpose
+utility, 2–3 distinct developer tasks max). Use a compressed flow when
+the skill surface is small enough that two interview rounds would be
+redundant:
 
 1. **Phase 1** — Quick scan (same as full flow)
 2. **Phase 2+4 combined** — Single interview round. Combine the
@@ -144,13 +147,22 @@ Surface lifecycle/journey skills that cross-cut task areas:
 > a migrate-from-v4 walkthrough. Which of these exist in your docs
 > or would be valuable as standalone skills?"
 
-### 2c — Composition and ecosystem (1–2 questions)
+### 2c — Composition and ecosystem (1–3 questions)
 
 > "Which other libraries does yours compose with most often? Are there
 > integration patterns important enough to warrant their own skill —
 > for example, using your library with [framework/ORM/router]?"
 
-### 2d — Confirm initial skill map
+> "Are there tasks that developers might expect your library to handle,
+> but that are actually handled by a companion library? Which tasks
+> should we explicitly exclude from your library's skills?"
+
+### 2d — Exclude experimental features (1 question)
+
+> "Are there any features that are experimental, unstable, or not yet
+> ready to document for agents? We'll exclude these from the skill set."
+
+### 2e — Confirm initial skill map
 
 Synthesize what you heard into a proposed skill list and present it:
 
@@ -170,7 +182,10 @@ gotchas.
 
 Read in this order. Each step builds context for the next.
 
-1. **Every narrative guide** — the how-to content, not API reference tables
+1. **Narrative guides** — read as many as needed to build confidence in
+   your understanding. Prioritize getting-started, migration, and guides
+   covering the skill areas from Phase 2. Skip exhaustive reading of large
+   online-only doc sets.
 2. **Migration guides** — highest-yield source for failure modes; every
    breaking change is exactly what agents trained on older versions produce
 3. **API reference** — scan for exports, type signatures, option shapes
@@ -538,6 +553,10 @@ Merge interview findings into the draft. For each interview answer:
 4. If it reveals a new skill — add it
 5. If it fills a gap — remove from gaps section
 
+Validate the domain_map.yaml by parsing it with a YAML parser. Check for
+duplicate keys, invalid syntax, and structural correctness. Fix any issues
+before presenting the final artifact.
+
 Update `status: draft` to `status: reviewed`.
 
 ---
@@ -743,42 +762,3 @@ Gemini, and open-source models. To achieve this:
   phase separation
 - No model-specific features (no XML tags in output, no tool_use assumptions)
 
----
-
-## Meta-skill feedback (alpha default)
-
-After finalizing artifacts, create or update a single Markdown feedback draft
-for all three meta skills used in scaffolding. Use this exact template and
-fill only the **Domain Discovery** section now. Leave the other sections in
-place for later steps to complete.
-
-```
-# Intent Meta Skill Feedback
-
-## Domain Discovery
-- What worked well:
-- What was confusing or missing:
-- Suggestions for improvement:
-- Overall rating: good | mixed | bad
-
-## Tree Generator
-- What worked well:
-- What was confusing or missing:
-- Suggestions for improvement:
-- Overall rating: good | mixed | bad
-
-## Generate Skill
-- What worked well:
-- What was confusing or missing:
-- Suggestions for improvement:
-- Overall rating: good | mixed | bad
-
-## Context (optional)
-- Library:
-- Repo:
-- Docs:
-- Notes:
-```
-
-Do not submit feedback yet. Tell the maintainer to carry this draft forward
-to the next meta skill step.

@@ -17,6 +17,12 @@ Run this at the end of any session where you loaded one or more SKILL.md files.
 The goal is to capture what worked, what didn't, and what was missing — so skill
 maintainers can improve future versions.
 
+This skill also covers **meta-skill feedback** — feedback about the scaffolding
+process itself. When invoked after running domain-discovery, tree-generator, and
+generate-skill, treat those three meta skills as the "skills" being evaluated.
+Capture what worked and what didn't in each scaffolding phase so the meta skills
+can be improved.
+
 ---
 
 ## Phase 1 — Automated Signal Collection

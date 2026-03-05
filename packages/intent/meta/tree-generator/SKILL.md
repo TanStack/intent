@@ -274,14 +274,9 @@ packages/
 │   └── package.json             # Add "skills" to files array
 ```
 
-Add `"skills"` to each package's `files` array in `package.json` so
-skill files are included in the published npm tarball:
-
-```json
-{
-  "files": ["dist", "src", "skills"]
-}
-```
+Run `intent edit-package-json` to wire each package's `package.json`
+automatically (adds `"skills"`, `"bin"`, and `"!skills/_artifacts"` to the
+`files` array, and adds the `bin` entry if missing).
 
 ### Step 2 — Write the core skill
 
@@ -853,40 +848,3 @@ When updating:
 
 ---
 
-## Meta-skill feedback (alpha default)
-
-After producing the skill tree artifact, update a single Markdown feedback
-draft for all three meta skills used in scaffolding. If a draft exists from
-Domain Discovery, keep it and fill only the **Tree Generator** section. If
-no draft exists, create it using this exact template.
-
-```
-# Intent Meta Skill Feedback
-
-## Domain Discovery
-- What worked well:
-- What was confusing or missing:
-- Suggestions for improvement:
-- Overall rating: good | mixed | bad
-
-## Tree Generator
-- What worked well:
-- What was confusing or missing:
-- Suggestions for improvement:
-- Overall rating: good | mixed | bad
-
-## Generate Skill
-- What worked well:
-- What was confusing or missing:
-- Suggestions for improvement:
-- Overall rating: good | mixed | bad
-
-## Context (optional)
-- Library:
-- Repo:
-- Docs:
-- Notes:
-```
-
-Do not submit feedback yet. Carry this draft forward to the generate-skill
-step.
