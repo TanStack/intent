@@ -63,8 +63,13 @@ You need one of:
   discovery first)
 
 If starting from raw docs without a domain map, run a compressed
-discovery. This produces lower-fidelity output than the full
-skill-domain-discovery skill — prefer running that when time permits.
+discovery. **Warning:** This produces significantly lower-fidelity
+output than the full skill-domain-discovery skill. The maintainer
+interview in domain discovery surfaces implicit knowledge, failure
+modes, and prioritization that cannot be inferred from docs alone.
+Always prefer running the full discovery when possible. Only use
+compressed discovery when the maintainer has explicitly confirmed
+they want to skip domain discovery.
 
 1. Build a concept inventory (every export, config key, constraint, warning)
 2. Group into 4–7 capability domains using work-oriented names
@@ -107,6 +112,9 @@ skills:
     domain: '[domain slug]'
     path: 'skills/[path]/SKILL.md'
     description: '[1–2 sentence agent-facing routing key]'
+    packages: # required for monorepo; omit for single-package libraries
+      - '[package where this skill ships]'
+      - '[additional package, if skill is relevant to multiple packages]'
     requires:
       - '[other skill slugs]' # omit if none
     sources:
@@ -122,7 +130,18 @@ skills:
 
 From the domain map, each entry in the `skills` list becomes a SKILL.md
 file. The `type` field on each skill (`core`, `framework`, `lifecycle`,
-`composition`) determines where it goes. Determine the file tree:
+`composition`) determines where it goes. Determine the file tree.
+
+Present the planned file tree to the maintainer before writing any files.
+Include the full `skill_tree.yaml` content and explain any structural
+decisions (flat vs nested, which skills get reference files, how
+cross-package skills are handled).
+
+**── STOP ── Wait for the maintainer to review and approve the file tree
+before proceeding to Step 2. A bad tree means rewriting every generated
+file.**
+
+Determine the file tree:
 
 **Core vs framework decision:**
 
@@ -174,6 +193,31 @@ Use **flat** (`skills/[skill-name]/SKILL.md`) when:
 Both are valid. The domain map's `type` field and structure will signal
 which fits. When in doubt, prefer flat — it's simpler and each skill
 is independently discoverable.
+
+**Monorepo placement:** Skills ship inside each package so they are
+available when developers install the package. Each package has its
+own `skills/` directory. Cross-package skills live in whichever
+package is the primary entry point for that task. For example:
+
+```
+packages/
+├── react-router/
+│   └── skills/
+│       ├── router-core/
+│       │   ├── SKILL.md
+│       │   └── navigation/
+│       │       └── SKILL.md
+│       └── react-router/
+│           └── SKILL.md
+├── start/
+│   └── skills/
+│       ├── start-core/
+│       │   └── SKILL.md
+│       └── start-server-functions/
+│           └── SKILL.md
+```
+
+The examples below show the `skills/` tree within a single package.
 
 **Nested structure:**
 
@@ -637,6 +681,11 @@ The key differences from the standard body:
 ### Step 8 — Validate the complete tree
 
 Run every check before outputting. Fix any failures before proceeding.
+Present the validation results to the maintainer — list any checks that
+required fixes and what was changed.
+
+**── STOP ── Wait for the maintainer to acknowledge the validation
+results before proceeding to the feedback step.**
 
 | Check | Rule |
 |-------|------|
@@ -762,6 +811,8 @@ current_skills:
 
 | Check                                       | Rule                                                                                |
 | ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **File tree reviewed by maintainer**        | Present skill_tree.yaml for approval before writing SKILL.md files                  |
+| **Validation results presented**            | Show check results to maintainer before finalizing                                  |
 | Under 500 lines per SKILL.md                | Move excess to references/; also create references for content depth                |
 | Real imports in every code block            | Exact package, correct adapter                                                      |
 | No external concept explanations            | No "TypeScript is...", no "React hooks are..." — library-specific concepts are fine |
@@ -820,9 +871,14 @@ When updating:
 
 ---
 
-## Meta-skill feedback (alpha default)
+## Meta-skill feedback (alpha — temporary)
 
-After producing the skill tree artifact, update a single Markdown feedback
+During the alpha period, collect feedback from the maintainer on the
+tree generation process. Ask if they'd like to share what worked well,
+what was confusing, or suggestions for improvement. If they decline or
+want to move on, that's fine — proceed to the next step.
+
+Update the single Markdown feedback
 draft for all three meta skills used in scaffolding. If a draft exists from
 Domain Discovery, keep it and fill only the **Tree Generator** section. If
 no draft exists, create it using this exact template.

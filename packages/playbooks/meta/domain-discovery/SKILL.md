@@ -153,8 +153,9 @@ For monorepo libraries, also ask about cross-package tasks:
 
 > "Are there tasks that touch multiple packages in your monorepo? For
 > example, a getting-started flow that requires imports from both the
-> client and server packages? I want to make sure skills that span
-> package boundaries are captured correctly."
+> client and server packages? Since skills ship inside each package,
+> I need to know which package should own cross-cutting skills and
+> which other packages they reference."
 
 ### 2b — Developer journeys (1–2 questions)
 
@@ -577,8 +578,8 @@ skills:
     description: '[what a developer is doing — matches a specific task/moment]'
     type: '[core | framework | lifecycle | composition]'
     packages: # required for monorepo; omit for single-package libraries
-      - '[primary package name]'
-      - '[secondary package name, if skill spans multiple packages]'
+      - '[package where this skill ships]'
+      - '[additional package, if skill is relevant to multiple packages]'
     covers:
       - '[API/hook/concept 1]'
       - '[API/hook/concept 2]'

@@ -47,8 +47,15 @@ You will receive:
 If the maintainer uses a custom skills root, replace `skills/` in any paths
 below with their chosen directory.
 
+For monorepo libraries, skills ship inside the package they belong to.
+Each package has its own `skills/` directory so that when a developer
+installs a package (e.g. `@tanstack/react-router`), the skills are
+available locally. Cross-package skills live in whichever package is the
+primary entry point for that task, with references to the other packages.
+
 1. **Skill name** — format `library-group/skill-name` (e.g. `tanstack-query/core`,
-   `tanstack-router/loaders`, `db/core/live-queries`)
+   `tanstack-router/loaders`, `db/core/live-queries`). The name determines the
+   output file path: `skills/[name]/SKILL.md` relative to the package root.
 2. **Skill description** — what the skill covers and when an agent should load it
 3. **Source documentation** — the docs, guides, API references, and/or source
    files to distill from
@@ -117,6 +124,9 @@ description: >
 type: core
 library: [library]
 library_version: "[version this targets]"
+packages: # required for monorepo; omit for single-package libraries
+  - "[package where this skill ships]"
+  - "[additional package, if skill is relevant to multiple packages]"
 sources:
   - "[Owner/repo]:docs/[path].md"
   - "[Owner/repo]:src/[path].ts"
@@ -314,9 +324,17 @@ Output the complete SKILL.md file content. If reference files are needed,
 output those as well with their relative paths.
 
 If generating multiple skills in a batch (e.g. all skills for a library),
-output in this order:
+generate and present the first core overview SKILL.md to the maintainer
+before writing the rest.
 
-1. Core overview SKILL.md
+**── STOP ── Wait for the maintainer to review the first generated skill.
+Their feedback on structure, tone, and detail level applies to every
+subsequent skill. Catching issues early avoids rewriting the entire batch.**
+
+After the maintainer confirms (or provides corrections), generate the
+remaining skills in this order:
+
+1. Core overview SKILL.md (already reviewed above)
 2. Core sub-skills in domain order
 3. Framework overview SKILL.md for each framework
 4. Framework sub-skills
@@ -347,6 +365,7 @@ updates preserve review effort and reduce diff noise.
 
 | Rule | Detail |
 |------|--------|
+| **First skill reviewed before batch** | In batch mode, present the first core skill for maintainer review before generating the rest |
 | React adapter only (Phase 1) | No Vue, Solid, Svelte, Angular examples unless generating a framework skill for that adapter |
 | All imports use real package names | `@tanstack/react-query`, not `react-query` |
 | No placeholder code | No `// ...`, `[your value]`, or `...rest` |
@@ -372,9 +391,14 @@ Output is consumed by all major AI coding agents. To ensure consistency:
 
 ---
 
-## Meta-skill feedback (alpha default)
+## Meta-skill feedback (alpha — temporary)
 
-After generating the first iteration of skills, complete a single Markdown
+During the alpha period, collect feedback from the maintainer on the
+skill generation process. Ask if they'd like to share what worked well,
+what was confusing, or suggestions for improvement. If they decline or
+want to move on, that's fine.
+
+Complete a single Markdown
 feedback draft for all three meta skills used in scaffolding. If a draft
 exists from previous steps, keep it and fill the **Generate Skill** section.
 If no draft exists, create it using this exact template.
