@@ -223,7 +223,7 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
 
   // Detect indent size from existing file
   const indentMatch = raw.match(/^(\s+)"/m)
-  const indentSize = indentMatch ? indentMatch[1].length : 2
+  const indentSize = indentMatch?.[1] ? indentMatch[1].length : 2
 
   // --- files array ---
   if (!Array.isArray(pkg.files)) {
