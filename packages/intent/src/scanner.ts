@@ -213,7 +213,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
   }
 
   for (const entry of topEntries) {
-    if (!entry.isDirectory()) continue
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
     const dirPath = join(nodeModulesDir, entry.name)
 
     if (entry.name.startsWith('@')) {
@@ -228,7 +228,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
         continue
       }
       for (const scoped of scopedEntries) {
-        if (!scoped.isDirectory()) continue
+        if (!scoped.isDirectory() && !scoped.isSymbolicLink()) continue
         packageDirs.push({ dirPath: join(dirPath, scoped.name) })
       }
     } else if (!entry.name.startsWith('.')) {

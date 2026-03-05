@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -84,6 +90,49 @@ describe('scanForIntents', () => {
     expect(result.packages[0]!.skills[0]!.description).toBe(
       'Core database concepts',
     )
+  })
+
+  it('discovers packages through symlinks (pnpm layout)', async () => {
+    // pnpm stores packages outside node_modules and symlinks them in
+    const store = createDir(root, '.pnpm-store', '@tanstack', 'db')
+    writeJson(join(store, 'package.json'), {
+      name: '@tanstack/db',
+      version: '0.5.2',
+      intent: { version: 1, repo: 'TanStack/db', docs: 'docs/' },
+    })
+    const skillDir = createDir(store, 'skills', 'db-core')
+    writeSkillMd(skillDir, {
+      name: 'db-core',
+      description: 'Core database concepts',
+      type: 'core',
+    })
+
+    // Create the scoped dir, then symlink the package (like pnpm does)
+    createDir(root, 'node_modules', '@tanstack')
+    symlinkSync(store, join(root, 'node_modules', '@tanstack', 'db'))
+
+    const result = await scanForIntents(root)
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('@tanstack/db')
+    expect(result.packages[0]!.skills).toHaveLength(1)
+  })
+
+  it('discovers unscoped packages through symlinks (pnpm layout)', async () => {
+    const store = createDir(root, '.pnpm-store', 'my-lib')
+    writeJson(join(store, 'package.json'), {
+      name: 'my-lib',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'foo/my-lib', docs: 'docs/' },
+    })
+    const skillDir = createDir(store, 'skills', 'my-skill')
+    writeSkillMd(skillDir, { name: 'my-skill', description: 'A skill' })
+
+    createDir(root, 'node_modules')
+    symlinkSync(store, join(root, 'node_modules', 'my-lib'))
+
+    const result = await scanForIntents(root)
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('my-lib')
   })
 
   it('discovers sub-skills', async () => {
