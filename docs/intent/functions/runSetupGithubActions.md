@@ -9,7 +9,7 @@ title: runSetupGithubActions
 function runSetupGithubActions(root, metaDir): SetupGithubActionsResult;
 ```
 
-Defined in: [setup.ts:290](https://github.com/TanStack/intent/blob/main/packages/intent/src/setup.ts#L290)
+Defined in: [setup.ts:315](https://github.com/TanStack/intent/blob/main/packages/intent/src/setup.ts#L315)
 
 ## Parameters
 
