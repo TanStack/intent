@@ -1,19 +1,25 @@
-
+---
 name: skill-generate
 description: >
-Generate a complete SKILL.md file for a library from source documentation
-and skill tree artifacts. Activate when bootstrapping skills for a new
-library, regenerating a stale skill after source changes, or producing a
-skill from a skill_tree.yaml entry. Takes a skill name, description, and
-source docs as inputs; outputs a validated SKILL.md that conforms to the
-tree-generator spec.
+  Generate a complete SKILL.md file for a library from source documentation
+  and skill tree artifacts. Activate when bootstrapping skills for a new
+  library, regenerating a stale skill after source changes, or producing a
+  skill from a skill_tree.yaml entry. Takes a skill name, description, and
+  source docs as inputs; outputs a validated SKILL.md that conforms to the
+  tree-generator spec.
 metadata:
-version: '1.0'
-category: meta-tooling
-input_artifacts: - skills/\_artifacts/skill_tree.yaml - skills/\_artifacts/domain_map.yaml - skills/\_artifacts/skill_spec.md - source documentation
-output_artifacts: - SKILL.md
-skills: - skill-tree-generator - skill-domain-discovery
-
+  version: '1.0'
+  category: meta-tooling
+  input_artifacts:
+    - skills/_artifacts/skill_tree.yaml
+    - skills/_artifacts/domain_map.yaml
+    - skills/_artifacts/skill_spec.md
+    - source documentation
+  output_artifacts:
+    - SKILL.md
+  skills:
+    - skill-tree-generator
+    - skill-domain-discovery
 ---
 
 # Skill Generation
@@ -420,4 +426,3 @@ Ask the maintainer if they want to edit the feedback. Then ask if you should
 send it as a GitHub issue to TanStack/intent. Use the issue title:
 `[meta-feedback] intent meta skill`. Only submit if they confirm.
 ```
-

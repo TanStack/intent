@@ -1,19 +1,21 @@
-
+---
 name: skill-domain-discovery
 description: >
-Analyze library documentation and source code, then interview maintainers
-to discover capability domains and task-focused skills for AI coding
-agents. Activate when creating skills for a new library, organizing
-existing documentation into skill categories, or when a maintainer wants
-help deciding how to structure their library's agent-facing knowledge.
-Produces a domain_map.yaml and skill_spec.md that feed directly into
-the skill-tree-generator skill.
+  Analyze library documentation and source code, then interview maintainers
+  to discover capability domains and task-focused skills for AI coding
+  agents. Activate when creating skills for a new library, organizing
+  existing documentation into skill categories, or when a maintainer wants
+  help deciding how to structure their library's agent-facing knowledge.
+  Produces a domain_map.yaml and skill_spec.md that feed directly into
+  the skill-tree-generator skill.
 metadata:
-version: '3.0'
-category: meta-tooling
-output_artifacts: - skills/\_artifacts/domain_map.yaml - skills/\_artifacts/skill_spec.md
-skills: - tree-generator
-
+  version: '3.0'
+  category: meta-tooling
+  output_artifacts:
+    - skills/_artifacts/domain_map.yaml
+    - skills/_artifacts/skill_spec.md
+  skills:
+    - tree-generator
 ---
 
 # Domain Discovery & Maintainer Interview
@@ -56,42 +58,6 @@ library with only 2–3 distinct developer tasks), use a compressed flow:
 The lightweight path produces identical output artifacts (domain_map.yaml
 and skill_spec.md). It just avoids two separate interview rounds when the
 library is small enough that one round covers everything.
-
-### Hard rules — interview phases are mandatory and interactive
-
-These rules override any other reasoning. No exceptions.
-
-1. **Phases 2 and 4 are interactive interviews conducted with the
-   maintainer.** You must ask the questions specified in each sub-section
-   and wait for the maintainer's response before continuing. Documentation,
-   source code, and other automated analysis are NOT substitutes for the
-   maintainer's answers.
-2. **Every question in Phases 2 and 4 must be asked as an open-ended
-   question and sent as a message to the maintainer.** You must then
-   STOP and WAIT for their reply. Do not answer your own questions. Do
-   not infer answers from documentation. Do not skip questions because
-   you believe you already know the answer.
-3. **Do not convert open-ended questions into multiple-choice,
-   yes/no, or confirmation prompts.** The question templates in each
-   sub-section are open-ended by design. Present them as open-ended
-   questions. The maintainer's unprompted answers surface knowledge that
-   pre-structured options suppress.
-4. **Minimum question counts are enforced.** Each sub-section specifies
-   a question count range (e.g. "2–4 questions"). You must ask at least
-   the minimum number. Asking zero questions in any sub-section is a
-   protocol violation.
-5. **STOP gates are mandatory.** At the boundaries marked `── STOP ──`
-   below, you must halt execution and wait for the maintainer's response
-   or acknowledgment before proceeding. Do not continue past a STOP gate
-   in the same message.
-6. **If the maintainer asks to skip an interview phase**, explain the
-   value of the phase and what will be lost. Proceed with skipping only
-   if they confirm a second time.
-7. **Rich documentation makes interviews MORE valuable, not less.**
-   When docs are comprehensive, the interview surfaces what docs miss:
-   implicit knowledge, AI-specific failure modes, undocumented tradeoffs,
-   and the maintainer's prioritization of what matters most. Never
-   rationalize skipping interviews because documentation is thorough.
 
 ---
 
@@ -139,37 +105,20 @@ Log (but do not group yet):
 - Which frameworks it supports
 - Any existing skill files, agent configs, or intents
 - Whether the library is a monorepo and which packages matter
-- Peer dependency constraints — read `peerDependencies` and
-  `peerDependenciesMeta` from each client-facing package.json to
-  understand version ranges and optional integrations early
-
-Present your initial impressions to the maintainer as a brief summary
-(3–5 bullets). This orients them on what you found and primes them for
-the interview.
-
-**── STOP ── Do not proceed to Phase 2 until the maintainer has
-acknowledged your summary or responded.**
 
 ---
 
-## Phase 2 — High-level interview (interactive — requires maintainer)
+## Phase 2 — High-level interview
 
 The maintainer's mental model of developer tasks IS the skill map. Your
 job in this phase is to extract it — not to propose your own structure.
-
-You must ask the questions below to the maintainer and wait for their
-responses. Do not infer answers from documentation or source code.
 
 ### Rules for Phase 2
 
 1. One topic per message for open-ended questions. You may batch 2–3
    yes/no or short-confirmation questions together.
-2. Ask each question as written (you may adapt phrasing to context, but
-   keep questions open-ended — never convert to multiple-choice).
-3. Wait for the maintainer's response after each question before asking
-   the next.
-4. Take notes silently. Do not summarize back unless asked.
-5. If the maintainer gives a short answer, probe deeper before moving on.
+2. Take notes silently. Do not summarize back unless asked.
+3. If the maintainer gives a short answer, probe deeper before moving on.
 
 ### 2a — Developer tasks (2–4 questions)
 
@@ -185,13 +134,6 @@ Follow up to enumerate distinct tasks:
 > with using your library, what would that list look like? I'm thinking
 > things like 'set up the client', 'implement auth', 'debug sync issues'
 > — each one a separate moment where they'd want focused guidance."
-
-For monorepo libraries, also ask about cross-package tasks:
-
-> "Are there tasks that touch multiple packages in your monorepo? For
-> example, a getting-started flow that requires imports from both the
-> client and server packages? I want to make sure skills that span
-> package boundaries are captured correctly."
 
 ### 2b — Developer journeys (1–2 questions)
 
@@ -216,9 +158,6 @@ Synthesize what you heard into a proposed skill list and present it:
 > [enumerate skills with one-line descriptions]. Does this match how
 > you think about your library? What would you add, remove, or rename?"
 
-**── STOP ── Do not proceed to Phase 3 until the maintainer has
-reviewed and confirmed (or corrected) the skill list.**
-
 ---
 
 ## Phase 3 — Deep read (autonomous)
@@ -231,12 +170,7 @@ gotchas.
 
 Read in this order. Each step builds context for the next.
 
-Before starting, list every file in the docs directory (and subdirectories).
-Use this list as a checklist — every narrative file must be read. Do not
-sample a subset and extrapolate.
-
-1. **Every narrative guide** — the how-to content, not API reference tables.
-   Read every guide file, not a representative sample.
+1. **Every narrative guide** — the how-to content, not API reference tables
 2. **Migration guides** — highest-yield source for failure modes; every
    breaking change is exactly what agents trained on older versions produce
 3. **API reference** — scan for exports, type signatures, option shapes
@@ -483,35 +417,20 @@ Present the draft to the maintainer before starting Phase 4:
 > [N] skills and [M] failure modes. I've flagged [K] specific gaps where
 > I need your input."
 
-Include the full draft domain_map.yaml in your message so the maintainer
-can review it. Also include a checklist of all docs files you read.
-
-**── STOP ── Do not proceed to Phase 4 until the maintainer has
-reviewed the draft and responded. Their feedback on the draft informs
-the detail interview questions.**
-
 ---
 
-## Phase 4 — Detail interview (interactive — requires maintainer)
+## Phase 4 — Detail interview (builds on Phase 1–3)
 
 You have the maintainer's task map and a deep read. The interview now
 fills gaps, validates your understanding, and surfaces implicit knowledge.
-
-You must ask the questions below to the maintainer and wait for their
-responses. Do not infer answers from documentation or source code —
-even for gaps you think you can answer from your reading.
 
 ### Rules for Phase 4
 
 1. One topic per message for open-ended questions. You may batch 2–3
    yes/no or short-confirmation questions together.
-2. Ask each question as written (you may adapt phrasing to context, but
-   keep questions open-ended — never convert to multiple-choice).
-3. Each question must reference something specific from your reading.
-4. Wait for the maintainer's response after each question before asking
-   the next.
-5. If the maintainer gives a short answer, probe deeper before moving on.
-6. Take notes silently. Do not summarize back unless asked.
+2. Each question must reference something specific from your reading.
+3. If the maintainer gives a short answer, probe deeper before moving on.
+4. Take notes silently. Do not summarize back unless asked.
 
 ### 4a — Draft review (2–3 questions)
 
@@ -661,9 +580,6 @@ skills:
     domain: '[parent domain slug]'
     description: '[what a developer is doing — matches a specific task/moment]'
     type: '[core | framework | lifecycle | composition]'
-    packages: # required for monorepo; omit for single-package libraries
-      - '[primary package name]'
-      - '[secondary package name, if skill spans multiple packages]'
     covers:
       - '[API/hook/concept 1]'
       - '[API/hook/concept 2]'
@@ -794,11 +710,6 @@ not promotional.]
 | ------------------------------------- | -------------------------------------------------------------------------- |
 | Quick scan before interview           | Never interview without at least reading README and package structure      |
 | High-level interview before deep read | The maintainer's task map informs what you read deeply                     |
-| **Interview phases are interactive**  | Phases 2 and 4 require sending questions to the maintainer and waiting     |
-| **Docs are not a substitute**         | Documentation cannot replace maintainer answers — even comprehensive docs  |
-| **Open-ended questions stay open**    | Never convert interview questions to multiple-choice or yes/no             |
-| **Minimum question counts enforced**  | Each sub-section's minimum count must be met; zero questions = violation   |
-| **STOP gates are mandatory**          | Do not proceed past a STOP gate without maintainer response                |
 | Batch only confirmations              | Yes/no questions may batch 2–3; open-ended questions get their own message |
 | Questions reference findings          | No generic questions — cite what you found                                 |
 | Skills are task-focused               | Each skill matches a developer moment, not a conceptual area               |
@@ -808,7 +719,6 @@ not promotional.]
 | No marketing prose                    | Library description is factual, not promotional                            |
 | domain_map.yaml is valid YAML         | Parseable by any YAML parser                                               |
 | Draft before detail interview         | Present draft for review before Phase 4                                    |
-| **Draft reviewed before Phase 4**     | Maintainer must acknowledge or respond to draft before detail interview    |
 | Agent-specific failures probed        | Always ask AI-agent-specific questions in Phase 4c                         |
 | Compositions discovered from code     | Scan peer deps and examples before asking composition questions            |
 | Cross-skill failure modes tagged      | Failure modes spanning skills list all relevant slugs                      |
@@ -817,7 +727,6 @@ not promotional.]
 | Dense surfaces flagged                | Topics with >10 patterns noted as reference_candidates                     |
 | Lifecycle skills considered           | Suggest journey skills when docs have the material                         |
 | Cross-references mapped               | Skills that illuminate each other get "See also" pointers                  |
-| **All docs files read**               | List docs directory contents and read every narrative file — no sampling   |
 
 ---
 
@@ -827,13 +736,6 @@ This skill is designed to produce consistent results across Claude, GPT-4+,
 Gemini, and open-source models. To achieve this:
 
 - All instructions use imperative sentences, not suggestions
-- Interview phases use explicit STOP gates to prevent models from
-  continuing autonomously past interactive checkpoints
-- Hard rules at the top override any model tendency to rationalize
-  skipping interactive phases when documentation is available
-- Open-ended questions are explicitly protected from conversion to
-  multiple-choice or confirmation prompts, which models default to
-  when they have enough context to pre-populate answers
 - Output formats use YAML (universally parsed) and Markdown tables
   (universally rendered)
 - Examples use concrete values, not placeholders like "[your value here]"
@@ -843,20 +745,9 @@ Gemini, and open-source models. To achieve this:
 
 ---
 
-## Meta-skill feedback (mandatory — do not skip)
+## Meta-skill feedback (alpha default)
 
-**This step is required.** Agents routinely skip feedback collection
-because it appears at the end of the skill. You must complete this step
-before the domain discovery process is considered finished.
-
-After finalizing artifacts, ask the maintainer for feedback on the domain
-discovery process. Do not silently create the feedback template — present
-it to the maintainer and ask them to fill in the Domain Discovery section.
-
-**── STOP ── Ask the maintainer to provide feedback. Wait for their
-response before writing the feedback file.**
-
-Create or update a single Markdown feedback draft
+After finalizing artifacts, create or update a single Markdown feedback draft
 for all three meta skills used in scaffolding. Use this exact template and
 fill only the **Domain Discovery** section now. Leave the other sections in
 place for later steps to complete.
