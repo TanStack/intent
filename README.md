@@ -31,11 +31,13 @@
 <div align="center">
 
 ### [Become a Sponsor!](https://github.com/sponsors/tannerlinsley/)
+
 </div>
 
 # TanStack Intent
 
 A toolkit for packaging agent-readable skills with your npm libraries. Auto-discovered, versioned with your code, and compatible across every major package manager.
+
 ### <a href="https://tanstack.com/intent">Read the docs →</b></a>
 
 ## Get Involved
