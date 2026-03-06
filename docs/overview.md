@@ -1,6 +1,8 @@
-# @tanstack/intent
+---
+title: Overview
+---
 
-A CLI for library maintainers to generate, validate, and ship [Agent Skills](https://agentskills.io) alongside their npm packages.
+`@tanstack/intent` is a CLI for library maintainers to generate, validate, and ship [Agent Skills](https://agentskills.io) alongside their npm packages.
 
 ## The problem
 
@@ -18,9 +20,7 @@ Each skill declares its source docs. When those docs change, the CLI flags the s
 
 The [Agent Skills spec](https://agentskills.io) is an open standard already adopted by VS Code, GitHub Copilot, OpenAI Codex, Cursor, Claude Code, Goose, Amp, and others.
 
-## Quick Start
-
-### For library consumers
+## For library consumers
 
 Set up skill-to-task mappings in your project's agent config files (CLAUDE.md, .cursorrules, etc.):
 
@@ -36,7 +36,7 @@ List available skills from installed packages:
 npx @tanstack/intent list
 ```
 
-### For library maintainers
+## For library maintainers
 
 Generate skills for your library by telling your AI coding agent to run:
 
@@ -72,17 +72,13 @@ The feedback loop runs both directions. `npx @tanstack/intent feedback` lets use
 
 ## CLI Commands
 
-| Command                                     | Description                                         |
-| ------------------------------------------- | --------------------------------------------------- |
-| `npx @tanstack/intent install`              | Set up skill-to-task mappings in agent config files |
-| `npx @tanstack/intent list [--json]`        | Discover intent-enabled packages                    |
-| `npx @tanstack/intent meta`                 | List meta-skills for library maintainers            |
-| `npx @tanstack/intent scaffold`             | Print the guided skill generation prompt            |
-| `npx @tanstack/intent validate [dir]`       | Validate SKILL.md files                             |
-| `npx @tanstack/intent setup-github-actions` | Copy CI templates into your repo                    |
-| `npx @tanstack/intent stale [--json]`       | Check skills for version drift                      |
-| `npx @tanstack/intent feedback`             | Submit skill feedback                               |
-
-## License
-
-[MIT](./LICENSE)
+| Command | Description |
+| --- | --- |
+| `npx @tanstack/intent install` | Set up skill-to-task mappings in agent config files |
+| `npx @tanstack/intent list [--json]` | Discover intent-enabled packages |
+| `npx @tanstack/intent meta` | List meta-skills for library maintainers |
+| `npx @tanstack/intent scaffold` | Print the guided skill generation prompt |
+| `npx @tanstack/intent validate [dir]` | Validate SKILL.md files |
+| `npx @tanstack/intent setup-github-actions` | Copy CI templates into your repo |
+| `npx @tanstack/intent stale [--json]` | Check skills for version drift |
+| `npx @tanstack/intent feedback` | Submit skill feedback |

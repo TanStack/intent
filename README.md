@@ -36,7 +36,7 @@
 
 # TanStack Intent
 
-A toolkit for packaging agent-readable skills with your npm libraries. Auto-discovered, versioned with your code, and compatible across every major package manager.
+A CLI for library maintainers to generate, validate, and ship [Agent Skills](https://agentskills.io) alongside their npm packages. Auto-discovered, versioned with your code, and compatible with the open Agent Skills standard.
 
 ### <a href="https://tanstack.com/intent">Read the docs →</b></a>
 
