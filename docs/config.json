@@ -12,14 +12,6 @@
         {
           "label": "Overview",
           "to": "overview"
-        },
-        {
-          "label": "Installation",
-          "to": "installation"
-        },
-        {
-          "label": "Quick Start",
-          "to": "quick-start"
         }
       ]
     }
