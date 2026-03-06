@@ -91,12 +91,25 @@ async function cmdList(args: string[]): Promise<void> {
   }
 }
 
-function cmdMeta(): void {
+function cmdMeta(args: string[]): void {
   const metaDir = getMetaDir()
 
   if (!existsSync(metaDir)) {
     console.error('Meta-skills directory not found.')
     process.exit(1)
+  }
+
+  // If a specific meta-skill name is given, print its SKILL.md content
+  if (args.length > 0) {
+    const name = args[0]!
+    const skillFile = join(metaDir, name, 'SKILL.md')
+    if (!existsSync(skillFile)) {
+      console.error(`Meta-skill "${name}" not found.`)
+      console.error(`Run \`npx @tanstack/intent meta\` to list available meta-skills.`)
+      process.exit(1)
+    }
+    console.log(readFileSync(skillFile, 'utf8'))
+    return
   }
 
   const entries = readdirSync(metaDir, { withFileTypes: true })
@@ -412,7 +425,7 @@ const USAGE = `TanStack Intent CLI
 
 Usage:
   intent list [--json]           Discover intent-enabled packages
-  intent meta                    List meta-skills for maintainers
+  intent meta [name]             List meta-skills, or print one by name
   intent validate [<dir>]        Validate skill files (default: skills/)
   intent install                  Print a skill that guides your coding agent to set up skill-to-task mappings
   intent scaffold                Print maintainer scaffold prompt
@@ -429,7 +442,7 @@ switch (command) {
     await cmdList(commandArgs)
     break
   case 'meta':
-    cmdMeta()
+    cmdMeta(commandArgs)
     break
   case 'validate':
     cmdValidate(commandArgs)
