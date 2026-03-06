@@ -91,12 +91,36 @@ async function cmdList(args: string[]): Promise<void> {
   }
 }
 
-function cmdMeta(): void {
+function cmdMeta(args: string[]): void {
   const metaDir = getMetaDir()
 
   if (!existsSync(metaDir)) {
     console.error('Meta-skills directory not found.')
     process.exit(1)
+  }
+
+  if (args.length > 0) {
+    const name = args[0]!
+    if (name.includes('..') || name.includes('/') || name.includes('\\')) {
+      console.error(`Invalid meta-skill name: "${name}"`)
+      process.exit(1)
+    }
+    const skillFile = join(metaDir, name, 'SKILL.md')
+    if (!existsSync(skillFile)) {
+      console.error(`Meta-skill "${name}" not found.`)
+      console.error(
+        `Run \`npx @tanstack/intent meta\` to list available meta-skills.`,
+      )
+      process.exit(1)
+    }
+    try {
+      console.log(readFileSync(skillFile, 'utf8'))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`Failed to read meta-skill "${name}": ${msg}`)
+      process.exit(1)
+    }
+    return
   }
 
   const entries = readdirSync(metaDir, { withFileTypes: true })
@@ -397,7 +421,7 @@ This produces: individual SKILL.md files.
 3. For each publishable package, run: \`npx @tanstack/intent add-library-bin\`
 4. For each publishable package, run: \`npx @tanstack/intent edit-package-json\`
 5. Ensure each package has \`@tanstack/intent\` as a devDependency
-6. Create a \`feedback:<skill-name>\` label on the GitHub repo for each skill (use \`gh label create\`)
+6. Create a \`skill:<skill-name>\` label on the GitHub repo for each skill (use \`gh label create\`)
 7. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent install\`"
 `
 
@@ -412,7 +436,7 @@ const USAGE = `TanStack Intent CLI
 
 Usage:
   intent list [--json]           Discover intent-enabled packages
-  intent meta                    List meta-skills for maintainers
+  intent meta [name]             List meta-skills, or print one by name
   intent validate [<dir>]        Validate skill files (default: skills/)
   intent install                  Print a skill that guides your coding agent to set up skill-to-task mappings
   intent scaffold                Print maintainer scaffold prompt
@@ -429,7 +453,7 @@ switch (command) {
     await cmdList(commandArgs)
     break
   case 'meta':
-    cmdMeta()
+    cmdMeta(commandArgs)
     break
   case 'validate':
     cmdValidate(commandArgs)

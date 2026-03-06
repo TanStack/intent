@@ -348,7 +348,7 @@ export function submitMetaFeedback(
           '--title',
           title,
           '--label',
-          `feedback:${payload.metaSkill}`,
+          `skill:${payload.metaSkill}`,
           '--body',
           '-',
         ],
