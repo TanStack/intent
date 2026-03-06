@@ -99,9 +99,12 @@ function cmdMeta(args: string[]): void {
     process.exit(1)
   }
 
-  // If a specific meta-skill name is given, print its SKILL.md content
   if (args.length > 0) {
     const name = args[0]!
+    if (name.includes('..') || name.includes('/') || name.includes('\\')) {
+      console.error(`Invalid meta-skill name: "${name}"`)
+      process.exit(1)
+    }
     const skillFile = join(metaDir, name, 'SKILL.md')
     if (!existsSync(skillFile)) {
       console.error(`Meta-skill "${name}" not found.`)
@@ -110,7 +113,13 @@ function cmdMeta(args: string[]): void {
       )
       process.exit(1)
     }
-    console.log(readFileSync(skillFile, 'utf8'))
+    try {
+      console.log(readFileSync(skillFile, 'utf8'))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`Failed to read meta-skill "${name}": ${msg}`)
+      process.exit(1)
+    }
     return
   }
 
@@ -412,7 +421,7 @@ This produces: individual SKILL.md files.
 3. For each publishable package, run: \`npx @tanstack/intent add-library-bin\`
 4. For each publishable package, run: \`npx @tanstack/intent edit-package-json\`
 5. Ensure each package has \`@tanstack/intent\` as a devDependency
-6. Create a \`feedback:<skill-name>\` label on the GitHub repo for each skill (use \`gh label create\`)
+6. Create a \`skill:<skill-name>\` label on the GitHub repo for each skill (use \`gh label create\`)
 7. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent install\`"
 `
 

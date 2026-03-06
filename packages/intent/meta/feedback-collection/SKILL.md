@@ -198,7 +198,7 @@ not contain project-specific details. Before submission:
 Submit directly as a GitHub issue:
 
 ```bash
-gh issue create --repo [owner/repo] --title "Skill Feedback: [skill-name] ([rating])" --label "feedback:[skill-name]" --body-file intent-feedback.md
+gh issue create --repo [owner/repo] --title "Skill Feedback: [skill-name] ([rating])" --label "skill:[skill-name]" --body-file intent-feedback.md
 ```
 
 If the label doesn't exist, omit the `--label` flag — don't let a missing
