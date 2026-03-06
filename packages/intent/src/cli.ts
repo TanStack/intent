@@ -105,7 +105,9 @@ function cmdMeta(args: string[]): void {
     const skillFile = join(metaDir, name, 'SKILL.md')
     if (!existsSync(skillFile)) {
       console.error(`Meta-skill "${name}" not found.`)
-      console.error(`Run \`npx @tanstack/intent meta\` to list available meta-skills.`)
+      console.error(
+        `Run \`npx @tanstack/intent meta\` to list available meta-skills.`,
+      )
       process.exit(1)
     }
     console.log(readFileSync(skillFile, 'utf8'))
