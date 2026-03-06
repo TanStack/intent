@@ -29,7 +29,17 @@ can be improved.
 
 Review your own session transcript. No human interaction needed yet.
 
-### 1a: Gap detection
+### 1a: Skills inventory
+
+Before analyzing gaps and errors, inventory all skills that were available
+during the session:
+
+- **Loaded and used:** Skills you read and actively followed.
+- **Available but not loaded:** Skills that were installed (discoverable via
+  `intent list`) but you never read. This is important — many issues stem from
+  the agent not loading the right skill, not from the skill itself being wrong.
+
+### 1b: Gap detection
 
 Identify moments where the skill was silent and you had to bridge the gap
 yourself — via code reading, search, trial-and-error, or general knowledge.
@@ -40,7 +50,7 @@ For each gap, note:
 - What the skill should have told you
 - How you solved it (code reading, web search, guessing)
 
-### 1b: Error/correction tracking
+### 1c: Error/correction tracking
 
 Identify moments where the skill prescribed an approach that produced an error.
 
@@ -50,7 +60,7 @@ For each error, note:
 - The error or incorrect behavior that resulted
 - The fix you applied
 
-### 1c: Human intervention events
+### 1d: Human intervention events
 
 Identify moments where the human clarified, corrected, or overrode your approach.
 
@@ -60,7 +70,7 @@ For each intervention, note:
 - What the human said or changed
 - Whether the skill could have prevented this
 
-### 1d: Step duration anomalies
+### 1e: Step duration anomalies
 
 Identify steps that consumed disproportionate effort compared to their apparent
 complexity. These signal that the skill should provide a template, snippet, or
@@ -107,21 +117,29 @@ referenced.
 
 [one-sentence summary of what the human asked you to do]
 
+## Skills Inventory
+
+**Loaded and used:**
+- [list each skill the agent read and actively followed during the session]
+
+**Available but not loaded:**
+- [list skills that were installed/available but the agent never read]
+
 ## What Worked
 
 [patterns/instructions from the skill that were accurate and helpful]
 
 ## What Failed
 
-[from 1b — skill instructions that produced errors]
+[from 1c — skill instructions that produced errors]
 
 ## Missing
 
-[from 1a — gaps where the skill should have covered]
+[from 1b — gaps where the skill should have covered]
 
 ## Self-Corrections
 
-[from 1b fixes + 1c human interventions, combined]
+[from 1c fixes + 1d human interventions, combined]
 
 ## User Comments
 
@@ -136,10 +154,11 @@ referenced.
 | Package          | The npm package the skill lives in (e.g. `@tanstack/query-intent`) |
 | Skill version    | Frontmatter `metadata.version` or `library_version`                |
 | Task             | Summarize the human's original request in one sentence             |
+| Skills Inventory | Which skills were loaded vs. available but not loaded (see below) |
 | What Worked      | List skill sections/patterns that were correct and useful          |
-| What Failed      | From 1b — skill instructions that produced errors                  |
-| Missing          | From 1a — gaps where the skill was silent                          |
-| Self-Corrections | From 1b fixes + 1c human interventions, combined                   |
+| What Failed      | From 1c — skill instructions that produced errors                  |
+| Missing          | From 1b — gaps where the skill was silent                          |
+| Self-Corrections | From 1c fixes + 1d human interventions, combined                   |
 | Rating           | From Phase 2 sentiment analysis or explicit rating                 |
 | User Comments    | From Phase 2 answers, keep brief                                   |
 
