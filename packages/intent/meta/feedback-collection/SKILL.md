@@ -120,9 +120,11 @@ referenced.
 ## Skills Inventory
 
 **Loaded and used:**
+
 - [list each skill the agent read and actively followed during the session]
 
 **Available but not loaded:**
+
 - [list skills that were installed/available but the agent never read]
 
 ## What Worked
@@ -154,7 +156,7 @@ referenced.
 | Package          | The npm package the skill lives in (e.g. `@tanstack/query-intent`) |
 | Skill version    | Frontmatter `metadata.version` or `library_version`                |
 | Task             | Summarize the human's original request in one sentence             |
-| Skills Inventory | Which skills were loaded vs. available but not loaded (see below) |
+| Skills Inventory | Which skills were loaded vs. available but not loaded (see below)  |
 | What Worked      | List skill sections/patterns that were correct and useful          |
 | What Failed      | From 1c — skill instructions that produced errors                  |
 | Missing          | From 1b — gaps where the skill was silent                          |
