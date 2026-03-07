@@ -7,6 +7,7 @@
       "entry": ["scripts/*.ts"]
     },
     "packages/intent": {
+      "entry": ["src/index.ts", "src/cli.ts", "src/intent-library.ts"],
       "ignore": ["meta/**"]
     }
   }
