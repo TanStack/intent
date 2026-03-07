@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
-import type { StalenessReport, SkillStaleness } from './types.js'
 import { findSkillFiles, parseFrontmatter } from './utils.js'
+import type { SkillStaleness, StalenessReport } from './types.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -88,7 +88,7 @@ export async function checkStaleness(
       .split(sep)
       .join('/')
     return {
-      name: (fm?.name as string) ?? relName,
+      name: typeof fm?.name === 'string' ? fm.name : relName,
       filePath,
       libraryVersion: fm?.library_version as string | undefined,
       sources: Array.isArray(fm?.sources)
