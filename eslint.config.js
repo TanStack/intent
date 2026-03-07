@@ -13,10 +13,7 @@ const config = [
       'unused-imports': unusedImports,
     },
     rules: {
-      '@typescript-eslint/array-type': [
-        'error',
-        { default: 'array-simple', readonly: 'array-simple' },
-      ],
+      '@typescript-eslint/array-type': 'off',
       'import/order': 'warn',
       'no-case-declarations': 'off',
       'no-shadow': 'off',
