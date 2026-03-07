@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
@@ -39,7 +39,7 @@ describe('intent meta', () => {
       const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
       expect(match, `${entry.name} should have frontmatter`).not.toBeNull()
 
-      const fm = parseYaml(match![1]) as Record<string, unknown>
+      const fm = parseYaml((match as any)[1]) as Record<string, unknown>
       expect(
         fm.description,
         `${entry.name} should have a description`,
