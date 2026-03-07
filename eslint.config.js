@@ -5,7 +5,7 @@ import { tanstackConfig } from '@tanstack/eslint-config'
 import unusedImports from 'eslint-plugin-unused-imports'
 
 /** @type {import('eslint').Linter.Config[]} */
-export default [
+const config = [
   ...tanstackConfig,
   {
     name: 'tanstack/temp',
@@ -13,6 +13,11 @@ export default [
       'unused-imports': unusedImports,
     },
     rules: {
+      '@typescript-eslint/array-type': [
+        'error',
+        { default: 'array-simple', readonly: 'array-simple' },
+      ],
+      'import/order': 'warn',
       'no-case-declarations': 'off',
       'no-shadow': 'off',
       'unused-imports/no-unused-imports': 'warn',
@@ -21,3 +26,5 @@ export default [
     },
   },
 ]
+
+export default config
