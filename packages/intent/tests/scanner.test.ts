@@ -47,23 +47,23 @@ afterEach(() => {
 // ── Tests ──
 
 describe('scanForIntents', () => {
-  it('returns empty packages when no node_modules exists', async () => {
-    const result = await scanForIntents(root)
+  it('returns empty packages when no node_modules exists', () => {
+    const result = scanForIntents(root)
     expect(result.packages).toEqual([])
     expect(result.warnings).toEqual([])
   })
 
-  it('returns empty packages when node_modules has no intent packages', async () => {
+  it('returns empty packages when node_modules has no intent packages', () => {
     createDir(root, 'node_modules', 'some-lib')
     writeJson(join(root, 'node_modules', 'some-lib', 'package.json'), {
       name: 'some-lib',
       version: '1.0.0',
     })
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toEqual([])
   })
 
-  it('discovers an intent-enabled package with skills', async () => {
+  it('discovers an intent-enabled package with skills', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'db')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/db',
@@ -81,7 +81,7 @@ describe('scanForIntents', () => {
       type: 'core',
     })
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/db')
     expect(result.packages[0]!.version).toBe('0.5.2')
@@ -92,7 +92,7 @@ describe('scanForIntents', () => {
     )
   })
 
-  it('discovers packages through symlinks (pnpm layout)', async () => {
+  it('discovers packages through symlinks (pnpm layout)', () => {
     // pnpm stores packages outside node_modules and symlinks them in
     const store = createDir(root, '.pnpm-store', '@tanstack', 'db')
     writeJson(join(store, 'package.json'), {
@@ -111,13 +111,13 @@ describe('scanForIntents', () => {
     createDir(root, 'node_modules', '@tanstack')
     symlinkSync(store, join(root, 'node_modules', '@tanstack', 'db'))
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/db')
     expect(result.packages[0]!.skills).toHaveLength(1)
   })
 
-  it('discovers unscoped packages through symlinks (pnpm layout)', async () => {
+  it('discovers unscoped packages through symlinks (pnpm layout)', () => {
     const store = createDir(root, '.pnpm-store', 'my-lib')
     writeJson(join(store, 'package.json'), {
       name: 'my-lib',
@@ -130,12 +130,12 @@ describe('scanForIntents', () => {
     createDir(root, 'node_modules')
     symlinkSync(store, join(root, 'node_modules', 'my-lib'))
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('my-lib')
   })
 
-  it('discovers sub-skills', async () => {
+  it('discovers sub-skills', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'db')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/db',
@@ -150,14 +150,14 @@ describe('scanForIntents', () => {
       description: 'Queries',
     })
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages[0]!.skills).toHaveLength(2)
     const names = result.packages[0]!.skills.map((s) => s.name)
     expect(names).toContain('db-core')
     expect(names).toContain('db-core/live-queries')
   })
 
-  it('warns on skills/ dir without valid intent field', async () => {
+  it('warns on skills/ dir without valid intent field', () => {
     const pkgDir = createDir(root, 'node_modules', 'bad-pkg')
     writeJson(join(pkgDir, 'package.json'), {
       name: 'bad-pkg',
@@ -166,13 +166,13 @@ describe('scanForIntents', () => {
     })
     createDir(pkgDir, 'skills', 'some-skill')
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(0)
     expect(result.warnings).toHaveLength(1)
     expect(result.warnings[0]).toContain('bad-pkg')
   })
 
-  it('warns on invalid intent version', async () => {
+  it('warns on invalid intent version', () => {
     const pkgDir = createDir(root, 'node_modules', 'wrong-ver')
     writeJson(join(pkgDir, 'package.json'), {
       name: 'wrong-ver',
@@ -181,12 +181,12 @@ describe('scanForIntents', () => {
     })
     createDir(pkgDir, 'skills', 'some-skill')
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(0)
     expect(result.warnings).toHaveLength(1)
   })
 
-  it('sorts packages by dependency order (requires)', async () => {
+  it('sorts packages by dependency order (requires)', () => {
     // Create core package (no requires)
     const coreDir = createDir(root, 'node_modules', '@tanstack', 'db')
     writeJson(join(coreDir, 'package.json'), {
@@ -215,14 +215,14 @@ describe('scanForIntents', () => {
       description: 'React bindings',
     })
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(2)
     // Core should come first
     expect(result.packages[0]!.name).toBe('@tanstack/db')
     expect(result.packages[1]!.name).toBe('@tanstack/react-db')
   })
 
-  it('skips packages without skills/ directory', async () => {
+  it('skips packages without skills/ directory', () => {
     const pkgDir = createDir(root, 'node_modules', 'no-skills')
     writeJson(join(pkgDir, 'package.json'), {
       name: 'no-skills',
@@ -231,56 +231,55 @@ describe('scanForIntents', () => {
     })
     // No skills/ directory
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(0)
     expect(result.warnings).toHaveLength(0)
   })
 })
 
 describe('package manager detection', () => {
-  it('detects npm from package-lock.json', async () => {
+  it('detects npm from package-lock.json', () => {
     writeFileSync(join(root, 'package-lock.json'), '{}')
     createDir(root, 'node_modules')
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packageManager).toBe('npm')
   })
 
-  it('detects pnpm from pnpm-lock.yaml', async () => {
+  it('detects pnpm from pnpm-lock.yaml', () => {
     writeFileSync(join(root, 'pnpm-lock.yaml'), '')
     createDir(root, 'node_modules')
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packageManager).toBe('pnpm')
   })
 
-  it('detects yarn from yarn.lock', async () => {
+  it('detects yarn from yarn.lock', () => {
     writeFileSync(join(root, 'yarn.lock'), '')
     createDir(root, 'node_modules')
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packageManager).toBe('yarn')
   })
 
-  it('detects bun from bun.lockb', async () => {
+  it('detects bun from bun.lockb', () => {
     writeFileSync(join(root, 'bun.lockb'), '')
     createDir(root, 'node_modules')
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packageManager).toBe('bun')
   })
 
-  it('returns unknown when no lockfile found', async () => {
+  it('returns unknown when no lockfile found', () => {
     createDir(root, 'node_modules')
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packageManager).toBe('unknown')
   })
 
-  it('throws for Yarn PnP', async () => {
+  it('throws for Yarn PnP', () => {
     writeFileSync(join(root, '.pnp.cjs'), '')
-    await expect(scanForIntents(root)).rejects.toThrow('Yarn PnP')
+    expect(() => scanForIntents(root)).toThrow('Yarn PnP')
   })
 
-  it('throws for Deno without node_modules', async () => {
+  it('throws for Deno without node_modules', () => {
     writeFileSync(join(root, 'deno.json'), '{}')
-    // No node_modules dir
-    await expect(scanForIntents(root)).rejects.toThrow(
+    expect(() => scanForIntents(root)).toThrow(
       'Deno without node_modules',
     )
   })
