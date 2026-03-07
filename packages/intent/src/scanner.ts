@@ -1,13 +1,13 @@
-import type { Dirent } from 'node:fs'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
+import { parseFrontmatter } from './utils.js'
 import type {
   IntentConfig,
   IntentPackage,
   ScanResult,
   SkillEntry,
 } from './types.js'
-import { parseFrontmatter } from './utils.js'
+import type { Dirent } from 'node:fs'
 
 // ---------------------------------------------------------------------------
 // Package manager detection
@@ -118,11 +118,11 @@ function deriveIntentConfig(
 // Skill discovery within a package
 // ---------------------------------------------------------------------------
 
-function discoverSkills(skillsDir: string, _baseName: string): SkillEntry[] {
+export function discoverSkills(skillsDir: string): SkillEntry[] {
   const skills: SkillEntry[] = []
 
   function walk(dir: string): void {
-    let entries: Dirent<string>[]
+    let entries: Array<Dirent<string>>
     try {
       entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
     } catch {
@@ -187,7 +187,7 @@ function topoSort(packages: IntentPackage[]): IntentPackage[] {
 // Main scanner
 // ---------------------------------------------------------------------------
 
-export async function scanForIntents(root?: string): Promise<ScanResult> {
+export function scanForIntents(root?: string): ScanResult {
   const projectRoot = root ?? process.cwd()
   const packageManager = detectPackageManager(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')
@@ -202,7 +202,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
   // Collect all package directories to check
   const packageDirs: Array<{ dirPath: string }> = []
 
-  let topEntries: Dirent<string>[]
+  let topEntries: Array<Dirent<string>>
   try {
     topEntries = readdirSync(nodeModulesDir, {
       withFileTypes: true,
@@ -218,7 +218,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
 
     if (entry.name.startsWith('@')) {
       // Scoped package — check children
-      let scopedEntries: Dirent<string>[]
+      let scopedEntries: Array<Dirent<string>>
       try {
         scopedEntries = readdirSync(dirPath, {
           withFileTypes: true,
@@ -268,7 +268,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
     }
 
     // Discover skills
-    const skills = discoverSkills(skillsDir, pkgName)
+    const skills = discoverSkills(skillsDir)
 
     packages.push({
       name: pkgName,

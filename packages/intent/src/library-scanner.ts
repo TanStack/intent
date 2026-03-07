@@ -1,8 +1,7 @@
-import type { Dirent } from 'node:fs'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { dirname, join, relative, sep } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { discoverSkills } from './scanner.js'
 import type { SkillEntry } from './types.js'
-import { parseFrontmatter } from './utils.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,6 +33,7 @@ function readPkgJson(dir: string): Record<string, unknown> | null {
 
 function findHomeDir(scriptPath: string): string | null {
   let dir = dirname(scriptPath)
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   while (true) {
     if (existsSync(join(dir, 'package.json'))) return dir
     const parent = dirname(dir)
@@ -61,51 +61,14 @@ function getDeps(pkg: Record<string, unknown>): string[] {
   return [...seen]
 }
 
-function discoverSkills(skillsDir: string): SkillEntry[] {
-  const skills: SkillEntry[] = []
-
-  function walk(dir: string): void {
-    let entries: Dirent<string>[]
-    try {
-      entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
-    } catch {
-      return
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue
-      const childDir = join(dir, entry.name)
-      const skillFile = join(childDir, 'SKILL.md')
-      if (existsSync(skillFile)) {
-        const fm = parseFrontmatter(skillFile)
-        const relName = relative(skillsDir, childDir).split(sep).join('/')
-        skills.push({
-          name: typeof fm?.name === 'string' ? fm.name : relName,
-          path: skillFile,
-          description:
-            typeof fm?.description === 'string'
-              ? fm.description.replace(/\s+/g, ' ').trim()
-              : '',
-          type: typeof fm?.type === 'string' ? fm.type : undefined,
-          framework:
-            typeof fm?.framework === 'string' ? fm.framework : undefined,
-        })
-        walk(childDir)
-      }
-    }
-  }
-
-  walk(skillsDir)
-  return skills
-}
-
 // ---------------------------------------------------------------------------
 // Main scanner
 // ---------------------------------------------------------------------------
 
-export async function scanLibrary(
+export function scanLibrary(
   scriptPath: string,
   projectRoot?: string,
-): Promise<LibraryScanResult> {
+): LibraryScanResult {
   const nodeModulesDir = join(projectRoot ?? process.cwd(), 'node_modules')
   const packages: LibraryPackage[] = []
   const warnings: string[] = []
