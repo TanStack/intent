@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   existsSync,
   mkdirSync,
@@ -9,6 +8,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   runAddLibraryBin,
   runEditPackageJson,
@@ -22,7 +22,7 @@ function writePkg(data: Record<string, unknown>, indent?: number): void {
   writeFileSync(join(root, 'package.json'), JSON.stringify(data, null, indent))
 }
 
-function readPkg(): Record<string, unknown> {
+function readPkg(): Record<string, any> {
   return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 }
 

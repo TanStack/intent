@@ -1,13 +1,13 @@
-import type { Dirent } from 'node:fs'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
+import { parseFrontmatter } from './utils.js'
 import type {
   IntentConfig,
   IntentPackage,
   ScanResult,
   SkillEntry,
 } from './types.js'
-import { parseFrontmatter } from './utils.js'
+import type { Dirent } from 'node:fs'
 
 // ---------------------------------------------------------------------------
 // Package manager detection
@@ -118,11 +118,11 @@ function deriveIntentConfig(
 // Skill discovery within a package
 // ---------------------------------------------------------------------------
 
-function discoverSkills(skillsDir: string, _baseName: string): SkillEntry[] {
-  const skills: SkillEntry[] = []
+function discoverSkills(skillsDir: string, _baseName: string): Array<SkillEntry> {
+  const skills: Array<SkillEntry> = []
 
   function walk(dir: string): void {
-    let entries: Dirent<string>[]
+    let entries: Array<Dirent<string>>
     try {
       entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
     } catch {
@@ -161,10 +161,10 @@ function discoverSkills(skillsDir: string, _baseName: string): SkillEntry[] {
 // Topological sort on requires
 // ---------------------------------------------------------------------------
 
-function topoSort(packages: IntentPackage[]): IntentPackage[] {
+function topoSort(packages: Array<IntentPackage>): Array<IntentPackage> {
   const byName = new Map(packages.map((p) => [p.name, p]))
   const visited = new Set<string>()
-  const sorted: IntentPackage[] = []
+  const sorted: Array<IntentPackage> = []
 
   function visit(name: string): void {
     if (visited.has(name)) return
@@ -192,8 +192,8 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
   const packageManager = detectPackageManager(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')
 
-  const packages: IntentPackage[] = []
-  const warnings: string[] = []
+  const packages: Array<IntentPackage> = []
+  const warnings: Array<string> = []
 
   if (!existsSync(nodeModulesDir)) {
     return { packageManager, packages, warnings }
@@ -202,7 +202,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
   // Collect all package directories to check
   const packageDirs: Array<{ dirPath: string }> = []
 
-  let topEntries: Dirent<string>[]
+  let topEntries: Array<Dirent<string>>
   try {
     topEntries = readdirSync(nodeModulesDir, {
       withFileTypes: true,
@@ -218,7 +218,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
 
     if (entry.name.startsWith('@')) {
       // Scoped package — check children
-      let scopedEntries: Dirent<string>[]
+      let scopedEntries: Array<Dirent<string>>
       try {
         scopedEntries = readdirSync(dirPath, {
           withFileTypes: true,

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 import { computeSkillNameWidth, printSkillTree, printTable } from './display.js'
 import { scanForIntents } from './scanner.js'
-import type { ScanResult } from './types.js'
 import { findSkillFiles, parseFrontmatter } from './utils.js'
+import type { ScanResult } from './types.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -22,7 +22,7 @@ function getMetaDir(): string {
 // Commands
 // ---------------------------------------------------------------------------
 
-async function cmdList(args: string[]): Promise<void> {
+async function cmdList(args: Array<string>): Promise<void> {
   const jsonOutput = args.includes('--json')
 
   let result: ScanResult
@@ -91,7 +91,7 @@ async function cmdList(args: string[]): Promise<void> {
   }
 }
 
-function cmdMeta(args: string[]): void {
+function cmdMeta(args: Array<string>): void {
   const metaDir = getMetaDir()
 
   if (!existsSync(metaDir)) {
@@ -151,7 +151,7 @@ function cmdMeta(args: string[]): void {
   console.log(`Path: node_modules/@tanstack/intent/meta/<name>/SKILL.md`)
 }
 
-function collectPackagingWarnings(root: string): string[] {
+function collectPackagingWarnings(root: string): Array<string> {
   const pkgJsonPath = join(root, 'package.json')
   if (!existsSync(pkgJsonPath)) return []
 
@@ -163,7 +163,7 @@ function collectPackagingWarnings(root: string): string[] {
     return [`Could not parse package.json: ${msg}`]
   }
 
-  const warnings: string[] = []
+  const warnings: Array<string> = []
 
   const devDeps = pkgJson.devDependencies as Record<string, string> | undefined
   if (!devDeps?.['@tanstack/intent']) {
@@ -183,7 +183,7 @@ function collectPackagingWarnings(root: string): string[] {
     )
   }
 
-  const files = pkgJson.files as string[] | undefined
+  const files = pkgJson.files as Array<string> | undefined
   if (Array.isArray(files)) {
     if (!files.includes('skills')) {
       warnings.push(
@@ -205,7 +205,7 @@ function collectPackagingWarnings(root: string): string[] {
   return warnings
 }
 
-function cmdValidate(args: string[]): void {
+function cmdValidate(args: Array<string>): void {
   const targetDir = args[0] ?? 'skills'
   const skillsDir = join(process.cwd(), targetDir)
 
@@ -219,7 +219,7 @@ function cmdValidate(args: string[]): void {
     message: string
   }
 
-  const errors: ValidationError[] = []
+  const errors: Array<ValidationError> = []
   const skillFiles = findSkillFiles(skillsDir)
 
   if (skillFiles.length === 0) {
@@ -337,7 +337,7 @@ function cmdValidate(args: string[]): void {
 
   const warnings = collectPackagingWarnings(process.cwd())
 
-  const printWarnings = (log: (...args: unknown[]) => void): void => {
+  const printWarnings = (log: (...args: Array<unknown>) => void): void => {
     if (warnings.length === 0) return
     log(`\n⚠ Packaging warnings:`)
     for (const w of warnings) log(`  ${w}`)

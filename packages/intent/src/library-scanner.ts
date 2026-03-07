@@ -1,8 +1,8 @@
-import type { Dirent } from 'node:fs'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
-import type { SkillEntry } from './types.js'
 import { parseFrontmatter } from './utils.js'
+import type { SkillEntry } from './types.js'
+import type { Dirent } from 'node:fs'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -12,12 +12,12 @@ export interface LibraryPackage {
   name: string
   version: string
   description: string
-  skills: SkillEntry[]
+  skills: Array<SkillEntry>
 }
 
 export interface LibraryScanResult {
-  packages: LibraryPackage[]
-  warnings: string[]
+  packages: Array<LibraryPackage>
+  warnings: Array<string>
 }
 
 // ---------------------------------------------------------------------------
@@ -34,7 +34,7 @@ function readPkgJson(dir: string): Record<string, unknown> | null {
 
 function findHomeDir(scriptPath: string): string | null {
   let dir = dirname(scriptPath)
-  while (true) {
+  for (;;) {
     if (existsSync(join(dir, 'package.json'))) return dir
     const parent = dirname(dir)
     if (parent === dir) return null
@@ -48,7 +48,7 @@ function hasIntentBin(pkg: Record<string, unknown>): boolean {
   return 'intent' in (bin as Record<string, unknown>)
 }
 
-function getDeps(pkg: Record<string, unknown>): string[] {
+function getDeps(pkg: Record<string, unknown>): Array<string> {
   const seen = new Set<string>()
   for (const field of ['dependencies', 'peerDependencies']) {
     const d = pkg[field]
@@ -61,11 +61,11 @@ function getDeps(pkg: Record<string, unknown>): string[] {
   return [...seen]
 }
 
-function discoverSkills(skillsDir: string): SkillEntry[] {
-  const skills: SkillEntry[] = []
+function discoverSkills(skillsDir: string): Array<SkillEntry> {
+  const skills: Array<SkillEntry> = []
 
   function walk(dir: string): void {
-    let entries: Dirent<string>[]
+    let entries: Array<Dirent<string>>
     try {
       entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
     } catch {
@@ -107,8 +107,8 @@ export async function scanLibrary(
   projectRoot?: string,
 ): Promise<LibraryScanResult> {
   const nodeModulesDir = join(projectRoot ?? process.cwd(), 'node_modules')
-  const packages: LibraryPackage[] = []
-  const warnings: string[] = []
+  const packages: Array<LibraryPackage> = []
+  const warnings: Array<string> = []
   const visited = new Set<string>()
 
   const homeDir = findHomeDir(scriptPath)

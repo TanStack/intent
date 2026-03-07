@@ -1,12 +1,12 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
 /**
  * Recursively find all SKILL.md files under a directory.
  */
-export function findSkillFiles(dir: string): string[] {
-  const files: string[] = []
+export function findSkillFiles(dir: string): Array<string> {
+  const files: Array<string> = []
   if (!existsSync(dir)) return files
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const fullPath = join(dir, entry.name)
