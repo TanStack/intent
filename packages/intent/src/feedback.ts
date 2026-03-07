@@ -82,7 +82,7 @@ export function resolveFrequency(root: string): string {
 // Feedback payload validation
 // ---------------------------------------------------------------------------
 
-const REQUIRED_FIELDS: (keyof FeedbackPayload)[] = [
+const REQUIRED_FIELDS: Array<keyof FeedbackPayload> = [
   'skill',
   'package',
   'skillVersion',
@@ -96,19 +96,16 @@ const REQUIRED_FIELDS: (keyof FeedbackPayload)[] = [
 
 export function validatePayload(payload: unknown): {
   valid: boolean
-  errors: string[]
+  errors: Array<string>
 } {
-  const errors: string[] = []
+  const errors: Array<string> = []
   if (!payload || typeof payload !== 'object') {
     return { valid: false, errors: ['Payload must be a JSON object'] }
   }
   const obj = payload as Record<string, unknown>
 
   for (const field of REQUIRED_FIELDS) {
-    if (
-      typeof obj[field] !== 'string' ||
-      (obj[field] as string).trim() === ''
-    ) {
+    if (typeof obj[field] !== 'string' || obj[field].trim() === '') {
       errors.push(`Missing or empty required field: ${field}`)
     }
   }
@@ -138,7 +135,7 @@ export function validatePayload(payload: unknown): {
 // Meta-feedback payload validation
 // ---------------------------------------------------------------------------
 
-const META_REQUIRED_FIELDS: (keyof MetaFeedbackPayload)[] = [
+const META_REQUIRED_FIELDS: Array<keyof MetaFeedbackPayload> = [
   'metaSkill',
   'library',
   'agentUsed',
@@ -162,19 +159,16 @@ const VALID_QUALITY_RATINGS = ['good', 'mixed', 'bad']
 
 export function validateMetaPayload(payload: unknown): {
   valid: boolean
-  errors: string[]
+  errors: Array<string>
 } {
-  const errors: string[] = []
+  const errors: Array<string> = []
   if (!payload || typeof payload !== 'object') {
     return { valid: false, errors: ['Payload must be a JSON object'] }
   }
   const obj = payload as Record<string, unknown>
 
   for (const field of META_REQUIRED_FIELDS) {
-    if (
-      typeof obj[field] !== 'string' ||
-      (obj[field] as string).trim() === ''
-    ) {
+    if (typeof obj[field] !== 'string' || obj[field].trim() === '') {
       errors.push(`Missing or empty required field: ${field}`)
     }
   }

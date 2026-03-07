@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { checkStaleness } from '../src/staleness.js'
 
 // ---------------------------------------------------------------------------
@@ -118,8 +118,8 @@ describe('checkStaleness', () => {
     expect(report.skillVersion).toBe('1.2.3')
     expect(report.currentVersion).toBe('2.0.0')
     expect(report.versionDrift).toBe('major')
-    expect(report.skills[0].needsReview).toBe(true)
-    expect(report.skills[0].reasons[0]).toContain('version drift')
+    expect(report.skills[0]!.needsReview).toBe(true)
+    expect(report.skills[0]!.reasons[0]).toContain('version drift')
   })
 
   it('detects minor version drift', async () => {
@@ -168,7 +168,7 @@ describe('checkStaleness', () => {
 
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.versionDrift).toBeNull()
-    expect(report.skills[0].needsReview).toBe(false)
+    expect(report.skills[0]!.needsReview).toBe(false)
   })
 
   it('handles npm fetch failure gracefully', async () => {
@@ -206,8 +206,8 @@ describe('checkStaleness', () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
 
     const report = await checkStaleness(tmpDir, '@example/lib')
-    expect(report.skills[0].needsReview).toBe(true)
-    expect(report.skills[0].reasons).toEqual(
+    expect(report.skills[0]!.needsReview).toBe(true)
+    expect(report.skills[0]!.reasons).toEqual(
       expect.arrayContaining([expect.stringContaining('new source')]),
     )
   })
@@ -222,7 +222,7 @@ describe('checkStaleness', () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
 
     const report = await checkStaleness(tmpDir, '@example/lib')
-    expect(report.skills[0].needsReview).toBe(false)
+    expect(report.skills[0]!.needsReview).toBe(false)
   })
 
   it('handles nested skill directories', async () => {
@@ -239,8 +239,8 @@ describe('checkStaleness', () => {
 
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.skills).toHaveLength(1)
-    expect(report.skills[0].name).toBe('react/hooks')
-    expect(report.skills[0].needsReview).toBe(true)
+    expect(report.skills[0]!.name).toBe('react/hooks')
+    expect(report.skills[0]!.needsReview).toBe(true)
   })
 
   it('uses directory name when frontmatter has no name', async () => {
@@ -251,7 +251,7 @@ describe('checkStaleness', () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
 
     const report = await checkStaleness(tmpDir, '@example/lib')
-    expect(report.skills[0].name).toBe('my-skill')
+    expect(report.skills[0]!.name).toBe('my-skill')
   })
 
   it('uses skillVersion from first skill that has library_version', async () => {
@@ -281,6 +281,6 @@ describe('checkStaleness', () => {
 
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.skills).toHaveLength(1)
-    expect(report.skills[0].needsReview).toBe(false)
+    expect(report.skills[0]!.needsReview).toBe(false)
   })
 })

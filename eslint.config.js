@@ -1,11 +1,10 @@
 // @ts-check
 
-// @ts-ignore Needed due to moduleResolution Node vs Bundler
 import { tanstackConfig } from '@tanstack/eslint-config'
 import unusedImports from 'eslint-plugin-unused-imports'
 
 /** @type {import('eslint').Linter.Config[]} */
-export default [
+const config = [
   ...tanstackConfig,
   {
     name: 'tanstack/temp',
@@ -21,3 +20,5 @@ export default [
     },
   },
 ]
+
+export default config

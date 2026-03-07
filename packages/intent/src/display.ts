@@ -13,7 +13,10 @@ function padColumn(text: string, width: number): string {
   return text.length >= width ? text + '  ' : text.padEnd(width)
 }
 
-export function printTable(headers: string[], rows: string[][]): void {
+export function printTable(
+  headers: Array<string>,
+  rows: Array<Array<string>>,
+): void {
   const widths = headers.map(
     (h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)) + 2,
   )
@@ -46,11 +49,11 @@ function printSkillLine(
 }
 
 export function printSkillTree(
-  skills: SkillDisplay[],
+  skills: Array<SkillDisplay>,
   opts: { nameWidth: number; showTypes: boolean },
 ): void {
-  const roots: string[] = []
-  const children = new Map<string, SkillDisplay[]>()
+  const roots: Array<string> = []
+  const children = new Map<string, Array<SkillDisplay>>()
 
   for (const skill of skills) {
     const slashIdx = skill.name.indexOf('/')
@@ -83,7 +86,7 @@ export function printSkillTree(
 }
 
 export function computeSkillNameWidth(
-  allPackageSkills: SkillDisplay[][],
+  allPackageSkills: Array<Array<SkillDisplay>>,
 ): number {
   let max = 0
   for (const skills of allPackageSkills) {

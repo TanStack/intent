@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
@@ -44,8 +44,8 @@ function extractFrontmatter(
   if (!match) return null
 
   try {
-    const frontmatter = parseYaml(match[1]) as SkillFrontmatter
-    return { frontmatter, body: match[2] }
+    const frontmatter = parseYaml(match[1]!) as SkillFrontmatter
+    return { frontmatter, body: match[2]! }
   } catch {
     return null
   }
