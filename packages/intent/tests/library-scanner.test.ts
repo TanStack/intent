@@ -53,7 +53,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('scanLibrary', () => {
-  it('returns the home package with its skills', async () => {
+  it('returns the home package with its skills', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'router')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/router',
@@ -67,7 +67,7 @@ describe('scanLibrary', () => {
       description: 'File-based route definitions',
     })
 
-    const result = await scanLibrary(shimPath(pkgDir), root)
+    const result = scanLibrary(shimPath(pkgDir), root)
 
     expect(result.warnings).toEqual([])
     expect(result.packages).toHaveLength(1)
@@ -81,7 +81,7 @@ describe('scanLibrary', () => {
     )
   })
 
-  it('includes the full path to each SKILL.md', async () => {
+  it('includes the full path to each SKILL.md', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'router')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/router',
@@ -91,13 +91,13 @@ describe('scanLibrary', () => {
     const skillDir = createDir(pkgDir, 'skills', 'routing')
     writeSkillMd(skillDir, { name: 'routing', description: 'Routing patterns' })
 
-    const result = await scanLibrary(shimPath(pkgDir), root)
+    const result = scanLibrary(shimPath(pkgDir), root)
 
     const skill = result.packages[0]!.skills[0]!
     expect(skill.path).toBe(join(pkgDir, 'skills', 'routing', 'SKILL.md'))
   })
 
-  it('recursively discovers deps with bin.intent', async () => {
+  it('recursively discovers deps with bin.intent', () => {
     // Home package: @tanstack/router, depends on @tanstack/query
     const routerDir = createDir(root, 'node_modules', '@tanstack', 'router')
     writeJson(join(routerDir, 'package.json'), {
@@ -127,7 +127,7 @@ describe('scanLibrary', () => {
       description: 'Query and mutation patterns',
     })
 
-    const result = await scanLibrary(shimPath(routerDir), root)
+    const result = scanLibrary(shimPath(routerDir), root)
 
     expect(result.warnings).toEqual([])
     expect(result.packages).toHaveLength(2)
@@ -141,7 +141,7 @@ describe('scanLibrary', () => {
     expect(query.skills[0]!.description).toBe('Query and mutation patterns')
   })
 
-  it('discovers deps via peerDependencies', async () => {
+  it('discovers deps via peerDependencies', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'router')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/router',
@@ -159,13 +159,13 @@ describe('scanLibrary', () => {
     const querySkill = createDir(queryDir, 'skills', 'fetching')
     writeSkillMd(querySkill, { name: 'fetching', description: 'Fetching' })
 
-    const result = await scanLibrary(shimPath(pkgDir), root)
+    const result = scanLibrary(shimPath(pkgDir), root)
 
     const names = result.packages.map((p) => p.name)
     expect(names).toContain('@tanstack/query')
   })
 
-  it('skips deps without bin.intent', async () => {
+  it('skips deps without bin.intent', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'router')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/router',
@@ -183,13 +183,13 @@ describe('scanLibrary', () => {
     const reactSkill = createDir(reactDir, 'skills', 'hooks')
     writeSkillMd(reactSkill, { name: 'hooks', description: 'React hooks' })
 
-    const result = await scanLibrary(shimPath(pkgDir), root)
+    const result = scanLibrary(shimPath(pkgDir), root)
 
     const names = result.packages.map((p) => p.name)
     expect(names).not.toContain('react')
   })
 
-  it('handles packages with no skills/ directory', async () => {
+  it('handles packages with no skills/ directory', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'router')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/router',
@@ -198,13 +198,13 @@ describe('scanLibrary', () => {
     })
     // No skills/ directory
 
-    const result = await scanLibrary(shimPath(pkgDir), root)
+    const result = scanLibrary(shimPath(pkgDir), root)
 
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.skills).toEqual([])
   })
 
-  it('does not visit the same package twice (cycle detection)', async () => {
+  it('does not visit the same package twice (cycle detection)', () => {
     // router -> query -> router (circular)
     const routerDir = createDir(root, 'node_modules', '@tanstack', 'router')
     writeJson(join(routerDir, 'package.json'), {
@@ -222,7 +222,7 @@ describe('scanLibrary', () => {
       dependencies: { '@tanstack/router': '^1.0.0' }, // circular back
     })
 
-    const result = await scanLibrary(shimPath(routerDir), root)
+    const result = scanLibrary(shimPath(routerDir), root)
 
     // Each package appears exactly once
     const names = result.packages.map((p) => p.name)
@@ -230,7 +230,7 @@ describe('scanLibrary', () => {
     expect(new Set(names).size).toBe(2)
   })
 
-  it('discovers sub-skills within a package', async () => {
+  it('discovers sub-skills within a package', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'router')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/router',
@@ -248,7 +248,7 @@ describe('scanLibrary', () => {
       description: 'Nested route patterns',
     })
 
-    const result = await scanLibrary(shimPath(pkgDir), root)
+    const result = scanLibrary(shimPath(pkgDir), root)
 
     const skills = result.packages[0]!.skills
     expect(skills).toHaveLength(2)
@@ -257,10 +257,10 @@ describe('scanLibrary', () => {
     expect(names).toContain('routing/nested-routes')
   })
 
-  it('returns a warning when home package.json cannot be found', async () => {
+  it('returns a warning when home package.json cannot be found', () => {
     const fakeScript = join(root, 'nowhere', 'bin', 'intent.js')
 
-    const result = await scanLibrary(fakeScript, root)
+    const result = scanLibrary(fakeScript, root)
 
     expect(result.packages).toEqual([])
     expect(result.warnings).toHaveLength(1)

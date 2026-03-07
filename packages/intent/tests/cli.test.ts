@@ -39,7 +39,9 @@ describe('intent meta', () => {
       const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
       expect(match, `${entry.name} should have frontmatter`).not.toBeNull()
 
-      const fm = parseYaml(match![1]!) as Record<string, unknown>
+      if (!match?.[1]) continue
+
+      const fm = parseYaml(match[1]) as Record<string, unknown>
       expect(
         fm.description,
         `${entry.name} should have a description`,
@@ -51,20 +53,8 @@ describe('intent meta', () => {
 // ── Validate command logic ──
 
 describe('intent validate', () => {
-  it('finds SKILL.md files in meta directory', () => {
-    function findSkillFiles(dir: string): Array<string> {
-      const files: Array<string> = []
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const fullPath = join(dir, entry.name)
-        if (entry.isDirectory()) {
-          files.push(...findSkillFiles(fullPath))
-        } else if (entry.name === 'SKILL.md') {
-          files.push(fullPath)
-        }
-      }
-      return files
-    }
-
+  it('finds SKILL.md files in meta directory', async () => {
+    const { findSkillFiles } = await import('../src/utils.js')
     const files = findSkillFiles(metaDir)
     expect(files.length).toBeGreaterThan(0)
   })
@@ -80,7 +70,7 @@ describe('intent list --json shape', () => {
     const { tmpdir } = await import('node:os')
     const root = mkdtempSync(join(tmpdir(), 'cli-test-'))
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result).toHaveProperty('packageManager')
     expect(result).toHaveProperty('packages')
     expect(result).toHaveProperty('warnings')
