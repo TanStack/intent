@@ -6,7 +6,7 @@ export interface IntentConfig {
   version: number
   repo: string
   docs: string
-  requires?: string[]
+  requires?: Array<string>
 }
 
 // ---------------------------------------------------------------------------
@@ -15,15 +15,15 @@ export interface IntentConfig {
 
 export interface ScanResult {
   packageManager: 'npm' | 'pnpm' | 'yarn' | 'bun' | 'unknown'
-  packages: IntentPackage[]
-  warnings: string[]
+  packages: Array<IntentPackage>
+  warnings: Array<string>
 }
 
 export interface IntentPackage {
   name: string
   version: string
   intent: IntentConfig
-  skills: SkillEntry[]
+  skills: Array<SkillEntry>
 }
 
 export interface SkillEntry {
@@ -43,12 +43,12 @@ export interface StalenessReport {
   currentVersion: string | null
   skillVersion: string | null
   versionDrift: 'major' | 'minor' | 'patch' | null
-  skills: SkillStaleness[]
+  skills: Array<SkillStaleness>
 }
 
 export interface SkillStaleness {
   name: string
-  reasons: string[]
+  reasons: Array<string>
   needsReview: boolean
 }
 

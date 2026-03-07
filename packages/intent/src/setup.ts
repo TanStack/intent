@@ -17,13 +17,13 @@ export interface AddLibraryBinResult {
 }
 
 export interface EditPackageJsonResult {
-  added: string[]
-  alreadyPresent: string[]
+  added: Array<string>
+  alreadyPresent: Array<string>
 }
 
 export interface SetupGithubActionsResult {
-  workflows: string[]
-  skipped: string[]
+  workflows: Array<string>
+  skipped: Array<string>
 }
 
 interface TemplateVars {
@@ -100,9 +100,9 @@ function copyTemplates(
   srcDir: string,
   destDir: string,
   vars: TemplateVars,
-): { copied: string[]; skipped: string[] } {
-  const copied: string[] = []
-  const skipped: string[] = []
+): { copied: Array<string>; skipped: Array<string> } {
+  const copied: Array<string> = []
+  const skipped: Array<string> = []
 
   if (!existsSync(srcDir)) return { copied, skipped }
 
@@ -136,7 +136,21 @@ function getShimContent(ext: string): string {
 // Exposes the intent end-user CLI for consumers of this library.
 // Commit this file, then add to your package.json:
 //   "bin": { "intent": "./bin/intent.${ext}" }
-await import('@tanstack/intent/intent-library')
+try {
+  await import('@tanstack/intent/intent-library')
+} catch (e) {
+  if (e?.code === 'ERR_MODULE_NOT_FOUND' || e?.code === 'MODULE_NOT_FOUND') {
+    console.error('@tanstack/intent is not installed.')
+    console.error('')
+    console.error('Install it as a dev dependency:')
+    console.error('  npm add -D @tanstack/intent')
+    console.error('')
+    console.error('Or run directly:')
+    console.error('  npx @tanstack/intent@latest list')
+    process.exit(1)
+  }
+  throw e
+}
 `
 }
 
@@ -229,7 +243,7 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
   if (!Array.isArray(pkg.files)) {
     pkg.files = []
   }
-  const files = pkg.files as string[]
+  const files = pkg.files as Array<string>
 
   // In monorepos, _artifacts lives at repo root, not under packages —
   // the negation pattern is a no-op and shouldn't be added.

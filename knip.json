@@ -7,6 +7,13 @@
       "entry": ["scripts/*.ts"]
     },
     "packages/intent": {
+      "entry": [
+        "src/index.ts",
+        "src/cli.ts",
+        "src/setup.ts",
+        "src/intent-library.ts",
+        "src/library-scanner.ts"
+      ],
       "ignore": ["meta/**"]
     }
   }

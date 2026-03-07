@@ -12,7 +12,7 @@ import { scanForIntents } from '../src/scanner.js'
 
 // ── Helpers ──
 
-function createDir(...segments: string[]): string {
+function createDir(...segments: Array<string>): string {
   const dir = join(...segments)
   mkdirSync(dir, { recursive: true })
   return dir

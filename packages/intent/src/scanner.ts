@@ -1,13 +1,13 @@
-import type { Dirent } from 'node:fs'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
+import { getDeps, parseFrontmatter, resolveDepDir } from './utils.js'
 import type {
   IntentConfig,
   IntentPackage,
   ScanResult,
   SkillEntry,
 } from './types.js'
-import { parseFrontmatter } from './utils.js'
+import type { Dirent } from 'node:fs'
 
 // ---------------------------------------------------------------------------
 // Package manager detection
@@ -118,11 +118,14 @@ function deriveIntentConfig(
 // Skill discovery within a package
 // ---------------------------------------------------------------------------
 
-function discoverSkills(skillsDir: string, _baseName: string): SkillEntry[] {
-  const skills: SkillEntry[] = []
+function discoverSkills(
+  skillsDir: string,
+  _baseName: string,
+): Array<SkillEntry> {
+  const skills: Array<SkillEntry> = []
 
   function walk(dir: string): void {
-    let entries: Dirent<string>[]
+    let entries: Array<Dirent<string>>
     try {
       entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
     } catch {
@@ -161,10 +164,10 @@ function discoverSkills(skillsDir: string, _baseName: string): SkillEntry[] {
 // Topological sort on requires
 // ---------------------------------------------------------------------------
 
-function topoSort(packages: IntentPackage[]): IntentPackage[] {
+function topoSort(packages: Array<IntentPackage>): Array<IntentPackage> {
   const byName = new Map(packages.map((p) => [p.name, p]))
   const visited = new Set<string>()
-  const sorted: IntentPackage[] = []
+  const sorted: Array<IntentPackage> = []
 
   function visit(name: string): void {
     if (visited.has(name)) return
@@ -192,8 +195,8 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
   const packageManager = detectPackageManager(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')
 
-  const packages: IntentPackage[] = []
-  const warnings: string[] = []
+  const packages: Array<IntentPackage> = []
+  const warnings: Array<string> = []
 
   if (!existsSync(nodeModulesDir)) {
     return { packageManager, packages, warnings }
@@ -202,7 +205,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
   // Collect all package directories to check
   const packageDirs: Array<{ dirPath: string }> = []
 
-  let topEntries: Dirent<string>[]
+  let topEntries: Array<Dirent<string>>
   try {
     topEntries = readdirSync(nodeModulesDir, {
       withFileTypes: true,
@@ -218,7 +221,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
 
     if (entry.name.startsWith('@')) {
       // Scoped package — check children
-      let scopedEntries: Dirent<string>[]
+      let scopedEntries: Array<Dirent<string>>
       try {
         scopedEntries = readdirSync(dirPath, {
           withFileTypes: true,
@@ -236,46 +239,115 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
     }
   }
 
-  // Check each package for skills/
-  for (const { dirPath } of packageDirs) {
-    const skillsDir = join(dirPath, 'skills')
-    if (!existsSync(skillsDir)) continue
+  // Track registered package names to avoid duplicates across phases
+  const foundNames = new Set<string>()
 
-    // Has skills/ — read package.json
-    const pkgJsonPath = join(dirPath, 'package.json')
+  /**
+   * Try to register a package with a skills/ directory. Reads its
+   * package.json, validates intent config, discovers skills, and pushes
+   * to `packages`. Returns true if the package was registered.
+   */
+  function tryRegister(dirPath: string, fallbackName: string): boolean {
+    const skillsDir = join(dirPath, 'skills')
+    if (!existsSync(skillsDir)) return false
+
     let pkgJson: Record<string, unknown>
     try {
-      pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8'))
+      pkgJson = JSON.parse(readFileSync(join(dirPath, 'package.json'), 'utf8'))
     } catch {
       warnings.push(`Could not read package.json for ${dirPath}`)
-      continue
+      return false
     }
 
-    const pkgName = typeof pkgJson.name === 'string' ? pkgJson.name : 'unknown'
-    const pkgVersion =
-      typeof pkgJson.version === 'string' ? pkgJson.version : '0.0.0'
+    const name = typeof pkgJson.name === 'string' ? pkgJson.name : fallbackName
+    if (foundNames.has(name)) return false
 
-    // Validate intent field — explicit config takes priority, then derive from
-    // standard package.json fields (repository, homepage)
     const intent =
-      validateIntentField(pkgName, pkgJson.intent) ??
-      deriveIntentConfig(pkgJson)
+      validateIntentField(name, pkgJson.intent) ?? deriveIntentConfig(pkgJson)
     if (!intent) {
       warnings.push(
-        `${pkgName} has a skills/ directory but could not determine repo/docs from package.json (add a "repository" field or explicit "intent" config)`,
+        `${name} has a skills/ directory but could not determine repo/docs from package.json (add a "repository" field or explicit "intent" config)`,
       )
-      continue
+      return false
     }
 
-    // Discover skills
-    const skills = discoverSkills(skillsDir, pkgName)
-
     packages.push({
-      name: pkgName,
-      version: pkgVersion,
+      name,
+      version: typeof pkgJson.version === 'string' ? pkgJson.version : '0.0.0',
       intent,
-      skills,
+      skills: discoverSkills(skillsDir, name),
     })
+    foundNames.add(name)
+    return true
+  }
+
+  // Phase 1: Check each top-level package for skills/
+  for (const { dirPath } of packageDirs) {
+    tryRegister(dirPath, 'unknown')
+  }
+
+  // Phase 2: Walk dependency trees to discover transitive deps with skills.
+  // This handles pnpm and other non-hoisted layouts where transitive deps
+  // are not visible at the top level of node_modules.
+  const walkVisited = new Set<string>()
+
+  function walkDeps(pkgDir: string, pkgName: string): void {
+    if (walkVisited.has(pkgName)) return
+    walkVisited.add(pkgName)
+
+    let pkgJson: Record<string, unknown>
+    try {
+      pkgJson = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'))
+    } catch {
+      warnings.push(
+        `Could not read package.json for ${pkgName} (skipping dependency walk)`,
+      )
+      return
+    }
+
+    for (const depName of getDeps(pkgJson)) {
+      if (foundNames.has(depName) || walkVisited.has(depName)) continue
+
+      const depDir = resolveDepDir(depName, pkgDir, pkgName, nodeModulesDir)
+      if (!depDir) continue
+
+      tryRegister(depDir, depName)
+      walkDeps(depDir, depName)
+    }
+  }
+
+  // Walk from packages found in Phase 1
+  for (const pkg of [...packages]) {
+    walkDeps(join(nodeModulesDir, pkg.name), pkg.name)
+  }
+
+  // Walk from project's direct deps that weren't found in Phase 1
+  let projectPkg: Record<string, unknown> | null = null
+  try {
+    projectPkg = JSON.parse(
+      readFileSync(join(projectRoot, 'package.json'), 'utf8'),
+    )
+  } catch (err: unknown) {
+    const isNotFound =
+      err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err as NodeJS.ErrnoException).code === 'ENOENT'
+    if (!isNotFound) {
+      warnings.push(
+        `Could not read project package.json: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
+
+  if (projectPkg) {
+    for (const depName of getDeps(projectPkg, true)) {
+      if (walkVisited.has(depName)) continue
+      const depDir = join(nodeModulesDir, depName)
+      if (existsSync(join(depDir, 'package.json'))) {
+        walkDeps(depDir, depName)
+      }
+    }
   }
 
   // Sort by dependency order

@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
@@ -39,7 +39,7 @@ describe('intent meta', () => {
       const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
       expect(match, `${entry.name} should have frontmatter`).not.toBeNull()
 
-      const fm = parseYaml(match![1]) as Record<string, unknown>
+      const fm = parseYaml(match![1]!) as Record<string, unknown>
       expect(
         fm.description,
         `${entry.name} should have a description`,
@@ -52,8 +52,8 @@ describe('intent meta', () => {
 
 describe('intent validate', () => {
   it('finds SKILL.md files in meta directory', () => {
-    function findSkillFiles(dir: string): string[] {
-      const files: string[] = []
+    function findSkillFiles(dir: string): Array<string> {
+      const files: Array<string> = []
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const fullPath = join(dir, entry.name)
         if (entry.isDirectory()) {

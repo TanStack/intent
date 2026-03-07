@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
-import type { StalenessReport, SkillStaleness } from './types.js'
 import { findSkillFiles, parseFrontmatter } from './utils.js'
+import type { SkillStaleness, StalenessReport } from './types.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -11,7 +11,7 @@ interface SkillMeta {
   name: string
   filePath: string
   libraryVersion?: string
-  sources?: string[]
+  sources?: Array<string>
 }
 
 function classifyVersionDrift(
@@ -81,18 +81,18 @@ export async function checkStaleness(
 
   // Find all skills
   const skillFiles = findSkillFiles(skillsDir)
-  const skillMetas: SkillMeta[] = skillFiles.map((filePath) => {
+  const skillMetas: Array<SkillMeta> = skillFiles.map((filePath) => {
     const fm = parseFrontmatter(filePath)
     const relName = relative(skillsDir, filePath)
       .replace(/[/\\]SKILL\.md$/, '')
       .split(sep)
       .join('/')
     return {
-      name: (fm?.name as string) ?? relName,
+      name: typeof fm?.name === 'string' ? fm.name : relName,
       filePath,
       libraryVersion: fm?.library_version as string | undefined,
       sources: Array.isArray(fm?.sources)
-        ? (fm.sources as string[])
+        ? (fm.sources as Array<string>)
         : undefined,
     }
   })
@@ -114,8 +114,8 @@ export async function checkStaleness(
   const syncState = readSyncState(packageDir)
 
   // Build per-skill staleness
-  const skills: SkillStaleness[] = skillMetas.map((skill) => {
-    const reasons: string[] = []
+  const skills: Array<SkillStaleness> = skillMetas.map((skill) => {
+    const reasons: Array<string> = []
 
     // Version drift
     if (

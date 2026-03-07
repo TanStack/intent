@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { computeSkillNameWidth, printSkillTree, printTable } from './display.js'
-import type { LibraryScanResult } from './library-scanner.js'
 import { scanLibrary } from './library-scanner.js'
+import type { LibraryScanResult } from './library-scanner.js'
 
 // ---------------------------------------------------------------------------
 // Commands

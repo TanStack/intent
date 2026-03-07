@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   existsSync,
   mkdirSync,
@@ -8,6 +7,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   containsSecrets,
   resolveFrequency,
