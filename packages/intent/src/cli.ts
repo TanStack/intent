@@ -22,12 +22,12 @@ function getMetaDir(): string {
 // Commands
 // ---------------------------------------------------------------------------
 
-async function cmdList(args: string[]): Promise<void> {
+function cmdList(args: string[]): void {
   const jsonOutput = args.includes('--json')
 
   let result: ScanResult
   try {
-    result = await scanForIntents()
+    result = scanForIntents()
   } catch (err) {
     console.error((err as Error).message)
     process.exit(1)
@@ -450,7 +450,7 @@ const commandArgs = process.argv.slice(3)
 
 switch (command) {
   case 'list':
-    await cmdList(commandArgs)
+    cmdList(commandArgs)
     break
   case 'meta':
     cmdMeta(commandArgs)
