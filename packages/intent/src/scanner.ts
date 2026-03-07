@@ -256,8 +256,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
       return false
     }
 
-    const name =
-      typeof pkgJson.name === 'string' ? pkgJson.name : fallbackName
+    const name = typeof pkgJson.name === 'string' ? pkgJson.name : fallbackName
     if (foundNames.has(name)) return false
 
     const intent =
@@ -297,7 +296,9 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
     try {
       pkgJson = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'))
     } catch {
-      warnings.push(`Could not read package.json for ${pkgName} (skipping dependency walk)`)
+      warnings.push(
+        `Could not read package.json for ${pkgName} (skipping dependency walk)`,
+      )
       return
     }
 

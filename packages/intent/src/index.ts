@@ -11,7 +11,12 @@ export {
   validateMetaPayload,
   validatePayload,
 } from './feedback.js'
-export { findSkillFiles, getDeps, parseFrontmatter, resolveDepDir } from './utils.js'
+export {
+  findSkillFiles,
+  getDeps,
+  parseFrontmatter,
+  resolveDepDir,
+} from './utils.js'
 export {
   runAddLibraryBin,
   runEditPackageJson,

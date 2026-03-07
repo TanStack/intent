@@ -72,16 +72,16 @@ The feedback loop runs both directions. `npx @tanstack/intent@latest feedback` l
 
 ## CLI Commands
 
-| Command                                              | Description                                         |
-| ---------------------------------------------------- | --------------------------------------------------- |
-| `npx @tanstack/intent@latest install`                | Set up skill-to-task mappings in agent config files |
-| `npx @tanstack/intent@latest list [--json]`          | Discover intent-enabled packages                    |
-| `npx @tanstack/intent@latest meta`                   | List meta-skills for library maintainers            |
-| `npx @tanstack/intent@latest scaffold`               | Print the guided skill generation prompt            |
-| `npx @tanstack/intent@latest validate [dir]`         | Validate SKILL.md files                             |
-| `npx @tanstack/intent@latest setup-github-actions`   | Copy CI templates into your repo                    |
-| `npx @tanstack/intent@latest stale [--json]`         | Check skills for version drift                      |
-| `npx @tanstack/intent@latest feedback`               | Submit skill feedback                               |
+| Command                                            | Description                                         |
+| -------------------------------------------------- | --------------------------------------------------- |
+| `npx @tanstack/intent@latest install`              | Set up skill-to-task mappings in agent config files |
+| `npx @tanstack/intent@latest list [--json]`        | Discover intent-enabled packages                    |
+| `npx @tanstack/intent@latest meta`                 | List meta-skills for library maintainers            |
+| `npx @tanstack/intent@latest scaffold`             | Print the guided skill generation prompt            |
+| `npx @tanstack/intent@latest validate [dir]`       | Validate SKILL.md files                             |
+| `npx @tanstack/intent@latest setup-github-actions` | Copy CI templates into your repo                    |
+| `npx @tanstack/intent@latest stale [--json]`       | Check skills for version drift                      |
+| `npx @tanstack/intent@latest feedback`             | Submit skill feedback                               |
 
 ## License
 

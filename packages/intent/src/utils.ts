@@ -72,9 +72,7 @@ export function resolveDepDir(
     if (existsSync(join(nested, 'package.json'))) return nested
   } catch (err: unknown) {
     const code =
-      err &&
-      typeof err === 'object' &&
-      'code' in err
+      err && typeof err === 'object' && 'code' in err
         ? (err as NodeJS.ErrnoException).code
         : undefined
     if (code !== 'ENOENT' && code !== 'ENOTDIR') {
