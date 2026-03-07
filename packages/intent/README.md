@@ -25,15 +25,15 @@ The [Agent Skills spec](https://agentskills.io) is an open standard already adop
 Set up skill-to-task mappings in your project's agent config files (CLAUDE.md, .cursorrules, etc.):
 
 ```bash
-npx @tanstack/intent install
+npx @tanstack/intent@latest install
 ```
 
-No per-library setup. No hunting for rules files. Install the package, run `npx @tanstack/intent install`, and the agent understands the tool. Update the package, and skills update too.
+No per-library setup. No hunting for rules files. Install the package, run `npx @tanstack/intent@latest install`, and the agent understands the tool. Update the package, and skills update too.
 
 List available skills from installed packages:
 
 ```bash
-npx @tanstack/intent list
+npx @tanstack/intent@latest list
 ```
 
 ### For library maintainers
@@ -41,7 +41,7 @@ npx @tanstack/intent list
 Generate skills for your library by telling your AI coding agent to run:
 
 ```bash
-npx @tanstack/intent scaffold
+npx @tanstack/intent@latest scaffold
 ```
 
 This walks the agent through domain discovery, skill tree generation, and skill creation — one step at a time with your review at each stage.
@@ -49,39 +49,39 @@ This walks the agent through domain discovery, skill tree generation, and skill 
 Validate your skill files:
 
 ```bash
-npx @tanstack/intent validate
+npx @tanstack/intent@latest validate
 ```
 
 Check for skills that have fallen behind their sources:
 
 ```bash
-npx @tanstack/intent stale
+npx @tanstack/intent@latest stale
 ```
 
 Copy CI workflow templates into your repo so validation and staleness checks run on every push:
 
 ```bash
-npx @tanstack/intent setup-github-actions
+npx @tanstack/intent@latest setup-github-actions
 ```
 
 ## Keeping skills current
 
-The real risk with any derived artifact is staleness. `npx @tanstack/intent stale` flags skills whose source docs have changed, and CI templates catch drift before it ships.
+The real risk with any derived artifact is staleness. `npx @tanstack/intent@latest stale` flags skills whose source docs have changed, and CI templates catch drift before it ships.
 
-The feedback loop runs both directions. `npx @tanstack/intent feedback` lets users submit structured reports when a skill produces wrong output — which skill, which version, what broke. That context flows back to the maintainer, and the fix ships to everyone on the next `npm update`. Every support interaction produces an artifact that prevents the same class of problem for all future users — not just the one who reported it.
+The feedback loop runs both directions. `npx @tanstack/intent@latest feedback` lets users submit structured reports when a skill produces wrong output — which skill, which version, what broke. That context flows back to the maintainer, and the fix ships to everyone on the next `npm update`. Every support interaction produces an artifact that prevents the same class of problem for all future users — not just the one who reported it.
 
 ## CLI Commands
 
-| Command                                     | Description                                         |
-| ------------------------------------------- | --------------------------------------------------- |
-| `npx @tanstack/intent install`              | Set up skill-to-task mappings in agent config files |
-| `npx @tanstack/intent list [--json]`        | Discover intent-enabled packages                    |
-| `npx @tanstack/intent meta`                 | List meta-skills for library maintainers            |
-| `npx @tanstack/intent scaffold`             | Print the guided skill generation prompt            |
-| `npx @tanstack/intent validate [dir]`       | Validate SKILL.md files                             |
-| `npx @tanstack/intent setup-github-actions` | Copy CI templates into your repo                    |
-| `npx @tanstack/intent stale [--json]`       | Check skills for version drift                      |
-| `npx @tanstack/intent feedback`             | Submit skill feedback                               |
+| Command                                              | Description                                         |
+| ---------------------------------------------------- | --------------------------------------------------- |
+| `npx @tanstack/intent@latest install`                | Set up skill-to-task mappings in agent config files |
+| `npx @tanstack/intent@latest list [--json]`          | Discover intent-enabled packages                    |
+| `npx @tanstack/intent@latest meta`                   | List meta-skills for library maintainers            |
+| `npx @tanstack/intent@latest scaffold`               | Print the guided skill generation prompt            |
+| `npx @tanstack/intent@latest validate [dir]`         | Validate SKILL.md files                             |
+| `npx @tanstack/intent@latest setup-github-actions`   | Copy CI templates into your repo                    |
+| `npx @tanstack/intent@latest stale [--json]`         | Check skills for version drift                      |
+| `npx @tanstack/intent@latest feedback`               | Submit skill feedback                               |
 
 ## License
 

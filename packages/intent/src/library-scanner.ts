@@ -2,7 +2,7 @@ import type { Dirent } from 'node:fs'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import type { SkillEntry } from './types.js'
-import { parseFrontmatter } from './utils.js'
+import { getDeps, parseFrontmatter, resolveDepDir } from './utils.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,19 +46,6 @@ function hasIntentBin(pkg: Record<string, unknown>): boolean {
   const bin = pkg.bin
   if (!bin || typeof bin !== 'object') return false
   return 'intent' in (bin as Record<string, unknown>)
-}
-
-function getDeps(pkg: Record<string, unknown>): string[] {
-  const seen = new Set<string>()
-  for (const field of ['dependencies', 'peerDependencies']) {
-    const d = pkg[field]
-    if (d && typeof d === 'object') {
-      for (const name of Object.keys(d as Record<string, string>)) {
-        seen.add(name)
-      }
-    }
-  }
-  return [...seen]
 }
 
 function discoverSkills(skillsDir: string): SkillEntry[] {
@@ -145,8 +132,8 @@ export async function scanLibrary(
     })
 
     for (const depName of getDeps(pkg)) {
-      const depDir = join(nodeModulesDir, depName)
-      if (!existsSync(depDir)) continue
+      const depDir = resolveDepDir(depName, dir, name, nodeModulesDir)
+      if (!depDir) continue
       const depPkg = readPkgJson(depDir)
       if (depPkg && hasIntentBin(depPkg)) {
         processPackage(depName, depDir)

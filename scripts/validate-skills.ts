@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
@@ -43,7 +43,7 @@ const ALLOWED_SHELL_COMMANDS = [
   'intent list',
   'intent feedback',
   'npm install @tanstack/',
-  'npx intent',
+  'npx @tanstack/intent',
 ]
 
 // ── Helpers ──

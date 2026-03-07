@@ -422,7 +422,7 @@ This produces: individual SKILL.md files.
 4. For each publishable package, run: \`npx @tanstack/intent edit-package-json\`
 5. Ensure each package has \`@tanstack/intent\` as a devDependency
 6. Create a \`skill:<skill-name>\` label on the GitHub repo for each skill (use \`gh label create\`)
-7. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent install\`"
+7. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent@latest install\`"
 `
 
   console.log(prompt)
