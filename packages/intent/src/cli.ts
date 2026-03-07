@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 import { computeSkillNameWidth, printSkillTree, printTable } from './display.js'
 import { scanForIntents } from './scanner.js'
-import type { ScanResult } from './types.js'
 import { findSkillFiles, parseFrontmatter } from './utils.js'
+import type { ScanResult } from './types.js'
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -1,17 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
-  validateMetaPayload,
   metaToMarkdown,
   submitMetaFeedback,
+  validateMetaPayload,
 } from '../src/feedback.js'
 import type { MetaFeedbackPayload } from '../src/types.js'
 
