@@ -13,7 +13,10 @@ function padColumn(text: string, width: number): string {
   return text.length >= width ? text + '  ' : text.padEnd(width)
 }
 
-export function printTable(headers: Array<string>, rows: Array<Array<string>>): void {
+export function printTable(
+  headers: Array<string>,
+  rows: Array<Array<string>>,
+): void {
   const widths = headers.map(
     (h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)) + 2,
   )
