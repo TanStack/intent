@@ -1,13 +1,13 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { getDeps, parseFrontmatter, resolveDepDir } from './utils.js'
+import type { Dirent } from 'node:fs'
 import type {
   IntentConfig,
   IntentPackage,
   ScanResult,
   SkillEntry,
 } from './types.js'
-import type { Dirent } from 'node:fs'
 
 // ---------------------------------------------------------------------------
 // Package manager detection
