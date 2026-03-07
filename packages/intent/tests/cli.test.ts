@@ -36,10 +36,10 @@ describe('intent meta', () => {
         join(metaDir, entry.name, 'SKILL.md'),
         'utf8',
       )
-      const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/) as any
+      const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
       expect(match, `${entry.name} should have frontmatter`).not.toBeNull()
 
-      const fm = parseYaml(match[1]) as Record<string, unknown>
+      const fm = parseYaml(match![1]!) as Record<string, unknown>
       expect(
         fm.description,
         `${entry.name} should have a description`,
