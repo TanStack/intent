@@ -105,10 +105,7 @@ export function validatePayload(payload: unknown): {
   const obj = payload as Record<string, unknown>
 
   for (const field of REQUIRED_FIELDS) {
-    if (
-      typeof obj[field] !== 'string' ||
-      (obj[field]).trim() === ''
-    ) {
+    if (typeof obj[field] !== 'string' || obj[field].trim() === '') {
       errors.push(`Missing or empty required field: ${field}`)
     }
   }
@@ -171,10 +168,7 @@ export function validateMetaPayload(payload: unknown): {
   const obj = payload as Record<string, unknown>
 
   for (const field of META_REQUIRED_FIELDS) {
-    if (
-      typeof obj[field] !== 'string' ||
-      (obj[field]).trim() === ''
-    ) {
+    if (typeof obj[field] !== 'string' || obj[field].trim() === '') {
       errors.push(`Missing or empty required field: ${field}`)
     }
   }

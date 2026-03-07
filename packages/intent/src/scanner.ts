@@ -118,7 +118,10 @@ function deriveIntentConfig(
 // Skill discovery within a package
 // ---------------------------------------------------------------------------
 
-function discoverSkills(skillsDir: string, _baseName: string): Array<SkillEntry> {
+function discoverSkills(
+  skillsDir: string,
+  _baseName: string,
+): Array<SkillEntry> {
   const skills: Array<SkillEntry> = []
 
   function walk(dir: string): void {
