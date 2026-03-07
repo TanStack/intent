@@ -46,7 +46,7 @@
     "@changesets/cli": "^2.29.8",
     "@faker-js/faker": "^10.2.0",
     "@svitejs/changesets-changelog-github-compact": "^1.2.0",
-    "@tanstack/eslint-config": "0.3.4",
+    "@tanstack/eslint-config": "0.4.0",
     "@types/node": "^25.0.7",
     "eslint": "^9.39.2",
     "eslint-plugin-unused-imports": "^4.3.0",
