@@ -41,7 +41,7 @@ function extractFrontmatter(
   content: string,
 ): { frontmatter: SkillFrontmatter; body: string } | null {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)/)
-  if (!match) return null
+  if (!match || !match[1] || match[2] === undefined) return null
 
   try {
     const frontmatter = parseYaml(match[1]!) as SkillFrontmatter

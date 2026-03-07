@@ -26,6 +26,22 @@ function readPkg(): Record<string, any> {
   return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 }
 
+function readPkgBin(): Record<string, string> {
+  const bin = readPkg().bin
+  if (!bin || typeof bin !== 'object' || Array.isArray(bin)) {
+    throw new Error('Expected package.json bin to be an object')
+  }
+  return bin as Record<string, string>
+}
+
+function readPkgFiles(): string[] {
+  const files = readPkg().files
+  if (!Array.isArray(files)) {
+    throw new Error('Expected package.json files to be an array')
+  }
+  return files.filter((file): file is string => typeof file === 'string')
+}
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'setup-test-'))
   metaDir = join(root, 'meta')
@@ -118,8 +134,8 @@ describe('runEditPackageJson', () => {
       expect.arrayContaining([expect.stringMatching(/^bin\.intent/)]),
     )
 
-    const pkg = readPkg()
-    expect(pkg.bin.intent).toMatch(/\.\/bin\/intent\.(js|mjs)/)
+    const bin = readPkgBin()
+    expect(bin.intent).toMatch(/\.\/bin\/intent\.(js|mjs)/)
   })
 
   it('is idempotent — re-running does not duplicate entries', () => {
@@ -131,8 +147,7 @@ describe('runEditPackageJson', () => {
     expect(result.added).toHaveLength(0)
     expect(result.alreadyPresent.length).toBeGreaterThan(0)
 
-    const pkg = readPkg()
-    const skillsCount = pkg.files.filter((f: string) => f === 'skills').length
+    const skillsCount = readPkgFiles().filter((f) => f === 'skills').length
     expect(skillsCount).toBe(1)
   })
 
@@ -164,8 +179,7 @@ describe('runEditPackageJson', () => {
 
     runEditPackageJson(root)
 
-    const pkg = readPkg() as Record<string, unknown>
-    const bin = pkg.bin as Record<string, string>
+    const bin = readPkgBin()
     expect(bin['my-cli']).toBe('./bin/cli.js')
     expect(bin.intent).toMatch(/\.\/bin\/intent\.(js|mjs)/)
   })
@@ -175,8 +189,7 @@ describe('runEditPackageJson', () => {
 
     const result = runEditPackageJson(root)
 
-    const pkg = readPkg() as Record<string, unknown>
-    const bin = pkg.bin as Record<string, string>
+    const bin = readPkgBin()
     expect(bin['my-tool']).toBe('./dist/cli.js')
     expect(bin.intent).toMatch(/\.\/bin\/intent\.(js|mjs)/)
     expect(result.added).toEqual(
