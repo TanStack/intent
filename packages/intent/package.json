@@ -1,6 +1,6 @@
 {
   "name": "@tanstack/intent",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "Ship compositional knowledge for AI coding agents alongside your npm packages",
   "license": "MIT",
   "type": "module",
