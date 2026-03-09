@@ -184,7 +184,7 @@ web search with keywords from the "What Failed" and "Missing" sections.
 - If a **closed issue** describes a problem the skill still gets wrong
   (regression or stale skill content), reference the closed issue in the
   new feedback issue body: `Related to #[number] — this was fixed in the
-  library but the skill still describes the old behavior.`
+library but the skill still describes the old behavior.`
 - If a **discussion thread** covers the same topic, link to it in the
   feedback issue body so maintainers can see the community context.
 

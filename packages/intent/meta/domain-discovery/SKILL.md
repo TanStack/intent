@@ -264,7 +264,6 @@ sample a subset and extrapolate.
 
    **How to search.** Use `gh search issues` and `gh search prs` (or the
    GitHub web search UI) against the library's repo. Run multiple passes:
-
    - **High-engagement issues:** sort by reactions or comments to find the
      problems that affect the most developers. These are skill-worthy
      even if already fixed — agents trained on older data still hit them.
@@ -289,7 +288,6 @@ sample a subset and extrapolate.
    - Recurring themes across multiple threads (systemic confusion)
 
    **What to extract from issues/discussions:**
-
    - Frequently reported confusion patterns → candidate failure modes
    - Workarounds that developers use before a fix ships → "wrong pattern"
      examples that agents will reproduce
@@ -310,6 +308,7 @@ sample a subset and extrapolate.
    TROUBLESHOOTING.md, docs/faq, or KNOWN_ISSUES.md as proxies. Also
    scan the repo's `.github/ISSUE_TEMPLATE/` for hints about common
    issue categories.
+
 6. **Source code** — verify ambiguities from docs, check defaults, find
    assertions and invariant checks. For monorepos, read the 2–3 core
    packages deeply. For adapter packages, read one representative adapter
@@ -439,15 +438,15 @@ For each skill, extract failure modes that pass all three tests:
 
 **Where to find them:**
 
-| Source               | What to extract                                                    |
-| -------------------- | ------------------------------------------------------------------ |
-| Migration guides     | Every breaking change → old pattern is the wrong code              |
-| Doc callouts         | Any "note", "warning", "avoid" with surrounding context            |
-| Source assertions    | `throw` and `invariant()` messages describe the failure            |
-| Default values       | Undocumented or surprising defaults that cause wrong behavior      |
-| Type precision       | Source type more restrictive than docs imply                       |
-| Environment branches | `typeof window`, SSR flags, `NODE_ENV` — behavior differs silently |
-| GitHub issues        | Recurring bug reports with workarounds → wrong/correct code pairs  |
+| Source               | What to extract                                                      |
+| -------------------- | -------------------------------------------------------------------- |
+| Migration guides     | Every breaking change → old pattern is the wrong code                |
+| Doc callouts         | Any "note", "warning", "avoid" with surrounding context              |
+| Source assertions    | `throw` and `invariant()` messages describe the failure              |
+| Default values       | Undocumented or surprising defaults that cause wrong behavior        |
+| Type precision       | Source type more restrictive than docs imply                         |
+| Environment branches | `typeof window`, SSR flags, `NODE_ENV` — behavior differs silently   |
+| GitHub issues        | Recurring bug reports with workarounds → wrong/correct code pairs    |
 | GitHub discussions   | "How do I…" threads with non-obvious answers → missing skill content |
 
 Target 3 failure modes per skill minimum. Complex skills target 5–6.
