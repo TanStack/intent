@@ -1,5 +1,11 @@
 # @tanstack/intent
 
+## 0.0.15
+
+### Patch Changes
+
+- enhance SKILL.md with detailed guidance on leveraging GitHub issues and discussions for skill improvement ([#56](https://github.com/TanStack/intent/pull/56))
+
 ## 0.0.14
 
 ### Patch Changes
