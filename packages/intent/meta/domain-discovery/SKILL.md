@@ -258,13 +258,58 @@ sample a subset and extrapolate.
 3. **API reference** — scan for exports, type signatures, option shapes
 4. **Changelog for major versions** — API renames, removed exports,
    behavioral changes
-5. **GitHub issues and discussions** — scan for frequently reported
-   confusion, common misunderstandings, recurring questions. Also look
-   for what users are implicitly arguing for architecturally — not just
-   "people are confused about X" but "users keep expecting X to work
-   like Y, which reveals a tension between [design force] and [design force]."
-   If no web access, check for FAQ.md, TROUBLESHOOTING.md, or docs/faq
-   as proxies.
+5. **GitHub issues and discussions** — this is one of the highest-yield
+   sources for failure modes and skill content. Docs describe intended
+   behavior; issues reveal actual behavior and real developer confusion.
+
+   **How to search.** Use `gh search issues` and `gh search prs` (or the
+   GitHub web search UI) against the library's repo. Run multiple passes:
+
+   - **High-engagement issues:** sort by reactions or comments to find the
+     problems that affect the most developers. These are skill-worthy
+     even if already fixed — agents trained on older data still hit them.
+   - **Label-based scans:** look for labels like `bug`, `question`,
+     `documentation`, `breaking-change`, `good first issue`, `FAQ`,
+     `help wanted`. Each label category yields different signal:
+     - `bug` + `closed` → failure modes with known fixes (wrong/correct pairs)
+     - `question` → developer confusion that skills should preempt
+     - `breaking-change` → migration-boundary mistakes
+   - **Keyword searches:** search for the skill's primary APIs, hooks,
+     and config options by name. E.g. `useQuery stale` or `hydration SSR`.
+   - **Recent vs. historical:** scan the last 6–12 months of open issues
+     for current pain points. Then scan older closed issues for patterns
+     that are now fixed but still appear in agent training data.
+
+   **GitHub Discussions** are equally important when the repo uses them.
+   Discussions surface "how do I..." patterns and architectural questions
+   that issues don't capture. Search the Discussions tab (or use
+   `gh api` to query discussions) for:
+   - Unanswered or long-thread questions (signal: docs are insufficient)
+   - Threads marked as "Answered" with a non-obvious solution (skill content)
+   - Recurring themes across multiple threads (systemic confusion)
+
+   **What to extract from issues/discussions:**
+
+   - Frequently reported confusion patterns → candidate failure modes
+   - Workarounds that developers use before a fix ships → "wrong pattern"
+     examples that agents will reproduce
+   - Recurring "how do I X with Y" threads → composition skill candidates
+   - Misunderstandings about defaults or config → skill content gaps
+   - Feature requests with many upvotes that change API design → signals
+     of where the API surface is unintuitive
+   - What users are implicitly arguing for architecturally — not just
+     "people are confused about X" but "users keep expecting X to work
+     like Y, which reveals a tension between [design force] and
+     [design force]"
+
+   **What NOT to extract:** one-off bugs already fixed, feature requests
+   unrelated to current API surface, issues about build tooling or CI
+   that don't affect library usage patterns.
+
+   **Fallback.** If no web access is available, check for FAQ.md,
+   TROUBLESHOOTING.md, docs/faq, or KNOWN_ISSUES.md as proxies. Also
+   scan the repo's `.github/ISSUE_TEMPLATE/` for hints about common
+   issue categories.
 6. **Source code** — verify ambiguities from docs, check defaults, find
    assertions and invariant checks. For monorepos, read the 2–3 core
    packages deeply. For adapter packages, read one representative adapter
@@ -289,6 +334,10 @@ Log every:
   rejects a subtype of X
 - Source assertion: any `if (!x) throw`, `invariant()`, or `assert()` with
   the error message text
+- Issue/discussion pattern: any recurring confusion, workaround, or
+  misunderstanding surfaced from GitHub issues or discussions — note the
+  issue/discussion URL, the core misunderstanding, and whether it's
+  resolved or still active
 
 ### What to extract from migration guides specifically
 
@@ -398,6 +447,8 @@ For each skill, extract failure modes that pass all three tests:
 | Default values       | Undocumented or surprising defaults that cause wrong behavior      |
 | Type precision       | Source type more restrictive than docs imply                       |
 | Environment branches | `typeof window`, SSR flags, `NODE_ENV` — behavior differs silently |
+| GitHub issues        | Recurring bug reports with workarounds → wrong/correct code pairs  |
+| GitHub discussions   | "How do I…" threads with non-obvious answers → missing skill content |
 
 Target 3 failure modes per skill minimum. Complex skills target 5–6.
 
@@ -574,6 +625,12 @@ Adapt from this bank of gap-targeted question templates:
   What should an agent know about using them together?"
 - "The API reference shows [type signature], but the guide examples use
   a different shape. Which is accurate?"
+- "I found [N] GitHub issues/discussions where developers struggled with
+  [X]. The common workaround seems to be [Y] — is that the recommended
+  approach, or is there a better pattern that should be documented?"
+- "GitHub discussions show developers repeatedly asking how to combine
+  [feature A] with [feature B]. Is there an intended integration pattern,
+  or is this a gap in the current API?"
 
 ### 4c — AI-agent-specific failure modes (2–4 questions)
 

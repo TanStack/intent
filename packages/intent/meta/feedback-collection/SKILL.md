@@ -172,6 +172,25 @@ Determine the target repo from the skill's package. The repo is typically
 derivable from the `repository` field in the package's `package.json`, or
 from the `sources` field in the SKILL.md frontmatter.
 
+### Link to existing issues/discussions
+
+Before creating a new issue, search the target repo for existing issues or
+discussions that match the feedback. Use `gh search issues` or the GitHub
+web search with keywords from the "What Failed" and "Missing" sections.
+
+- If an **open issue** already describes the same problem, comment on it
+  with the feedback instead of creating a duplicate. Reference the skill
+  name and version in your comment.
+- If a **closed issue** describes a problem the skill still gets wrong
+  (regression or stale skill content), reference the closed issue in the
+  new feedback issue body: `Related to #[number] — this was fixed in the
+  library but the skill still describes the old behavior.`
+- If a **discussion thread** covers the same topic, link to it in the
+  feedback issue body so maintainers can see the community context.
+
+This prevents duplicate issues and gives maintainers richer context for
+improving skills.
+
 ### Privacy check
 
 Before submitting, determine whether the user's project is public or private.

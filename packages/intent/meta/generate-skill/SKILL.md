@@ -111,6 +111,49 @@ cannot already know:
   - Framework-specific gotchas (hydration, hook rules, provider ordering)
 - **Constraints and invariants** — ordering requirements, lifecycle rules,
   things enforced by runtime assertions
+- **Issue/discussion-sourced patterns** — real developer mistakes and
+  confusion surfaced from GitHub issues and discussions (see below)
+
+### 2b — Scan GitHub issues and discussions
+
+Before writing the skill body, search the library's GitHub repo for issues
+and discussions relevant to THIS skill's topic. This step is important for
+both initial generation and regeneration — community feedback reveals
+failure modes that docs miss.
+
+**Search strategy:**
+
+1. Search issues for the skill's primary APIs, hooks, and config options
+   by name (e.g. `useQuery invalidation`, `createRouter middleware`)
+2. Filter to high-signal threads: sort by reactions/comments, focus on
+   closed bugs with workarounds and open questions with long threads
+3. Search Discussions (if the repo uses them) for "how do I…" threads
+   related to the skill's topic
+4. Check for issues labeled `bug`, `question`, `breaking-change` that
+   mention concepts this skill covers
+
+**What to incorporate:**
+
+- **Recurring bug workarounds** → add as Common Mistakes entries with
+  wrong/correct code pairs. Cite the issue URL in the `Source` field.
+- **Frequently asked questions** → if the answer is non-obvious, add it
+  to Core Patterns or as a dedicated pattern section
+- **Misunderstandings about defaults** → add to Common Mistakes with the
+  incorrect assumption as the "wrong" pattern
+- **Resolved issues that changed behavior** → if the old behavior is
+  still in agent training data, add as a migration-boundary mistake
+
+**What NOT to incorporate:**
+
+- One-off bugs already fixed with no broader pattern
+- Feature requests for APIs that don't exist yet
+- Issues about tooling, CI, or build that don't affect library usage
+- Stale threads (>2 years old) about behavior that has fundamentally changed
+
+**Fallback:** If no web access is available, check for FAQ.md,
+TROUBLESHOOTING.md, or docs/faq in the repo. Also check whether the
+domain_map.yaml already contains issue-sourced failure modes from
+domain-discovery — use those directly.
 
 ### What NOT to extract
 
@@ -353,12 +396,20 @@ output in this order:
 When regenerating a stale skill (triggered by skill-staleness-check):
 
 1. Read the existing SKILL.md and the source diff that triggered staleness
-2. Determine which sections are affected by the change
-3. Update only affected sections — preserve all other content
-4. If a breaking change occurred, add the old pattern as a new Common
+2. Scan GitHub issues and discussions opened since the skill was last
+   generated (use `library_version` or file timestamps as the baseline).
+   Look for new failure modes, resolved confusion, or changed patterns
+   related to this skill's topic. Apply the same search strategy from
+   Step 2b but scoped to the time window since last generation.
+3. Determine which sections are affected by the source change AND by
+   any new issue/discussion findings
+4. Update only affected sections — preserve all other content
+5. If a breaking change occurred, add the old pattern as a new Common
    Mistake entry (wrong/correct pair)
-5. Bump `library_version` in frontmatter
-6. Validate the complete file against Step 5 checks
+6. If issues/discussions reveal new failure modes not in the existing
+   skill, add them to Common Mistakes with issue URLs as sources
+7. Bump `library_version` in frontmatter
+8. Validate the complete file against Step 5 checks
 
 Do not rewrite the entire skill for a minor source change. Surgical
 updates preserve review effort and reduce diff noise.
