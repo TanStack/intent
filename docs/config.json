@@ -12,6 +12,135 @@
         {
           "label": "Overview",
           "to": "overview"
+        },
+        {
+          "label": "Quick Start (Consumers)",
+          "to": "getting-started/quick-start-consumers"
+        },
+        {
+          "label": "Quick Start (Maintainers)",
+          "to": "getting-started/quick-start-maintainers"
+        }
+      ]
+    },
+    {
+      "label": "Concepts",
+      "children": [
+        {
+          "label": "What Are Skills",
+          "to": "concepts/what-are-skills"
+        },
+        {
+          "label": "Discovery",
+          "to": "concepts/discovery"
+        },
+        {
+          "label": "Staleness & Versioning",
+          "to": "concepts/staleness"
+        },
+        {
+          "label": "Feedback Loop",
+          "to": "concepts/feedback-loop"
+        },
+        {
+          "label": "Security & Trust",
+          "to": "concepts/security"
+        }
+      ]
+    },
+    {
+      "label": "Guides (Consumers)",
+      "children": [
+        {
+          "label": "Setting Up Agent Config",
+          "to": "guides/consumers/agent-config-setup"
+        },
+        {
+          "label": "Listing & Inspecting Skills",
+          "to": "guides/consumers/listing-skills"
+        },
+        {
+          "label": "Submitting Feedback",
+          "to": "guides/consumers/submitting-feedback"
+        }
+      ]
+    },
+    {
+      "label": "Guides (Maintainers)",
+      "children": [
+        {
+          "label": "Scaffolding Skills",
+          "to": "guides/maintainers/scaffolding-skills"
+        },
+        {
+          "label": "Writing Skills",
+          "to": "guides/maintainers/writing-skills"
+        },
+        {
+          "label": "Meta-Skills",
+          "to": "guides/maintainers/meta-skills"
+        },
+        {
+          "label": "Validation",
+          "to": "guides/maintainers/validation"
+        },
+        {
+          "label": "CI Integration",
+          "to": "guides/maintainers/ci-integration"
+        },
+        {
+          "label": "Responding to Feedback",
+          "to": "guides/maintainers/responding-to-feedback"
+        }
+      ]
+    },
+    {
+      "label": "CLI Reference",
+      "children": [
+        {
+          "label": "intent install",
+          "to": "cli/intent-install"
+        },
+        {
+          "label": "intent list",
+          "to": "cli/intent-list"
+        },
+        {
+          "label": "intent meta",
+          "to": "cli/intent-meta"
+        },
+        {
+          "label": "intent scaffold",
+          "to": "cli/intent-scaffold"
+        },
+        {
+          "label": "intent validate",
+          "to": "cli/intent-validate"
+        },
+        {
+          "label": "intent setup-github-actions",
+          "to": "cli/intent-setup"
+        },
+        {
+          "label": "intent stale",
+          "to": "cli/intent-stale"
+        }
+      ]
+    },
+    {
+      "label": "Specification",
+      "children": [
+        {
+          "label": "package.json Configuration",
+          "to": "specification/package-json"
+        },
+        {
+          "label": "SKILL.md Format",
+          "to": "specification/skill-format"
+        },
+        {
+          "label": "Agent Skills Compatibility",
+          "to": "specification/agent-skills-compatibility"
         }
       ]
     }

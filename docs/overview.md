@@ -5,46 +5,62 @@ id: overview
 
 `@tanstack/intent` is a CLI for shipping and consuming Agent Skills as package artifacts.
 
-Skills are published with npm packages, discovered from installed dependencies, and mapped into agent configuration in a reviewable way.
+Skills are markdown documents that teach AI coding agents how to use your library correctly. Intent versions them with your releases, ships them inside npm packages, discovers them from `node_modules`, and helps agents load them automatically when working on matching tasks.
 
-## What Intent is for
+## What Intent does
 
-Intent supports two workflows:
+Intent provides tooling for two workflows:
 
-- **Consumers (app teams):** discover skills in `node_modules` and map them into your agent config.
-- **Maintainers (library teams):** scaffold skill content, validate it, and ship it in the same release + CI pipeline as code.
+**For consumers:**
+- Discover skills from installed dependencies
+- Generate task-to-skill mappings for your agent config
+- Keep skills synchronized with library versions
 
-Across both workflows, the core capabilities are:
+**For maintainers (library teams):**
+- Scaffold skills through AI-assisted domain discovery
+- Validate SKILL.md format and packaging
+- Ship skills in the same release pipeline as code
+- Track staleness when source docs change
 
-- **Discovery:** find intent-enabled packages and their skills.
-- **Configuration:** generate instructions for an `intent-skills` mapping block.
-- **Authoring + validation:** scaffold skills and enforce `SKILL.md` + packaging rules.
-- **Staleness checks:** detect drift between skill metadata, source, and published versions.
+## How it works
 
-## Choose your path
+### Discovery and installation
 
-If you are consuming libraries:
+```bash
+npx @tanstack/intent@latest list
+```
 
-- Start with [Installation](./getting-started/installation.md)
-- Then run [Quick Start (Consumers)](./getting-started/quick-start-consumers.md)
-- Use [Setting Up Agent Config](./guides/consumers/agent-config-setup.md) and [Listing & Inspecting Skills](./guides/consumers/listing-skills.md) for ongoing usage
+Scans `node_modules` for intent-enabled packages and shows available skills with paths and descriptions.
 
-If you are publishing libraries:
+```bash
+npx @tanstack/intent@latest install
+```
 
-- Start with [Installation](./getting-started/installation.md)
-- Then run [Quick Start (Maintainers)](./getting-started/quick-start-maintainers.md)
-- Use [Scaffolding Skills](./guides/maintainers/scaffolding-skills.md), [Validation](./guides/maintainers/validation.md), and [CI Integration](./guides/maintainers/ci-integration.md)
+Prints instructions for your agent to create `intent-skills` mappings in your config files (CLAUDE.md, .cursorrules, etc.).
 
-## Core commands
+### Scaffolding and validation
 
-- `npx @tanstack/intent@latest list` discovers installed skills (`--json` for script output)
-- `npx @tanstack/intent@latest install` prints instructions for updating `intent-skills` mappings
-- `npx @tanstack/intent@latest scaffold` and `npx @tanstack/intent@latest validate` drive skill authoring + checks
-- `npx @tanstack/intent@latest stale` reports version/source drift
+```bash
+npx @tanstack/intent@latest scaffold
+```
 
-For complete command details, use the [CLI Reference](./cli/intent-list.md).
+Guides your agent through domain discovery, tree generation, and skill authoring with interactive maintainer interviews.
 
-## Where to go deeper
+```bash
+npx @tanstack/intent@latest validate
+```
 
-- **Concepts:** [What Are Skills](./concepts/what-are-skills.md), [Discovery](./concepts/discovery.md), [Staleness & Versioning](./concepts/staleness.md)
-- **Specification:** [package.json Configuration](./specification/package-json.md), [SKILL.md Format](./specification/skill-format.md)
+Enforces SKILL.md format rules and packaging requirements before publish.
+
+### Staleness tracking
+
+```bash
+npx @tanstack/intent@latest stale
+```
+
+Detects when skills reference outdated source documentation or library versions.
+
+## Next steps
+
+- **[What Are Skills](./concepts/what-are-skills.md)** — understand skill anatomy and why they matter
+- **[CLI Reference](./cli/intent-list.md)** — explore all commands
