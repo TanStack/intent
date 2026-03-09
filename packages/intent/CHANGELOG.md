@@ -1,5 +1,11 @@
 # @tanstack/intent
 
+## 0.0.17
+
+### Patch Changes
+
+- rename notify-playbooks.yml to notify-intent.yml ([`98981ed`](https://github.com/TanStack/intent/commit/98981ed166ecb4bab6234b383faaacd58c10d40c))
+
 ## 0.0.16
 
 ### Patch Changes
