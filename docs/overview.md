@@ -59,8 +59,3 @@ npx @tanstack/intent@latest stale
 ```
 
 Detects when skills reference outdated source documentation or library versions.
-
-## Next steps
-
-- **[What Are Skills](./concepts/what-are-skills.md)** — understand skill anatomy and why they matter
-- **[CLI Reference](./cli/intent-list.md)** — explore all commands

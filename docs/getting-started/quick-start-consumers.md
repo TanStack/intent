@@ -75,15 +75,6 @@ npx @tanstack/intent@latest meta feedback-collection
 
 This prints a skill that guides your agent to collect structured feedback about gaps, errors, and improvements.
 
----
-
-## Next steps
-
-- [Listing Skills](../guides/consumers/listing-skills.md) — interpret `intent list` output in detail
-- [Submitting Feedback](../guides/consumers/submitting-feedback.md) — help maintainers improve skills
-- [What Are Skills](../concepts/what-are-skills.md) — understand skill anatomy and consumption
-
-
 
 
 

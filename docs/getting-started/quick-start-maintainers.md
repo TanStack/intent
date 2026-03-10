@@ -198,16 +198,3 @@ As your library evolves:
 
 > [!TIP]
 > Create GitHub issue labels matching your skill names (`skill:core`, `skill:react`). When users file issues, tag them with the relevant skill label to track which areas need the most improvement.
-
----
-
-## Next steps
-
-- [Scaffolding Skills](../guides/maintainers/scaffolding-skills.md) — detailed workflow and phases
-- [Validation](../guides/maintainers/validation.md) — complete validation rules
-- [CI Integration](../guides/maintainers/ci-integration.md) — automated checks and workflows
-- [Writing Skills](../guides/maintainers/writing-skills.md) — SKILL.md format and conventions
-
-
-
-
