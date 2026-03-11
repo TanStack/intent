@@ -64,11 +64,19 @@ Validate your skill files:
 npm exec @tanstack/intent@latest validate
 ```
 
+In a monorepo, you can validate a package from the repo root:
+
+```bash
+pnpm dlx @tanstack/intent@latest validate packages/router/skills
+```
+
 Check for skills that have fallen behind their sources:
 
 ```bash
 pnpm dlx @tanstack/intent@latest stale
 ```
+
+From a monorepo root, `intent stale` checks every workspace package that ships skills. To scope it to one package, pass a directory like `intent stale packages/router`.
 
 Copy CI workflow templates into your repo so validation and staleness checks run on every push:
 
@@ -86,6 +94,13 @@ bunx @tanstack/intent@latest setup-github-actions
 | Deno           | Best-effort | Requires `npm:` interop and `node_modules` support |
 | Yarn PnP       | Unsupported | `@tanstack/intent` scans `node_modules`            |
 
+## Monorepos
+
+- Run `intent setup-github-actions` from either the repo root or a package directory. Intent detects the workspace root and writes workflows to the repo-level `.github/workflows/` directory.
+- Generated workflows are monorepo-aware: validation loops over workspace packages with skills, staleness checks run from the workspace root, and notify workflows watch package `src/` and docs paths.
+- Run `intent validate packages/<pkg>/skills` from the repo root to validate one package without root-level packaging warnings.
+- Run `intent stale` from the repo root to check all workspace packages with skills, or `intent stale packages/<pkg>` to check one package.
+
 ## Keeping skills current
 
 The real risk with any derived artifact is staleness. `intent stale` flags skills whose source docs have changed, and CI templates catch drift before it ships.
@@ -102,7 +117,7 @@ The feedback loop runs both directions. `intent feedback` lets users submit stru
 | `intent scaffold`             | Print the guided skill generation prompt            |
 | `intent validate [dir]`       | Validate SKILL.md files                             |
 | `intent setup-github-actions` | Copy CI templates into your repo                    |
-| `intent stale [--json]`       | Check skills for version drift                      |
+| `intent stale [dir] [--json]` | Check skills for version drift                      |
 | `intent feedback`             | Submit skill feedback                               |
 
 ## License

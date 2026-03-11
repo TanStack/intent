@@ -257,6 +257,37 @@ describe('cli commands', () => {
     )
   })
 
+  it('validates package skills from repo root without root packaging warnings', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-cli-validate-mono-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(root, 'packages', 'router', 'package.json'), {
+      name: '@tanstack/router',
+      devDependencies: { '@tanstack/intent': '^0.0.18' },
+      bin: { intent: './bin/intent.js' },
+      files: ['skills', 'bin', '!skills/_artifacts'],
+    })
+    mkdirSync(join(root, 'packages', 'router', 'bin'), { recursive: true })
+    writeFileSync(join(root, 'packages', 'router', 'bin', 'intent.js'), '')
+    writeSkillMd(join(root, 'packages', 'router', 'skills', 'db-core'), {
+      name: 'db-core',
+      description: 'Core database concepts',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', 'packages/router/skills'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('✅ Validated 1 skill files — all passed')
+    expect(output).not.toContain('@tanstack/intent is not in devDependencies')
+  })
+
   it('fails cleanly when validate is run without a skills directory', async () => {
     const root = mkdtempSync(join(tmpdir(), 'intent-cli-missing-skills-'))
     tempDirs.push(root)
@@ -298,6 +329,41 @@ describe('cli commands', () => {
     expect(errorSpy).toHaveBeenCalledWith(
       'Deno without node_modules is not yet supported. Add `"nodeModulesDir": "auto"` to your deno.json to use intent.',
     )
+  })
+
+  it('checks workspace packages for staleness from the monorepo root', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-cli-stale-mono-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(root, 'packages', 'router', 'package.json'), {
+      name: '@tanstack/router',
+    })
+    writeSkillMd(join(root, 'packages', 'router', 'skills', 'routing'), {
+      name: 'routing',
+      description: 'Routing skill',
+      library_version: '1.0.0',
+    })
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ version: '1.0.0' }),
+    } as Response)
+
+    process.chdir(root)
+
+    const exitCode = await main(['stale', '--json'])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const reports = JSON.parse(String(output)) as Array<{ library: string }>
+
+    expect(exitCode).toBe(0)
+    expect(reports).toHaveLength(1)
+    expect(reports[0]!.library).toBe('@tanstack/router')
+
+    fetchSpy.mockRestore()
   })
 })
 

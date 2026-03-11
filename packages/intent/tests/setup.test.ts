@@ -42,7 +42,11 @@ beforeEach(() => {
 
   writeFileSync(
     join(metaDir, 'templates', 'workflows', 'notify-intent.yml'),
-    'package: {{PACKAGE_NAME}}\nrepo: {{REPO}}\ndocs: {{DOCS_PATH}}\nsrc: {{SRC_PATH}}',
+    'package: {{PAYLOAD_PACKAGE}}\nrepo: {{REPO}}\npaths:\n  - {{DOCS_PATH}}\n  - {{SRC_PATH}}',
+  )
+  writeFileSync(
+    join(metaDir, 'templates', 'workflows', 'check-skills.yml'),
+    'label: {{PACKAGE_LABEL}}\ninstall: npm install -g @tanstack/intent',
   )
 })
 
@@ -259,7 +263,7 @@ describe('runSetupGithubActions', () => {
     })
 
     const result = runSetupGithubActions(root, metaDir)
-    expect(result.workflows).toHaveLength(1)
+    expect(result.workflows).toHaveLength(2)
     expect(result.skipped).toHaveLength(0)
 
     const wfContent = readFileSync(
@@ -268,12 +272,13 @@ describe('runSetupGithubActions', () => {
     )
     expect(wfContent).toContain('package: @tanstack/query')
     expect(wfContent).toContain('repo: TanStack/query')
-    expect(wfContent).toContain('docs: docs/**')
+    expect(wfContent).toContain('paths:')
+    expect(wfContent).toContain("'docs/**'")
   })
 
   it('copies templates with defaults when no package.json', () => {
     const result = runSetupGithubActions(root, metaDir)
-    expect(result.workflows).toHaveLength(1)
+    expect(result.workflows).toHaveLength(2)
 
     const wfPath = join(root, '.github', 'workflows', 'notify-intent.yml')
     expect(existsSync(wfPath)).toBe(true)
@@ -285,7 +290,7 @@ describe('runSetupGithubActions', () => {
     runSetupGithubActions(root, metaDir)
     const result = runSetupGithubActions(root, metaDir)
     expect(result.workflows).toHaveLength(0)
-    expect(result.skipped).toHaveLength(1)
+    expect(result.skipped).toHaveLength(2)
   })
 
   it('handles missing templates directory gracefully', () => {
@@ -293,6 +298,71 @@ describe('runSetupGithubActions', () => {
     mkdirSync(emptyMeta)
     const result = runSetupGithubActions(root, emptyMeta)
     expect(result.workflows).toHaveLength(0)
+  })
+
+  it('writes workflows to the workspace root with monorepo-aware substitutions', () => {
+    const monoRoot = createMonorepo({
+      packages: [
+        { name: 'router', hasSkills: true },
+        { name: 'start', hasSkills: true },
+      ],
+    })
+
+    writeFileSync(
+      join(monoRoot, 'package.json'),
+      JSON.stringify(
+        { name: '@tanstack/router', private: true, workspaces: ['packages/*'] },
+        null,
+        2,
+      ),
+    )
+    writeFileSync(
+      join(monoRoot, 'packages', 'router', 'package.json'),
+      JSON.stringify(
+        {
+          name: '@tanstack/react-router',
+          intent: { repo: 'TanStack/router', docs: 'docs/' },
+        },
+        null,
+        2,
+      ),
+    )
+    mkdirSync(join(monoRoot, 'packages', 'router', 'src'), { recursive: true })
+    mkdirSync(join(monoRoot, 'packages', 'router', 'docs'), { recursive: true })
+    mkdirSync(join(monoRoot, 'packages', 'start', 'src'), { recursive: true })
+
+    const result = runSetupGithubActions(
+      join(monoRoot, 'packages', 'router'),
+      metaDir,
+    )
+
+    expect(result.workflows).toEqual(
+      expect.arrayContaining([
+        join(monoRoot, '.github', 'workflows', 'notify-intent.yml'),
+        join(monoRoot, '.github', 'workflows', 'check-skills.yml'),
+      ]),
+    )
+    expect(
+      existsSync(join(monoRoot, 'packages', 'router', '.github', 'workflows')),
+    ).toBe(false)
+
+    const notifyContent = readFileSync(
+      join(monoRoot, '.github', 'workflows', 'notify-intent.yml'),
+      'utf8',
+    )
+    expect(notifyContent).toContain('package: @tanstack/router')
+    expect(notifyContent).toContain("- 'packages/router/docs/**'")
+    expect(notifyContent).toContain("- 'packages/router/src/**'")
+    expect(notifyContent).toContain("- 'packages/start/src/**'")
+
+    const checkContent = readFileSync(
+      join(monoRoot, '.github', 'workflows', 'check-skills.yml'),
+      'utf8',
+    )
+    expect(checkContent).toContain('label: @tanstack/router')
+    expect(checkContent).toContain('npm install -g @tanstack/intent')
+
+    rmSync(monoRoot, { recursive: true, force: true })
   })
 })
 

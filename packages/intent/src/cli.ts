@@ -279,6 +279,78 @@ function collectPackagingWarnings(root: string): Array<string> {
   return warnings
 }
 
+function resolvePackageRoot(startDir: string): string {
+  let dir = startDir
+
+  while (true) {
+    if (existsSync(join(dir, 'package.json'))) {
+      return dir
+    }
+
+    const next = dirname(dir)
+    if (next === dir) {
+      return startDir
+    }
+
+    dir = next
+  }
+}
+
+function readPackageName(root: string): string {
+  try {
+    const pkgJson = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    ) as {
+      name?: unknown
+    }
+    return typeof pkgJson.name === 'string'
+      ? pkgJson.name
+      : relative(process.cwd(), root) || 'unknown'
+  } catch {
+    return relative(process.cwd(), root) || 'unknown'
+  }
+}
+
+async function resolveStaleTargets(targetDir?: string) {
+  const resolvedRoot = targetDir
+    ? join(process.cwd(), targetDir)
+    : process.cwd()
+  const { checkStaleness } = await import('./staleness.js')
+
+  if (existsSync(join(resolvedRoot, 'skills'))) {
+    return {
+      reports: [
+        await checkStaleness(resolvedRoot, readPackageName(resolvedRoot)),
+      ],
+    }
+  }
+
+  const { findPackagesWithSkills, findWorkspaceRoot } =
+    await import('./setup.js')
+  const workspaceRoot = findWorkspaceRoot(resolvedRoot)
+  if (workspaceRoot) {
+    const packageDirs = findPackagesWithSkills(workspaceRoot)
+    if (packageDirs.length > 0) {
+      return {
+        reports: await Promise.all(
+          packageDirs.map((packageDir) =>
+            checkStaleness(packageDir, readPackageName(packageDir)),
+          ),
+        ),
+      }
+    }
+  }
+
+  const staleResult = await scanIntentsOrFail()
+  return {
+    reports: await Promise.all(
+      staleResult.packages.map((pkg) =>
+        checkStaleness(pkg.packageRoot, pkg.name),
+      ),
+    ),
+  }
+}
+
 async function cmdValidate(args: Array<string>): Promise<void> {
   const [{ parse: parseYaml }, { findSkillFiles }] = await Promise.all([
     import('yaml'),
@@ -286,6 +358,7 @@ async function cmdValidate(args: Array<string>): Promise<void> {
   ])
   const targetDir = args[0] ?? 'skills'
   const skillsDir = join(process.cwd(), targetDir)
+  const packageRoot = resolvePackageRoot(skillsDir)
 
   if (!existsSync(skillsDir)) {
     fail(`Skills directory not found: ${skillsDir}`)
@@ -411,7 +484,7 @@ async function cmdValidate(args: Array<string>): Promise<void> {
     }
   }
 
-  const warnings = collectPackagingWarnings(process.cwd())
+  const warnings = collectPackagingWarnings(packageRoot)
 
   if (errors.length > 0) {
     fail(buildValidationFailure(errors, warnings))
@@ -509,7 +582,7 @@ Usage:
   intent add-library-bin         Generate bin/intent.{js,mjs} bridge file
   intent edit-package-json       Wire package.json (files, bin) for skill publishing
   intent setup-github-actions    Copy CI workflow templates to .github/workflows/
-  intent stale                   Check skills for staleness`
+  intent stale [dir] [--json]    Check skills for staleness`
 
 const HELP_BY_COMMAND: Record<string, string> = {
   list: `${USAGE}
@@ -537,12 +610,13 @@ Print the install prompt used to set up skill-to-task mappings.`,
   scaffold: `intent scaffold
 
 Print the guided maintainer prompt for generating skills.`,
-  stale: `intent stale [--json]
+  stale: `intent stale [dir] [--json]
 
 Check installed skills for version and source drift.
 
 Examples:
   intent stale
+  intent stale packages/query
   intent stale --json`,
   'add-library-bin': `intent add-library-bin
 
@@ -609,26 +683,14 @@ export async function main(argv: Array<string> = process.argv.slice(2)) {
         return 0
       }
       case 'stale': {
-        const { checkStaleness } = await import('./staleness.js')
-        const { scanForIntents: scanStale } = await import('./scanner.js')
-        let staleResult
-        try {
-          staleResult = await scanStale()
-        } catch (err) {
-          fail((err as Error).message)
-        }
+        const jsonStale = commandArgs.includes('--json')
+        const targetDir = commandArgs.find((arg) => !arg.startsWith('-'))
+        const { reports } = await resolveStaleTargets(targetDir)
 
-        if (staleResult.packages.length === 0) {
+        if (reports.length === 0) {
           console.log('No intent-enabled packages found.')
           return 0
         }
-
-        const jsonStale = commandArgs.includes('--json')
-        const reports = await Promise.all(
-          staleResult.packages.map((pkg) => {
-            return checkStaleness(pkg.packageRoot, pkg.name)
-          }),
-        )
 
         if (jsonStale) {
           console.log(JSON.stringify(reports, null, 2))
