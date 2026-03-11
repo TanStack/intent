@@ -1,13 +1,13 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { getDeps, parseFrontmatter, resolveDepDir } from './utils.js'
+import type { Dirent } from 'node:fs'
 import type {
   IntentConfig,
   IntentPackage,
   ScanResult,
   SkillEntry,
 } from './types.js'
-import type { Dirent } from 'node:fs'
 
 // ---------------------------------------------------------------------------
 // Package manager detection
@@ -190,7 +190,7 @@ function topoSort(packages: Array<IntentPackage>): Array<IntentPackage> {
 // Main scanner
 // ---------------------------------------------------------------------------
 
-export async function scanForIntents(root?: string): Promise<ScanResult> {
+export function scanForIntents(root?: string): ScanResult {
   const projectRoot = root ?? process.cwd()
   const packageManager = detectPackageManager(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')

@@ -8,10 +8,10 @@ import type { LibraryScanResult } from './library-scanner.js'
 // Commands
 // ---------------------------------------------------------------------------
 
-async function cmdList(): Promise<void> {
+function cmdList(): void {
   let result: LibraryScanResult
   try {
-    result = await scanLibrary(process.argv[1]!)
+    result = scanLibrary(process.argv[1]!)
   } catch (err) {
     console.error((err as Error).message)
     process.exit(1)
@@ -136,7 +136,7 @@ const command = process.argv[2]
 switch (command) {
   case 'list':
   case undefined:
-    await cmdList()
+    cmdList()
     break
   case 'install':
     cmdInstall()

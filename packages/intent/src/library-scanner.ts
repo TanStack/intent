@@ -89,10 +89,10 @@ function discoverSkills(skillsDir: string): Array<SkillEntry> {
 // Main scanner
 // ---------------------------------------------------------------------------
 
-export async function scanLibrary(
+export function scanLibrary(
   scriptPath: string,
   projectRoot?: string,
-): Promise<LibraryScanResult> {
+): LibraryScanResult {
   const nodeModulesDir = join(projectRoot ?? process.cwd(), 'node_modules')
   const packages: Array<LibraryPackage> = []
   const warnings: Array<string> = []
