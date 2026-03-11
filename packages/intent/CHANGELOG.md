@@ -1,5 +1,11 @@
 # @tanstack/intent
 
+## 0.0.18
+
+### Patch Changes
+
+- Add `tanstack-intent` keyword to package.json during setup ([#63](https://github.com/TanStack/intent/pull/63))
+
 ## 0.0.17
 
 ### Patch Changes
