@@ -12,8 +12,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   runAddLibraryBin,
   runEditPackageJson,
+  runEditPackageJsonAll,
+  runAddLibraryBinAll,
   runSetupGithubActions,
 } from '../src/setup.js'
+import type { MonorepoResult, EditPackageJsonResult, AddLibraryBinResult } from '../src/setup.js'
 
 let root: string
 let metaDir: string
@@ -286,5 +289,168 @@ describe('runSetupGithubActions', () => {
     mkdirSync(emptyMeta)
     const result = runSetupGithubActions(root, emptyMeta)
     expect(result.workflows).toHaveLength(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Monorepo-aware commands
+// ---------------------------------------------------------------------------
+
+/**
+ * Helper: create a monorepo layout with pnpm-workspace.yaml,
+ * workspace packages, and optional SKILL.md files.
+ */
+function createMonorepo(opts?: {
+  usePackageJsonWorkspaces?: boolean
+  packages?: Array<{ name: string; hasSkills?: boolean }>
+}): string {
+  const monoRoot = mkdtempSync(join(tmpdir(), 'mono-test-'))
+  const packages = opts?.packages ?? [
+    { name: 'lib-a', hasSkills: true },
+    { name: 'lib-b', hasSkills: false },
+  ]
+
+  if (opts?.usePackageJsonWorkspaces) {
+    writeFileSync(
+      join(monoRoot, 'package.json'),
+      JSON.stringify(
+        { private: true, workspaces: ['packages/*'] },
+        null,
+        2,
+      ),
+    )
+  } else {
+    writeFileSync(
+      join(monoRoot, 'package.json'),
+      JSON.stringify({ private: true }, null, 2),
+    )
+    writeFileSync(
+      join(monoRoot, 'pnpm-workspace.yaml'),
+      'packages:\n  - "packages/*"\n',
+    )
+  }
+
+  for (const pkg of packages) {
+    const pkgDir = join(monoRoot, 'packages', pkg.name)
+    mkdirSync(pkgDir, { recursive: true })
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: `@scope/${pkg.name}`, files: ['dist'] }, null, 2),
+    )
+    if (pkg.hasSkills) {
+      const skillDir = join(pkgDir, 'skills', 'core', 'setup')
+      mkdirSync(skillDir, { recursive: true })
+      writeFileSync(
+        join(skillDir, 'SKILL.md'),
+        '---\nname: core/setup\ndescription: test\n---\n# Setup\n',
+      )
+    }
+  }
+
+  return monoRoot
+}
+
+describe('runEditPackageJsonAll', () => {
+  it('updates only packages with skills in pnpm monorepo', () => {
+    const monoRoot = createMonorepo()
+
+    const results = runEditPackageJsonAll(monoRoot) as Array<
+      MonorepoResult<EditPackageJsonResult>
+    >
+
+    expect(Array.isArray(results)).toBe(true)
+    expect(results).toHaveLength(1)
+    expect(results[0]!.package).toBe(join('packages', 'lib-a'))
+    expect(results[0]!.result.added).toContain('files: "skills"')
+
+    // lib-b should not have been modified
+    const libBPkg = JSON.parse(
+      readFileSync(
+        join(monoRoot, 'packages', 'lib-b', 'package.json'),
+        'utf8',
+      ),
+    )
+    expect(libBPkg.files).toEqual(['dist'])
+
+    rmSync(monoRoot, { recursive: true, force: true })
+  })
+
+  it('updates only packages with skills using package.json workspaces', () => {
+    const monoRoot = createMonorepo({ usePackageJsonWorkspaces: true })
+
+    const results = runEditPackageJsonAll(monoRoot) as Array<
+      MonorepoResult<EditPackageJsonResult>
+    >
+
+    expect(Array.isArray(results)).toBe(true)
+    expect(results).toHaveLength(1)
+    expect(results[0]!.package).toBe(join('packages', 'lib-a'))
+
+    rmSync(monoRoot, { recursive: true, force: true })
+  })
+
+  it('falls back to single-package when no workspace config exists', () => {
+    writePkg({ name: 'test-pkg', files: ['dist'] }, 2)
+
+    const result = runEditPackageJsonAll(root) as EditPackageJsonResult
+
+    expect(Array.isArray(result)).toBe(false)
+    expect(result.added).toContain('files: "skills"')
+  })
+
+  it('returns empty array when monorepo has no packages with skills', () => {
+    const monoRoot = createMonorepo({
+      packages: [
+        { name: 'lib-a', hasSkills: false },
+        { name: 'lib-b', hasSkills: false },
+      ],
+    })
+
+    const results = runEditPackageJsonAll(monoRoot)
+
+    expect(Array.isArray(results)).toBe(true)
+    expect(results).toHaveLength(0)
+
+    // Root package.json should NOT have been modified
+    const rootPkg = JSON.parse(
+      readFileSync(join(monoRoot, 'package.json'), 'utf8'),
+    )
+    expect(rootPkg.files).toBeUndefined()
+
+    rmSync(monoRoot, { recursive: true, force: true })
+  })
+})
+
+describe('runAddLibraryBinAll', () => {
+  it('generates shims only in packages with skills', () => {
+    const monoRoot = createMonorepo()
+
+    const results = runAddLibraryBinAll(monoRoot) as Array<
+      MonorepoResult<AddLibraryBinResult>
+    >
+
+    expect(Array.isArray(results)).toBe(true)
+    expect(results).toHaveLength(1)
+    expect(results[0]!.package).toBe(join('packages', 'lib-a'))
+    expect(results[0]!.result.shim).toBeTruthy()
+
+    // lib-b should not have a shim
+    expect(
+      existsSync(join(monoRoot, 'packages', 'lib-b', 'bin', 'intent.mjs')),
+    ).toBe(false)
+    expect(
+      existsSync(join(monoRoot, 'packages', 'lib-b', 'bin', 'intent.js')),
+    ).toBe(false)
+
+    rmSync(monoRoot, { recursive: true, force: true })
+  })
+
+  it('falls back to single-package when no workspace config exists', () => {
+    writePkg({ name: 'test-pkg' })
+
+    const result = runAddLibraryBinAll(root) as AddLibraryBinResult
+
+    expect(Array.isArray(result)).toBe(false)
+    expect(result.shim).toBeTruthy()
   })
 })

@@ -28,14 +28,9 @@ export interface SetupGithubActionsResult {
   skipped: Array<string>
 }
 
-export interface MonorepoEditResult {
+export interface MonorepoResult<T> {
   package: string
-  result: EditPackageJsonResult
-}
-
-export interface MonorepoBinResult {
-  package: string
-  result: AddLibraryBinResult
+  result: T
 }
 
 interface TemplateVars {
@@ -353,11 +348,7 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
 // Monorepo workspace resolution
 // ---------------------------------------------------------------------------
 
-interface WorkspaceConfig {
-  patterns: Array<string>
-}
-
-function readWorkspaceConfig(root: string): WorkspaceConfig | null {
+function readWorkspacePatterns(root: string): Array<string> | null {
   // pnpm-workspace.yaml
   const pnpmWs = join(root, 'pnpm-workspace.yaml')
   if (existsSync(pnpmWs)) {
@@ -367,9 +358,13 @@ function readWorkspaceConfig(root: string): WorkspaceConfig | null {
         unknown
       >
       if (Array.isArray(config.packages)) {
-        return { patterns: config.packages as Array<string> }
+        return config.packages as Array<string>
       }
-    } catch {}
+    } catch (err: unknown) {
+      console.error(
+        `Warning: failed to parse ${pnpmWs}: ${err instanceof Error ? err.message : err}`,
+      )
+    }
   }
 
   // package.json workspaces
@@ -378,12 +373,16 @@ function readWorkspaceConfig(root: string): WorkspaceConfig | null {
     try {
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
       if (Array.isArray(pkg.workspaces)) {
-        return { patterns: pkg.workspaces }
+        return pkg.workspaces
       }
       if (Array.isArray(pkg.workspaces?.packages)) {
-        return { patterns: pkg.workspaces.packages }
+        return pkg.workspaces.packages
       }
-    } catch {}
+    } catch (err: unknown) {
+      console.error(
+        `Warning: failed to parse ${pkgPath}: ${err instanceof Error ? err.message : err}`,
+      )
+    }
   }
 
   return null
@@ -434,8 +433,17 @@ function collectPackageDirs(dir: string, result: Array<string>): void {
   if (existsSync(join(dir, 'package.json'))) {
     result.push(dir)
   }
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name === 'node_modules') continue
+  let entries: Array<import('node:fs').Dirent>
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+  } catch (err: unknown) {
+    console.error(
+      `Warning: could not read directory ${dir}: ${err instanceof Error ? err.message : err}`,
+    )
+    return
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === 'node_modules' || entry.name.startsWith('.')) continue
     collectPackageDirs(join(dir, entry.name), result)
   }
 }
@@ -444,69 +452,58 @@ function collectPackageDirs(dir: string, result: Array<string>): void {
  * Find workspace packages that contain at least one SKILL.md file.
  */
 function findPackagesWithSkills(root: string): Array<string> {
-  const config = readWorkspaceConfig(root)
-  if (!config) return []
+  const patterns = readWorkspacePatterns(root)
+  if (!patterns) return []
 
-  const allPkgs = resolveWorkspacePackages(root, config.patterns)
-  return allPkgs.filter((dir) => {
+  return resolveWorkspacePackages(root, patterns).filter((dir) => {
     const skillsDir = join(dir, 'skills')
     return existsSync(skillsDir) && findSkillFiles(skillsDir).length > 0
   })
 }
 
 // ---------------------------------------------------------------------------
-// Command: edit-package-json (monorepo-aware)
+// Monorepo-aware command runner
 // ---------------------------------------------------------------------------
 
 /**
  * When run from a monorepo root, finds all workspace packages with SKILL.md
- * files and runs edit-package-json on each. When run from a non-root
- * directory, falls back to single-package behavior.
+ * files and runs the given command on each. Falls back to single-package
+ * behavior only when no workspace config is detected. If workspace config
+ * exists but no packages have skills, warns and returns empty.
  */
-export function runEditPackageJsonAll(
+function runForEachPackage<T>(
   root: string,
-): Array<MonorepoEditResult> | EditPackageJsonResult {
-  const pkgsWithSkills = findPackagesWithSkills(root)
+  runOne: (dir: string) => T,
+): Array<MonorepoResult<T>> | T {
+  const isMonorepo = readWorkspacePatterns(root) !== null
+  const pkgsWithSkills = isMonorepo ? findPackagesWithSkills(root) : []
+
+  if (!isMonorepo) {
+    return runOne(root)
+  }
 
   if (pkgsWithSkills.length === 0) {
-    return runEditPackageJson(root)
+    console.log('No workspace packages with skills found.')
+    return []
   }
 
-  const results: Array<MonorepoEditResult> = []
-  for (const pkgDir of pkgsWithSkills) {
+  return pkgsWithSkills.map((pkgDir) => {
     const rel = relative(root, pkgDir) || '.'
     console.log(`\n── ${rel} ──`)
-    const result = runEditPackageJson(pkgDir)
-    results.push({ package: rel, result })
-  }
-  return results
+    return { package: rel, result: runOne(pkgDir) }
+  })
 }
 
-// ---------------------------------------------------------------------------
-// Command: add-library-bin (monorepo-aware)
-// ---------------------------------------------------------------------------
+export function runEditPackageJsonAll(
+  root: string,
+): Array<MonorepoResult<EditPackageJsonResult>> | EditPackageJsonResult {
+  return runForEachPackage(root, runEditPackageJson)
+}
 
-/**
- * When run from a monorepo root, finds all workspace packages with SKILL.md
- * files and runs add-library-bin on each.
- */
 export function runAddLibraryBinAll(
   root: string,
-): Array<MonorepoBinResult> | AddLibraryBinResult {
-  const pkgsWithSkills = findPackagesWithSkills(root)
-
-  if (pkgsWithSkills.length === 0) {
-    return runAddLibraryBin(root)
-  }
-
-  const results: Array<MonorepoBinResult> = []
-  for (const pkgDir of pkgsWithSkills) {
-    const rel = relative(root, pkgDir) || '.'
-    console.log(`\n── ${rel} ──`)
-    const result = runAddLibraryBin(pkgDir)
-    results.push({ package: rel, result })
-  }
-  return results
+): Array<MonorepoResult<AddLibraryBinResult>> | AddLibraryBinResult {
+  return runForEachPackage(root, runAddLibraryBin)
 }
 
 // ---------------------------------------------------------------------------
