@@ -38,4 +38,4 @@ If no existing block is found, `AGENTS.md` is the default target.
 ## Related
 
 - [intent list](./intent-list)
-- [Setting Up Agent Config](../guides/consumers/agent-config-setup)
+- [Quick Start for Consumers](../getting-started/quick-start-consumers)
