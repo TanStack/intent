@@ -8,11 +8,13 @@ import {
   resolveDepDir,
 } from './utils.js'
 import type {
+  InstalledVariant,
   IntentConfig,
   IntentPackage,
   NodeModulesScanTarget,
   ScanResult,
   SkillEntry,
+  VersionConflict,
 } from './types.js'
 import type { Dirent } from 'node:fs'
 
@@ -212,7 +214,7 @@ function comparePackageVersions(a: string, b: string): number {
 
 function formatVariantWarning(
   name: string,
-  variants: Array<{ version: string; packageRoot: string }>,
+  variants: Array<InstalledVariant>,
   chosen: IntentPackage,
 ): string | null {
   const uniqueVersions = new Set(variants.map((variant) => variant.version))
@@ -223,6 +225,24 @@ function formatVariantWarning(
     .join(', ')
 
   return `Found ${variants.length} installed variants of ${name} across ${uniqueVersions.size} versions (${details}). Using ${chosen.version} from ${chosen.packageRoot}.`
+}
+
+function toVersionConflict(
+  packageName: string,
+  variants: Array<InstalledVariant>,
+  chosen: IntentPackage,
+): VersionConflict | null {
+  const uniqueVersions = new Set(variants.map((variant) => variant.version))
+  if (uniqueVersions.size <= 1) return null
+
+  return {
+    packageName,
+    chosen: {
+      version: chosen.version,
+      packageRoot: chosen.packageRoot,
+    },
+    variants,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -238,6 +258,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
 
   const packages: Array<IntentPackage> = []
   const warnings: Array<string> = []
+  const conflicts: Array<VersionConflict> = []
   const nodeModules: ScanResult['nodeModules'] = {
     local: {
       path: nodeModulesDir,
@@ -473,12 +494,17 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
   }
 
   if (!nodeModules.local.exists && !nodeModules.global.exists) {
-    return { packageManager, packages, warnings, nodeModules }
+    return { packageManager, packages, warnings, conflicts, nodeModules }
   }
 
   for (const pkg of packages) {
     const variants = packageVariants.get(pkg.name)
     if (!variants) continue
+
+    const conflict = toVersionConflict(pkg.name, [...variants.values()], pkg)
+    if (conflict) {
+      conflicts.push(conflict)
+    }
 
     const warning = formatVariantWarning(pkg.name, [...variants.values()], pkg)
     if (warning) {
@@ -489,5 +515,5 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
   // Sort by dependency order
   const sorted = topoSort(packages)
 
-  return { packageManager, packages: sorted, warnings, nodeModules }
+  return { packageManager, packages: sorted, warnings, conflicts, nodeModules }
 }

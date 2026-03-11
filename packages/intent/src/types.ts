@@ -17,6 +17,7 @@ export interface ScanResult {
   packageManager: 'npm' | 'pnpm' | 'yarn' | 'bun' | 'unknown'
   packages: Array<IntentPackage>
   warnings: Array<string>
+  conflicts: Array<VersionConflict>
   nodeModules: {
     local: NodeModulesScanTarget
     global: NodeModulesScanTarget
@@ -37,6 +38,17 @@ export interface IntentPackage {
   intent: IntentConfig
   skills: Array<SkillEntry>
   packageRoot: string
+}
+
+export interface InstalledVariant {
+  version: string
+  packageRoot: string
+}
+
+export interface VersionConflict {
+  packageName: string
+  chosen: InstalledVariant
+  variants: Array<InstalledVariant>
 }
 
 export interface SkillEntry {

@@ -78,6 +78,27 @@ async function cmdList(args: Array<string>): Promise<void> {
   ])
   printTable(['PACKAGE', 'VERSION', 'SKILLS', 'REQUIRES'], rows)
 
+  if (result.conflicts.length > 0) {
+    console.log(`
+Version conflicts:
+`)
+    for (const conflict of result.conflicts) {
+      const otherVariants = conflict.variants.filter(
+        (variant) => variant.packageRoot !== conflict.chosen.packageRoot,
+      )
+      console.log(
+        `  ${conflict.packageName} -> using ${conflict.chosen.version}`,
+      )
+      console.log(`    chosen: ${conflict.chosen.packageRoot}`)
+      for (const variant of otherVariants) {
+        console.log(
+          `    also found: ${variant.version} at ${variant.packageRoot}`,
+        )
+      }
+      console.log()
+    }
+  }
+
   // Skills detail
   const allSkills = result.packages.map((p) => p.skills)
   const nameWidth = computeSkillNameWidth(allSkills)

@@ -122,6 +122,7 @@ describe('cli commands', () => {
     const output = logSpy.mock.calls.at(-1)?.[0]
     const parsed = JSON.parse(String(output)) as {
       packages: Array<{ name: string; version: string; packageRoot: string }>
+      conflicts: Array<{ packageName: string }>
       warnings: Array<string>
     }
 
@@ -132,7 +133,67 @@ describe('cli commands', () => {
       version: '0.5.2',
       packageRoot: pkgDir,
     })
+    expect(parsed.conflicts).toEqual([])
     expect(parsed.warnings).toEqual([])
+  })
+
+  it('explains which package version was chosen when conflicts exist', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-cli-conflicts-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      dependencies: {
+        'consumer-a': '1.0.0',
+        'consumer-b': '1.0.0',
+      },
+    })
+
+    const consumerADir = join(root, 'node_modules', 'consumer-a')
+    const consumerBDir = join(root, 'node_modules', 'consumer-b')
+    const queryV4Dir = join(consumerADir, 'node_modules', '@tanstack', 'query')
+    const queryV5Dir = join(consumerBDir, 'node_modules', '@tanstack', 'query')
+
+    writeJson(join(consumerADir, 'package.json'), {
+      name: 'consumer-a',
+      version: '1.0.0',
+      dependencies: { '@tanstack/query': '4.0.0' },
+    })
+    writeJson(join(consumerBDir, 'package.json'), {
+      name: 'consumer-b',
+      version: '1.0.0',
+      dependencies: { '@tanstack/query': '5.0.0' },
+    })
+    writeJson(join(queryV4Dir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '4.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeJson(join(queryV5Dir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(join(queryV4Dir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query v4 skill',
+    })
+    writeSkillMd(join(queryV5Dir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query v5 skill',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['list'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('Version conflicts:')
+    expect(output).toContain('@tanstack/query -> using 5.0.0')
+    expect(output).toContain(`chosen: ${queryV5Dir}`)
+    expect(output).toContain(`also found: 4.0.0 at ${queryV4Dir}`)
   })
 
   it('validates a well-formed skills directory', async () => {
