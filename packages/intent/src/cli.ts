@@ -565,13 +565,13 @@ skills:
     break
   }
   case 'add-library-bin': {
-    const { runAddLibraryBin } = await import('./setup.js')
-    runAddLibraryBin(process.cwd())
+    const { runAddLibraryBinAll } = await import('./setup.js')
+    runAddLibraryBinAll(process.cwd())
     break
   }
   case 'edit-package-json': {
-    const { runEditPackageJson } = await import('./setup.js')
-    runEditPackageJson(process.cwd())
+    const { runEditPackageJsonAll } = await import('./setup.js')
+    runEditPackageJsonAll(process.cwd())
     break
   }
   case 'setup-github-actions': {

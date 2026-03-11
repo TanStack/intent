@@ -5,7 +5,9 @@ import {
   readdirSync,
   writeFileSync,
 } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
+import { parse as parseYaml } from 'yaml'
+import { findSkillFiles } from './utils.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,6 +26,16 @@ export interface EditPackageJsonResult {
 export interface SetupGithubActionsResult {
   workflows: Array<string>
   skipped: Array<string>
+}
+
+export interface MonorepoEditResult {
+  package: string
+  result: EditPackageJsonResult
+}
+
+export interface MonorepoBinResult {
+  package: string
+  result: AddLibraryBinResult
 }
 
 interface TemplateVars {
@@ -335,6 +347,166 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
   for (const a of result.alreadyPresent) console.log(`  Already present: ${a}`)
 
   return result
+}
+
+// ---------------------------------------------------------------------------
+// Monorepo workspace resolution
+// ---------------------------------------------------------------------------
+
+interface WorkspaceConfig {
+  patterns: Array<string>
+}
+
+function readWorkspaceConfig(root: string): WorkspaceConfig | null {
+  // pnpm-workspace.yaml
+  const pnpmWs = join(root, 'pnpm-workspace.yaml')
+  if (existsSync(pnpmWs)) {
+    try {
+      const config = parseYaml(readFileSync(pnpmWs, 'utf8')) as Record<
+        string,
+        unknown
+      >
+      if (Array.isArray(config.packages)) {
+        return { patterns: config.packages as Array<string> }
+      }
+    } catch {}
+  }
+
+  // package.json workspaces
+  const pkgPath = join(root, 'package.json')
+  if (existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+      if (Array.isArray(pkg.workspaces)) {
+        return { patterns: pkg.workspaces }
+      }
+      if (Array.isArray(pkg.workspaces?.packages)) {
+        return { patterns: pkg.workspaces.packages }
+      }
+    } catch {}
+  }
+
+  return null
+}
+
+/**
+ * Resolve workspace glob patterns to actual package directories.
+ * Handles simple patterns like "packages/*" and "packages/**".
+ * Each resolved directory must contain a package.json.
+ */
+function resolveWorkspacePackages(
+  root: string,
+  patterns: Array<string>,
+): Array<string> {
+  const dirs: Array<string> = []
+
+  for (const pattern of patterns) {
+    // Strip trailing /* or /**/* for directory resolution
+    const base = pattern.replace(/\/\*\*?(\/\*)?$/, '')
+    const baseDir = join(root, base)
+    if (!existsSync(baseDir)) continue
+
+    if (pattern.includes('**')) {
+      // Recursive: walk all subdirectories
+      collectPackageDirs(baseDir, dirs)
+    } else if (pattern.endsWith('/*')) {
+      // Single level: direct children
+      for (const entry of readdirSync(baseDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue
+        const dir = join(baseDir, entry.name)
+        if (existsSync(join(dir, 'package.json'))) {
+          dirs.push(dir)
+        }
+      }
+    } else {
+      // Exact path
+      const dir = join(root, pattern)
+      if (existsSync(join(dir, 'package.json'))) {
+        dirs.push(dir)
+      }
+    }
+  }
+
+  return dirs
+}
+
+function collectPackageDirs(dir: string, result: Array<string>): void {
+  if (existsSync(join(dir, 'package.json'))) {
+    result.push(dir)
+  }
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === 'node_modules') continue
+    collectPackageDirs(join(dir, entry.name), result)
+  }
+}
+
+/**
+ * Find workspace packages that contain at least one SKILL.md file.
+ */
+function findPackagesWithSkills(root: string): Array<string> {
+  const config = readWorkspaceConfig(root)
+  if (!config) return []
+
+  const allPkgs = resolveWorkspacePackages(root, config.patterns)
+  return allPkgs.filter((dir) => {
+    const skillsDir = join(dir, 'skills')
+    return existsSync(skillsDir) && findSkillFiles(skillsDir).length > 0
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Command: edit-package-json (monorepo-aware)
+// ---------------------------------------------------------------------------
+
+/**
+ * When run from a monorepo root, finds all workspace packages with SKILL.md
+ * files and runs edit-package-json on each. When run from a non-root
+ * directory, falls back to single-package behavior.
+ */
+export function runEditPackageJsonAll(
+  root: string,
+): Array<MonorepoEditResult> | EditPackageJsonResult {
+  const pkgsWithSkills = findPackagesWithSkills(root)
+
+  if (pkgsWithSkills.length === 0) {
+    return runEditPackageJson(root)
+  }
+
+  const results: Array<MonorepoEditResult> = []
+  for (const pkgDir of pkgsWithSkills) {
+    const rel = relative(root, pkgDir) || '.'
+    console.log(`\n── ${rel} ──`)
+    const result = runEditPackageJson(pkgDir)
+    results.push({ package: rel, result })
+  }
+  return results
+}
+
+// ---------------------------------------------------------------------------
+// Command: add-library-bin (monorepo-aware)
+// ---------------------------------------------------------------------------
+
+/**
+ * When run from a monorepo root, finds all workspace packages with SKILL.md
+ * files and runs add-library-bin on each.
+ */
+export function runAddLibraryBinAll(
+  root: string,
+): Array<MonorepoBinResult> | AddLibraryBinResult {
+  const pkgsWithSkills = findPackagesWithSkills(root)
+
+  if (pkgsWithSkills.length === 0) {
+    return runAddLibraryBin(root)
+  }
+
+  const results: Array<MonorepoBinResult> = []
+  for (const pkgDir of pkgsWithSkills) {
+    const rel = relative(root, pkgDir) || '.'
+    console.log(`\n── ${rel} ──`)
+    const result = runAddLibraryBin(pkgDir)
+    results.push({ package: rel, result })
+  }
+  return results
 }
 
 // ---------------------------------------------------------------------------
