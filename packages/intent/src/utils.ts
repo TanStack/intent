@@ -1,4 +1,11 @@
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  type Dirent,
+} from 'node:fs'
 import { dirname, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
@@ -42,6 +49,100 @@ export function getDeps(
   return [...deps]
 }
 
+export function listNodeModulesPackageDirs(
+  nodeModulesDir: string,
+): Array<string> {
+  if (!existsSync(nodeModulesDir)) return []
+
+  let topEntries: Array<Dirent<string>>
+  try {
+    topEntries = readdirSync(nodeModulesDir, {
+      withFileTypes: true,
+      encoding: 'utf8',
+    })
+  } catch {
+    return []
+  }
+
+  const packageDirs: Array<string> = []
+
+  for (const entry of topEntries) {
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+    const dirPath = join(nodeModulesDir, entry.name)
+
+    if (entry.name.startsWith('@')) {
+      let scopedEntries: Array<Dirent<string>>
+      try {
+        scopedEntries = readdirSync(dirPath, {
+          withFileTypes: true,
+          encoding: 'utf8',
+        })
+      } catch {
+        continue
+      }
+
+      for (const scoped of scopedEntries) {
+        if (!scoped.isDirectory() && !scoped.isSymbolicLink()) continue
+        packageDirs.push(join(dirPath, scoped.name))
+      }
+    } else if (!entry.name.startsWith('.')) {
+      packageDirs.push(dirPath)
+    }
+  }
+
+  return packageDirs
+}
+
+export function detectGlobalNodeModules(packageManager: string): {
+  path: string | null
+  source?: string
+} {
+  const envPath = process.env.INTENT_GLOBAL_NODE_MODULES?.trim()
+  if (envPath) {
+    return {
+      path: envPath,
+      source: 'INTENT_GLOBAL_NODE_MODULES',
+    }
+  }
+
+  const commands: Array<{
+    command: string
+    args: Array<string>
+    transform?: (output: string) => string
+  }> = []
+
+  if (packageManager === 'pnpm') {
+    commands.push({ command: 'pnpm', args: ['root', '-g'] })
+  }
+  if (packageManager === 'yarn') {
+    commands.push({
+      command: 'yarn',
+      args: ['global', 'dir'],
+      transform: (output) => join(output, 'node_modules'),
+    })
+  }
+  commands.push({ command: 'npm', args: ['root', '-g'] })
+
+  for (const candidate of commands) {
+    try {
+      const output = execFileSync(candidate.command, candidate.args, {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim()
+      if (!output) continue
+
+      return {
+        path: candidate.transform ? candidate.transform(output) : output,
+        source: `${candidate.command} ${candidate.args.join(' ')}`,
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return { path: null }
+}
+
 /**
  * Resolve the directory of a dependency by name. First checks the top-level
  * node_modules (hoisted layout — npm, yarn, bun), then resolves through the
@@ -52,13 +153,19 @@ export function resolveDepDir(
   depName: string,
   parentDir: string,
   parentName: string,
-  nodeModulesDir: string,
+  nodeModulesDirs: string | Array<string>,
 ): string | null {
   if (!parentName) return null
 
+  const roots = Array.isArray(nodeModulesDirs)
+    ? nodeModulesDirs
+    : [nodeModulesDirs]
+
   // 1. Top-level (hoisted)
-  const topLevel = join(nodeModulesDir, depName)
-  if (existsSync(join(topLevel, 'package.json'))) return topLevel
+  for (const nodeModulesDir of roots) {
+    const topLevel = join(nodeModulesDir, depName)
+    if (existsSync(join(topLevel, 'package.json'))) return topLevel
+  }
 
   // 2. Resolve through parent's real path (pnpm virtual store)
   try {

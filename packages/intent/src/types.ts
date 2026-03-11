@@ -17,6 +17,18 @@ export interface ScanResult {
   packageManager: 'npm' | 'pnpm' | 'yarn' | 'bun' | 'unknown'
   packages: Array<IntentPackage>
   warnings: Array<string>
+  nodeModules: {
+    local: NodeModulesScanTarget
+    global: NodeModulesScanTarget
+  }
+}
+
+export interface NodeModulesScanTarget {
+  path: string | null
+  detected: boolean
+  exists: boolean
+  scanned: boolean
+  source?: string
 }
 
 export interface IntentPackage {

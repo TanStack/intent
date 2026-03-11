@@ -1,9 +1,16 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
-import { getDeps, parseFrontmatter, resolveDepDir } from './utils.js'
+import {
+  detectGlobalNodeModules,
+  getDeps,
+  listNodeModulesPackageDirs,
+  parseFrontmatter,
+  resolveDepDir,
+} from './utils.js'
 import type {
   IntentConfig,
   IntentPackage,
+  NodeModulesScanTarget,
   ScanResult,
   SkillEntry,
 } from './types.js'
@@ -194,53 +201,48 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
   const projectRoot = root ?? process.cwd()
   const packageManager = detectPackageManager(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')
+  const globalNodeModules = detectGlobalNodeModules(packageManager)
 
   const packages: Array<IntentPackage> = []
   const warnings: Array<string> = []
+  const nodeModules: ScanResult['nodeModules'] = {
+    local: {
+      path: nodeModulesDir,
+      detected: true,
+      exists: existsSync(nodeModulesDir),
+      scanned: false,
+    },
+    global: {
+      path: globalNodeModules.path,
+      detected: Boolean(globalNodeModules.path),
+      exists: globalNodeModules.path
+        ? existsSync(globalNodeModules.path)
+        : false,
+      scanned: false,
+      source: globalNodeModules.source,
+    },
+  }
+  const resolutionRoots = [nodeModulesDir]
 
-  if (!existsSync(nodeModulesDir)) {
-    return { packageManager, packages, warnings }
+  if (
+    nodeModules.global.exists &&
+    nodeModules.global.path &&
+    nodeModules.global.path !== nodeModulesDir
+  ) {
+    resolutionRoots.push(nodeModules.global.path)
   }
 
-  // Collect all package directories to check
-  const packageDirs: Array<{ dirPath: string }> = []
-
-  let topEntries: Array<Dirent<string>>
-  try {
-    topEntries = readdirSync(nodeModulesDir, {
-      withFileTypes: true,
-      encoding: 'utf8',
-    })
-  } catch {
-    return { packageManager, packages, warnings }
+  if (!nodeModules.local.exists && !nodeModules.global.exists) {
+    return { packageManager, packages, warnings, nodeModules }
   }
-
-  for (const entry of topEntries) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
-    const dirPath = join(nodeModulesDir, entry.name)
-
-    if (entry.name.startsWith('@')) {
-      // Scoped package — check children
-      let scopedEntries: Array<Dirent<string>>
-      try {
-        scopedEntries = readdirSync(dirPath, {
-          withFileTypes: true,
-          encoding: 'utf8',
-        })
-      } catch {
-        continue
-      }
-      for (const scoped of scopedEntries) {
-        if (!scoped.isDirectory() && !scoped.isSymbolicLink()) continue
-        packageDirs.push({ dirPath: join(dirPath, scoped.name) })
-      }
-    } else if (!entry.name.startsWith('.')) {
-      packageDirs.push({ dirPath })
-    }
-  }
+  const scanTargets: Array<NodeModulesScanTarget> = [
+    nodeModules.local,
+    nodeModules.global,
+  ]
 
   // Track registered package names to avoid duplicates across phases
   const foundNames = new Set<string>()
+  const packageRoots = new Map<string, string>()
 
   /**
    * Try to register a package with a skills/ directory. Reads its
@@ -278,12 +280,17 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
       skills: discoverSkills(skillsDir, name),
     })
     foundNames.add(name)
+    packageRoots.set(name, dirPath)
     return true
   }
 
   // Phase 1: Check each top-level package for skills/
-  for (const { dirPath } of packageDirs) {
-    tryRegister(dirPath, 'unknown')
+  for (const target of scanTargets) {
+    if (!target.path || !target.exists) continue
+    target.scanned = true
+    for (const dirPath of listNodeModulesPackageDirs(target.path)) {
+      tryRegister(dirPath, 'unknown')
+    }
   }
 
   // Phase 2: Walk dependency trees to discover transitive deps with skills.
@@ -308,7 +315,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
     for (const depName of getDeps(pkgJson)) {
       if (foundNames.has(depName) || walkVisited.has(depName)) continue
 
-      const depDir = resolveDepDir(depName, pkgDir, pkgName, nodeModulesDir)
+      const depDir = resolveDepDir(depName, pkgDir, pkgName, resolutionRoots)
       if (!depDir) continue
 
       tryRegister(depDir, depName)
@@ -318,7 +325,10 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
 
   // Walk from packages found in Phase 1
   for (const pkg of [...packages]) {
-    walkDeps(join(nodeModulesDir, pkg.name), pkg.name)
+    const pkgDir = packageRoots.get(pkg.name)
+    if (pkgDir) {
+      walkDeps(pkgDir, pkg.name)
+    }
   }
 
   // Walk from project's direct deps that weren't found in Phase 1
@@ -343,9 +353,11 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
   if (projectPkg) {
     for (const depName of getDeps(projectPkg, true)) {
       if (walkVisited.has(depName)) continue
-      const depDir = join(nodeModulesDir, depName)
-      if (existsSync(join(depDir, 'package.json'))) {
-        walkDeps(depDir, depName)
+      const depDir = resolutionRoots.find((candidateRoot) =>
+        existsSync(join(candidateRoot, depName, 'package.json')),
+      )
+      if (depDir) {
+        walkDeps(join(depDir, depName), depName)
       }
     }
   }
@@ -353,5 +365,5 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
   // Sort by dependency order
   const sorted = topoSort(packages)
 
-  return { packageManager, packages: sorted, warnings }
+  return { packageManager, packages: sorted, warnings, nodeModules }
 }

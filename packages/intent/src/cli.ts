@@ -5,6 +5,7 @@ import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 import { computeSkillNameWidth, printSkillTree, printTable } from './display.js'
+import { INSTALL_PROMPT } from './install-prompt.js'
 import { scanForIntents } from './scanner.js'
 import { findSkillFiles, parseFrontmatter } from './utils.js'
 import type { ScanResult } from './types.js'
@@ -38,8 +39,17 @@ async function cmdList(args: Array<string>): Promise<void> {
     return
   }
 
+  const scanCoverage: Array<string> = []
+  if (result.nodeModules.local.scanned)
+    scanCoverage.push('project node_modules')
+  if (result.nodeModules.global.scanned)
+    scanCoverage.push('global node_modules')
+
   if (result.packages.length === 0) {
     console.log('No intent-enabled packages found.')
+    if (scanCoverage.length > 0) {
+      console.log(`Scanned: ${scanCoverage.join(', ')}`)
+    }
     if (result.warnings.length > 0) {
       console.log(`\nWarnings:`)
       for (const w of result.warnings) console.log(`  ⚠ ${w}`)
@@ -54,6 +64,11 @@ async function cmdList(args: Array<string>): Promise<void> {
   console.log(
     `\n${result.packages.length} intent-enabled packages, ${totalSkills} skills (${result.packageManager})\n`,
   )
+  if (scanCoverage.length > 0) {
+    console.log(
+      `Scanned: ${scanCoverage.join(', ')}${result.nodeModules.global.scanned ? ' (local packages take precedence)' : ''}\n`,
+    )
+  }
 
   // Summary table
   const rows = result.packages.map((pkg) => [
@@ -459,54 +474,7 @@ switch (command) {
     cmdValidate(commandArgs)
     break
   case 'install': {
-    const prompt = `You are an AI assistant helping a developer set up skill-to-task mappings for their project.
-
-Follow these steps in order:
-
-1. CHECK FOR EXISTING MAPPINGS
-   Search the project's agent config files (CLAUDE.md, AGENTS.md, .cursorrules,
-   .github/copilot-instructions.md) for a block delimited by:
-     <!-- intent-skills:start -->
-     <!-- intent-skills:end -->
-   - If found: show the user the current mappings and ask "What would you like to update?"
-     Then skip to step 4 with their requested changes.
-   - If not found: continue to step 2.
-
-2. DISCOVER AVAILABLE SKILLS
-   Run: intent list
-   This outputs each skill's name, description, and full path — grouped by package.
-
-3. SCAN THE REPOSITORY
-   Build a picture of the project's structure and patterns:
-   - Read package.json for library dependencies
-   - Survey the directory layout (src/, app/, routes/, components/, api/, etc.)
-   - Note recurring patterns (routing, data fetching, auth, UI components, etc.)
-
-   Based on this, propose 3–5 skill-to-task mappings. For each one explain:
-   - The task or code area (in plain language the user would recognise)
-   - Which skill applies and why
-
-   Then ask: "What other tasks do you commonly use AI coding agents for?
-   I'll create mappings for those too."
-
-4. WRITE THE MAPPINGS BLOCK
-   Once you have the full set of mappings, write or update the agent config file
-   (prefer CLAUDE.md; create it if none exists) with this exact block:
-
-<!-- intent-skills:start -->
-# Skill mappings — when working in these areas, load the linked skill file into context.
-skills:
-  - task: "describe the task or code area here"
-    load: "node_modules/package-name/skills/skill-name/SKILL.md"
-<!-- intent-skills:end -->
-
-   Rules:
-   - Use the user's own words for task descriptions
-   - Include the exact path from \`intent list\` output so agents can load it directly
-   - Keep entries concise — this block is read on every agent task
-   - Preserve all content outside the block tags unchanged`
-
-    console.log(prompt)
+    console.log(INSTALL_PROMPT)
     break
   }
   case 'scaffold': {

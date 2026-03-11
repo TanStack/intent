@@ -84,6 +84,7 @@ describe('intent list --json shape', () => {
     expect(result).toHaveProperty('packageManager')
     expect(result).toHaveProperty('packages')
     expect(result).toHaveProperty('warnings')
+    expect(result).toHaveProperty('nodeModules')
     expect(Array.isArray(result.packages)).toBe(true)
     expect(Array.isArray(result.warnings)).toBe(true)
 

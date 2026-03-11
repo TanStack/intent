@@ -14,11 +14,14 @@ npx @tanstack/intent@latest install
 ```
 
 This prints a skill that instructs your AI agent to:
-1. Check for existing `intent-skills` mappings in your config files (CLAUDE.md, .cursorrules, etc.)
+1. Check for existing `intent-skills` mappings in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.)
 2. Run `intent list` to discover available skills from installed packages
 3. Scan your repository structure to understand your project
 4. Propose relevant skill-to-task mappings based on your codebase patterns
-5. Write or update an `intent-skills` block in your agent config
+5. Ask if you want a target other than `AGENTS.md`
+6. Write or update an `intent-skills` block in your agent config
+
+If an `intent-skills` block already exists, the agent updates that file in place. If no block exists, `AGENTS.md` is the default target.
 
 Your agent will create mappings like:
 
@@ -45,7 +48,7 @@ Skills version with library releases. When you update a library:
 npm update @tanstack/react-query
 ```
 
-The new version brings updated skills automatically — you don't need to do anything. The skills are shipped with the library, so you always get the version that matches your installed code.
+The new version brings updated skills automatically — you don't need to do anything. The skills are shipped with the library, so you always get the version that matches your installed code. If a package is installed both locally and globally, Intent prefers the local version.
 
 If you need to see what skills have changed, run:
 

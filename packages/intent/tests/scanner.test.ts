@@ -35,13 +35,24 @@ function writeSkillMd(dir: string, frontmatter: Record<string, unknown>): void {
 // ── Setup / Teardown ──
 
 let root: string
+let globalRoot: string
+let previousGlobalNodeModules: string | undefined
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'intent-test-'))
+  globalRoot = mkdtempSync(join(tmpdir(), 'intent-global-test-'))
+  previousGlobalNodeModules = process.env.INTENT_GLOBAL_NODE_MODULES
+  delete process.env.INTENT_GLOBAL_NODE_MODULES
 })
 
 afterEach(() => {
   rmSync(root, { recursive: true, force: true })
+  rmSync(globalRoot, { recursive: true, force: true })
+  if (previousGlobalNodeModules === undefined) {
+    delete process.env.INTENT_GLOBAL_NODE_MODULES
+  } else {
+    process.env.INTENT_GLOBAL_NODE_MODULES = previousGlobalNodeModules
+  }
 })
 
 // ── Tests ──
@@ -51,6 +62,7 @@ describe('scanForIntents', () => {
     const result = await scanForIntents(root)
     expect(result.packages).toEqual([])
     expect(result.warnings).toEqual([])
+    expect(result.nodeModules.local.exists).toBe(false)
   })
 
   it('returns empty packages when node_modules has no intent packages', async () => {
@@ -234,6 +246,63 @@ describe('scanForIntents', () => {
     const result = await scanForIntents(root)
     expect(result.packages).toHaveLength(0)
     expect(result.warnings).toHaveLength(0)
+  })
+
+  it('discovers global-only intent packages', async () => {
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+
+    const pkgDir = createDir(globalRoot, '@tanstack', 'query')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(pkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Global fetching skill',
+    })
+
+    const result = await scanForIntents(root)
+
+    expect(result.nodeModules.global.detected).toBe(true)
+    expect(result.nodeModules.global.exists).toBe(true)
+    expect(result.nodeModules.global.scanned).toBe(true)
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('@tanstack/query')
+  })
+
+  it('prefers local packages over global packages with the same name', async () => {
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+
+    const localPkgDir = createDir(root, 'node_modules', '@tanstack', 'query')
+    writeJson(join(localPkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.1.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(localPkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Local fetching skill',
+    })
+
+    const globalPkgDir = createDir(globalRoot, '@tanstack', 'query')
+    writeJson(join(globalPkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '4.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(globalPkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Global fetching skill',
+    })
+
+    const result = await scanForIntents(root)
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.version).toBe('5.1.0')
+    expect(result.packages[0]!.skills[0]!.description).toBe(
+      'Local fetching skill',
+    )
   })
 })
 
