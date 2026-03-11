@@ -239,6 +239,21 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
   const indentMatch = raw.match(/^(\s+)"/m)
   const indentSize = indentMatch?.[1] ? indentMatch[1].length : 2
 
+  // --- keywords array ---
+  if (!Array.isArray(pkg.keywords)) {
+    pkg.keywords = []
+  }
+  const keywords = pkg.keywords as Array<string>
+  const requiredKeywords = ['tanstack-intent']
+  for (const kw of requiredKeywords) {
+    if (keywords.includes(kw)) {
+      result.alreadyPresent.push(`keywords: "${kw}"`)
+    } else {
+      keywords.push(kw)
+      result.added.push(`keywords: "${kw}"`)
+    }
+  }
+
   // --- files array ---
   if (!Array.isArray(pkg.files)) {
     pkg.files = []
