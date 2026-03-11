@@ -2,6 +2,7 @@ import { execFileSync, execSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type {
+  FeedbackFrequency,
   FeedbackPayload,
   IntentProjectConfig,
   MetaFeedbackPayload,
@@ -51,28 +52,40 @@ function getHomeConfigDir(): string {
   )
 }
 
+function parseFrequency(value: unknown): FeedbackFrequency | null {
+  if (value === 'always' || value === 'never') return value
+  if (typeof value !== 'string') return null
+
+  const match = /^every-(\d+)$/.exec(value)
+  if (!match) return null
+
+  const count = Number(match[1])
+  return Number.isInteger(count) && count > 0
+    ? (`every-${count}` as FeedbackFrequency)
+    : null
+}
+
+function readFrequency(filePath: string): FeedbackFrequency | null {
+  try {
+    const config = JSON.parse(
+      readFileSync(filePath, 'utf8'),
+    ) as Partial<IntentProjectConfig>
+    return parseFrequency(config.feedback?.frequency)
+  } catch {
+    return null
+  }
+}
+
 export function resolveFrequency(root: string): string {
   // 1. User override (~/.config/intent/config.json)
   const userConfigPath = join(getHomeConfigDir(), 'intent', 'config.json')
-  try {
-    const userCfg = JSON.parse(
-      readFileSync(userConfigPath, 'utf8'),
-    ) as Partial<IntentProjectConfig>
-    if (userCfg.feedback?.frequency) return userCfg.feedback.frequency
-  } catch {
-    /* fallback */
-  }
+  const userFrequency = readFrequency(userConfigPath)
+  if (userFrequency) return userFrequency
 
   // 2. Project config
   const projectConfigPath = join(root, 'intent.config.json')
-  try {
-    const projCfg = JSON.parse(
-      readFileSync(projectConfigPath, 'utf8'),
-    ) as Partial<IntentProjectConfig>
-    if (projCfg.feedback?.frequency) return projCfg.feedback.frequency
-  } catch {
-    /* fallback */
-  }
+  const projectFrequency = readFrequency(projectConfigPath)
+  if (projectFrequency) return projectFrequency
 
   // 3. Default
   return 'every-5'
@@ -156,6 +169,13 @@ const VALID_META_SKILLS = [
 const VALID_AGENTS = ['claude-code', 'cursor', 'copilot', 'codex', 'other']
 
 const VALID_QUALITY_RATINGS = ['good', 'mixed', 'bad']
+const VALID_INTERVIEW_QUALITY_RATINGS = ['good', 'mixed', 'bad', 'skipped']
+const VALID_FAILURE_MODE_QUALITY_RATINGS = [
+  'good',
+  'mixed',
+  'bad',
+  'not-applicable',
+]
 
 export function validateMetaPayload(payload: unknown): {
   valid: boolean
@@ -193,6 +213,24 @@ export function validateMetaPayload(payload: unknown): {
     !VALID_QUALITY_RATINGS.includes(obj.userRating as string)
   ) {
     errors.push('userRating must be one of: good, mixed, bad')
+  }
+
+  if (
+    obj.interviewQuality &&
+    !VALID_INTERVIEW_QUALITY_RATINGS.includes(obj.interviewQuality as string)
+  ) {
+    errors.push('interviewQuality must be one of: good, mixed, bad, skipped')
+  }
+
+  if (
+    obj.failureModeQuality &&
+    !VALID_FAILURE_MODE_QUALITY_RATINGS.includes(
+      obj.failureModeQuality as string,
+    )
+  ) {
+    errors.push(
+      'failureModeQuality must be one of: good, mixed, bad, not-applicable',
+    )
   }
 
   // Secret scan

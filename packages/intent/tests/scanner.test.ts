@@ -97,6 +97,7 @@ describe('scanForIntents', () => {
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/db')
     expect(result.packages[0]!.version).toBe('0.5.2')
+    expect(result.packages[0]!.packageRoot).toBe(pkgDir)
     expect(result.packages[0]!.skills).toHaveLength(1)
     expect(result.packages[0]!.skills[0]!.name).toBe('db-core')
     expect(result.packages[0]!.skills[0]!.description).toBe(
@@ -298,11 +299,122 @@ describe('scanForIntents', () => {
 
     const result = await scanForIntents(root)
 
+    expect(result.nodeModules.global.detected).toBe(true)
+    expect(result.nodeModules.global.scanned).toBe(true)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.version).toBe('5.1.0')
     expect(result.packages[0]!.skills[0]!.description).toBe(
       'Local fetching skill',
     )
+    expect(
+      result.warnings.some(
+        (warning) =>
+          warning.includes('Found 2 installed variants of @tanstack/query') &&
+          warning.includes('Using 5.1.0'),
+      ),
+    ).toBe(true)
+  })
+
+  it('chooses the highest version when duplicate package names exist at the same depth', async () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      dependencies: {
+        'consumer-a': '1.0.0',
+        'consumer-b': '1.0.0',
+        'consumer-c': '1.0.0',
+      },
+    })
+
+    const consumerADir = createDir(root, 'node_modules', 'consumer-a')
+    writeJson(join(consumerADir, 'package.json'), {
+      name: 'consumer-a',
+      version: '1.0.0',
+      dependencies: {
+        '@tanstack/query': '4.0.0',
+      },
+    })
+
+    const consumerBDir = createDir(root, 'node_modules', 'consumer-b')
+    writeJson(join(consumerBDir, 'package.json'), {
+      name: 'consumer-b',
+      version: '1.0.0',
+      dependencies: {
+        '@tanstack/query': '5.0.0',
+      },
+    })
+
+    const consumerCDir = createDir(root, 'node_modules', 'consumer-c')
+    writeJson(join(consumerCDir, 'package.json'), {
+      name: 'consumer-c',
+      version: '1.0.0',
+      dependencies: {
+        '@tanstack/query': '3.0.0',
+      },
+    })
+
+    const queryV4Dir = createDir(
+      consumerADir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    writeJson(join(queryV4Dir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '4.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(queryV4Dir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query v4 skill',
+    })
+
+    const queryV5Dir = createDir(
+      consumerBDir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    writeJson(join(queryV5Dir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(queryV5Dir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query v5 skill',
+    })
+
+    const queryV3Dir = createDir(
+      consumerCDir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    writeJson(join(queryV3Dir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '3.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(queryV3Dir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query v3 skill',
+    })
+
+    const result = await scanForIntents(root)
+    const versionWarning = result.warnings.find((warning) =>
+      warning.includes('@tanstack/query'),
+    )
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('@tanstack/query')
+    expect(result.packages[0]!.version).toBe('5.0.0')
+    expect(result.packages[0]!.packageRoot).toBe(queryV5Dir)
+    expect(versionWarning).toContain(
+      'Found 3 installed variants of @tanstack/query',
+    )
+    expect(versionWarning).toContain('across 3 versions')
+    expect(versionWarning).toContain('Using 5.0.0')
   })
 })
 

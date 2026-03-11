@@ -14,7 +14,8 @@
       "types": "./dist/index.d.mts"
     },
     "./intent-library": {
-      "import": "./dist/intent-library.mjs"
+      "import": "./dist/intent-library.mjs",
+      "types": "./dist/intent-library.d.mts"
     }
   },
   "bin": {
@@ -32,7 +33,7 @@
     "tsdown": "^0.19.0"
   },
   "scripts": {
-    "prepack": "pnpm run build",
+    "prepack": "npm run build",
     "build": "tsdown src/index.ts src/cli.ts src/setup.ts src/intent-library.ts src/library-scanner.ts --format esm --dts",
     "test:lib": "vitest run",
     "test:types": "tsc --noEmit"

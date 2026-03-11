@@ -59,10 +59,50 @@ interface SyncState {
   skills?: Record<string, { sources_sha?: Record<string, string> }>
 }
 
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.values(value).every((entry) => typeof entry === 'string')
+  )
+}
+
+function parseSyncState(value: unknown): SyncState | null {
+  if (!value || typeof value !== 'object') return null
+
+  const raw = value as Record<string, unknown>
+  const parsed: SyncState = {}
+
+  if (typeof raw.library_version === 'string') {
+    parsed.library_version = raw.library_version
+  }
+
+  if (raw.skills && typeof raw.skills === 'object') {
+    const skills: Record<string, { sources_sha?: Record<string, string> }> = {}
+
+    for (const [skillName, skillValue] of Object.entries(raw.skills)) {
+      if (!skillValue || typeof skillValue !== 'object') continue
+
+      const sourcesSha = (skillValue as Record<string, unknown>).sources_sha
+      if (sourcesSha !== undefined && !isStringRecord(sourcesSha)) continue
+
+      skills[skillName] = {}
+      if (sourcesSha) {
+        skills[skillName]!.sources_sha = sourcesSha
+      }
+    }
+
+    parsed.skills = skills
+  }
+
+  return parsed
+}
+
 function readSyncState(packageDir: string): SyncState | null {
   const statePath = join(packageDir, 'skills', 'sync-state.json')
   try {
-    return JSON.parse(readFileSync(statePath, 'utf8')) as SyncState
+    return parseSyncState(JSON.parse(readFileSync(statePath, 'utf8')))
   } catch {
     return null
   }

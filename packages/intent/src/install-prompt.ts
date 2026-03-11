@@ -15,6 +15,8 @@ Follow these steps in order:
    Run: intent list
    This outputs each skill's name, description, full path, and whether it was found in
    project-local node_modules or accessible global node_modules.
+   This works best in Node-compatible environments (npm, pnpm, Bun, or Deno npm interop
+   with node_modules enabled).
 
 3. SCAN THE REPOSITORY
    Build a picture of the project's structure and patterns:
@@ -49,4 +51,5 @@ skills:
    - Use the user's own words for task descriptions
    - Include the exact path from \`intent list\` output so agents can load it directly
    - Keep entries concise - this block is read on every agent task
-   - Preserve all content outside the block tags unchanged`
+   - Preserve all content outside the block tags unchanged
+   - If the user is on Deno, note that this setup is best-effort today and relies on npm interop`

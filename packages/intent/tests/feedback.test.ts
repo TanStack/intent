@@ -224,6 +224,24 @@ describe('resolveFrequency', () => {
     expect(resolveFrequency(tmpDir)).toBe('every-5')
   })
 
+  it('ignores invalid project config values and falls back to default', () => {
+    writeFileSync(
+      join(tmpDir, 'intent.config.json'),
+      JSON.stringify({ feedback: { frequency: 'sometimes' } }),
+    )
+
+    expect(resolveFrequency(tmpDir)).toBe('every-5')
+  })
+
+  it('accepts validated every-N frequencies', () => {
+    writeFileSync(
+      join(tmpDir, 'intent.config.json'),
+      JSON.stringify({ feedback: { frequency: 'every-12' } }),
+    )
+
+    expect(resolveFrequency(tmpDir)).toBe('every-12')
+  })
+
   it('reads user override via XDG_CONFIG_HOME', () => {
     const configDir = join(tmpDir, 'xdg')
     mkdirSync(join(configDir, 'intent'), { recursive: true })

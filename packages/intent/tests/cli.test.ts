@@ -1,95 +1,166 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
-import { parse as parseYaml } from 'yaml'
-
-// ── Meta-skills tests (intent meta) ──
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { INSTALL_PROMPT } from '../src/install-prompt.js'
+import { main, USAGE } from '../src/cli.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const metaDir = join(thisDir, '..', 'meta')
+const packageJsonPath = join(thisDir, '..', 'package.json')
+
+function writeJson(filePath: string, data: unknown): void {
+  mkdirSync(dirname(filePath), { recursive: true })
+  writeFileSync(filePath, JSON.stringify(data, null, 2))
+}
+
+function writeSkillMd(dir: string, frontmatter: Record<string, unknown>): void {
+  mkdirSync(dir, { recursive: true })
+  const yamlLines = Object.entries(frontmatter)
+    .map(
+      ([key, value]) =>
+        `${key}: ${typeof value === 'string' ? `"${value}"` : value}`,
+    )
+    .join('\n')
+
+  writeFileSync(
+    join(dir, 'SKILL.md'),
+    `---\n${yamlLines}\n---\n\nSkill content here.\n`,
+  )
+}
+
+let originalCwd: string
+let logSpy: ReturnType<typeof vi.spyOn>
+let errorSpy: ReturnType<typeof vi.spyOn>
+let tempDirs: Array<string>
+
+beforeEach(() => {
+  originalCwd = process.cwd()
+  tempDirs = []
+  logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+  errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  process.chdir(originalCwd)
+  logSpy.mockRestore()
+  errorSpy.mockRestore()
+  for (const dir of tempDirs) {
+    if (existsSync(dir)) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+})
 
 describe('intent meta', () => {
-  it('meta directory exists', () => {
-    expect(existsSync(metaDir)).toBe(true)
+  it('lists the shipped public meta-skills', async () => {
+    const exitCode = await main(['meta'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('Meta-skills')
+    expect(output).toContain('domain-discovery')
+    expect(output).toContain('tree-generator')
+    expect(output).toContain('generate-skill')
+    expect(output).toContain('skill-staleness-check')
   })
 
-  it('contains expected meta-skills', () => {
-    const entries = readdirSync(metaDir, { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .filter((e) => existsSync(join(metaDir, e.name, 'SKILL.md')))
-      .map((e) => e.name)
+  it('prints the requested meta-skill content', async () => {
+    const expected = readFileSync(
+      join(metaDir, 'domain-discovery', 'SKILL.md'),
+      'utf8',
+    )
 
-    expect(entries).toContain('domain-discovery')
-    expect(entries).toContain('tree-generator')
-    expect(entries).toContain('generate-skill')
-    expect(entries).toContain('skill-staleness-check')
-  })
+    const exitCode = await main(['meta', 'domain-discovery'])
 
-  it('each meta-skill has a description in frontmatter', () => {
-    const entries = readdirSync(metaDir, { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .filter((e) => existsSync(join(metaDir, e.name, 'SKILL.md')))
-
-    for (const entry of entries) {
-      const content = readFileSync(
-        join(metaDir, entry.name, 'SKILL.md'),
-        'utf8',
-      )
-      const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-      expect(match, `${entry.name} should have frontmatter`).not.toBeNull()
-
-      const fm = parseYaml(match![1]!) as Record<string, unknown>
-      expect(
-        fm.description,
-        `${entry.name} should have a description`,
-      ).toBeTruthy()
-    }
+    expect(exitCode).toBe(0)
+    expect(logSpy).toHaveBeenCalledWith(expected)
   })
 })
 
-// ── Validate command logic ──
+describe('cli commands', () => {
+  it('prints usage when no command is provided', async () => {
+    const exitCode = await main([])
 
-describe('intent validate', () => {
-  it('finds SKILL.md files in meta directory', () => {
-    function findSkillFiles(dir: string): Array<string> {
-      const files: Array<string> = []
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const fullPath = join(dir, entry.name)
-        if (entry.isDirectory()) {
-          files.push(...findSkillFiles(fullPath))
-        } else if (entry.name === 'SKILL.md') {
-          files.push(fullPath)
-        }
-      }
-      return files
+    expect(exitCode).toBe(0)
+    expect(logSpy).toHaveBeenCalledWith(USAGE)
+  })
+
+  it('prints the install prompt', async () => {
+    const exitCode = await main(['install'])
+
+    expect(exitCode).toBe(0)
+    expect(logSpy).toHaveBeenCalledWith(INSTALL_PROMPT)
+  })
+
+  it('lists installed intent packages as json', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-cli-list-'))
+    tempDirs.push(root)
+    const pkgDir = join(root, 'node_modules', '@tanstack', 'db')
+
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/db',
+      version: '0.5.2',
+      intent: { version: 1, repo: 'TanStack/db', docs: 'docs/' },
+    })
+    writeSkillMd(join(pkgDir, 'skills', 'db-core'), {
+      name: 'db-core',
+      description: 'Core database concepts',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['list', '--json'])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const parsed = JSON.parse(String(output)) as {
+      packages: Array<{ name: string; version: string; packageRoot: string }>
+      warnings: Array<string>
     }
 
-    const files = findSkillFiles(metaDir)
-    expect(files.length).toBeGreaterThan(0)
+    expect(exitCode).toBe(0)
+    expect(parsed.packages).toHaveLength(1)
+    expect(parsed.packages[0]).toMatchObject({
+      name: '@tanstack/db',
+      version: '0.5.2',
+      packageRoot: pkgDir,
+    })
+    expect(parsed.warnings).toEqual([])
+  })
+
+  it('validates a well-formed skills directory', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-cli-validate-'))
+    tempDirs.push(root)
+
+    writeSkillMd(join(root, 'skills', 'db-core'), {
+      name: 'db-core',
+      description: 'Core database concepts',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+
+    expect(exitCode).toBe(0)
+    expect(logSpy).toHaveBeenCalledWith(
+      '✅ Validated 1 skill files — all passed',
+    )
   })
 })
 
-// ── Scanner JSON output shape ──
+describe('package metadata', () => {
+  it('uses a package-manager-neutral prepack script', () => {
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+      scripts?: Record<string, string>
+    }
 
-describe('intent list --json shape', () => {
-  it('scanForIntents returns correct shape', async () => {
-    const { scanForIntents } = await import('../src/scanner.js')
-    // Run against a dir with no node_modules — should return valid shape
-    const { mkdtempSync } = await import('node:fs')
-    const { tmpdir } = await import('node:os')
-    const root = mkdtempSync(join(tmpdir(), 'cli-test-'))
-
-    const result = await scanForIntents(root)
-    expect(result).toHaveProperty('packageManager')
-    expect(result).toHaveProperty('packages')
-    expect(result).toHaveProperty('warnings')
-    expect(result).toHaveProperty('nodeModules')
-    expect(Array.isArray(result.packages)).toBe(true)
-    expect(Array.isArray(result.warnings)).toBe(true)
-
-    // Cleanup
-    const { rmSync } = await import('node:fs')
-    rmSync(root, { recursive: true, force: true })
+    expect(packageJson.scripts?.prepack).toBe('npm run build')
   })
 })

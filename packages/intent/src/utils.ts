@@ -167,7 +167,13 @@ export function resolveDepDir(
     if (existsSync(join(topLevel, 'package.json'))) return topLevel
   }
 
-  // 2. Resolve through parent's real path (pnpm virtual store)
+  // 2. Resolve nested installs under the parent package (npm/pnpm/bun)
+  const nestedNodeModules = join(parentDir, 'node_modules', depName)
+  if (existsSync(join(nestedNodeModules, 'package.json'))) {
+    return nestedNodeModules
+  }
+
+  // 3. Resolve through parent's real path (pnpm virtual store)
   try {
     const realParent = realpathSync(parentDir)
     const segments = parentName.split('/').length

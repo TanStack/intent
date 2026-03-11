@@ -36,6 +36,7 @@ export interface IntentPackage {
   version: string
   intent: IntentConfig
   skills: Array<SkillEntry>
+  packageRoot: string
 }
 
 export interface SkillEntry {
@@ -106,12 +107,14 @@ export interface MetaFeedbackPayload {
   userRating: 'good' | 'mixed' | 'bad'
 }
 
+export type FeedbackFrequency = 'always' | 'never' | `every-${number}`
+
 // ---------------------------------------------------------------------------
 // Config types
 // ---------------------------------------------------------------------------
 
 export interface IntentProjectConfig {
   feedback: {
-    frequency: string // "always" | "every-N" | "never"
+    frequency: FeedbackFrequency
   }
 }

@@ -2,12 +2,8 @@
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { parse as parseYaml } from 'yaml'
-import { computeSkillNameWidth, printSkillTree, printTable } from './display.js'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { INSTALL_PROMPT } from './install-prompt.js'
-import { scanForIntents } from './scanner.js'
-import { findSkillFiles, parseFrontmatter } from './utils.js'
 import type { ScanResult } from './types.js'
 
 // ---------------------------------------------------------------------------
@@ -24,6 +20,9 @@ function getMetaDir(): string {
 // ---------------------------------------------------------------------------
 
 async function cmdList(args: Array<string>): Promise<void> {
+  const { computeSkillNameWidth, printSkillTree, printTable } =
+    await import('./display.js')
+  const { scanForIntents } = await import('./scanner.js')
   const jsonOutput = args.includes('--json')
 
   let result: ScanResult
@@ -106,7 +105,8 @@ async function cmdList(args: Array<string>): Promise<void> {
   }
 }
 
-function cmdMeta(args: Array<string>): void {
+async function cmdMeta(args: Array<string>): Promise<void> {
+  const { parseFrontmatter } = await import('./utils.js')
   const metaDir = getMetaDir()
 
   if (!existsSync(metaDir)) {
@@ -123,9 +123,7 @@ function cmdMeta(args: Array<string>): void {
     const skillFile = join(metaDir, name, 'SKILL.md')
     if (!existsSync(skillFile)) {
       console.error(`Meta-skill "${name}" not found.`)
-      console.error(
-        `Run \`npx @tanstack/intent meta\` to list available meta-skills.`,
-      )
+      console.error(`Run \`intent meta\` to list available meta-skills.`)
       process.exit(1)
     }
     try {
@@ -220,7 +218,11 @@ function collectPackagingWarnings(root: string): Array<string> {
   return warnings
 }
 
-function cmdValidate(args: Array<string>): void {
+async function cmdValidate(args: Array<string>): Promise<void> {
+  const [{ parse: parseYaml }, { findSkillFiles }] = await Promise.all([
+    import('yaml'),
+    import('./utils.js'),
+  ])
   const targetDir = args[0] ?? 'skills'
   const skillsDir = join(process.cwd(), targetDir)
 
@@ -431,7 +433,7 @@ This produces: individual SKILL.md files.
 
 ## After all skills are generated
 
-1. Run \`npx @tanstack/intent validate\` in each package directory
+1. Run \`intent validate\` in each package directory
 2. Commit skills/ and artifacts
 3. For each publishable package, run: \`npx @tanstack/intent add-library-bin\`
 4. For each publishable package, run: \`npx @tanstack/intent edit-package-json\`
@@ -447,7 +449,7 @@ This produces: individual SKILL.md files.
 // Main
 // ---------------------------------------------------------------------------
 
-const USAGE = `TanStack Intent CLI
+export const USAGE = `TanStack Intent CLI
 
 Usage:
   intent list [--json]           Discover intent-enabled packages
@@ -460,94 +462,104 @@ Usage:
   intent setup-github-actions    Copy CI workflow templates to .github/workflows/
   intent stale                   Check skills for staleness`
 
-const command = process.argv[2]
-const commandArgs = process.argv.slice(3)
+export async function main(argv: Array<string> = process.argv.slice(2)) {
+  const command = argv[0]
+  const commandArgs = argv.slice(1)
 
-switch (command) {
-  case 'list':
-    await cmdList(commandArgs)
-    break
-  case 'meta':
-    cmdMeta(commandArgs)
-    break
-  case 'validate':
-    cmdValidate(commandArgs)
-    break
-  case 'install': {
-    console.log(INSTALL_PROMPT)
-    break
-  }
-  case 'scaffold': {
-    cmdScaffold()
-    break
-  }
-  case 'stale': {
-    const { checkStaleness } = await import('./staleness.js')
-    const { scanForIntents: scanStale } = await import('./scanner.js')
-    let staleResult
-    try {
-      staleResult = await scanStale()
-    } catch (err) {
-      console.error((err as Error).message)
-      process.exit(1)
+  switch (command) {
+    case 'list':
+      await cmdList(commandArgs)
+      return 0
+    case 'meta':
+      await cmdMeta(commandArgs)
+      return 0
+    case 'validate':
+      await cmdValidate(commandArgs)
+      return 0
+    case 'install': {
+      console.log(INSTALL_PROMPT)
+      return 0
     }
-
-    if (staleResult.packages.length === 0) {
-      console.log('No intent-enabled packages found.')
-      break
+    case 'scaffold': {
+      cmdScaffold()
+      return 0
     }
-
-    const jsonStale = commandArgs.includes('--json')
-    const reports = await Promise.all(
-      staleResult.packages.map((pkg) => {
-        const pkgDir = join(process.cwd(), 'node_modules', pkg.name)
-        return checkStaleness(pkgDir, pkg.name)
-      }),
-    )
-
-    if (jsonStale) {
-      console.log(JSON.stringify(reports, null, 2))
-      break
-    }
-
-    for (const report of reports) {
-      const driftLabel = report.versionDrift
-        ? ` [${report.versionDrift} drift]`
-        : ''
-      const vLabel =
-        report.skillVersion && report.currentVersion
-          ? ` (${report.skillVersion} → ${report.currentVersion})`
-          : ''
-      console.log(`${report.library}${vLabel}${driftLabel}`)
-
-      const stale = report.skills.filter((s) => s.needsReview)
-      if (stale.length === 0) {
-        console.log('  All skills up-to-date')
-      } else {
-        for (const skill of stale) {
-          console.log(`  ⚠ ${skill.name}: ${skill.reasons.join(', ')}`)
-        }
+    case 'stale': {
+      const { checkStaleness } = await import('./staleness.js')
+      const { scanForIntents: scanStale } = await import('./scanner.js')
+      let staleResult
+      try {
+        staleResult = await scanStale()
+      } catch (err) {
+        console.error((err as Error).message)
+        process.exit(1)
       }
-      console.log()
+
+      if (staleResult.packages.length === 0) {
+        console.log('No intent-enabled packages found.')
+        return 0
+      }
+
+      const jsonStale = commandArgs.includes('--json')
+      const reports = await Promise.all(
+        staleResult.packages.map((pkg) => {
+          return checkStaleness(pkg.packageRoot, pkg.name)
+        }),
+      )
+
+      if (jsonStale) {
+        console.log(JSON.stringify(reports, null, 2))
+        return 0
+      }
+
+      for (const report of reports) {
+        const driftLabel = report.versionDrift
+          ? ` [${report.versionDrift} drift]`
+          : ''
+        const vLabel =
+          report.skillVersion && report.currentVersion
+            ? ` (${report.skillVersion} → ${report.currentVersion})`
+            : ''
+        console.log(`${report.library}${vLabel}${driftLabel}`)
+
+        const stale = report.skills.filter((s) => s.needsReview)
+        if (stale.length === 0) {
+          console.log('  All skills up-to-date')
+        } else {
+          for (const skill of stale) {
+            console.log(`  ⚠ ${skill.name}: ${skill.reasons.join(', ')}`)
+          }
+        }
+        console.log()
+      }
+      return 0
     }
-    break
+    case 'add-library-bin': {
+      const { runAddLibraryBinAll } = await import('./setup.js')
+      runAddLibraryBinAll(process.cwd())
+      return 0
+    }
+    case 'edit-package-json': {
+      const { runEditPackageJsonAll } = await import('./setup.js')
+      runEditPackageJsonAll(process.cwd())
+      return 0
+    }
+    case 'setup-github-actions': {
+      const { runSetupGithubActions } = await import('./setup.js')
+      runSetupGithubActions(process.cwd(), getMetaDir())
+      return 0
+    }
+    default:
+      console.log(USAGE)
+      return command ? 1 : 0
   }
-  case 'add-library-bin': {
-    const { runAddLibraryBinAll } = await import('./setup.js')
-    runAddLibraryBinAll(process.cwd())
-    break
-  }
-  case 'edit-package-json': {
-    const { runEditPackageJsonAll } = await import('./setup.js')
-    runEditPackageJsonAll(process.cwd())
-    break
-  }
-  case 'setup-github-actions': {
-    const { runSetupGithubActions } = await import('./setup.js')
-    runSetupGithubActions(process.cwd(), getMetaDir())
-    break
-  }
-  default:
-    console.log(USAGE)
-    process.exit(command ? 1 : 0)
+}
+
+const isMain =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+
+if (isMain) {
+  const exitCode = await main()
+  process.exit(exitCode)
 }
