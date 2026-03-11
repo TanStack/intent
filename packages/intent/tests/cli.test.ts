@@ -84,14 +84,56 @@ describe('intent meta', () => {
     expect(exitCode).toBe(0)
     expect(logSpy).toHaveBeenCalledWith(expected)
   })
+
+  it('fails cleanly for invalid meta-skill names', async () => {
+    const exitCode = await main(['meta', '../bad'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith('Invalid meta-skill name: "../bad"')
+  })
+
+  it('fails cleanly when a meta-skill does not exist', async () => {
+    const exitCode = await main(['meta', 'missing-skill'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Meta-skill "missing-skill" not found. Run `intent meta` to list available meta-skills.',
+    )
+  })
 })
 
 describe('cli commands', () => {
-  it('prints usage when no command is provided', async () => {
+  it('prints top-level help when no command is provided', async () => {
     const exitCode = await main([])
 
     expect(exitCode).toBe(0)
-    expect(logSpy).toHaveBeenCalledWith(USAGE)
+    expect(logSpy.mock.calls[0]?.[0]).toContain(USAGE)
+    expect(logSpy.mock.calls[0]?.[0]).toContain('Run `intent help <command>`')
+  })
+
+  it('prints top-level help for --help', async () => {
+    const exitCode = await main(['--help'])
+
+    expect(exitCode).toBe(0)
+    expect(logSpy.mock.calls[0]?.[0]).toContain('Run `intent help <command>`')
+  })
+
+  it('prints command help for help subcommands', async () => {
+    const exitCode = await main(['help', 'validate'])
+
+    expect(exitCode).toBe(0)
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('intent validate [dir]'),
+    )
+  })
+
+  it('prints command help when --help is passed after a subcommand', async () => {
+    const exitCode = await main(['list', '--help'])
+
+    expect(exitCode).toBe(0)
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('intent list --json'),
+    )
   })
 
   it('prints the install prompt', async () => {
@@ -212,6 +254,49 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(logSpy).toHaveBeenCalledWith(
       '✅ Validated 1 skill files — all passed',
+    )
+  })
+
+  it('fails cleanly when validate is run without a skills directory', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-cli-missing-skills-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      `Skills directory not found: ${join(root, 'skills')}`,
+    )
+  })
+
+  it('fails cleanly for unsupported yarn pnp projects', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-cli-pnp-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), { name: 'app', private: true })
+    writeFileSync(join(root, '.pnp.cjs'), 'module.exports = {}\n')
+    process.chdir(root)
+
+    const exitCode = await main(['list'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Yarn PnP is not yet supported. Add `nodeLinker: node-modules` to your .yarnrc.yml to use intent.',
+    )
+  })
+
+  it('fails cleanly for deno projects without node_modules', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-cli-deno-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), { name: 'app', private: true })
+    writeFileSync(join(root, 'deno.json'), '{"nodeModulesDir":"none"}\n')
+    process.chdir(root)
+
+    const exitCode = await main(['list'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Deno without node_modules is not yet supported. Add `"nodeModulesDir": "auto"` to your deno.json to use intent.',
     )
   })
 })
