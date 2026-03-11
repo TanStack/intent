@@ -199,13 +199,72 @@ function getPackageDepth(packageRoot: string, projectRoot: string): number {
   return relative(projectRoot, packageRoot).split(sep).length
 }
 
-function comparePackageVersions(a: string, b: string): number {
-  const aMatch = /^(\d+)\.(\d+)\.(\d+)/.exec(a)
-  const bMatch = /^(\d+)\.(\d+)\.(\d+)/.exec(b)
-  if (!aMatch || !bMatch) return 0
+interface ParsedSemver {
+  major: number
+  minor: number
+  patch: number
+  prerelease: Array<string | number>
+}
 
-  for (let i = 1; i <= 3; i++) {
-    const diff = Number(aMatch[i]) - Number(bMatch[i])
+function parseSemver(version: string): ParsedSemver | null {
+  const match =
+    /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(
+      version,
+    )
+  if (!match) return null
+
+  const prerelease = match[4]
+    ? match[4].split('.').map((identifier) => {
+        return /^\d+$/.test(identifier) ? Number(identifier) : identifier
+      })
+    : []
+
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease,
+  }
+}
+
+function comparePrereleaseIdentifiers(
+  a: string | number | undefined,
+  b: string | number | undefined,
+): number {
+  if (a === undefined) return b === undefined ? 0 : 1
+  if (b === undefined) return -1
+
+  if (typeof a === 'number' && typeof b === 'number') {
+    return a - b
+  }
+
+  if (typeof a === 'number') return -1
+  if (typeof b === 'number') return 1
+
+  return a.localeCompare(b)
+}
+
+function comparePackageVersions(a: string, b: string): number {
+  const parsedA = parseSemver(a)
+  const parsedB = parseSemver(b)
+
+  if (!parsedA || !parsedB) {
+    if (parsedA) return 1
+    if (parsedB) return -1
+    return 0
+  }
+
+  for (const key of ['major', 'minor', 'patch'] as const) {
+    const diff = parsedA[key] - parsedB[key]
+    if (diff !== 0) return diff
+  }
+
+  const length = Math.max(parsedA.prerelease.length, parsedB.prerelease.length)
+  for (let i = 0; i < length; i++) {
+    const diff = comparePrereleaseIdentifiers(
+      parsedA.prerelease[i],
+      parsedB.prerelease[i],
+    )
     if (diff !== 0) return diff
   }
 

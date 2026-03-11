@@ -416,6 +416,132 @@ describe('scanForIntents', () => {
     expect(versionWarning).toContain('across 3 versions')
     expect(versionWarning).toContain('Using 5.0.0')
   })
+
+  it('prefers stable releases over prereleases at the same depth', async () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      dependencies: {
+        'consumer-a': '1.0.0',
+        'consumer-b': '1.0.0',
+      },
+    })
+
+    const consumerADir = createDir(root, 'node_modules', 'consumer-a')
+    const consumerBDir = createDir(root, 'node_modules', 'consumer-b')
+
+    writeJson(join(consumerADir, 'package.json'), {
+      name: 'consumer-a',
+      version: '1.0.0',
+      dependencies: { '@tanstack/query': '5.0.0-beta.1' },
+    })
+    writeJson(join(consumerBDir, 'package.json'), {
+      name: 'consumer-b',
+      version: '1.0.0',
+      dependencies: { '@tanstack/query': '5.0.0' },
+    })
+
+    const prereleaseDir = createDir(
+      consumerADir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    const stableDir = createDir(
+      consumerBDir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+
+    writeJson(join(prereleaseDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0-beta.1',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeJson(join(stableDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(prereleaseDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Prerelease query skill',
+    })
+    writeSkillMd(createDir(stableDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Stable query skill',
+    })
+
+    const result = await scanForIntents(root)
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.version).toBe('5.0.0')
+    expect(result.packages[0]!.packageRoot).toBe(stableDir)
+  })
+
+  it('prefers valid semver versions over invalid ones at the same depth', async () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      dependencies: {
+        'consumer-a': '1.0.0',
+        'consumer-b': '1.0.0',
+      },
+    })
+
+    const consumerADir = createDir(root, 'node_modules', 'consumer-a')
+    const consumerBDir = createDir(root, 'node_modules', 'consumer-b')
+
+    writeJson(join(consumerADir, 'package.json'), {
+      name: 'consumer-a',
+      version: '1.0.0',
+      dependencies: { '@tanstack/query': 'workspace-dev' },
+    })
+    writeJson(join(consumerBDir, 'package.json'), {
+      name: 'consumer-b',
+      version: '1.0.0',
+      dependencies: { '@tanstack/query': '5.0.0' },
+    })
+
+    const invalidDir = createDir(
+      consumerADir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    const validDir = createDir(
+      consumerBDir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+
+    writeJson(join(invalidDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: 'workspace-dev',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeJson(join(validDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(invalidDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Invalid version query skill',
+    })
+    writeSkillMd(createDir(validDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Valid version query skill',
+    })
+
+    const result = await scanForIntents(root)
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.version).toBe('5.0.0')
+    expect(result.packages[0]!.packageRoot).toBe(validDir)
+  })
 })
 
 describe('package manager detection', () => {
