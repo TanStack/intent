@@ -443,7 +443,12 @@ function collectPackageDirs(dir: string, result: Array<string>): void {
     return
   }
   for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === 'node_modules' || entry.name.startsWith('.')) continue
+    if (
+      !entry.isDirectory() ||
+      entry.name === 'node_modules' ||
+      entry.name.startsWith('.')
+    )
+      continue
     collectPackageDirs(join(dir, entry.name), result)
   }
 }

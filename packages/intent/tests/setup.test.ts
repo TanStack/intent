@@ -16,7 +16,11 @@ import {
   runAddLibraryBinAll,
   runSetupGithubActions,
 } from '../src/setup.js'
-import type { MonorepoResult, EditPackageJsonResult, AddLibraryBinResult } from '../src/setup.js'
+import type {
+  MonorepoResult,
+  EditPackageJsonResult,
+  AddLibraryBinResult,
+} from '../src/setup.js'
 
 let root: string
 let metaDir: string
@@ -313,11 +317,7 @@ function createMonorepo(opts?: {
   if (opts?.usePackageJsonWorkspaces) {
     writeFileSync(
       join(monoRoot, 'package.json'),
-      JSON.stringify(
-        { private: true, workspaces: ['packages/*'] },
-        null,
-        2,
-      ),
+      JSON.stringify({ private: true, workspaces: ['packages/*'] }, null, 2),
     )
   } else {
     writeFileSync(
@@ -365,10 +365,7 @@ describe('runEditPackageJsonAll', () => {
 
     // lib-b should not have been modified
     const libBPkg = JSON.parse(
-      readFileSync(
-        join(monoRoot, 'packages', 'lib-b', 'package.json'),
-        'utf8',
-      ),
+      readFileSync(join(monoRoot, 'packages', 'lib-b', 'package.json'), 'utf8'),
     )
     expect(libBPkg.files).toEqual(['dist'])
 
