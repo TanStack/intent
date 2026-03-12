@@ -25,7 +25,7 @@ The [Agent Skills spec](https://agentskills.io) is an open standard already adop
 Use whichever command runner matches your environment:
 
 | Tool | Pattern                                      |
-| ---- |----------------------------------------------|
+| ---- | -------------------------------------------- |
 | npm  | `npx @tanstack/intent@latest <command>`      |
 | pnpm | `pnpm dlx @tanstack/intent@latest <command>` |
 | bun  | `bunx @tanstack/intent@latest <command>`     |
@@ -88,7 +88,7 @@ npx @tanstack/intent@latest setup-github-actions
 
 | Environment    | Status      | Notes                                              |
 | -------------- | ----------- | -------------------------------------------------- |
-| Node.js + npm  | Supported   | Use `npx @tanstack/intent@latest <command>`   |
+| Node.js + npm  | Supported   | Use `npx @tanstack/intent@latest <command>`        |
 | Node.js + pnpm | Supported   | Use `pnpm dlx @tanstack/intent@latest <command>`   |
 | Node.js + Bun  | Supported   | Use `bunx @tanstack/intent@latest <command>`       |
 | Deno           | Best-effort | Requires `npm:` interop and `node_modules` support |
