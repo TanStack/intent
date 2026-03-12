@@ -25,8 +25,8 @@ The [Agent Skills spec](https://agentskills.io) is an open standard already adop
 Use whichever command runner matches your environment:
 
 | Tool | Pattern                                      |
-| ---- | -------------------------------------------- |
-| npm  | `npm exec @tanstack/intent@latest <command>` |
+| ---- |----------------------------------------------|
+| npm  | `npx @tanstack/intent@latest <command>`      |
 | pnpm | `pnpm dlx @tanstack/intent@latest <command>` |
 | bun  | `bunx @tanstack/intent@latest <command>`     |
 
@@ -37,15 +37,15 @@ If you use Deno, support is best-effort today via `npm:` interop with `node_modu
 Set up skill-to-task mappings in your project's agent config files (CLAUDE.md, .cursorrules, etc.):
 
 ```bash
-npm exec @tanstack/intent@latest install
+npx @tanstack/intent@latest install
 ```
 
-No per-library setup. No hunting for rules files. Install the package, run `intent install` through your preferred command runner, and the agent understands the tool. Update the package, and skills update too.
+No per-library setup. No hunting for rules files. Install the package, run `npx @tanstack/intent@latest install` through your preferred command runner, and the agent understands the tool. Update the package, and skills update too.
 
 List available skills from installed packages:
 
 ```bash
-pnpm dlx @tanstack/intent@latest list
+npx @tanstack/intent@latest list
 ```
 
 ### For library maintainers
@@ -53,7 +53,7 @@ pnpm dlx @tanstack/intent@latest list
 Generate skills for your library by telling your AI coding agent to run:
 
 ```bash
-bunx @tanstack/intent@latest scaffold
+npx @tanstack/intent@latest scaffold
 ```
 
 This walks the agent through domain discovery, skill tree generation, and skill creation — one step at a time with your review at each stage.
@@ -61,19 +61,19 @@ This walks the agent through domain discovery, skill tree generation, and skill 
 Validate your skill files:
 
 ```bash
-npm exec @tanstack/intent@latest validate
+npx @tanstack/intent@latest validate
 ```
 
 In a monorepo, you can validate a package from the repo root:
 
 ```bash
-pnpm dlx @tanstack/intent@latest validate packages/router/skills
+npx @tanstack/intent@latest validate packages/router/skills
 ```
 
 Check for skills that have fallen behind their sources:
 
 ```bash
-pnpm dlx @tanstack/intent@latest stale
+npx @tanstack/intent@latest stale
 ```
 
 From a monorepo root, `intent stale` checks every workspace package that ships skills. To scope it to one package, pass a directory like `intent stale packages/router`.
@@ -81,14 +81,14 @@ From a monorepo root, `intent stale` checks every workspace package that ships s
 Copy CI workflow templates into your repo so validation and staleness checks run on every push:
 
 ```bash
-bunx @tanstack/intent@latest setup-github-actions
+npx @tanstack/intent@latest setup-github-actions
 ```
 
 ## Compatibility
 
 | Environment    | Status      | Notes                                              |
 | -------------- | ----------- | -------------------------------------------------- |
-| Node.js + npm  | Supported   | Use `npm exec @tanstack/intent@latest <command>`   |
+| Node.js + npm  | Supported   | Use `npx @tanstack/intent@latest <command>`   |
 | Node.js + pnpm | Supported   | Use `pnpm dlx @tanstack/intent@latest <command>`   |
 | Node.js + Bun  | Supported   | Use `bunx @tanstack/intent@latest <command>`       |
 | Deno           | Best-effort | Requires `npm:` interop and `node_modules` support |
