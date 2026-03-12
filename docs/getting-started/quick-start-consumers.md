@@ -15,7 +15,7 @@ npx @tanstack/intent@latest install
 
 This prints a skill that instructs your AI agent to:
 1. Check for existing `intent-skills` mappings in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.)
-2. Run `intent list` to discover available skills from installed packages
+2. Run `npx @tanstack/intent@latest list` to discover available skills from installed packages
 3. Scan your repository structure to understand your project
 4. Propose relevant skill-to-task mappings based on your codebase patterns
 5. Ask if you want a target other than `AGENTS.md`

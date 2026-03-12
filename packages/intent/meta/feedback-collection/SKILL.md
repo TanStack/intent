@@ -36,7 +36,7 @@ during the session:
 
 - **Loaded and used:** Skills you read and actively followed.
 - **Available but not loaded:** Skills that were installed (discoverable via
-  `intent list`) but you never read. This is important — many issues stem from
+  `npx @tanstack/intent@latest list`) but you never read. This is important — many issues stem from
   the agent not loading the right skill, not from the skill itself being wrong.
 
 ### 1b: Gap detection

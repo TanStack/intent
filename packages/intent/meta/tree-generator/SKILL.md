@@ -274,7 +274,7 @@ packages/
 │   └── package.json             # Add "skills" to files array
 ```
 
-Run `intent edit-package-json` to wire each package's `package.json`
+Run `npx @tanstack/intent@latest edit-package-json` to wire each package's `package.json`
 automatically (adds `"skills"`, `"bin"`, and `"!skills/_artifacts"` to the
 `files` array, and adds the `bin` entry if missing).
 
