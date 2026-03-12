@@ -109,8 +109,8 @@ The feedback loop runs both directions. `npx @tanstack/intent@latest feedback` l
 
 ## CLI Commands
 
-| Command                       | Description                                         |
-| ----------------------------- | --------------------------------------------------- |
+| Command                                            | Description                                         |
+| -------------------------------------------------- | --------------------------------------------------- |
 | `npx @tanstack/intent@latest install`              | Set up skill-to-task mappings in agent config files |
 | `npx @tanstack/intent@latest list [--json]`        | Discover intent-enabled packages                    |
 | `npx @tanstack/intent@latest meta`                 | List meta-skills for library maintainers            |
