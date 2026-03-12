@@ -40,7 +40,7 @@ Every skill has a `type` field in its frontmatter. Valid types:
 | `composition` | Integration between two or more libraries                  | `electric-drizzle`        |
 | `security`    | Audit checklist or security validation                     | `electric-security-check` |
 
-Agents discover skills via `tanstack intent list` and read them directly
+Agents discover skills via `npx @tanstack/intent list` and read them directly
 from `node_modules`. Framework skills declare a `requires` dependency on
 their core skill so agents load them in the right order.
 
