@@ -128,6 +128,21 @@ describe('validateMetaPayload', () => {
     )
     expect(result.valid).toBe(true)
   })
+
+  it('rejects invalid optional quality fields', () => {
+    const result = validateMetaPayload(
+      validMetaPayload({
+        interviewQuality: 'excellent' as any,
+        failureModeQuality: 'unknown' as any,
+      }),
+    )
+
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.includes('interviewQuality'))).toBe(true)
+    expect(result.errors.some((e) => e.includes('failureModeQuality'))).toBe(
+      true,
+    )
+  })
 })
 
 // ---------------------------------------------------------------------------

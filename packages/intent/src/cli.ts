@@ -2,47 +2,121 @@
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { parse as parseYaml } from 'yaml'
-import { computeSkillNameWidth, printSkillTree, printTable } from './display.js'
-import { scanForIntents } from './scanner.js'
-import { findSkillFiles, parseFrontmatter } from './utils.js'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { INSTALL_PROMPT } from './install-prompt.js'
 import type { ScanResult } from './types.js'
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function getMetaDir(): string {
   const thisDir = dirname(fileURLToPath(import.meta.url))
   return join(thisDir, '..', 'meta')
 }
 
-// ---------------------------------------------------------------------------
-// Commands
-// ---------------------------------------------------------------------------
+type CliFailure = {
+  message: string
+  exitCode: number
+}
+
+function fail(message: string, exitCode = 1): never {
+  throw { message, exitCode } satisfies CliFailure
+}
+
+function isCliFailure(value: unknown): value is CliFailure {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'message' in value &&
+    typeof value.message === 'string' &&
+    'exitCode' in value &&
+    typeof value.exitCode === 'number'
+  )
+}
+
+async function scanIntentsOrFail(): Promise<ScanResult> {
+  const { scanForIntents } = await import('./scanner.js')
+
+  try {
+    return await scanForIntents()
+  } catch (err) {
+    fail((err as Error).message)
+  }
+}
+
+function printWarnings(warnings: Array<string>): void {
+  if (warnings.length === 0) return
+
+  console.log('Warnings:')
+  for (const warning of warnings) {
+    console.log(`  ⚠ ${warning}`)
+  }
+}
+
+function formatScanCoverage(result: ScanResult): string {
+  const coverage: Array<string> = []
+
+  if (result.nodeModules.local.scanned) coverage.push('project node_modules')
+  if (result.nodeModules.global.scanned) coverage.push('global node_modules')
+
+  return coverage.join(', ')
+}
+
+function printVersionConflicts(result: ScanResult): void {
+  if (result.conflicts.length === 0) return
+
+  console.log('\nVersion conflicts:\n')
+  for (const conflict of result.conflicts) {
+    console.log(`  ${conflict.packageName} -> using ${conflict.chosen.version}`)
+    console.log(`    chosen: ${conflict.chosen.packageRoot}`)
+
+    for (const variant of conflict.variants) {
+      if (variant.packageRoot === conflict.chosen.packageRoot) continue
+      console.log(
+        `    also found: ${variant.version} at ${variant.packageRoot}`,
+      )
+    }
+
+    console.log()
+  }
+}
+
+function buildValidationFailure(
+  errors: Array<{ file: string; message: string }>,
+  warnings: Array<string>,
+): string {
+  const lines = ['', `❌ Validation failed with ${errors.length} error(s):`, '']
+
+  for (const { file, message } of errors) {
+    lines.push(`  ${file}: ${message}`)
+  }
+
+  if (warnings.length > 0) {
+    lines.push('', '⚠ Packaging warnings:')
+    for (const warning of warnings) {
+      lines.push(`  ${warning}`)
+    }
+  }
+
+  return lines.join('\n')
+}
 
 async function cmdList(args: Array<string>): Promise<void> {
+  const { computeSkillNameWidth, printSkillTree, printTable } =
+    await import('./display.js')
   const jsonOutput = args.includes('--json')
-
-  let result: ScanResult
-  try {
-    result = await scanForIntents()
-  } catch (err) {
-    console.error((err as Error).message)
-    process.exit(1)
-  }
+  const result = await scanIntentsOrFail()
 
   if (jsonOutput) {
     console.log(JSON.stringify(result, null, 2))
     return
   }
 
+  const scanCoverage = formatScanCoverage(result)
+
   if (result.packages.length === 0) {
     console.log('No intent-enabled packages found.')
+    if (scanCoverage) console.log(`Scanned: ${scanCoverage}`)
     if (result.warnings.length > 0) {
-      console.log(`\nWarnings:`)
-      for (const w of result.warnings) console.log(`  ⚠ ${w}`)
+      console.log()
+      printWarnings(result.warnings)
     }
     return
   }
@@ -54,6 +128,11 @@ async function cmdList(args: Array<string>): Promise<void> {
   console.log(
     `\n${result.packages.length} intent-enabled packages, ${totalSkills} skills (${result.packageManager})\n`,
   )
+  if (scanCoverage) {
+    console.log(
+      `Scanned: ${scanCoverage}${result.nodeModules.global.scanned ? ' (local packages take precedence)' : ''}\n`,
+    )
+  }
 
   // Summary table
   const rows = result.packages.map((pkg) => [
@@ -63,6 +142,8 @@ async function cmdList(args: Array<string>): Promise<void> {
     pkg.intent.requires?.join(', ') || '–',
   ])
   printTable(['PACKAGE', 'VERSION', 'SKILLS', 'REQUIRES'], rows)
+
+  printVersionConflicts(result)
 
   // Skills detail
   const allSkills = result.packages.map((p) => p.skills)
@@ -85,40 +166,33 @@ async function cmdList(args: Array<string>): Promise<void> {
   )
   console.log()
 
-  if (result.warnings.length > 0) {
-    console.log(`Warnings:`)
-    for (const w of result.warnings) console.log(`  ⚠ ${w}`)
-  }
+  printWarnings(result.warnings)
 }
 
-function cmdMeta(args: Array<string>): void {
+async function cmdMeta(args: Array<string>): Promise<void> {
+  const { parseFrontmatter } = await import('./utils.js')
   const metaDir = getMetaDir()
 
   if (!existsSync(metaDir)) {
-    console.error('Meta-skills directory not found.')
-    process.exit(1)
+    fail('Meta-skills directory not found.')
   }
 
   if (args.length > 0) {
     const name = args[0]!
     if (name.includes('..') || name.includes('/') || name.includes('\\')) {
-      console.error(`Invalid meta-skill name: "${name}"`)
-      process.exit(1)
+      fail(`Invalid meta-skill name: "${name}"`)
     }
     const skillFile = join(metaDir, name, 'SKILL.md')
     if (!existsSync(skillFile)) {
-      console.error(`Meta-skill "${name}" not found.`)
-      console.error(
-        `Run \`npx @tanstack/intent meta\` to list available meta-skills.`,
+      fail(
+        `Meta-skill "${name}" not found. Run \`intent meta\` to list available meta-skills.`,
       )
-      process.exit(1)
     }
     try {
       console.log(readFileSync(skillFile, 'utf8'))
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.error(`Failed to read meta-skill "${name}": ${msg}`)
-      process.exit(1)
+      fail(`Failed to read meta-skill "${name}": ${msg}`)
     }
     return
   }
@@ -205,13 +279,89 @@ function collectPackagingWarnings(root: string): Array<string> {
   return warnings
 }
 
-function cmdValidate(args: Array<string>): void {
+function resolvePackageRoot(startDir: string): string {
+  let dir = startDir
+
+  while (true) {
+    if (existsSync(join(dir, 'package.json'))) {
+      return dir
+    }
+
+    const next = dirname(dir)
+    if (next === dir) {
+      return startDir
+    }
+
+    dir = next
+  }
+}
+
+function readPackageName(root: string): string {
+  try {
+    const pkgJson = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    ) as {
+      name?: unknown
+    }
+    return typeof pkgJson.name === 'string'
+      ? pkgJson.name
+      : relative(process.cwd(), root) || 'unknown'
+  } catch {
+    return relative(process.cwd(), root) || 'unknown'
+  }
+}
+
+async function resolveStaleTargets(targetDir?: string) {
+  const resolvedRoot = targetDir
+    ? join(process.cwd(), targetDir)
+    : process.cwd()
+  const { checkStaleness } = await import('./staleness.js')
+
+  if (existsSync(join(resolvedRoot, 'skills'))) {
+    return {
+      reports: [
+        await checkStaleness(resolvedRoot, readPackageName(resolvedRoot)),
+      ],
+    }
+  }
+
+  const { findPackagesWithSkills, findWorkspaceRoot } =
+    await import('./setup.js')
+  const workspaceRoot = findWorkspaceRoot(resolvedRoot)
+  if (workspaceRoot) {
+    const packageDirs = findPackagesWithSkills(workspaceRoot)
+    if (packageDirs.length > 0) {
+      return {
+        reports: await Promise.all(
+          packageDirs.map((packageDir) =>
+            checkStaleness(packageDir, readPackageName(packageDir)),
+          ),
+        ),
+      }
+    }
+  }
+
+  const staleResult = await scanIntentsOrFail()
+  return {
+    reports: await Promise.all(
+      staleResult.packages.map((pkg) =>
+        checkStaleness(pkg.packageRoot, pkg.name),
+      ),
+    ),
+  }
+}
+
+async function cmdValidate(args: Array<string>): Promise<void> {
+  const [{ parse: parseYaml }, { findSkillFiles }] = await Promise.all([
+    import('yaml'),
+    import('./utils.js'),
+  ])
   const targetDir = args[0] ?? 'skills'
   const skillsDir = join(process.cwd(), targetDir)
+  const packageRoot = resolvePackageRoot(skillsDir)
 
   if (!existsSync(skillsDir)) {
-    console.error(`Skills directory not found: ${skillsDir}`)
-    process.exit(1)
+    fail(`Skills directory not found: ${skillsDir}`)
   }
 
   interface ValidationError {
@@ -223,8 +373,7 @@ function cmdValidate(args: Array<string>): void {
   const skillFiles = findSkillFiles(skillsDir)
 
   if (skillFiles.length === 0) {
-    console.error('No SKILL.md files found')
-    process.exit(1)
+    fail('No SKILL.md files found')
   }
 
   for (const filePath of skillFiles) {
@@ -335,25 +484,15 @@ function cmdValidate(args: Array<string>): void {
     }
   }
 
-  const warnings = collectPackagingWarnings(process.cwd())
-
-  const printWarnings = (log: (...args: Array<unknown>) => void): void => {
-    if (warnings.length === 0) return
-    log(`\n⚠ Packaging warnings:`)
-    for (const w of warnings) log(`  ${w}`)
-  }
+  const warnings = collectPackagingWarnings(packageRoot)
 
   if (errors.length > 0) {
-    console.error(`\n❌ Validation failed with ${errors.length} error(s):\n`)
-    for (const { file, message } of errors) {
-      console.error(`  ${file}: ${message}`)
-    }
-    printWarnings(console.error)
-    process.exit(1)
+    fail(buildValidationFailure(errors, warnings))
   }
 
   console.log(`✅ Validated ${skillFiles.length} skill files — all passed`)
-  printWarnings(console.log)
+  if (warnings.length > 0) console.log()
+  printWarnings(warnings)
 }
 
 function cmdScaffold(): void {
@@ -416,7 +555,7 @@ This produces: individual SKILL.md files.
 
 ## After all skills are generated
 
-1. Run \`npx @tanstack/intent validate\` in each package directory
+1. Run \`intent validate\` in each package directory
 2. Commit skills/ and artifacts
 3. For each publishable package, run: \`npx @tanstack/intent add-library-bin\`
 4. For each publishable package, run: \`npx @tanstack/intent edit-package-json\`
@@ -432,7 +571,7 @@ This produces: individual SKILL.md files.
 // Main
 // ---------------------------------------------------------------------------
 
-const USAGE = `TanStack Intent CLI
+export const USAGE = `TanStack Intent CLI
 
 Usage:
   intent list [--json]           Discover intent-enabled packages
@@ -443,143 +582,177 @@ Usage:
   intent add-library-bin         Generate bin/intent.{js,mjs} bridge file
   intent edit-package-json       Wire package.json (files, bin) for skill publishing
   intent setup-github-actions    Copy CI workflow templates to .github/workflows/
-  intent stale                   Check skills for staleness`
+  intent stale [dir] [--json]    Check skills for staleness`
 
-const command = process.argv[2]
-const commandArgs = process.argv.slice(3)
+const HELP_BY_COMMAND: Record<string, string> = {
+  list: `${USAGE}
 
-switch (command) {
-  case 'list':
-    await cmdList(commandArgs)
-    break
-  case 'meta':
-    cmdMeta(commandArgs)
-    break
-  case 'validate':
-    cmdValidate(commandArgs)
-    break
-  case 'install': {
-    const prompt = `You are an AI assistant helping a developer set up skill-to-task mappings for their project.
+Examples:
+  intent list
+  intent list --json`,
+  meta: `intent meta [name]
 
-Follow these steps in order:
+List shipped meta-skills, or print a single meta-skill by name.
 
-1. CHECK FOR EXISTING MAPPINGS
-   Search the project's agent config files (CLAUDE.md, AGENTS.md, .cursorrules,
-   .github/copilot-instructions.md) for a block delimited by:
-     <!-- intent-skills:start -->
-     <!-- intent-skills:end -->
-   - If found: show the user the current mappings and ask "What would you like to update?"
-     Then skip to step 4 with their requested changes.
-   - If not found: continue to step 2.
+Examples:
+  intent meta
+  intent meta domain-discovery`,
+  validate: `intent validate [dir]
 
-2. DISCOVER AVAILABLE SKILLS
-   Run: intent list
-   This outputs each skill's name, description, and full path — grouped by package.
+Validate SKILL.md files in the target directory.
 
-3. SCAN THE REPOSITORY
-   Build a picture of the project's structure and patterns:
-   - Read package.json for library dependencies
-   - Survey the directory layout (src/, app/, routes/, components/, api/, etc.)
-   - Note recurring patterns (routing, data fetching, auth, UI components, etc.)
+Examples:
+  intent validate
+  intent validate packages/query/skills`,
+  install: `intent install
 
-   Based on this, propose 3–5 skill-to-task mappings. For each one explain:
-   - The task or code area (in plain language the user would recognise)
-   - Which skill applies and why
+Print the install prompt used to set up skill-to-task mappings.`,
+  scaffold: `intent scaffold
 
-   Then ask: "What other tasks do you commonly use AI coding agents for?
-   I'll create mappings for those too."
+Print the guided maintainer prompt for generating skills.`,
+  stale: `intent stale [dir] [--json]
 
-4. WRITE THE MAPPINGS BLOCK
-   Once you have the full set of mappings, write or update the agent config file
-   (prefer CLAUDE.md; create it if none exists) with this exact block:
+Check installed skills for version and source drift.
 
-<!-- intent-skills:start -->
-# Skill mappings — when working in these areas, load the linked skill file into context.
-skills:
-  - task: "describe the task or code area here"
-    load: "node_modules/package-name/skills/skill-name/SKILL.md"
-<!-- intent-skills:end -->
+Examples:
+  intent stale
+  intent stale packages/query
+  intent stale --json`,
+  'add-library-bin': `intent add-library-bin
 
-   Rules:
-   - Use the user's own words for task descriptions
-   - Include the exact path from \`intent list\` output so agents can load it directly
-   - Keep entries concise — this block is read on every agent task
-   - Preserve all content outside the block tags unchanged`
+Generate bin/intent.{js,mjs} bridge files for publishable packages.`,
+  'edit-package-json': `intent edit-package-json
 
-    console.log(prompt)
-    break
+Update package.json files so skills and shims are published.`,
+  'setup-github-actions': `intent setup-github-actions
+
+Copy Intent CI workflow templates into .github/workflows/.`,
+}
+
+function isHelpFlag(arg: string | undefined): boolean {
+  return arg === '-h' || arg === '--help'
+}
+
+function printHelp(command?: string): void {
+  if (!command) {
+    console.log(`${USAGE}
+
+Run \`intent help <command>\` for details on a specific command.`)
+    return
   }
-  case 'scaffold': {
-    cmdScaffold()
-    break
-  }
-  case 'stale': {
-    const { checkStaleness } = await import('./staleness.js')
-    const { scanForIntents: scanStale } = await import('./scanner.js')
-    let staleResult
-    try {
-      staleResult = await scanStale()
-    } catch (err) {
-      console.error((err as Error).message)
-      process.exit(1)
+
+  console.log(HELP_BY_COMMAND[command] ?? USAGE)
+}
+
+export async function main(argv: Array<string> = process.argv.slice(2)) {
+  const command = argv[0]
+  const commandArgs = argv.slice(1)
+
+  try {
+    if (!command || isHelpFlag(command)) {
+      printHelp()
+      return 0
     }
 
-    if (staleResult.packages.length === 0) {
-      console.log('No intent-enabled packages found.')
-      break
+    if (command === 'help') {
+      printHelp(commandArgs[0])
+      return 0
     }
 
-    const jsonStale = commandArgs.includes('--json')
-    const reports = await Promise.all(
-      staleResult.packages.map((pkg) => {
-        const pkgDir = join(process.cwd(), 'node_modules', pkg.name)
-        return checkStaleness(pkgDir, pkg.name)
-      }),
-    )
-
-    if (jsonStale) {
-      console.log(JSON.stringify(reports, null, 2))
-      break
+    if (isHelpFlag(commandArgs[0])) {
+      printHelp(command)
+      return 0
     }
 
-    for (const report of reports) {
-      const driftLabel = report.versionDrift
-        ? ` [${report.versionDrift} drift]`
-        : ''
-      const vLabel =
-        report.skillVersion && report.currentVersion
-          ? ` (${report.skillVersion} → ${report.currentVersion})`
-          : ''
-      console.log(`${report.library}${vLabel}${driftLabel}`)
-
-      const stale = report.skills.filter((s) => s.needsReview)
-      if (stale.length === 0) {
-        console.log('  All skills up-to-date')
-      } else {
-        for (const skill of stale) {
-          console.log(`  ⚠ ${skill.name}: ${skill.reasons.join(', ')}`)
-        }
+    switch (command) {
+      case 'list':
+        await cmdList(commandArgs)
+        return 0
+      case 'meta':
+        await cmdMeta(commandArgs)
+        return 0
+      case 'validate':
+        await cmdValidate(commandArgs)
+        return 0
+      case 'install': {
+        console.log(INSTALL_PROMPT)
+        return 0
       }
-      console.log()
+      case 'scaffold': {
+        cmdScaffold()
+        return 0
+      }
+      case 'stale': {
+        const jsonStale = commandArgs.includes('--json')
+        const targetDir = commandArgs.find((arg) => !arg.startsWith('-'))
+        const { reports } = await resolveStaleTargets(targetDir)
+
+        if (reports.length === 0) {
+          console.log('No intent-enabled packages found.')
+          return 0
+        }
+
+        if (jsonStale) {
+          console.log(JSON.stringify(reports, null, 2))
+          return 0
+        }
+
+        for (const report of reports) {
+          const driftLabel = report.versionDrift
+            ? ` [${report.versionDrift} drift]`
+            : ''
+          const vLabel =
+            report.skillVersion && report.currentVersion
+              ? ` (${report.skillVersion} → ${report.currentVersion})`
+              : ''
+          console.log(`${report.library}${vLabel}${driftLabel}`)
+
+          const stale = report.skills.filter((s) => s.needsReview)
+          if (stale.length === 0) {
+            console.log('  All skills up-to-date')
+          } else {
+            for (const skill of stale) {
+              console.log(`  ⚠ ${skill.name}: ${skill.reasons.join(', ')}`)
+            }
+          }
+          console.log()
+        }
+        return 0
+      }
+      case 'add-library-bin': {
+        const { runAddLibraryBinAll } = await import('./setup.js')
+        runAddLibraryBinAll(process.cwd())
+        return 0
+      }
+      case 'edit-package-json': {
+        const { runEditPackageJsonAll } = await import('./setup.js')
+        runEditPackageJsonAll(process.cwd())
+        return 0
+      }
+      case 'setup-github-actions': {
+        const { runSetupGithubActions } = await import('./setup.js')
+        runSetupGithubActions(process.cwd(), getMetaDir())
+        return 0
+      }
+      default:
+        printHelp()
+        return command ? 1 : 0
     }
-    break
+  } catch (err) {
+    if (isCliFailure(err)) {
+      console.error(err.message)
+      return err.exitCode
+    }
+
+    throw err
   }
-  case 'add-library-bin': {
-    const { runAddLibraryBinAll } = await import('./setup.js')
-    runAddLibraryBinAll(process.cwd())
-    break
-  }
-  case 'edit-package-json': {
-    const { runEditPackageJsonAll } = await import('./setup.js')
-    runEditPackageJsonAll(process.cwd())
-    break
-  }
-  case 'setup-github-actions': {
-    const { runSetupGithubActions } = await import('./setup.js')
-    runSetupGithubActions(process.cwd(), getMetaDir())
-    break
-  }
-  default:
-    console.log(USAGE)
-    process.exit(command ? 1 : 0)
+}
+
+const isMain =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+
+if (isMain) {
+  const exitCode = await main()
+  process.exit(exitCode)
 }

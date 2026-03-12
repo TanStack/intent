@@ -5,7 +5,7 @@ import {
   readdirSync,
   writeFileSync,
 } from 'node:fs'
-import { join, relative } from 'node:path'
+import { basename, join, relative } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { findSkillFiles } from './utils.js'
 
@@ -35,20 +35,22 @@ export interface MonorepoResult<T> {
 
 interface TemplateVars {
   PACKAGE_NAME: string
+  PACKAGE_LABEL: string
+  PAYLOAD_PACKAGE: string
   REPO: string
   DOCS_PATH: string
   SRC_PATH: string
+  WATCH_PATHS: string
 }
 
 // ---------------------------------------------------------------------------
 // Variable detection from package.json
 // ---------------------------------------------------------------------------
 
-function detectVars(root: string): TemplateVars {
+function readPackageJson(root: string): Record<string, unknown> {
   const pkgPath = join(root, 'package.json')
-  let pkgJson: Record<string, unknown> = {}
   try {
-    pkgJson = JSON.parse(readFileSync(pkgPath, 'utf8'))
+    return JSON.parse(readFileSync(pkgPath, 'utf8')) as Record<string, unknown>
   } catch (err: unknown) {
     const isNotFound =
       err &&
@@ -60,17 +62,88 @@ function detectVars(root: string): TemplateVars {
         `Warning: could not read ${pkgPath}: ${err instanceof Error ? err.message : err}`,
       )
     }
+    return {}
+  }
+}
+
+function detectRepo(
+  pkgJson: Record<string, unknown>,
+  fallback: string,
+): string {
+  const intent = pkgJson.intent as Record<string, unknown> | undefined
+  if (typeof intent?.repo === 'string') {
+    return intent.repo
   }
 
+  if (typeof pkgJson.repository === 'string') {
+    return pkgJson.repository
+      .replace(/^git\+/, '')
+      .replace(/\.git$/, '')
+      .replace(/^https?:\/\/github\.com\//, '')
+  }
+
+  if (
+    pkgJson.repository &&
+    typeof pkgJson.repository === 'object' &&
+    typeof (pkgJson.repository as Record<string, unknown>).url === 'string'
+  ) {
+    return ((pkgJson.repository as Record<string, unknown>).url as string)
+      .replace(/^git\+/, '')
+      .replace(/\.git$/, '')
+      .replace(/^https?:\/\/github\.com\//, '')
+  }
+
+  return fallback
+}
+
+function normalizePattern(pattern: string): string {
+  return pattern.endsWith('**') ? pattern : pattern.replace(/\/$/, '') + '/**'
+}
+
+function buildWatchPaths(root: string, packageDirs: Array<string>): string {
+  const paths = new Set<string>()
+
+  if (existsSync(join(root, 'docs'))) {
+    paths.add('docs/**')
+  }
+
+  for (const packageDir of packageDirs) {
+    const relDir = relative(root, packageDir).split('\\').join('/')
+    if (existsSync(join(packageDir, 'src'))) {
+      paths.add(`${relDir}/src/**`)
+    }
+
+    const pkgJson = readPackageJson(packageDir)
+    const intent = pkgJson.intent as Record<string, unknown> | undefined
+    const docs = typeof intent?.docs === 'string' ? intent.docs : 'docs/'
+    if (!docs.startsWith('http://') && !docs.startsWith('https://')) {
+      paths.add(normalizePattern(join(relDir, docs).split('\\').join('/')))
+    }
+  }
+
+  if (paths.size === 0) {
+    paths.add('packages/*/src/**')
+    paths.add('packages/*/docs/**')
+  }
+
+  return [...paths]
+    .sort()
+    .map((path) => `      - '${path}'`)
+    .join('\n')
+}
+
+function detectVars(root: string, packageDirs?: Array<string>): TemplateVars {
+  const pkgJson = readPackageJson(root)
   const name = typeof pkgJson.name === 'string' ? pkgJson.name : 'unknown'
-  const intent = pkgJson.intent as Record<string, unknown> | undefined
-
-  const repo =
-    typeof intent?.repo === 'string'
-      ? intent.repo
-      : name.replace(/^@/, '').replace(/\//, '/')
-
-  const docs = typeof intent?.docs === 'string' ? intent.docs : 'docs/'
+  const docs =
+    typeof (pkgJson.intent as Record<string, unknown> | undefined)?.docs ===
+    'string'
+      ? ((pkgJson.intent as Record<string, unknown>).docs as string)
+      : 'docs/'
+  const repo = detectRepo(pkgJson, name.replace(/^@/, '').replace(/\//, '/'))
+  const isMonorepo = packageDirs !== undefined
+  const packageLabel =
+    isMonorepo && name === 'unknown' ? `${basename(root)} workspace` : name
 
   // Best-guess src path from common monorepo patterns
   const shortName = name.replace(/^@[^/]+\//, '')
@@ -81,9 +154,14 @@ function detectVars(root: string): TemplateVars {
 
   return {
     PACKAGE_NAME: name,
+    PACKAGE_LABEL: packageLabel,
+    PAYLOAD_PACKAGE: packageLabel,
     REPO: repo,
     DOCS_PATH: docs.endsWith('**') ? docs : docs.replace(/\/$/, '') + '/**',
     SRC_PATH: srcPath,
+    WATCH_PATHS: isMonorepo
+      ? buildWatchPaths(root, packageDirs)
+      : `      - '${docs.endsWith('**') ? docs : docs.replace(/\/$/, '') + '/**'}'\n      - '${srcPath}'`,
   }
 }
 
@@ -94,9 +172,12 @@ function detectVars(root: string): TemplateVars {
 function applyVars(content: string, vars: TemplateVars): string {
   return content
     .replace(/\{\{PACKAGE_NAME\}\}/g, vars.PACKAGE_NAME)
+    .replace(/\{\{PACKAGE_LABEL\}\}/g, vars.PACKAGE_LABEL)
+    .replace(/\{\{PAYLOAD_PACKAGE\}\}/g, vars.PAYLOAD_PACKAGE)
     .replace(/\{\{REPO\}\}/g, vars.REPO)
     .replace(/\{\{DOCS_PATH\}\}/g, vars.DOCS_PATH)
     .replace(/\{\{SRC_PATH\}\}/g, vars.SRC_PATH)
+    .replace(/\{\{WATCH_PATHS\}\}/g, vars.WATCH_PATHS)
 }
 
 // ---------------------------------------------------------------------------
@@ -124,7 +205,13 @@ function copyTemplates(
       continue
     }
 
-    const content = readFileSync(srcPath, 'utf8')
+    let content = readFileSync(srcPath, 'utf8')
+    if (vars.WATCH_PATHS.includes('\n')) {
+      content = content.replace(
+        /\s+- '?\{\{DOCS_PATH\}\}'?\n\s+- '?\{\{SRC_PATH\}\}'?/,
+        vars.WATCH_PATHS,
+      )
+    }
     const substituted = applyVars(content, vars)
     writeFileSync(destPath, substituted)
     copied.push(destPath)
@@ -348,7 +435,7 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
 // Monorepo workspace resolution
 // ---------------------------------------------------------------------------
 
-function readWorkspacePatterns(root: string): Array<string> | null {
+export function readWorkspacePatterns(root: string): Array<string> | null {
   // pnpm-workspace.yaml
   const pnpmWs = join(root, 'pnpm-workspace.yaml')
   if (existsSync(pnpmWs)) {
@@ -453,10 +540,24 @@ function collectPackageDirs(dir: string, result: Array<string>): void {
   }
 }
 
+export function findWorkspaceRoot(start: string): string | null {
+  let dir = start
+
+  while (true) {
+    if (readWorkspacePatterns(dir)) {
+      return dir
+    }
+
+    const next = join(dir, '..')
+    if (next === dir) return null
+    dir = next
+  }
+}
+
 /**
  * Find workspace packages that contain at least one SKILL.md file.
  */
-function findPackagesWithSkills(root: string): Array<string> {
+export function findPackagesWithSkills(root: string): Array<string> {
   const patterns = readWorkspacePatterns(root)
   if (!patterns) return []
 
@@ -519,11 +620,16 @@ export function runSetupGithubActions(
   root: string,
   metaDir: string,
 ): SetupGithubActionsResult {
-  const vars = detectVars(root)
+  const workspaceRoot = findWorkspaceRoot(root) ?? root
+  const packageDirs = findPackagesWithSkills(workspaceRoot)
+  const vars = detectVars(
+    workspaceRoot,
+    packageDirs.length > 0 ? packageDirs : undefined,
+  )
   const result: SetupGithubActionsResult = { workflows: [], skipped: [] }
 
   const srcDir = join(metaDir, 'templates', 'workflows')
-  const destDir = join(root, '.github', 'workflows')
+  const destDir = join(workspaceRoot, '.github', 'workflows')
   const { copied, skipped } = copyTemplates(srcDir, destDir, vars)
   result.workflows = copied
   result.skipped = skipped
@@ -535,10 +641,11 @@ export function runSetupGithubActions(
     console.log('No templates directory found. Is @tanstack/intent installed?')
   } else if (result.workflows.length > 0) {
     console.log(`\nTemplate variables applied:`)
-    console.log(`  Package:  ${vars.PACKAGE_NAME}`)
+    console.log(`  Package:  ${vars.PACKAGE_LABEL}`)
     console.log(`  Repo:     ${vars.REPO}`)
-    console.log(`  Docs:     ${vars.DOCS_PATH}`)
-    console.log(`  Src:      ${vars.SRC_PATH}`)
+    console.log(
+      `  Mode:     ${packageDirs.length > 0 ? `monorepo (${packageDirs.length} packages with skills)` : 'single package'}`,
+    )
   }
 
   return result

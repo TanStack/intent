@@ -35,13 +35,24 @@ function writeSkillMd(dir: string, frontmatter: Record<string, unknown>): void {
 // ── Setup / Teardown ──
 
 let root: string
+let globalRoot: string
+let previousGlobalNodeModules: string | undefined
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'intent-test-'))
+  globalRoot = mkdtempSync(join(tmpdir(), 'intent-global-test-'))
+  previousGlobalNodeModules = process.env.INTENT_GLOBAL_NODE_MODULES
+  delete process.env.INTENT_GLOBAL_NODE_MODULES
 })
 
 afterEach(() => {
   rmSync(root, { recursive: true, force: true })
+  rmSync(globalRoot, { recursive: true, force: true })
+  if (previousGlobalNodeModules === undefined) {
+    delete process.env.INTENT_GLOBAL_NODE_MODULES
+  } else {
+    process.env.INTENT_GLOBAL_NODE_MODULES = previousGlobalNodeModules
+  }
 })
 
 // ── Tests ──
@@ -51,6 +62,7 @@ describe('scanForIntents', () => {
     const result = await scanForIntents(root)
     expect(result.packages).toEqual([])
     expect(result.warnings).toEqual([])
+    expect(result.nodeModules.local.exists).toBe(false)
   })
 
   it('returns empty packages when node_modules has no intent packages', async () => {
@@ -85,6 +97,7 @@ describe('scanForIntents', () => {
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/db')
     expect(result.packages[0]!.version).toBe('0.5.2')
+    expect(result.packages[0]!.packageRoot).toBe(pkgDir)
     expect(result.packages[0]!.skills).toHaveLength(1)
     expect(result.packages[0]!.skills[0]!.name).toBe('db-core')
     expect(result.packages[0]!.skills[0]!.description).toBe(
@@ -234,6 +247,300 @@ describe('scanForIntents', () => {
     const result = await scanForIntents(root)
     expect(result.packages).toHaveLength(0)
     expect(result.warnings).toHaveLength(0)
+  })
+
+  it('discovers global-only intent packages', async () => {
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+
+    const pkgDir = createDir(globalRoot, '@tanstack', 'query')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(pkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Global fetching skill',
+    })
+
+    const result = await scanForIntents(root)
+
+    expect(result.nodeModules.global.detected).toBe(true)
+    expect(result.nodeModules.global.exists).toBe(true)
+    expect(result.nodeModules.global.scanned).toBe(true)
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('@tanstack/query')
+  })
+
+  it('prefers local packages over global packages with the same name', async () => {
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+
+    const localPkgDir = createDir(root, 'node_modules', '@tanstack', 'query')
+    writeJson(join(localPkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.1.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(localPkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Local fetching skill',
+    })
+
+    const globalPkgDir = createDir(globalRoot, '@tanstack', 'query')
+    writeJson(join(globalPkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '4.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(globalPkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Global fetching skill',
+    })
+
+    const result = await scanForIntents(root)
+
+    expect(result.nodeModules.global.detected).toBe(true)
+    expect(result.nodeModules.global.scanned).toBe(true)
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.version).toBe('5.1.0')
+    expect(result.packages[0]!.skills[0]!.description).toBe(
+      'Local fetching skill',
+    )
+    expect(
+      result.warnings.some(
+        (warning) =>
+          warning.includes('Found 2 installed variants of @tanstack/query') &&
+          warning.includes('Using 5.1.0'),
+      ),
+    ).toBe(true)
+  })
+
+  it('chooses the highest version when duplicate package names exist at the same depth', async () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      dependencies: {
+        'consumer-a': '1.0.0',
+        'consumer-b': '1.0.0',
+        'consumer-c': '1.0.0',
+      },
+    })
+
+    const consumerADir = createDir(root, 'node_modules', 'consumer-a')
+    writeJson(join(consumerADir, 'package.json'), {
+      name: 'consumer-a',
+      version: '1.0.0',
+      dependencies: {
+        '@tanstack/query': '4.0.0',
+      },
+    })
+
+    const consumerBDir = createDir(root, 'node_modules', 'consumer-b')
+    writeJson(join(consumerBDir, 'package.json'), {
+      name: 'consumer-b',
+      version: '1.0.0',
+      dependencies: {
+        '@tanstack/query': '5.0.0',
+      },
+    })
+
+    const consumerCDir = createDir(root, 'node_modules', 'consumer-c')
+    writeJson(join(consumerCDir, 'package.json'), {
+      name: 'consumer-c',
+      version: '1.0.0',
+      dependencies: {
+        '@tanstack/query': '3.0.0',
+      },
+    })
+
+    const queryV4Dir = createDir(
+      consumerADir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    writeJson(join(queryV4Dir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '4.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(queryV4Dir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query v4 skill',
+    })
+
+    const queryV5Dir = createDir(
+      consumerBDir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    writeJson(join(queryV5Dir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(queryV5Dir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query v5 skill',
+    })
+
+    const queryV3Dir = createDir(
+      consumerCDir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    writeJson(join(queryV3Dir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '3.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(queryV3Dir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query v3 skill',
+    })
+
+    const result = await scanForIntents(root)
+    const versionWarning = result.warnings.find((warning) =>
+      warning.includes('@tanstack/query'),
+    )
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('@tanstack/query')
+    expect(result.packages[0]!.version).toBe('5.0.0')
+    expect(result.packages[0]!.packageRoot).toBe(queryV5Dir)
+    expect(versionWarning).toContain(
+      'Found 3 installed variants of @tanstack/query',
+    )
+    expect(versionWarning).toContain('across 3 versions')
+    expect(versionWarning).toContain('Using 5.0.0')
+  })
+
+  it('prefers stable releases over prereleases at the same depth', async () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      dependencies: {
+        'consumer-a': '1.0.0',
+        'consumer-b': '1.0.0',
+      },
+    })
+
+    const consumerADir = createDir(root, 'node_modules', 'consumer-a')
+    const consumerBDir = createDir(root, 'node_modules', 'consumer-b')
+
+    writeJson(join(consumerADir, 'package.json'), {
+      name: 'consumer-a',
+      version: '1.0.0',
+      dependencies: { '@tanstack/query': '5.0.0-beta.1' },
+    })
+    writeJson(join(consumerBDir, 'package.json'), {
+      name: 'consumer-b',
+      version: '1.0.0',
+      dependencies: { '@tanstack/query': '5.0.0' },
+    })
+
+    const prereleaseDir = createDir(
+      consumerADir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    const stableDir = createDir(
+      consumerBDir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+
+    writeJson(join(prereleaseDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0-beta.1',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeJson(join(stableDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(prereleaseDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Prerelease query skill',
+    })
+    writeSkillMd(createDir(stableDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Stable query skill',
+    })
+
+    const result = await scanForIntents(root)
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.version).toBe('5.0.0')
+    expect(result.packages[0]!.packageRoot).toBe(stableDir)
+  })
+
+  it('prefers valid semver versions over invalid ones at the same depth', async () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      dependencies: {
+        'consumer-a': '1.0.0',
+        'consumer-b': '1.0.0',
+      },
+    })
+
+    const consumerADir = createDir(root, 'node_modules', 'consumer-a')
+    const consumerBDir = createDir(root, 'node_modules', 'consumer-b')
+
+    writeJson(join(consumerADir, 'package.json'), {
+      name: 'consumer-a',
+      version: '1.0.0',
+      dependencies: { '@tanstack/query': 'workspace-dev' },
+    })
+    writeJson(join(consumerBDir, 'package.json'), {
+      name: 'consumer-b',
+      version: '1.0.0',
+      dependencies: { '@tanstack/query': '5.0.0' },
+    })
+
+    const invalidDir = createDir(
+      consumerADir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    const validDir = createDir(
+      consumerBDir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+
+    writeJson(join(invalidDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: 'workspace-dev',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeJson(join(validDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(invalidDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Invalid version query skill',
+    })
+    writeSkillMd(createDir(validDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Valid version query skill',
+    })
+
+    const result = await scanForIntents(root)
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.version).toBe('5.0.0')
+    expect(result.packages[0]!.packageRoot).toBe(validDir)
   })
 })
 

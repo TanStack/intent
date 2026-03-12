@@ -40,7 +40,7 @@ Every skill has a `type` field in its frontmatter. Valid types:
 | `composition` | Integration between two or more libraries                  | `electric-drizzle`        |
 | `security`    | Audit checklist or security validation                     | `electric-security-check` |
 
-Agents discover skills via `tanstack intent list` and read them directly
+Agents discover skills via `npx @tanstack/intent list` and read them directly
 from `node_modules`. Framework skills declare a `requires` dependency on
 their core skill so agents load them in the right order.
 
@@ -274,7 +274,7 @@ packages/
 │   └── package.json             # Add "skills" to files array
 ```
 
-Run `intent edit-package-json` to wire each package's `package.json`
+Run `npx @tanstack/intent@latest edit-package-json` to wire each package's `package.json`
 automatically (adds `"skills"`, `"bin"`, and `"!skills/_artifacts"` to the
 `files` array, and adds the `bin` entry if missing).
 

@@ -9,9 +9,9 @@
 #     as the INTENT_NOTIFY_TOKEN repository secret.
 #
 # Template variables (replaced by `intent setup`):
-#   {{PACKAGE_NAME}}  — e.g. @tanstack/query
-#   {{DOCS_PATH}}     — e.g. docs/**
-#   {{SRC_PATH}}      — e.g. packages/query-core/src/**
+#   {{PAYLOAD_PACKAGE}} — e.g. @tanstack/query or my-workspace workspace
+#   {{DOCS_PATH}}       — e.g. docs/**
+#   {{SRC_PATH}}        — e.g. packages/query-core/src/**
 
 name: Notify Intent
 
@@ -46,7 +46,7 @@ jobs:
           event-type: skill-check
           client-payload: |
             {
-              "package": "{{PACKAGE_NAME}}",
+              "package": "{{PAYLOAD_PACKAGE}}",
               "sha": "${{ github.sha }}",
               "changed_files": ${{ steps.changes.outputs.files }}
             }

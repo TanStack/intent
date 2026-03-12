@@ -28,10 +28,14 @@ They also ask you to:
 
 1. Check for an existing block first
 2. Run `intent list` to discover installed skills
-3. Add task-to-skill mappings
-4. Preserve all content outside the tagged block
+3. Ask whether you want a config target other than `AGENTS.md`
+4. Update an existing block in place when one already exists
+5. Add task-to-skill mappings
+6. Preserve all content outside the tagged block
+
+If no existing block is found, `AGENTS.md` is the default target.
 
 ## Related
 
 - [intent list](./intent-list)
-- [Setting Up Agent Config](../guides/consumers/agent-config-setup)
+- [Quick Start for Consumers](../getting-started/quick-start-consumers)

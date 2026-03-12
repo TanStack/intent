@@ -7,7 +7,7 @@
 # Triggers: new release published, or manual workflow_dispatch.
 #
 # Template variables (replaced by `intent setup`):
-#   {{PACKAGE_NAME}}  — e.g. @tanstack/query
+#   {{PACKAGE_LABEL}} — e.g. @tanstack/query or my-workspace workspace
 
 name: Check Skills
 
@@ -36,12 +36,12 @@ jobs:
           node-version: 20
 
       - name: Install intent
-        run: npm install {{PACKAGE_NAME}}
+        run: npm install -g @tanstack/intent
 
       - name: Check staleness
         id: stale
         run: |
-          OUTPUT=$(npx @tanstack/intent stale --json 2>&1) || true
+          OUTPUT=$(intent stale --json 2>&1) || true
           echo "$OUTPUT"
 
           # Check if any skills need review
@@ -81,7 +81,7 @@ jobs:
             const summary = lines.join('\n');
 
             const prompt = [
-              'Review and update the following stale intent skills for {{PACKAGE_NAME}}:',
+              'Review and update the following stale intent skills for {{PACKAGE_LABEL}}:',
               '',
               ...stale.map(s => '- ' + s.skill + ': ' + s.reasons.join(', ')),
               '',

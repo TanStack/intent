@@ -17,6 +17,19 @@ export interface ScanResult {
   packageManager: 'npm' | 'pnpm' | 'yarn' | 'bun' | 'unknown'
   packages: Array<IntentPackage>
   warnings: Array<string>
+  conflicts: Array<VersionConflict>
+  nodeModules: {
+    local: NodeModulesScanTarget
+    global: NodeModulesScanTarget
+  }
+}
+
+export interface NodeModulesScanTarget {
+  path: string | null
+  detected: boolean
+  exists: boolean
+  scanned: boolean
+  source?: string
 }
 
 export interface IntentPackage {
@@ -24,6 +37,18 @@ export interface IntentPackage {
   version: string
   intent: IntentConfig
   skills: Array<SkillEntry>
+  packageRoot: string
+}
+
+export interface InstalledVariant {
+  version: string
+  packageRoot: string
+}
+
+export interface VersionConflict {
+  packageName: string
+  chosen: InstalledVariant
+  variants: Array<InstalledVariant>
 }
 
 export interface SkillEntry {
@@ -94,12 +119,14 @@ export interface MetaFeedbackPayload {
   userRating: 'good' | 'mixed' | 'bad'
 }
 
+export type FeedbackFrequency = 'always' | 'never' | `every-${number}`
+
 // ---------------------------------------------------------------------------
 // Config types
 // ---------------------------------------------------------------------------
 
 export interface IntentProjectConfig {
   feedback: {
-    frequency: string // "always" | "every-N" | "never"
+    frequency: FeedbackFrequency
   }
 }
