@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
@@ -16,6 +17,7 @@ import { main, USAGE } from '../src/cli.js'
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const metaDir = join(thisDir, '..', 'meta')
 const packageJsonPath = join(thisDir, '..', 'package.json')
+const realTmpdir = realpathSync(tmpdir())
 
 function writeJson(filePath: string, data: unknown): void {
   mkdirSync(dirname(filePath), { recursive: true })
@@ -144,7 +146,7 @@ describe('cli commands', () => {
   })
 
   it('lists installed intent packages as json', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'intent-cli-list-'))
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-'))
     tempDirs.push(root)
     const pkgDir = join(root, 'node_modules', '@tanstack', 'db')
 
@@ -180,7 +182,7 @@ describe('cli commands', () => {
   })
 
   it('explains which package version was chosen when conflicts exist', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'intent-cli-conflicts-'))
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-conflicts-'))
     tempDirs.push(root)
 
     writeJson(join(root, 'package.json'), {
@@ -239,7 +241,7 @@ describe('cli commands', () => {
   })
 
   it('validates a well-formed skills directory', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'intent-cli-validate-'))
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-'))
     tempDirs.push(root)
 
     writeSkillMd(join(root, 'skills', 'db-core'), {
@@ -258,7 +260,7 @@ describe('cli commands', () => {
   })
 
   it('validates package skills from repo root without root packaging warnings', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'intent-cli-validate-mono-'))
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-mono-'))
     tempDirs.push(root)
 
     writeJson(join(root, 'package.json'), {
@@ -289,7 +291,7 @@ describe('cli commands', () => {
   })
 
   it('fails cleanly when validate is run without a skills directory', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'intent-cli-missing-skills-'))
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-missing-skills-'))
     tempDirs.push(root)
     process.chdir(root)
 
@@ -302,7 +304,7 @@ describe('cli commands', () => {
   })
 
   it('fails cleanly for unsupported yarn pnp projects', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'intent-cli-pnp-'))
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-pnp-'))
     tempDirs.push(root)
     writeJson(join(root, 'package.json'), { name: 'app', private: true })
     writeFileSync(join(root, '.pnp.cjs'), 'module.exports = {}\n')
@@ -317,7 +319,7 @@ describe('cli commands', () => {
   })
 
   it('fails cleanly for deno projects without node_modules', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'intent-cli-deno-'))
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-deno-'))
     tempDirs.push(root)
     writeJson(join(root, 'package.json'), { name: 'app', private: true })
     writeFileSync(join(root, 'deno.json'), '{"nodeModulesDir":"none"}\n')
@@ -332,7 +334,7 @@ describe('cli commands', () => {
   })
 
   it('checks workspace packages for staleness from the monorepo root', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'intent-cli-stale-mono-'))
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-stale-mono-'))
     tempDirs.push(root)
 
     writeJson(join(root, 'package.json'), {

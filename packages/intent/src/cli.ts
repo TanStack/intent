@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { INSTALL_PROMPT } from './install-prompt.js'
 import type { ScanResult } from './types.js'
 
@@ -748,9 +748,12 @@ export async function main(argv: Array<string> = process.argv.slice(2)) {
   }
 }
 
-const isMain =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
+let isMain = false
+try {
+  isMain =
+    process.argv[1] !== undefined &&
+    fileURLToPath(import.meta.url) === realpathSync(process.argv[1])
+} catch {}
 
 if (isMain) {
   const exitCode = await main()
