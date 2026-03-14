@@ -56,13 +56,24 @@ export async function startRegistry(): Promise<Registry> {
     ].join('\n'),
   )
 
-  const verdaccioBin = join(thisDir, '..', '..', 'node_modules', '.bin', 'verdaccio')
+  const verdaccioBin = join(
+    thisDir,
+    '..',
+    '..',
+    'node_modules',
+    '.bin',
+    'verdaccio',
+  )
 
   return new Promise((resolve, reject) => {
-    const child = spawn(verdaccioBin, ['--config', configPath, '--listen', String(port)], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: false,
-    })
+    const child = spawn(
+      verdaccioBin,
+      ['--config', configPath, '--listen', String(port)],
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: false,
+      },
+    )
 
     let started = false
     const timeout = setTimeout(() => {
@@ -180,7 +191,10 @@ export function scaffoldProject(opts: {
     ...(opts.pm !== 'pnpm' ? { workspaces: ['packages/*'] } : {}),
   })
   if (opts.pm === 'pnpm') {
-    writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n')
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - packages/*\n',
+    )
   }
   if (opts.pm === 'yarn') {
     writeFileSync(join(root, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
@@ -211,7 +225,11 @@ function install(dir: string, pm: PackageManager, registryUrl: string): void {
       execSync(`npm install ${reg}`, { cwd: dir, stdio: 'ignore', env })
       break
     case 'pnpm':
-      execSync(`pnpm install ${reg} --no-frozen-lockfile`, { cwd: dir, stdio: 'ignore', env })
+      execSync(`pnpm install ${reg} --no-frozen-lockfile`, {
+        cwd: dir,
+        stdio: 'ignore',
+        env,
+      })
       break
     case 'yarn':
       execSync(`yarn install ${reg}`, { cwd: dir, stdio: 'ignore', env })

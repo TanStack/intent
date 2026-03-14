@@ -550,7 +550,10 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
     const workspacePatterns = readWorkspacePatterns(projectRoot)
     if (!workspacePatterns) return
 
-    for (const wsDir of resolveWorkspacePackages(projectRoot, workspacePatterns)) {
+    for (const wsDir of resolveWorkspacePackages(
+      projectRoot,
+      workspacePatterns,
+    )) {
       const wsNodeModules = join(wsDir, 'node_modules')
       if (existsSync(wsNodeModules)) {
         for (const dirPath of listNodeModulesPackageDirs(wsNodeModules)) {

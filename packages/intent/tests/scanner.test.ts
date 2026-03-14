@@ -504,7 +504,11 @@ describe('scanForIntents', () => {
     writeJson(join(dbDir, 'package.json'), {
       name: '@tanstack/db',
       version: '0.5.0',
-      intent: { version: 1, repo: 'TanStack/db', docs: 'https://db.tanstack.com' },
+      intent: {
+        version: 1,
+        repo: 'TanStack/db',
+        docs: 'https://db.tanstack.com',
+      },
     })
     writeSkillMd(join(dbDir, 'skills', 'db-core'), {
       name: 'db-core',
@@ -541,7 +545,11 @@ describe('scanForIntents', () => {
     writeJson(join(dbDir, 'package.json'), {
       name: '@tanstack/db',
       version: '0.5.0',
-      intent: { version: 1, repo: 'TanStack/db', docs: 'https://db.tanstack.com' },
+      intent: {
+        version: 1,
+        repo: 'TanStack/db',
+        docs: 'https://db.tanstack.com',
+      },
     })
     writeSkillMd(join(dbDir, 'skills', 'db-core'), {
       name: 'db-core',
@@ -571,7 +579,7 @@ describe('scanForIntents', () => {
     writeJson(join(appDir, 'package.json'), {
       name: '@monorepo/app',
       version: '1.0.0',
-      dependencies: { 'wrapper': '1.0.0' },
+      dependencies: { wrapper: '1.0.0' },
     })
 
     // wrapper has no skills, but depends on skills-pkg
@@ -623,7 +631,11 @@ describe('scanForIntents', () => {
     writeJson(join(dbDir, 'package.json'), {
       name: '@tanstack/db',
       version: '0.5.0',
-      intent: { version: 1, repo: 'TanStack/db', docs: 'https://db.tanstack.com' },
+      intent: {
+        version: 1,
+        repo: 'TanStack/db',
+        docs: 'https://db.tanstack.com',
+      },
     })
     writeSkillMd(join(dbDir, 'skills', 'db-core'), {
       name: 'db-core',

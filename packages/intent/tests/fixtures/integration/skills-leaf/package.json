@@ -6,5 +6,7 @@
     "repo": "test/skills-leaf",
     "docs": "https://example.com/docs"
   },
-  "files": ["skills"]
+  "files": [
+    "skills"
+  ]
 }

@@ -1,10 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import {
-  existsSync,
-  readFileSync,
-  readdirSync,
-  type Dirent,
-} from 'node:fs'
+import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'

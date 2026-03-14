@@ -1,6 +1,6 @@
 ---
 name: core
-description: "Core skill for integration testing"
+description: 'Core skill for integration testing'
 type: core
 ---
 
