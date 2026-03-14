@@ -121,7 +121,7 @@ export function publishFixtures(registryUrl: string): void {
     // Write a local .npmrc so npm publish can authenticate
     writeFileSync(join(pkgDir, '.npmrc'), npmrc)
     try {
-      execSync(`npm publish --registry ${registryUrl} --access public`, {
+      execSync(`npm publish --registry ${registryUrl} --access public --provenance=false`, {
         cwd: pkgDir,
         stdio: 'pipe',
       })
