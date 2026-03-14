@@ -157,7 +157,21 @@ export function resolveDepDir(
     const req = createRequire(join(parentDir, 'package.json'))
     const pkgJsonPath = req.resolve(join(depName, 'package.json'))
     return dirname(pkgJsonPath)
-  } catch {}
+  } catch (err: unknown) {
+    const code =
+      err && typeof err === 'object' && 'code' in err
+        ? (err as NodeJS.ErrnoException).code
+        : undefined
+    if (
+      code &&
+      code !== 'MODULE_NOT_FOUND' &&
+      code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+    ) {
+      console.warn(
+        `Warning: could not resolve ${depName} from ${parentDir}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
 
   // Fallback: walk up from parentDir checking node_modules/<depName>.
   // Handles packages with exports maps that don't expose ./package.json.
