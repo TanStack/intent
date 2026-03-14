@@ -30,12 +30,15 @@
     "yaml": "^2.7.0"
   },
   "devDependencies": {
-    "tsdown": "^0.19.0"
+    "@verdaccio/node-api": "6.0.0-6-next.76",
+    "tsdown": "^0.19.0",
+    "verdaccio": "^6.3.2"
   },
   "scripts": {
     "prepack": "npm run build",
     "build": "tsdown src/index.ts src/cli.ts src/setup.ts src/intent-library.ts src/library-scanner.ts --format esm --dts",
-    "test:lib": "vitest run",
+    "test:lib": "vitest run --exclude tests/integration/**",
+    "test:integration": "vitest run tests/integration/",
     "test:types": "tsc --noEmit"
   }
 }
