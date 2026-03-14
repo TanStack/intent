@@ -111,25 +111,27 @@ export async function startRegistry(): Promise<Registry> {
 // ---------------------------------------------------------------------------
 
 export function publishFixtures(registryUrl: string): void {
-  // Register a user with Verdaccio so npm publish has auth
   const host = new URL(registryUrl).host
   const npmrc = `//${host}/:_authToken=test-token\nregistry=${registryUrl}\n`
+
+  // Isolate npm cache to avoid EPERM on the host's ~/.npm/_cacache
+  const cacheDir = mkdtempSync(join(realTmpdir, 'intent-npm-cache-'))
 
   // Order matters: leaf first, then wrappers that depend on it
   for (const pkg of ['skills-leaf', 'wrapper-1', 'wrapper-2', 'wrapper-3']) {
     const pkgDir = join(fixturesDir, pkg)
-    // Write a local .npmrc so npm publish can authenticate
     writeFileSync(join(pkgDir, '.npmrc'), npmrc)
     try {
-      execSync(`npm publish --registry ${registryUrl} --access public --provenance=false`, {
-        cwd: pkgDir,
-        stdio: 'pipe',
-      })
+      execSync(
+        `npm publish --registry ${registryUrl} --access public --provenance=false --cache=${cacheDir} --userconfig=/dev/null`,
+        { cwd: pkgDir, stdio: 'pipe' },
+      )
     } finally {
-      // Clean up the .npmrc so it doesn't pollute the fixture
       rmSync(join(pkgDir, '.npmrc'), { force: true })
     }
   }
+
+  rmSync(cacheDir, { recursive: true, force: true })
 }
 
 // ---------------------------------------------------------------------------

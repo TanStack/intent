@@ -8,6 +8,7 @@ import {
   resolveDepDir,
 } from './utils.js'
 import {
+  findWorkspaceRoot,
   readWorkspacePatterns,
   resolveWorkspacePackages,
 } from './setup.js'
@@ -44,11 +45,17 @@ function detectPackageManager(root: string): PackageManager {
     )
   }
 
-  if (existsSync(join(root, 'pnpm-lock.yaml'))) return 'pnpm'
-  if (existsSync(join(root, 'bun.lockb')) || existsSync(join(root, 'bun.lock')))
-    return 'bun'
-  if (existsSync(join(root, 'yarn.lock'))) return 'yarn'
-  if (existsSync(join(root, 'package-lock.json'))) return 'npm'
+  const dirsToCheck = [root]
+  const wsRoot = findWorkspaceRoot(root)
+  if (wsRoot && wsRoot !== root) dirsToCheck.push(wsRoot)
+
+  for (const dir of dirsToCheck) {
+    if (existsSync(join(dir, 'pnpm-lock.yaml'))) return 'pnpm'
+    if (existsSync(join(dir, 'bun.lockb')) || existsSync(join(dir, 'bun.lock')))
+      return 'bun'
+    if (existsSync(join(dir, 'yarn.lock'))) return 'yarn'
+    if (existsSync(join(dir, 'package-lock.json'))) return 'npm'
+  }
   return 'unknown'
 }
 

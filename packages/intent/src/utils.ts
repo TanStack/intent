@@ -144,24 +144,33 @@ export function detectGlobalNodeModules(packageManager: string): {
 }
 
 /**
- * Resolve the directory of a dependency by name. Uses Node's built-in
- * module resolution via createRequire, which handles:
- * - Hoisted layouts (npm, yarn, bun) — walks up directory tree
- * - pnpm symlinked virtual store — follows symlinks
- * - Workspace packages — finds deps at workspace root
- * - Nested node_modules — standard Node resolution
+ * Resolve the directory of a dependency by name. Tries createRequire first
+ * (handles pnpm symlinks), then falls back to walking up node_modules
+ * directories (handles packages with export maps that block ./package.json).
  */
 export function resolveDepDir(
   depName: string,
   parentDir: string,
 ): string | null {
+  // Try createRequire — works for most packages including pnpm virtual store
   try {
-    const require = createRequire(join(parentDir, 'package.json'))
-    const pkgJsonPath = require.resolve(join(depName, 'package.json'))
+    const req = createRequire(join(parentDir, 'package.json'))
+    const pkgJsonPath = req.resolve(join(depName, 'package.json'))
     return dirname(pkgJsonPath)
-  } catch {
-    return null
+  } catch {}
+
+  // Fallback: walk up from parentDir checking node_modules/<depName>.
+  // Handles packages with exports maps that don't expose ./package.json.
+  let dir = parentDir
+  while (true) {
+    const candidate = join(dir, 'node_modules', depName)
+    if (existsSync(join(candidate, 'package.json'))) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
   }
+
+  return null
 }
 
 /**
