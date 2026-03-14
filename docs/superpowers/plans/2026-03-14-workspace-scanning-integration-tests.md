@@ -14,9 +14,9 @@
 
 | File | Action | Responsibility |
 |------|--------|----------------|
-| `packages/intent/src/utils.ts` | Modify | Replace `resolveDepDir` with `createRequire`-based resolution, remove `listNodeModulesPackageDirs`, `getDeps`, `detectGlobalNodeModules` |
+| `packages/intent/src/utils.ts` | Modify | Replace `resolveDepDir` with `createRequire`-based resolution. Keep `listNodeModulesPackageDirs` (used by Phase 1 + workspace scan), `getDeps` (used to extract dep names), `detectGlobalNodeModules` (global install support) |
 | `packages/intent/src/setup.ts` | Modify | Export `resolveWorkspacePackages` |
-| `packages/intent/src/scanner.ts` | Modify | Use new `resolveDepDir`, add workspace scanning phase, simplify by removing multi-phase scanning |
+| `packages/intent/src/scanner.ts` | Modify | Use new `resolveDepDir` (2-arg), add workspace scanning phase, add `tryRegister` to `walkProjectDeps`. Keep existing Phase 1 (`scanTarget`), global scanning, and `resolutionRoots` for `listNodeModulesPackageDirs` |
 | `packages/intent/tests/scanner.test.ts` | Modify | Add unit tests for workspace scanning |
 | `packages/intent/tests/fixtures/integration/skills-leaf/package.json` | Create | Fixture: package with skills |
 | `packages/intent/tests/fixtures/integration/skills-leaf/skills/core/SKILL.md` | Create | Fixture: skill file |
@@ -80,8 +80,10 @@ it('finds hoisted deps when scanning from a workspace package subdir', async () 
 })
 ```
 
-Run: `pnpm vitest run tests/scanner.test.ts -t "finds hoisted deps"`
+Run: `cd packages/intent && pnpm vitest run tests/scanner.test.ts -t "finds hoisted deps"`
 Expected: FAIL — current `resolveDepDir` only checks explicit `resolutionRoots`, not upward walk.
+
+> **Note:** All `pnpm vitest` and `pnpm test:*` commands in this plan should be run from `packages/intent/`, not the repo root.
 
 - [ ] **Step 2: Replace `resolveDepDir` in utils.ts**
 
@@ -112,12 +114,11 @@ export function resolveDepDir(
 }
 ```
 
-Also remove these functions that are no longer needed:
-- `listNodeModulesPackageDirs` (scanner will scan via workspace resolution + dep walking instead)
-- `detectGlobalNodeModules` (no longer used — `createRequire` finds global installs naturally)
-
-Keep `getDeps` — still needed to extract dep names from package.json.
-Keep `findSkillFiles`, `parseFrontmatter`.
+Keep all other exported functions — they are still used:
+- `listNodeModulesPackageDirs` — used by Phase 1 scan and workspace node_modules scan
+- `getDeps` — used to extract dep names from package.json
+- `detectGlobalNodeModules` — used for `INTENT_GLOBAL_NODE_MODULES` and global install discovery (`createRequire` does NOT resolve global installs)
+- `findSkillFiles`, `parseFrontmatter`
 
 - [ ] **Step 3: Update scanner.ts call sites**
 
@@ -140,17 +141,35 @@ const depDir = resolveDepDir(depName, projectRoot, depName, resolutionRoots)
 const depDir = resolveDepDir(depName, projectRoot)
 ```
 
-Remove the `resolutionRoots` array and all code that builds/manages it. Remove `scanTarget`, `ensureGlobalNodeModules`, and the `nodeModules.global` scanning phases. The scanner simplifies to:
+Keep all existing scanner phases — Phase 1 (`scanTarget`), Phase 2 (`walkKnownPackages`), Phase 3 (`walkProjectDeps`), and global scanning. The only changes are:
 
-1. Scan `node_modules` at project root for packages with `skills/`
-2. Walk project deps
-3. Walk known packages' deps
-4. (New) Workspace scanning
+1. `resolveDepDir` calls go from 4 args to 2
+2. `walkProjectDeps` gets a `tryRegister` call (see Step 3b)
+3. A new workspace scanning phase is added (Task 4)
+
+- [ ] **Step 3b: Add `tryRegister` to `walkProjectDeps`**
+
+In `walkProjectDeps`, the current code calls `walkDeps(depDir, depName)` but never `tryRegister(depDir, depName)`. This means a direct skills-package dependency of the project is only discovered through Phase 1's `scanTarget`. When Phase 1 can't find it (e.g., hoisted layout from workspace subdir), it's never registered.
+
+In `scanner.ts`, find the `walkProjectDeps` function and change:
+
+```typescript
+// Before (scanner.ts ~line 535):
+if (depDir && !walkVisited.has(depDir)) {
+  walkDeps(depDir, depName)
+}
+
+// After:
+if (depDir && !walkVisited.has(depDir)) {
+  tryRegister(depDir, depName)
+  walkDeps(depDir, depName)
+}
+```
 
 - [ ] **Step 4: Run all tests**
 
-Run: `pnpm vitest run tests/scanner.test.ts`
-Expected: Most tests pass. The global node_modules tests will need updating since we removed that feature. If any tests relied on `listNodeModulesPackageDirs` or the old `resolveDepDir` signature, update them.
+Run: `cd packages/intent && pnpm vitest run`
+Expected: All existing tests pass (no behavioral change to global scanning, Phase 1, etc.). The new hoisted-deps test from Step 1 now passes.
 
 - [ ] **Step 5: Commit**
 
@@ -308,7 +327,7 @@ it('discovers skills using package.json workspaces', async () => {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `pnpm vitest run tests/scanner.test.ts -t "discovers skills in workspace"`
+Run: `cd packages/intent && pnpm vitest run tests/scanner.test.ts -t "discovers skills in workspace"`
 Expected: FAIL — scanner doesn't scan workspace packages' node_modules yet.
 
 ### Task 4: Add workspace scanning phase to scanner.ts
@@ -362,16 +381,16 @@ After the existing Phase 1 (`scanTarget`), and after the `walkDeps`/`walkKnownPa
   }
 ```
 
-Note: keep `listNodeModulesPackageDirs` for the top-level scan (Phase 1) and workspace node_modules scan — it's still the right tool for "scan everything in this directory." The `createRequire` change is for `resolveDepDir` (resolving a specific dep by name from a parent).
+**Important:** All existing scanner phases are preserved — Phase 1 (`scanTarget` with `listNodeModulesPackageDirs`), Phase 2/3 (`walkKnownPackages`/`walkProjectDeps`), and global scanning (`ensureGlobalNodeModules`). The only changes to the scanner are: (a) `resolveDepDir` calls use 2 args instead of 4, (b) `tryRegister` added to `walkProjectDeps` (Task 1 Step 3b), and (c) this new workspace phase.
 
 - [ ] **Step 3: Run workspace tests**
 
-Run: `pnpm vitest run tests/scanner.test.ts -t "workspace\|hoisted"`
+Run: `cd packages/intent && pnpm vitest run tests/scanner.test.ts -t "workspace\|hoisted"`
 Expected: PASS
 
 - [ ] **Step 4: Run all scanner tests**
 
-Run: `pnpm vitest run tests/scanner.test.ts`
+Run: `cd packages/intent && pnpm vitest run tests/scanner.test.ts`
 Expected: All pass
 
 - [ ] **Step 5: Commit**
@@ -400,7 +419,7 @@ cd packages/intent && pnpm remove @npmcli/arborist
 
 - [ ] **Step 2: Run all tests**
 
-Run: `pnpm test:lib`
+Run: `cd packages/intent && pnpm test:lib`
 Expected: All pass
 
 - [ ] **Step 3: Commit**
@@ -844,7 +863,7 @@ describe('symlink invocation', () => {
 
 ```bash
 pnpm run build
-pnpm test:integration
+cd packages/intent && pnpm test:integration
 ```
 
 Expected: 4 PMs × 3 structures × 4 depths = 48 tests + 1 symlink test = 49 total. Debug failures as they arise (Task 9).
@@ -863,7 +882,7 @@ Debug and fix failures. Common issues:
 2. **pnpm transitive deps** — `createRequire` + workspace dep walking should handle this; if not, debug the resolution chain
 3. **Bun workspaces** — uses `package.json` workspaces, should work
 
-- [ ] **Step 1: Fix failures, run `pnpm test:lib && pnpm test:integration`**
+- [ ] **Step 1: Fix failures, run `cd packages/intent && pnpm test:lib && pnpm test:integration`**
 - [ ] **Step 2: Commit fixes**
 
 ---
@@ -896,7 +915,7 @@ node /Users/kylemathews/programs/intent/packages/intent/dist/cli.mjs list
 
 Expected: `@tanstack/db` with 6 skills (createRequire walks up to root node_modules)
 
-- [ ] **Step 4: Run `pnpm test:lib && pnpm test:integration`**
+- [ ] **Step 4: Run `cd packages/intent && pnpm test:lib && pnpm test:integration`**
 
 Expected: All unit + integration tests pass
 
