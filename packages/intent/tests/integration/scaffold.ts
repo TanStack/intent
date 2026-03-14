@@ -74,7 +74,7 @@ export async function startRegistry(): Promise<Registry> {
 
     const onData = (chunk: Buffer) => {
       const text = chunk.toString()
-      if (text.includes('http address') || text.includes('warn') || text.includes('---')) {
+      if (text.includes('http address') || text.includes(`localhost:${port}`)) {
         if (!started) {
           started = true
           clearTimeout(timeout)
@@ -238,9 +238,10 @@ export function runScanner(
   method: 'direct' | 'symlink' = 'direct',
 ): CliResult {
   let binPath = cliPath
+  let linkDir: string | undefined
 
   if (method === 'symlink') {
-    const linkDir = mkdtempSync(join(realTmpdir, 'intent-link-'))
+    linkDir = mkdtempSync(join(realTmpdir, 'intent-link-'))
     const linkPath = join(linkDir, 'intent-cli.mjs')
     symlinkSync(cliPath, linkPath)
     binPath = linkPath
@@ -259,6 +260,10 @@ export function runScanner(
       stderr: err.stderr ?? '',
       exitCode: err.status ?? 1,
       parsed: null,
+    }
+  } finally {
+    if (linkDir) {
+      rmSync(linkDir, { recursive: true, force: true })
     }
   }
 }

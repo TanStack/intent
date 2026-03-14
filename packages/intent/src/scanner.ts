@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import {
   detectGlobalNodeModules,
@@ -21,7 +21,6 @@ import type {
   SkillEntry,
   VersionConflict,
 } from './types.js'
-import type { Dirent } from 'node:fs'
 
 // ---------------------------------------------------------------------------
 // Package manager detection
@@ -378,7 +377,6 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
         ? existsSync(detected.path)
         : false
     }
-
   }
 
   function readPkgJson(dirPath: string): Record<string, unknown> | null {
@@ -525,9 +523,17 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
     }
 
     if (!projectPkg) return
+    walkDepsFromPkgJson(projectPkg, projectRoot, true)
+  }
 
-    for (const depName of getDeps(projectPkg, true)) {
-      const depDir = resolveDepDir(depName, projectRoot)
+  /** Resolve and walk deps listed in a package.json. */
+  function walkDepsFromPkgJson(
+    pkgJson: Record<string, unknown>,
+    fromDir: string,
+    includeDevDeps = false,
+  ): void {
+    for (const depName of getDeps(pkgJson, includeDevDeps)) {
+      const depDir = resolveDepDir(depName, fromDir)
       if (depDir && !walkVisited.has(depDir)) {
         tryRegister(depDir, depName)
         walkDeps(depDir, depName)
@@ -535,13 +541,16 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
     }
   }
 
-  // Phase 1b: In monorepos, discover workspace packages and walk their deps.
-  // This handles pnpm monorepos (workspace-specific node_modules) and ensures
-  // transitive skills packages are found through workspace package dependencies.
-  const workspacePatterns = readWorkspacePatterns(projectRoot)
-  if (workspacePatterns) {
+  /**
+   * In monorepos, discover workspace packages and walk their deps.
+   * Handles pnpm monorepos (workspace-specific node_modules) and ensures
+   * transitive skills packages are found through workspace package dependencies.
+   */
+  function walkWorkspacePackages(): void {
+    const workspacePatterns = readWorkspacePatterns(projectRoot)
+    if (!workspacePatterns) return
+
     for (const wsDir of resolveWorkspacePackages(projectRoot, workspacePatterns)) {
-      // Scan workspace package's own node_modules for skills
       const wsNodeModules = join(wsDir, 'node_modules')
       if (existsSync(wsNodeModules)) {
         for (const dirPath of listNodeModulesPackageDirs(wsNodeModules)) {
@@ -549,22 +558,14 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
         }
       }
 
-      // Walk workspace package's deps to find transitive skills packages.
-      // createRequire-based resolveDepDir walks up from wsDir, so it finds
-      // deps hoisted to the monorepo root too.
       const wsPkg = readPkgJson(wsDir)
       if (wsPkg) {
-        for (const depName of getDeps(wsPkg, true)) {
-          const depDir = resolveDepDir(depName, wsDir)
-          if (depDir && !walkVisited.has(depDir)) {
-            tryRegister(depDir, depName)
-            walkDeps(depDir, depName)
-          }
-        }
+        walkDepsFromPkgJson(wsPkg, wsDir)
       }
     }
   }
 
+  walkWorkspacePackages()
   walkKnownPackages()
   walkProjectDeps()
 

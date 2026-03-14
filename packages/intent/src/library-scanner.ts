@@ -91,9 +91,8 @@ function discoverSkills(skillsDir: string): Array<SkillEntry> {
 
 export async function scanLibrary(
   scriptPath: string,
-  projectRoot?: string,
+  _projectRoot?: string,
 ): Promise<LibraryScanResult> {
-  const nodeModulesDir = join(projectRoot ?? process.cwd(), 'node_modules')
   const packages: Array<LibraryPackage> = []
   const warnings: Array<string> = []
   const visited = new Set<string>()
@@ -132,7 +131,7 @@ export async function scanLibrary(
     })
 
     for (const depName of getDeps(pkg)) {
-      const depDir = resolveDepDir(depName, dir, name, nodeModulesDir)
+      const depDir = resolveDepDir(depName, dir)
       if (!depDir) continue
       const depPkg = readPkgJson(depDir)
       if (depPkg && hasIntentBin(depPkg)) {
