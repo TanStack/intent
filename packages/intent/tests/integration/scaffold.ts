@@ -1,4 +1,4 @@
-import { execSync, execFileSync } from 'node:child_process'
+import { execSync, execFileSync, spawn } from 'node:child_process'
 import {
   mkdirSync,
   mkdtempSync,
@@ -26,16 +26,22 @@ export interface Registry {
 }
 
 export async function startRegistry(): Promise<Registry> {
-  const { runServer } = await import('@verdaccio/node-api')
-
   const storageDir = mkdtempSync(join(realTmpdir, 'verdaccio-storage-'))
   const port = 6000 + Math.floor(Math.random() * 4000)
   const configPath = join(storageDir, 'config.yaml')
+
+  const htpasswdPath = join(storageDir, 'htpasswd')
+  writeFileSync(htpasswdPath, '')
 
   writeFileSync(
     configPath,
     [
       `storage: ${storageDir}`,
+      `listen: 0.0.0.0:${port}`,
+      'auth:',
+      '  htpasswd:',
+      `    file: ${htpasswdPath}`,
+      '    max_users: 100',
       'uplinks:',
       '  npmjs:',
       '    url: https://registry.npmjs.org/',
@@ -46,23 +52,57 @@ export async function startRegistry(): Promise<Registry> {
       "  '**':",
       '    access: $all',
       '    proxy: npmjs',
-      'log: { type: stdout, format: pretty, level: fatal }',
+      'log: { type: stdout, format: pretty, level: warn }',
     ].join('\n'),
   )
 
-  const app = await runServer(configPath)
+  const verdaccioBin = join(thisDir, '..', '..', 'node_modules', '.bin', 'verdaccio')
 
   return new Promise((resolve, reject) => {
-    const server = app.listen(port, () => {
-      resolve({
-        url: `http://localhost:${port}`,
-        stop: () => {
-          server.close()
-          rmSync(storageDir, { recursive: true, force: true })
-        },
-      })
+    const child = spawn(verdaccioBin, ['--config', configPath, '--listen', String(port)], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: false,
     })
-    server.on('error', reject)
+
+    let started = false
+    const timeout = setTimeout(() => {
+      if (!started) {
+        child.kill()
+        reject(new Error('Verdaccio failed to start within 15s'))
+      }
+    }, 15_000)
+
+    const onData = (chunk: Buffer) => {
+      const text = chunk.toString()
+      if (text.includes('http address') || text.includes('warn') || text.includes('---')) {
+        if (!started) {
+          started = true
+          clearTimeout(timeout)
+          resolve({
+            url: `http://localhost:${port}`,
+            stop: () => {
+              child.kill('SIGTERM')
+              rmSync(storageDir, { recursive: true, force: true })
+            },
+          })
+        }
+      }
+    }
+
+    child.stdout?.on('data', onData)
+    child.stderr?.on('data', onData)
+
+    child.on('error', (err) => {
+      clearTimeout(timeout)
+      reject(err)
+    })
+
+    child.on('exit', (code) => {
+      if (!started) {
+        clearTimeout(timeout)
+        reject(new Error(`Verdaccio exited with code ${code} before starting`))
+      }
+    })
   })
 }
 
@@ -71,12 +111,24 @@ export async function startRegistry(): Promise<Registry> {
 // ---------------------------------------------------------------------------
 
 export function publishFixtures(registryUrl: string): void {
+  // Register a user with Verdaccio so npm publish has auth
+  const host = new URL(registryUrl).host
+  const npmrc = `//${host}/:_authToken=test-token\nregistry=${registryUrl}\n`
+
   // Order matters: leaf first, then wrappers that depend on it
   for (const pkg of ['skills-leaf', 'wrapper-1', 'wrapper-2', 'wrapper-3']) {
-    execSync(`npm publish --registry ${registryUrl} --access public`, {
-      cwd: join(fixturesDir, pkg),
-      stdio: 'ignore',
-    })
+    const pkgDir = join(fixturesDir, pkg)
+    // Write a local .npmrc so npm publish can authenticate
+    writeFileSync(join(pkgDir, '.npmrc'), npmrc)
+    try {
+      execSync(`npm publish --registry ${registryUrl} --access public`, {
+        cwd: pkgDir,
+        stdio: 'pipe',
+      })
+    } finally {
+      // Clean up the .npmrc so it doesn't pollute the fixture
+      rmSync(join(pkgDir, '.npmrc'), { force: true })
+    }
   }
 }
 
