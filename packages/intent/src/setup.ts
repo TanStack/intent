@@ -480,7 +480,7 @@ export function readWorkspacePatterns(root: string): Array<string> | null {
  * Handles simple patterns like "packages/*" and "packages/**".
  * Each resolved directory must contain a package.json.
  */
-function resolveWorkspacePackages(
+export function resolveWorkspacePackages(
   root: string,
   patterns: Array<string>,
 ): Array<string> {
