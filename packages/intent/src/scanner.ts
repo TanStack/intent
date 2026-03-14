@@ -337,8 +337,6 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
         : undefined,
     },
   }
-  const resolutionRoots = [nodeModulesDir]
-
   // Track registered package names to avoid duplicates across phases
   const packageIndexes = new Map<string, number>()
   const packageJsonCache = new Map<string, Record<string, unknown> | null>()
@@ -370,14 +368,6 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
         : false
     }
 
-    if (
-      nodeModules.global.exists &&
-      nodeModules.global.path &&
-      nodeModules.global.path !== nodeModulesDir &&
-      !resolutionRoots.includes(nodeModules.global.path)
-    ) {
-      resolutionRoots.push(nodeModules.global.path)
-    }
   }
 
   function readPkgJson(dirPath: string): Record<string, unknown> | null {
@@ -490,7 +480,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
     }
 
     for (const depName of getDeps(pkgJson)) {
-      const depDir = resolveDepDir(depName, pkgDir, pkgName, resolutionRoots)
+      const depDir = resolveDepDir(depName, pkgDir)
       if (!depDir || walkVisited.has(depDir)) continue
 
       tryRegister(depDir, depName)
@@ -526,13 +516,9 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
     if (!projectPkg) return
 
     for (const depName of getDeps(projectPkg, true)) {
-      const depDir = resolveDepDir(
-        depName,
-        projectRoot,
-        depName,
-        resolutionRoots,
-      )
+      const depDir = resolveDepDir(depName, projectRoot)
       if (depDir && !walkVisited.has(depDir)) {
+        tryRegister(depDir, depName)
         walkDeps(depDir, depName)
       }
     }

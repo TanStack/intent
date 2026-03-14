@@ -3,9 +3,9 @@ import {
   existsSync,
   readFileSync,
   readdirSync,
-  realpathSync,
   type Dirent,
 } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
@@ -144,58 +144,24 @@ export function detectGlobalNodeModules(packageManager: string): {
 }
 
 /**
- * Resolve the directory of a dependency by name. First checks the top-level
- * node_modules (hoisted layout — npm, yarn, bun), then resolves through the
- * parent package's real path to handle pnpm's virtual store layout where
- * transitive deps are siblings in the .pnpm virtual store node_modules.
+ * Resolve the directory of a dependency by name. Uses Node's built-in
+ * module resolution via createRequire, which handles:
+ * - Hoisted layouts (npm, yarn, bun) — walks up directory tree
+ * - pnpm symlinked virtual store — follows symlinks
+ * - Workspace packages — finds deps at workspace root
+ * - Nested node_modules — standard Node resolution
  */
 export function resolveDepDir(
   depName: string,
   parentDir: string,
-  parentName: string,
-  nodeModulesDirs: string | Array<string>,
 ): string | null {
-  if (!parentName) return null
-
-  const roots = Array.isArray(nodeModulesDirs)
-    ? nodeModulesDirs
-    : [nodeModulesDirs]
-
-  // 1. Top-level (hoisted)
-  for (const nodeModulesDir of roots) {
-    const topLevel = join(nodeModulesDir, depName)
-    if (existsSync(join(topLevel, 'package.json'))) return topLevel
-  }
-
-  // 2. Resolve nested installs under the parent package (npm/pnpm/bun)
-  const nestedNodeModules = join(parentDir, 'node_modules', depName)
-  if (existsSync(join(nestedNodeModules, 'package.json'))) {
-    return nestedNodeModules
-  }
-
-  // 3. Resolve through parent's real path (pnpm virtual store)
   try {
-    const realParent = realpathSync(parentDir)
-    const segments = parentName.split('/').length
-    let nmDir = realParent
-    for (let i = 0; i < segments; i++) {
-      nmDir = dirname(nmDir)
-    }
-    const nested = join(nmDir, depName)
-    if (existsSync(join(nested, 'package.json'))) return nested
-  } catch (err: unknown) {
-    const code =
-      err && typeof err === 'object' && 'code' in err
-        ? (err as NodeJS.ErrnoException).code
-        : undefined
-    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
-      console.warn(
-        `Warning: could not resolve ${depName} from ${parentDir}: ${err instanceof Error ? err.message : String(err)}`,
-      )
-    }
+    const require = createRequire(join(parentDir, 'package.json'))
+    const pkgJsonPath = require.resolve(join(depName, 'package.json'))
+    return dirname(pkgJsonPath)
+  } catch {
+    return null
   }
-
-  return null
 }
 
 /**
