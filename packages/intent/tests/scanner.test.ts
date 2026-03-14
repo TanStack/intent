@@ -1,6 +1,7 @@
 import {
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -39,8 +40,8 @@ let globalRoot: string
 let previousGlobalNodeModules: string | undefined
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'intent-test-'))
-  globalRoot = mkdtempSync(join(tmpdir(), 'intent-global-test-'))
+  root = realpathSync(mkdtempSync(join(tmpdir(), 'intent-test-')))
+  globalRoot = realpathSync(mkdtempSync(join(tmpdir(), 'intent-global-test-')))
   previousGlobalNodeModules = process.env.INTENT_GLOBAL_NODE_MODULES
   delete process.env.INTENT_GLOBAL_NODE_MODULES
 })
@@ -478,6 +479,42 @@ describe('scanForIntents', () => {
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.version).toBe('5.0.0')
     expect(result.packages[0]!.packageRoot).toBe(stableDir)
+  })
+
+  it('finds hoisted deps when scanning from a workspace package subdir', async () => {
+    // Simulate npm/yarn/bun monorepo: deps hoisted to root node_modules
+    writeJson(join(root, 'package.json'), {
+      name: 'monorepo',
+      private: true,
+      workspaces: ['packages/*'],
+    })
+
+    const appDir = join(root, 'packages', 'app')
+    createDir(root, 'packages', 'app')
+    writeJson(join(appDir, 'package.json'), {
+      name: '@monorepo/app',
+      version: '1.0.0',
+      dependencies: { '@tanstack/db': '0.5.0' },
+    })
+
+    // Dep is hoisted to root, NOT in app's node_modules
+    createDir(root, 'node_modules', '@tanstack', 'db')
+    createDir(root, 'node_modules', '@tanstack', 'db', 'skills', 'db-core')
+    const dbDir = join(root, 'node_modules', '@tanstack', 'db')
+    writeJson(join(dbDir, 'package.json'), {
+      name: '@tanstack/db',
+      version: '0.5.0',
+      intent: { version: 1, repo: 'TanStack/db', docs: 'https://db.tanstack.com' },
+    })
+    writeSkillMd(join(dbDir, 'skills', 'db-core'), {
+      name: 'db-core',
+      description: 'Core database concepts',
+    })
+
+    // Scan from the workspace package subdir (not root)
+    const result = await scanForIntents(appDir)
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('@tanstack/db')
   })
 
   it('prefers valid semver versions over invalid ones at the same depth', async () => {
