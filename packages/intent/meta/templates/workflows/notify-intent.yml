@@ -12,7 +12,7 @@
 #   {{DOCS_PATH}}       — e.g. docs/**
 #   {{SRC_PATH}}        — e.g. packages/query-core/src/**
 
-name: Review Skills Against Changes
+name: Trigger Skill Review
 
 on:
   push:
@@ -23,7 +23,7 @@ on:
 
 jobs:
   notify:
-    name: Review Skills Against Changes
+    name: Trigger Skill Review
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
