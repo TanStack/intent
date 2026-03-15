@@ -165,7 +165,7 @@ describe('scanLibrary', () => {
     expect(names).toContain('@tanstack/query')
   })
 
-  it('skips deps without tanstack-intent keyword', async () => {
+  it('skips deps without tanstack-intent keyword or bin.intent', async () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'router')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/router',
@@ -178,7 +178,7 @@ describe('scanLibrary', () => {
     writeJson(join(reactDir, 'package.json'), {
       name: 'react',
       version: '18.0.0',
-      // no tanstack-intent keyword
+      // no tanstack-intent keyword or bin.intent
     })
     const reactSkill = createDir(reactDir, 'skills', 'hooks')
     writeSkillMd(reactSkill, { name: 'hooks', description: 'React hooks' })
@@ -187,6 +187,33 @@ describe('scanLibrary', () => {
 
     const names = result.packages.map((p) => p.name)
     expect(names).not.toContain('react')
+  })
+
+  it('follows deps with legacy bin.intent (backwards compat)', async () => {
+    const pkgDir = createDir(root, 'node_modules', '@tanstack', 'router')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/router',
+      version: '1.0.0',
+      keywords: ['tanstack-intent'],
+      dependencies: { '@tanstack/query': '^5.0.0' },
+    })
+    const routerSkill = createDir(pkgDir, 'skills', 'routing')
+    writeSkillMd(routerSkill, { name: 'routing', description: 'Routing' })
+
+    // Legacy package: only has bin.intent, no keyword
+    const queryDir = createDir(root, 'node_modules', '@tanstack', 'query')
+    writeJson(join(queryDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      bin: { intent: './bin/intent.js' },
+    })
+    const querySkill = createDir(queryDir, 'skills', 'fetching')
+    writeSkillMd(querySkill, { name: 'fetching', description: 'Fetching' })
+
+    const result = await scanLibrary(scriptPath(pkgDir), root)
+
+    const names = result.packages.map((p) => p.name)
+    expect(names).toContain('@tanstack/query')
   })
 
   it('skips deps with other keywords but not tanstack-intent', async () => {

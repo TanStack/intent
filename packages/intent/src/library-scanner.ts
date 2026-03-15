@@ -42,10 +42,18 @@ function findHomeDir(scriptPath: string): string | null {
   }
 }
 
-function hasIntentKeyword(pkg: Record<string, unknown>): boolean {
+function isIntentPackage(pkg: Record<string, unknown>): boolean {
   const keywords = pkg.keywords
-  if (!Array.isArray(keywords)) return false
-  return keywords.includes('tanstack-intent')
+  if (Array.isArray(keywords) && keywords.includes('tanstack-intent')) {
+    return true
+  }
+  // Legacy fallback: packages published before the keyword-based detection
+  // change may only have bin.intent. Keep this until a breaking release.
+  const bin = pkg.bin
+  if (bin && typeof bin === 'object' && 'intent' in (bin as Record<string, unknown>)) {
+    return true
+  }
+  return false
 }
 
 function discoverSkills(skillsDir: string): Array<SkillEntry> {
@@ -134,7 +142,7 @@ export async function scanLibrary(
       const depDir = resolveDepDir(depName, dir)
       if (!depDir) continue
       const depPkg = readPkgJson(depDir)
-      if (depPkg && hasIntentKeyword(depPkg)) {
+      if (depPkg && isIntentPackage(depPkg)) {
         processPackage(depName, depDir)
       }
     }
