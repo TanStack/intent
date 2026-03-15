@@ -267,7 +267,9 @@ function collectPackagingWarnings(root: string): Array<string> {
         if (existsSync(parentPkg)) {
           try {
             const parent = JSON.parse(readFileSync(parentPkg, 'utf8'))
-            return Array.isArray(parent.workspaces) || parent.workspaces?.packages
+            return (
+              Array.isArray(parent.workspaces) || parent.workspaces?.packages
+            )
           } catch {
             return false
           }

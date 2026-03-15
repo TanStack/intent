@@ -17,10 +17,7 @@ export {
   parseFrontmatter,
   resolveDepDir,
 } from './utils.js'
-export {
-  runEditPackageJson,
-  runSetupGithubActions,
-} from './setup.js'
+export { runEditPackageJson, runSetupGithubActions } from './setup.js'
 export type {
   EditPackageJsonResult,
   SetupGithubActionsResult,

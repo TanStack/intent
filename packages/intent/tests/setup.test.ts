@@ -14,10 +14,7 @@ import {
   runEditPackageJsonAll,
   runSetupGithubActions,
 } from '../src/setup.js'
-import type {
-  MonorepoResult,
-  EditPackageJsonResult,
-} from '../src/setup.js'
+import type { MonorepoResult, EditPackageJsonResult } from '../src/setup.js'
 
 let root: string
 let metaDir: string
@@ -89,10 +86,7 @@ describe('runEditPackageJson', () => {
   })
 
   it('reports already present when tanstack-intent keyword exists', () => {
-    writePkg(
-      { name: 'test-pkg', files: [], keywords: ['tanstack-intent'] },
-      2,
-    )
+    writePkg({ name: 'test-pkg', files: [], keywords: ['tanstack-intent'] }, 2)
 
     const result = runEditPackageJson(root)
     expect(result.alreadyPresent).toContain('keywords: "tanstack-intent"')
@@ -437,4 +431,3 @@ describe('runEditPackageJsonAll', () => {
     rmSync(monoRoot, { recursive: true, force: true })
   })
 })
-
