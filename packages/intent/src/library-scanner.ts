@@ -50,7 +50,11 @@ function isIntentPackage(pkg: Record<string, unknown>): boolean {
   // Legacy fallback: packages published before the keyword-based detection
   // change may only have bin.intent. Keep this until a breaking release.
   const bin = pkg.bin
-  if (bin && typeof bin === 'object' && 'intent' in (bin as Record<string, unknown>)) {
+  if (
+    bin &&
+    typeof bin === 'object' &&
+    'intent' in (bin as Record<string, unknown>)
+  ) {
     return true
   }
   return false
