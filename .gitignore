@@ -61,3 +61,5 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 .angular
+
+docs/superpowers
