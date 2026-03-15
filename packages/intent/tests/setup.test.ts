@@ -14,7 +14,7 @@ import {
   runEditPackageJsonAll,
   runSetupGithubActions,
 } from '../src/setup.js'
-import type { MonorepoResult, EditPackageJsonResult } from '../src/setup.js'
+import type { EditPackageJsonResult, MonorepoResult } from '../src/setup.js'
 
 let root: string
 let metaDir: string
