@@ -480,7 +480,7 @@ export function readWorkspacePatterns(root: string): Array<string> | null {
  * Handles simple patterns like "packages/*" and "packages/**".
  * Each resolved directory must contain a package.json.
  */
-function resolveWorkspacePackages(
+export function resolveWorkspacePackages(
   root: string,
   patterns: Array<string>,
 ): Array<string> {
@@ -497,7 +497,13 @@ function resolveWorkspacePackages(
       collectPackageDirs(baseDir, dirs)
     } else if (pattern.endsWith('/*')) {
       // Single level: direct children
-      for (const entry of readdirSync(baseDir, { withFileTypes: true })) {
+      let entries: Array<import('node:fs').Dirent>
+      try {
+        entries = readdirSync(baseDir, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      for (const entry of entries) {
         if (!entry.isDirectory()) continue
         const dir = join(baseDir, entry.name)
         if (existsSync(join(dir, 'package.json'))) {

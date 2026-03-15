@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import {
   detectGlobalNodeModules,
@@ -7,6 +7,11 @@ import {
   parseFrontmatter,
   resolveDepDir,
 } from './utils.js'
+import {
+  findWorkspaceRoot,
+  readWorkspacePatterns,
+  resolveWorkspacePackages,
+} from './setup.js'
 import type {
   InstalledVariant,
   IntentConfig,
@@ -16,7 +21,6 @@ import type {
   SkillEntry,
   VersionConflict,
 } from './types.js'
-import type { Dirent } from 'node:fs'
 
 // ---------------------------------------------------------------------------
 // Package manager detection
@@ -40,11 +44,17 @@ function detectPackageManager(root: string): PackageManager {
     )
   }
 
-  if (existsSync(join(root, 'pnpm-lock.yaml'))) return 'pnpm'
-  if (existsSync(join(root, 'bun.lockb')) || existsSync(join(root, 'bun.lock')))
-    return 'bun'
-  if (existsSync(join(root, 'yarn.lock'))) return 'yarn'
-  if (existsSync(join(root, 'package-lock.json'))) return 'npm'
+  const dirsToCheck = [root]
+  const wsRoot = findWorkspaceRoot(root)
+  if (wsRoot && wsRoot !== root) dirsToCheck.push(wsRoot)
+
+  for (const dir of dirsToCheck) {
+    if (existsSync(join(dir, 'pnpm-lock.yaml'))) return 'pnpm'
+    if (existsSync(join(dir, 'bun.lockb')) || existsSync(join(dir, 'bun.lock')))
+      return 'bun'
+    if (existsSync(join(dir, 'yarn.lock'))) return 'yarn'
+    if (existsSync(join(dir, 'package-lock.json'))) return 'npm'
+  }
   return 'unknown'
 }
 
@@ -337,8 +347,6 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
         : undefined,
     },
   }
-  const resolutionRoots = [nodeModulesDir]
-
   // Track registered package names to avoid duplicates across phases
   const packageIndexes = new Map<string, number>()
   const packageJsonCache = new Map<string, Record<string, unknown> | null>()
@@ -368,15 +376,6 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
       nodeModules.global.exists = detected.path
         ? existsSync(detected.path)
         : false
-    }
-
-    if (
-      nodeModules.global.exists &&
-      nodeModules.global.path &&
-      nodeModules.global.path !== nodeModulesDir &&
-      !resolutionRoots.includes(nodeModules.global.path)
-    ) {
-      resolutionRoots.push(nodeModules.global.path)
     }
   }
 
@@ -490,7 +489,7 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
     }
 
     for (const depName of getDeps(pkgJson)) {
-      const depDir = resolveDepDir(depName, pkgDir, pkgName, resolutionRoots)
+      const depDir = resolveDepDir(depName, pkgDir)
       if (!depDir || walkVisited.has(depDir)) continue
 
       tryRegister(depDir, depName)
@@ -524,20 +523,52 @@ export async function scanForIntents(root?: string): Promise<ScanResult> {
     }
 
     if (!projectPkg) return
+    walkDepsFromPkgJson(projectPkg, projectRoot, true)
+  }
 
-    for (const depName of getDeps(projectPkg, true)) {
-      const depDir = resolveDepDir(
-        depName,
-        projectRoot,
-        depName,
-        resolutionRoots,
-      )
+  /** Resolve and walk deps listed in a package.json. */
+  function walkDepsFromPkgJson(
+    pkgJson: Record<string, unknown>,
+    fromDir: string,
+    includeDevDeps = false,
+  ): void {
+    for (const depName of getDeps(pkgJson, includeDevDeps)) {
+      const depDir = resolveDepDir(depName, fromDir)
       if (depDir && !walkVisited.has(depDir)) {
+        tryRegister(depDir, depName)
         walkDeps(depDir, depName)
       }
     }
   }
 
+  /**
+   * In monorepos, discover workspace packages and walk their deps.
+   * Handles pnpm monorepos (workspace-specific node_modules) and ensures
+   * transitive skills packages are found through workspace package dependencies.
+   */
+  function walkWorkspacePackages(): void {
+    const workspacePatterns = readWorkspacePatterns(projectRoot)
+    if (!workspacePatterns) return
+
+    for (const wsDir of resolveWorkspacePackages(
+      projectRoot,
+      workspacePatterns,
+    )) {
+      const wsNodeModules = join(wsDir, 'node_modules')
+      if (existsSync(wsNodeModules)) {
+        for (const dirPath of listNodeModulesPackageDirs(wsNodeModules)) {
+          tryRegister(dirPath, 'unknown')
+        }
+      }
+
+      const wsPkg = readPkgJson(wsDir)
+      if (wsPkg) {
+        walkDepsFromPkgJson(wsPkg, wsDir)
+      }
+    }
+  }
+
+  walkWorkspacePackages()
   walkKnownPackages()
   walkProjectDeps()
 

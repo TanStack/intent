@@ -1,0 +1,12 @@
+{
+  "name": "@test-intent/skills-leaf",
+  "version": "1.0.0",
+  "intent": {
+    "version": 1,
+    "repo": "test/skills-leaf",
+    "docs": "https://example.com/docs"
+  },
+  "files": [
+    "skills"
+  ]
+}
