@@ -37,11 +37,9 @@ If `<dir>/_artifacts` exists, it also validates artifacts:
 Packaging warnings are always computed from `package.json` in the current working directory:
 
 - `@tanstack/intent` missing from `devDependencies`
-- Missing `bin.intent` entry
-- Missing shim (`bin/intent.js` or `bin/intent.mjs`)
+- Missing `tanstack-intent` in keywords array
 - Missing `files` entries when `files` array exists:
   - `skills`
-  - `bin`
   - `!skills/_artifacts`
 
 Warnings are informational; they are printed on both pass and fail paths.

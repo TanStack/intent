@@ -270,11 +270,9 @@ describe('cli commands', () => {
     writeJson(join(root, 'packages', 'router', 'package.json'), {
       name: '@tanstack/router',
       devDependencies: { '@tanstack/intent': '^0.0.18' },
-      bin: { intent: './bin/intent.js' },
-      files: ['skills', 'bin', '!skills/_artifacts'],
+      keywords: ['tanstack-intent'],
+      files: ['skills', '!skills/_artifacts'],
     })
-    mkdirSync(join(root, 'packages', 'router', 'bin'), { recursive: true })
-    writeFileSync(join(root, 'packages', 'router', 'bin', 'intent.js'), '')
     writeSkillMd(join(root, 'packages', 'router', 'skills', 'db-core'), {
       name: 'db-core',
       description: 'Core database concepts',

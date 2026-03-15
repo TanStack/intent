@@ -22,9 +22,6 @@ Or run commands without installing:
 npx @tanstack/intent@latest scaffold
 ```
 
-> [!WARNING]
-> When using `npx` or `bunx`, always include `@latest`. Intent-enabled libraries ship a local `intent` binary shim, and without `@latest`, your package manager may resolve to that shim instead of the real CLI.
-
 ---
 
 ## Initial Setup (With Agent)
@@ -101,9 +98,6 @@ Artifacts enforce a consistent skill structure across versions, making it easier
 Run these commands to prepare your package for skill publishing:
 
 ```bash
-# Generate the bin shim that consumers use for discovery
-npx @tanstack/intent@latest add-library-bin
-
 # Update package.json with required fields
 npx @tanstack/intent@latest edit-package-json
 
@@ -113,11 +107,9 @@ npx @tanstack/intent@latest setup-github-actions
 
 **What these do:**
 
-- `add-library-bin` creates `bin/intent.js` or `bin/intent.mjs` — a shim that lets consumers run `npx your-package intent` to access Intent CLI features
 - `edit-package-json` adds:
-  - `intent` field in package.json with version, repo, and docs metadata
-  - `bin.intent` entry pointing to the shim
-  - `files` array entries for `skills/` and `bin/`
+  - `tanstack-intent` keyword (used for package detection and registry discovery)
+  - `files` array entries for `skills/`
   - For single packages: also adds `!skills/_artifacts` to exclude artifacts from npm
   - For monorepos: skips the artifacts exclusion (artifacts live at repo root)
 - `setup-github-actions` copies workflow templates to `.github/workflows/` for automated validation and staleness checking
