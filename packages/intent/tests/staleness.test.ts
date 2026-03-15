@@ -233,6 +233,28 @@ describe('checkStaleness', () => {
     expect(requireFirstSkill(report).needsReview).toBe(false)
   })
 
+  it('ignores malformed sync-state entries instead of flagging false positives', async () => {
+    writeSkill(tmpDir, 'core', {
+      name: 'core',
+      description: 'Core',
+      sources: ['docs/api.md'],
+    })
+
+    writeSyncState(tmpDir, {
+      skills: {
+        core: {
+          sources_sha: ['not', 'a', 'record'],
+        },
+      },
+    })
+
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
+
+    const report = await checkStaleness(tmpDir, '@example/lib')
+    expect(report.skills[0]!.needsReview).toBe(false)
+    expect(report.skills[0]!.reasons).toEqual([])
+  })
+
   it('handles nested skill directories', async () => {
     writeSkill(tmpDir, 'react/hooks', {
       name: 'react/hooks',

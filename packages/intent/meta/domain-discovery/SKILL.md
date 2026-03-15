@@ -76,23 +76,33 @@ These rules override any other reasoning. No exceptions.
    STOP and WAIT for their reply. Do not answer your own questions. Do
    not infer answers from documentation. Do not skip questions because
    you believe you already know the answer.
-3. **Do not convert open-ended questions into multiple-choice,
+3. **Never ask factual questions you can answer by searching the
+   codebase.** Before asking any question, determine whether the answer
+   is a deterministic fact (how many X exist, what versions are
+   supported, which files implement Y) or a judgment call (which ones
+   matter, what should we prioritize, what do developers struggle with).
+   Factual questions must be answered by searching the code — grep,
+   glob, read files. Only ask the maintainer for priorities, opinions,
+   trade-offs, and implicit knowledge that cannot be found in code or
+   docs. Asking the maintainer a question whose answer is sitting in
+   the codebase wastes their time and erodes trust in the process.
+4. **Do not convert open-ended questions into multiple-choice,
    yes/no, or confirmation prompts.** The question templates in each
    sub-section are open-ended by design. Present them as open-ended
    questions. The maintainer's unprompted answers surface knowledge that
    pre-structured options suppress.
-4. **Minimum question counts are enforced.** Each sub-section specifies
+5. **Minimum question counts are enforced.** Each sub-section specifies
    a question count range (e.g. "2–4 questions"). You must ask at least
    the minimum number. Asking zero questions in any sub-section is a
    protocol violation.
-5. **STOP gates are mandatory.** At the boundaries marked `── STOP ──`
+6. **STOP gates are mandatory.** At the boundaries marked `── STOP ──`
    below, you must halt execution and wait for the maintainer's response
    or acknowledgment before proceeding. Do not continue past a STOP gate
    in the same message.
-6. **If the maintainer asks to skip an interview phase**, explain the
+7. **If the maintainer asks to skip an interview phase**, explain the
    value of the phase and what will be lost. Proceed with skipping only
    if they confirm a second time.
-7. **Rich documentation makes interviews MORE valuable, not less.**
+8. **Rich documentation makes interviews MORE valuable, not less.**
    When docs are comprehensive, the interview surfaces what docs miss:
    implicit knowledge, AI-specific failure modes, undocumented tradeoffs,
    and the maintainer's prioritization of what matters most. Never
@@ -115,6 +125,15 @@ reading exhaustively yet.
 4. **AGENTS.md or .cursorrules** — if the library already has agent
    guidance, read it. This is high-signal for what the maintainer
    considers important
+5. **All in-repo documentation** — list every `.md` file in the `docs/`
+   directory (and any other documentation directories like `guides/`,
+   `reference/`, `wiki/`). Read every file. This is NOT the exhaustive
+   external doc reading from Phase 3 — this is reading what the
+   maintainer committed to the repository, which is fast and
+   high-signal. In-repo docs often contain migration guides, backward
+   compatibility notes, architecture decisions, and other context that
+   prevents you from asking factual questions the docs already answer.
+   Do not sample a subset — read them all before the first interview.
 
 ### 1b — Read peer dependency constraints
 

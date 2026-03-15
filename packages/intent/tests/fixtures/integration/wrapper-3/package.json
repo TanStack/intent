@@ -1,0 +1,7 @@
+{
+  "name": "@test-intent/wrapper-3",
+  "version": "1.0.0",
+  "dependencies": {
+    "@test-intent/wrapper-2": "1.0.0"
+  }
+}

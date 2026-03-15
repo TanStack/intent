@@ -14,7 +14,8 @@
         "src/intent-library.ts",
         "src/library-scanner.ts"
       ],
-      "ignore": ["meta/**"]
+      "ignore": ["meta/**"],
+      "ignoreDependencies": ["verdaccio", "@verdaccio/node-api"]
     }
   }
 }

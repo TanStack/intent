@@ -1,4 +1,6 @@
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
@@ -42,44 +44,139 @@ export function getDeps(
   return [...deps]
 }
 
+export function listNodeModulesPackageDirs(
+  nodeModulesDir: string,
+): Array<string> {
+  if (!existsSync(nodeModulesDir)) return []
+
+  let topEntries: Array<Dirent<string>>
+  try {
+    topEntries = readdirSync(nodeModulesDir, {
+      withFileTypes: true,
+      encoding: 'utf8',
+    })
+  } catch {
+    return []
+  }
+
+  const packageDirs: Array<string> = []
+
+  for (const entry of topEntries) {
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+    const dirPath = join(nodeModulesDir, entry.name)
+
+    if (entry.name.startsWith('@')) {
+      let scopedEntries: Array<Dirent<string>>
+      try {
+        scopedEntries = readdirSync(dirPath, {
+          withFileTypes: true,
+          encoding: 'utf8',
+        })
+      } catch {
+        continue
+      }
+
+      for (const scoped of scopedEntries) {
+        if (!scoped.isDirectory() && !scoped.isSymbolicLink()) continue
+        packageDirs.push(join(dirPath, scoped.name))
+      }
+    } else if (!entry.name.startsWith('.')) {
+      packageDirs.push(dirPath)
+    }
+  }
+
+  return packageDirs
+}
+
+export function detectGlobalNodeModules(packageManager: string): {
+  path: string | null
+  source?: string
+} {
+  const envPath = process.env.INTENT_GLOBAL_NODE_MODULES?.trim()
+  if (envPath) {
+    return {
+      path: envPath,
+      source: 'INTENT_GLOBAL_NODE_MODULES',
+    }
+  }
+
+  const commands: Array<{
+    command: string
+    args: Array<string>
+    transform?: (output: string) => string
+  }> = []
+
+  if (packageManager === 'pnpm') {
+    commands.push({ command: 'pnpm', args: ['root', '-g'] })
+  }
+  if (packageManager === 'yarn') {
+    commands.push({
+      command: 'yarn',
+      args: ['global', 'dir'],
+      transform: (output) => join(output, 'node_modules'),
+    })
+  }
+  commands.push({ command: 'npm', args: ['root', '-g'] })
+
+  for (const candidate of commands) {
+    try {
+      const output = execFileSync(candidate.command, candidate.args, {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim()
+      if (!output) continue
+
+      return {
+        path: candidate.transform ? candidate.transform(output) : output,
+        source: `${candidate.command} ${candidate.args.join(' ')}`,
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return { path: null }
+}
+
 /**
- * Resolve the directory of a dependency by name. First checks the top-level
- * node_modules (hoisted layout — npm, yarn, bun), then resolves through the
- * parent package's real path to handle pnpm's virtual store layout where
- * transitive deps are siblings in the .pnpm virtual store node_modules.
+ * Resolve the directory of a dependency by name. Tries createRequire first
+ * (handles pnpm symlinks), then falls back to walking up node_modules
+ * directories (handles packages with export maps that block ./package.json).
  */
 export function resolveDepDir(
   depName: string,
   parentDir: string,
-  parentName: string,
-  nodeModulesDir: string,
 ): string | null {
-  if (!parentName) return null
-
-  // 1. Top-level (hoisted)
-  const topLevel = join(nodeModulesDir, depName)
-  if (existsSync(join(topLevel, 'package.json'))) return topLevel
-
-  // 2. Resolve through parent's real path (pnpm virtual store)
+  // Try createRequire — works for most packages including pnpm virtual store
   try {
-    const realParent = realpathSync(parentDir)
-    const segments = parentName.split('/').length
-    let nmDir = realParent
-    for (let i = 0; i < segments; i++) {
-      nmDir = dirname(nmDir)
-    }
-    const nested = join(nmDir, depName)
-    if (existsSync(join(nested, 'package.json'))) return nested
+    const req = createRequire(join(parentDir, 'package.json'))
+    const pkgJsonPath = req.resolve(join(depName, 'package.json'))
+    return dirname(pkgJsonPath)
   } catch (err: unknown) {
     const code =
       err && typeof err === 'object' && 'code' in err
         ? (err as NodeJS.ErrnoException).code
         : undefined
-    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+    if (
+      code &&
+      code !== 'MODULE_NOT_FOUND' &&
+      code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+    ) {
       console.warn(
         `Warning: could not resolve ${depName} from ${parentDir}: ${err instanceof Error ? err.message : String(err)}`,
       )
     }
+  }
+
+  // Fallback: walk up from parentDir checking node_modules/<depName>.
+  // Handles packages with exports maps that don't expose ./package.json.
+  let dir = parentDir
+  while (true) {
+    const candidate = join(dir, 'node_modules', depName)
+    if (existsSync(join(candidate, 'package.json'))) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
   }
 
   return null

@@ -12,6 +12,51 @@
         {
           "label": "Overview",
           "to": "overview"
+        },
+        {
+          "label": "Quick Start (Consumers)",
+          "to": "getting-started/quick-start-consumers"
+        },
+        {
+          "label": "Quick Start (Maintainers)",
+          "to": "getting-started/quick-start-maintainers"
+        },
+        {
+          "label": "Get Listed on the Registry",
+          "to": "registry"
+        }
+      ]
+    },
+    {
+      "label": "CLI Reference",
+      "children": [
+        {
+          "label": "intent install",
+          "to": "cli/intent-install"
+        },
+        {
+          "label": "intent list",
+          "to": "cli/intent-list"
+        },
+        {
+          "label": "intent meta",
+          "to": "cli/intent-meta"
+        },
+        {
+          "label": "intent scaffold",
+          "to": "cli/intent-scaffold"
+        },
+        {
+          "label": "intent validate",
+          "to": "cli/intent-validate"
+        },
+        {
+          "label": "intent setup-github-actions",
+          "to": "cli/intent-setup"
+        },
+        {
+          "label": "intent stale",
+          "to": "cli/intent-stale"
         }
       ]
     }

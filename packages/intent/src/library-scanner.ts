@@ -42,10 +42,22 @@ function findHomeDir(scriptPath: string): string | null {
   }
 }
 
-function hasIntentBin(pkg: Record<string, unknown>): boolean {
+function isIntentPackage(pkg: Record<string, unknown>): boolean {
+  const keywords = pkg.keywords
+  if (Array.isArray(keywords) && keywords.includes('tanstack-intent')) {
+    return true
+  }
+  // Legacy fallback: packages published before the keyword-based detection
+  // change may only have bin.intent. Keep this until a breaking release.
   const bin = pkg.bin
-  if (!bin || typeof bin !== 'object') return false
-  return 'intent' in (bin as Record<string, unknown>)
+  if (
+    bin &&
+    typeof bin === 'object' &&
+    'intent' in (bin as Record<string, unknown>)
+  ) {
+    return true
+  }
+  return false
 }
 
 function discoverSkills(skillsDir: string): Array<SkillEntry> {
@@ -91,9 +103,8 @@ function discoverSkills(skillsDir: string): Array<SkillEntry> {
 
 export function scanLibrary(
   scriptPath: string,
-  projectRoot?: string,
+  _projectRoot?: string,
 ): LibraryScanResult {
-  const nodeModulesDir = join(projectRoot ?? process.cwd(), 'node_modules')
   const packages: Array<LibraryPackage> = []
   const warnings: Array<string> = []
   const visited = new Set<string>()
@@ -132,10 +143,10 @@ export function scanLibrary(
     })
 
     for (const depName of getDeps(pkg)) {
-      const depDir = resolveDepDir(depName, dir, name, nodeModulesDir)
+      const depDir = resolveDepDir(depName, dir)
       if (!depDir) continue
       const depPkg = readPkgJson(depDir)
-      if (depPkg && hasIntentBin(depPkg)) {
+      if (depPkg && isIntentPackage(depPkg)) {
         processPackage(depName, depDir)
       }
     }

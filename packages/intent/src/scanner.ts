@@ -1,12 +1,25 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
 import { join, relative, sep } from 'node:path'
-import { getDeps, parseFrontmatter, resolveDepDir } from './utils.js'
-import type { Dirent } from 'node:fs'
+import {
+  detectGlobalNodeModules,
+  getDeps,
+  listNodeModulesPackageDirs,
+  parseFrontmatter,
+  resolveDepDir,
+} from './utils.js'
+import {
+  findWorkspaceRoot,
+  readWorkspacePatterns,
+  resolveWorkspacePackages,
+} from './setup.js'
 import type {
+  InstalledVariant,
   IntentConfig,
   IntentPackage,
+  NodeModulesScanTarget,
   ScanResult,
   SkillEntry,
+  VersionConflict,
 } from './types.js'
 
 // ---------------------------------------------------------------------------
@@ -31,11 +44,17 @@ function detectPackageManager(root: string): PackageManager {
     )
   }
 
-  if (existsSync(join(root, 'pnpm-lock.yaml'))) return 'pnpm'
-  if (existsSync(join(root, 'bun.lockb')) || existsSync(join(root, 'bun.lock')))
-    return 'bun'
-  if (existsSync(join(root, 'yarn.lock'))) return 'yarn'
-  if (existsSync(join(root, 'package-lock.json'))) return 'npm'
+  const dirsToCheck = [root]
+  const wsRoot = findWorkspaceRoot(root)
+  if (wsRoot && wsRoot !== root) dirsToCheck.push(wsRoot)
+
+  for (const dir of dirsToCheck) {
+    if (existsSync(join(dir, 'pnpm-lock.yaml'))) return 'pnpm'
+    if (existsSync(join(dir, 'bun.lockb')) || existsSync(join(dir, 'bun.lock')))
+      return 'bun'
+    if (existsSync(join(dir, 'yarn.lock'))) return 'yarn'
+    if (existsSync(join(dir, 'package-lock.json'))) return 'npm'
+  }
   return 'unknown'
 }
 
@@ -186,6 +205,115 @@ function topoSort(packages: Array<IntentPackage>): Array<IntentPackage> {
   return sorted
 }
 
+function getPackageDepth(packageRoot: string, projectRoot: string): number {
+  return relative(projectRoot, packageRoot).split(sep).length
+}
+
+interface ParsedSemver {
+  major: number
+  minor: number
+  patch: number
+  prerelease: Array<string | number>
+}
+
+function parseSemver(version: string): ParsedSemver | null {
+  const match =
+    /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(
+      version,
+    )
+  if (!match) return null
+
+  const prerelease = match[4]
+    ? match[4].split('.').map((identifier) => {
+        return /^\d+$/.test(identifier) ? Number(identifier) : identifier
+      })
+    : []
+
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease,
+  }
+}
+
+function comparePrereleaseIdentifiers(
+  a: string | number | undefined,
+  b: string | number | undefined,
+): number {
+  if (a === undefined) return b === undefined ? 0 : 1
+  if (b === undefined) return -1
+
+  if (typeof a === 'number' && typeof b === 'number') {
+    return a - b
+  }
+
+  if (typeof a === 'number') return -1
+  if (typeof b === 'number') return 1
+
+  return a.localeCompare(b)
+}
+
+function comparePackageVersions(a: string, b: string): number {
+  const parsedA = parseSemver(a)
+  const parsedB = parseSemver(b)
+
+  if (!parsedA || !parsedB) {
+    if (parsedA) return 1
+    if (parsedB) return -1
+    return 0
+  }
+
+  for (const key of ['major', 'minor', 'patch'] as const) {
+    const diff = parsedA[key] - parsedB[key]
+    if (diff !== 0) return diff
+  }
+
+  const length = Math.max(parsedA.prerelease.length, parsedB.prerelease.length)
+  for (let i = 0; i < length; i++) {
+    const diff = comparePrereleaseIdentifiers(
+      parsedA.prerelease[i],
+      parsedB.prerelease[i],
+    )
+    if (diff !== 0) return diff
+  }
+
+  return 0
+}
+
+function formatVariantWarning(
+  name: string,
+  variants: Array<InstalledVariant>,
+  chosen: IntentPackage,
+): string | null {
+  const uniqueVersions = new Set(variants.map((variant) => variant.version))
+  if (uniqueVersions.size <= 1) return null
+
+  const details = variants
+    .map((variant) => `${variant.version} at ${variant.packageRoot}`)
+    .join(', ')
+
+  return `Found ${variants.length} installed variants of ${name} across ${uniqueVersions.size} versions (${details}). Using ${chosen.version} from ${chosen.packageRoot}.`
+}
+
+function toVersionConflict(
+  packageName: string,
+  variants: Array<InstalledVariant>,
+  chosen: IntentPackage,
+): VersionConflict | null {
+  const uniqueVersions = new Set(variants.map((variant) => variant.version))
+  if (uniqueVersions.size <= 1) return null
+
+  return {
+    packageName,
+    chosen: {
+      version: chosen.version,
+      packageRoot: chosen.packageRoot,
+    },
+    variants,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main scanner
 // ---------------------------------------------------------------------------
@@ -194,53 +322,88 @@ export function scanForIntents(root?: string): ScanResult {
   const projectRoot = root ?? process.cwd()
   const packageManager = detectPackageManager(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')
+  const explicitGlobalNodeModules =
+    process.env.INTENT_GLOBAL_NODE_MODULES?.trim() || null
 
   const packages: Array<IntentPackage> = []
   const warnings: Array<string> = []
-
-  if (!existsSync(nodeModulesDir)) {
-    return { packageManager, packages, warnings }
+  const conflicts: Array<VersionConflict> = []
+  const nodeModules: ScanResult['nodeModules'] = {
+    local: {
+      path: nodeModulesDir,
+      detected: true,
+      exists: existsSync(nodeModulesDir),
+      scanned: false,
+    },
+    global: {
+      path: explicitGlobalNodeModules,
+      detected: Boolean(explicitGlobalNodeModules),
+      exists: explicitGlobalNodeModules
+        ? existsSync(explicitGlobalNodeModules)
+        : false,
+      scanned: false,
+      source: explicitGlobalNodeModules
+        ? 'INTENT_GLOBAL_NODE_MODULES'
+        : undefined,
+    },
   }
+  // Track registered package names to avoid duplicates across phases
+  const packageIndexes = new Map<string, number>()
+  const packageJsonCache = new Map<string, Record<string, unknown> | null>()
+  const packageVariants = new Map<
+    string,
+    Map<string, { version: string; packageRoot: string }>
+  >()
 
-  // Collect all package directories to check
-  const packageDirs: Array<{ dirPath: string }> = []
-
-  let topEntries: Array<Dirent<string>>
-  try {
-    topEntries = readdirSync(nodeModulesDir, {
-      withFileTypes: true,
-      encoding: 'utf8',
+  function rememberVariant(pkg: IntentPackage): void {
+    let variants = packageVariants.get(pkg.name)
+    if (!variants) {
+      variants = new Map()
+      packageVariants.set(pkg.name, variants)
+    }
+    variants.set(pkg.packageRoot, {
+      version: pkg.version,
+      packageRoot: pkg.packageRoot,
     })
-  } catch {
-    return { packageManager, packages, warnings }
   }
 
-  for (const entry of topEntries) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
-    const dirPath = join(nodeModulesDir, entry.name)
-
-    if (entry.name.startsWith('@')) {
-      // Scoped package — check children
-      let scopedEntries: Array<Dirent<string>>
-      try {
-        scopedEntries = readdirSync(dirPath, {
-          withFileTypes: true,
-          encoding: 'utf8',
-        })
-      } catch {
-        continue
-      }
-      for (const scoped of scopedEntries) {
-        if (!scoped.isDirectory() && !scoped.isSymbolicLink()) continue
-        packageDirs.push({ dirPath: join(dirPath, scoped.name) })
-      }
-    } else if (!entry.name.startsWith('.')) {
-      packageDirs.push({ dirPath })
+  function ensureGlobalNodeModules(): void {
+    if (!nodeModules.global.path && !explicitGlobalNodeModules) {
+      const detected = detectGlobalNodeModules(packageManager)
+      nodeModules.global.path = detected.path
+      nodeModules.global.source = detected.source
+      nodeModules.global.detected = Boolean(detected.path)
+      nodeModules.global.exists = detected.path
+        ? existsSync(detected.path)
+        : false
     }
   }
 
-  // Track registered package names to avoid duplicates across phases
-  const foundNames = new Set<string>()
+  function readPkgJson(dirPath: string): Record<string, unknown> | null {
+    if (packageJsonCache.has(dirPath)) {
+      return packageJsonCache.get(dirPath) ?? null
+    }
+
+    try {
+      const pkgJson = JSON.parse(
+        readFileSync(join(dirPath, 'package.json'), 'utf8'),
+      ) as Record<string, unknown>
+      packageJsonCache.set(dirPath, pkgJson)
+      return pkgJson
+    } catch {
+      packageJsonCache.set(dirPath, null)
+      return null
+    }
+  }
+
+  function scanTarget(target: NodeModulesScanTarget): void {
+    if (!target.path || !target.exists || target.scanned) return
+    target.scanned = true
+
+    for (const dirPath of listNodeModulesPackageDirs(target.path)) {
+      tryRegister(dirPath, 'unknown')
+    }
+  }
 
   /**
    * Try to register a package with a skills/ directory. Reads its
@@ -251,17 +414,15 @@ export function scanForIntents(root?: string): ScanResult {
     const skillsDir = join(dirPath, 'skills')
     if (!existsSync(skillsDir)) return false
 
-    let pkgJson: Record<string, unknown>
-    try {
-      pkgJson = JSON.parse(readFileSync(join(dirPath, 'package.json'), 'utf8'))
-    } catch {
+    const pkgJson = readPkgJson(dirPath)
+    if (!pkgJson) {
       warnings.push(`Could not read package.json for ${dirPath}`)
       return false
     }
 
     const name = typeof pkgJson.name === 'string' ? pkgJson.name : fallbackName
-    if (foundNames.has(name)) return false
-
+    const version =
+      typeof pkgJson.version === 'string' ? pkgJson.version : '0.0.0'
     const intent =
       validateIntentField(name, pkgJson.intent) ?? deriveIntentConfig(pkgJson)
     if (!intent) {
@@ -271,20 +432,44 @@ export function scanForIntents(root?: string): ScanResult {
       return false
     }
 
-    packages.push({
+    const candidate: IntentPackage = {
       name,
-      version: typeof pkgJson.version === 'string' ? pkgJson.version : '0.0.0',
+      version,
       intent,
       skills: discoverSkills(skillsDir, name),
-    })
-    foundNames.add(name)
+      packageRoot: dirPath,
+    }
+    const existingIndex = packageIndexes.get(name)
+    if (existingIndex === undefined) {
+      rememberVariant(candidate)
+      packageIndexes.set(name, packages.push(candidate) - 1)
+      return true
+    }
+
+    const existing = packages[existingIndex]!
+    if (existing.packageRoot === candidate.packageRoot) {
+      return false
+    }
+
+    rememberVariant(existing)
+    rememberVariant(candidate)
+
+    const existingDepth = getPackageDepth(existing.packageRoot, projectRoot)
+    const candidateDepth = getPackageDepth(candidate.packageRoot, projectRoot)
+    const shouldReplace =
+      candidateDepth < existingDepth ||
+      (candidateDepth === existingDepth &&
+        comparePackageVersions(candidate.version, existing.version) > 0)
+
+    if (shouldReplace) {
+      packages[existingIndex] = candidate
+    }
+
     return true
   }
 
-  // Phase 1: Check each top-level package for skills/
-  for (const { dirPath } of packageDirs) {
-    tryRegister(dirPath, 'unknown')
-  }
+  // Phase 1: Check local top-level packages for skills/
+  scanTarget(nodeModules.local)
 
   // Phase 2: Walk dependency trees to discover transitive deps with skills.
   // This handles pnpm and other non-hoisted layouts where transitive deps
@@ -292,13 +477,11 @@ export function scanForIntents(root?: string): ScanResult {
   const walkVisited = new Set<string>()
 
   function walkDeps(pkgDir: string, pkgName: string): void {
-    if (walkVisited.has(pkgName)) return
-    walkVisited.add(pkgName)
+    if (walkVisited.has(pkgDir)) return
+    walkVisited.add(pkgDir)
 
-    let pkgJson: Record<string, unknown>
-    try {
-      pkgJson = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'))
-    } catch {
+    const pkgJson = readPkgJson(pkgDir)
+    if (!pkgJson) {
       warnings.push(
         `Could not read package.json for ${pkgName} (skipping dependency walk)`,
       )
@@ -306,52 +489,121 @@ export function scanForIntents(root?: string): ScanResult {
     }
 
     for (const depName of getDeps(pkgJson)) {
-      if (foundNames.has(depName) || walkVisited.has(depName)) continue
-
-      const depDir = resolveDepDir(depName, pkgDir, pkgName, nodeModulesDir)
-      if (!depDir) continue
+      const depDir = resolveDepDir(depName, pkgDir)
+      if (!depDir || walkVisited.has(depDir)) continue
 
       tryRegister(depDir, depName)
       walkDeps(depDir, depName)
     }
   }
 
-  // Walk from packages found in Phase 1
-  for (const pkg of [...packages]) {
-    walkDeps(join(nodeModulesDir, pkg.name), pkg.name)
-  }
-
-  // Walk from project's direct deps that weren't found in Phase 1
-  let projectPkg: Record<string, unknown> | null = null
-  try {
-    projectPkg = JSON.parse(
-      readFileSync(join(projectRoot, 'package.json'), 'utf8'),
-    )
-  } catch (err: unknown) {
-    const isNotFound =
-      err &&
-      typeof err === 'object' &&
-      'code' in err &&
-      (err as NodeJS.ErrnoException).code === 'ENOENT'
-    if (!isNotFound) {
-      warnings.push(
-        `Could not read project package.json: ${err instanceof Error ? err.message : String(err)}`,
-      )
+  function walkKnownPackages(): void {
+    for (const pkg of [...packages]) {
+      walkDeps(pkg.packageRoot, pkg.name)
     }
   }
 
-  if (projectPkg) {
-    for (const depName of getDeps(projectPkg, true)) {
-      if (walkVisited.has(depName)) continue
-      const depDir = join(nodeModulesDir, depName)
-      if (existsSync(join(depDir, 'package.json'))) {
+  function walkProjectDeps(): void {
+    let projectPkg: Record<string, unknown> | null = null
+    try {
+      projectPkg = JSON.parse(
+        readFileSync(join(projectRoot, 'package.json'), 'utf8'),
+      ) as Record<string, unknown>
+    } catch (err: unknown) {
+      const isNotFound =
+        err &&
+        typeof err === 'object' &&
+        'code' in err &&
+        (err as NodeJS.ErrnoException).code === 'ENOENT'
+      if (!isNotFound) {
+        warnings.push(
+          `Could not read project package.json: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
+    }
+
+    if (!projectPkg) return
+    walkDepsFromPkgJson(projectPkg, projectRoot, true)
+  }
+
+  /** Resolve and walk deps listed in a package.json. */
+  function walkDepsFromPkgJson(
+    pkgJson: Record<string, unknown>,
+    fromDir: string,
+    includeDevDeps = false,
+  ): void {
+    for (const depName of getDeps(pkgJson, includeDevDeps)) {
+      const depDir = resolveDepDir(depName, fromDir)
+      if (depDir && !walkVisited.has(depDir)) {
+        tryRegister(depDir, depName)
         walkDeps(depDir, depName)
       }
+    }
+  }
+
+  /**
+   * In monorepos, discover workspace packages and walk their deps.
+   * Handles pnpm monorepos (workspace-specific node_modules) and ensures
+   * transitive skills packages are found through workspace package dependencies.
+   */
+  function walkWorkspacePackages(): void {
+    const workspacePatterns = readWorkspacePatterns(projectRoot)
+    if (!workspacePatterns) return
+
+    for (const wsDir of resolveWorkspacePackages(
+      projectRoot,
+      workspacePatterns,
+    )) {
+      const wsNodeModules = join(wsDir, 'node_modules')
+      if (existsSync(wsNodeModules)) {
+        for (const dirPath of listNodeModulesPackageDirs(wsNodeModules)) {
+          tryRegister(dirPath, 'unknown')
+        }
+      }
+
+      const wsPkg = readPkgJson(wsDir)
+      if (wsPkg) {
+        walkDepsFromPkgJson(wsPkg, wsDir)
+      }
+    }
+  }
+
+  walkWorkspacePackages()
+  walkKnownPackages()
+  walkProjectDeps()
+
+  if (
+    explicitGlobalNodeModules ||
+    packages.length === 0 ||
+    !nodeModules.local.exists
+  ) {
+    ensureGlobalNodeModules()
+    scanTarget(nodeModules.global)
+    walkKnownPackages()
+    walkProjectDeps()
+  }
+
+  if (!nodeModules.local.exists && !nodeModules.global.exists) {
+    return { packageManager, packages, warnings, conflicts, nodeModules }
+  }
+
+  for (const pkg of packages) {
+    const variants = packageVariants.get(pkg.name)
+    if (!variants) continue
+
+    const conflict = toVersionConflict(pkg.name, [...variants.values()], pkg)
+    if (conflict) {
+      conflicts.push(conflict)
+    }
+
+    const warning = formatVariantWarning(pkg.name, [...variants.values()], pkg)
+    if (warning) {
+      warnings.push(warning)
     }
   }
 
   // Sort by dependency order
   const sorted = topoSort(packages)
 
-  return { packageManager, packages: sorted, warnings }
+  return { packageManager, packages: sorted, warnings, conflicts, nodeModules }
 }

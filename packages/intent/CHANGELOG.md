@@ -1,5 +1,19 @@
 # @tanstack/intent
 
+## 0.0.18
+
+### Patch Changes
+
+- Add `tanstack-intent` keyword to package.json during setup ([#63](https://github.com/TanStack/intent/pull/63))
+
+- Make `edit-package-json` and `add-library-bin` monorepo-aware: when run from a monorepo root, they discover workspace packages containing SKILL.md files and apply changes to each package's package.json. Also improve domain-discovery skill to read in-repo docs before interviewing and avoid asking factual questions the agent can answer by searching the codebase. ([#67](https://github.com/TanStack/intent/pull/67))
+
+## 0.0.17
+
+### Patch Changes
+
+- rename notify-playbooks.yml to notify-intent.yml ([#60](https://github.com/TanStack/intent/pull/60))
+
 ## 0.0.16
 
 ### Patch Changes
