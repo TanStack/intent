@@ -1,11 +1,10 @@
 # notify-intent.yml — Drop this into your library repo's .github/workflows/
 #
-# Fires a repository_dispatch event to TanStack/intent whenever docs or
-# source files change on merge to main. This triggers the skill staleness
-# check workflow in the intent repo.
+# Fires a repository_dispatch event whenever docs or source files change
+# on merge to main. This triggers the skill staleness check workflow.
 #
 # Requirements:
-#   - A fine-grained PAT with contents:write on TanStack/intent stored
+#   - A fine-grained PAT with contents:write on this repository stored
 #     as the INTENT_NOTIFY_TOKEN repository secret.
 #
 # Template variables (replaced by `intent setup`):
@@ -13,7 +12,7 @@
 #   {{DOCS_PATH}}       — e.g. docs/**
 #   {{SRC_PATH}}        — e.g. packages/query-core/src/**
 
-name: Notify Intent
+name: Trigger Skill Review
 
 on:
   push:
@@ -24,7 +23,7 @@ on:
 
 jobs:
   notify:
-    name: Notify TanStack Intent
+    name: Trigger Skill Review
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -42,7 +41,7 @@ jobs:
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.INTENT_NOTIFY_TOKEN }}
-          repository: TanStack/intent
+          repository: ${{ github.repository }}
           event-type: skill-check
           client-payload: |
             {
