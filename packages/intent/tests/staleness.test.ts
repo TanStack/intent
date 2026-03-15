@@ -248,11 +248,12 @@ describe('checkStaleness', () => {
       },
     })
 
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
+    mockFetchNotOk()
 
     const report = await checkStaleness(tmpDir, '@example/lib')
-    expect(report.skills[0]!.needsReview).toBe(false)
-    expect(report.skills[0]!.reasons).toEqual([])
+    const skill = requireFirstSkill(report)
+    expect(skill.needsReview).toBe(false)
+    expect(skill.reasons).toEqual([])
   })
 
   it('handles nested skill directories', async () => {

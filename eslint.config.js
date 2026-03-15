@@ -12,8 +12,6 @@ const config = [
       'unused-imports': unusedImports,
     },
     rules: {
-      '@typescript-eslint/array-type': 'off',
-      'import/order': 'warn',
       'no-case-declarations': 'off',
       'no-shadow': 'off',
       'unused-imports/no-unused-imports': 'warn',

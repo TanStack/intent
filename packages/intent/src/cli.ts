@@ -35,7 +35,7 @@ async function scanIntentsOrFail(): Promise<ScanResult> {
   const { scanForIntents } = await import('./scanner.js')
 
   try {
-    return await scanForIntents()
+    return scanForIntents()
   } catch (err) {
     fail((err as Error).message)
   }

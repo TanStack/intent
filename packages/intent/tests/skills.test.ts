@@ -29,8 +29,8 @@ function extractFrontmatter(
   if (!match || !match[1] || match[2] === undefined) return null
 
   try {
-    const frontmatter = parseYaml(match[1]!) as SkillFrontmatter
-    return { frontmatter, body: match[2]! }
+    const frontmatter = parseYaml(match[1]) as SkillFrontmatter
+    return { frontmatter, body: match[2] }
   } catch {
     return null
   }
