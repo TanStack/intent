@@ -30,7 +30,6 @@ The prompt also includes a post-generation checklist:
 - Commit generated `skills/` and `skills/_artifacts/`
 - Ensure `@tanstack/intent` is in `devDependencies`
 - Run setup commands as needed:
-  - `npx @tanstack/intent@latest add-library-bin`
   - `npx @tanstack/intent@latest edit-package-json`
   - `npx @tanstack/intent@latest setup-github-actions`
 

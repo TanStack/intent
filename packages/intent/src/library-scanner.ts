@@ -42,10 +42,10 @@ function findHomeDir(scriptPath: string): string | null {
   }
 }
 
-function hasIntentBin(pkg: Record<string, unknown>): boolean {
-  const bin = pkg.bin
-  if (!bin || typeof bin !== 'object') return false
-  return 'intent' in (bin as Record<string, unknown>)
+function hasIntentKeyword(pkg: Record<string, unknown>): boolean {
+  const keywords = pkg.keywords
+  if (!Array.isArray(keywords)) return false
+  return keywords.includes('tanstack-intent')
 }
 
 function discoverSkills(skillsDir: string): Array<SkillEntry> {
@@ -134,7 +134,7 @@ export async function scanLibrary(
       const depDir = resolveDepDir(depName, dir)
       if (!depDir) continue
       const depPkg = readPkgJson(depDir)
-      if (depPkg && hasIntentBin(depPkg)) {
+      if (depPkg && hasIntentKeyword(depPkg)) {
         processPackage(depName, depDir)
       }
     }

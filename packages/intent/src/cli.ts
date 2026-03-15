@@ -244,17 +244,9 @@ function collectPackagingWarnings(root: string): Array<string> {
     warnings.push('@tanstack/intent is not in devDependencies')
   }
 
-  const bin = pkgJson.bin as Record<string, string> | undefined
-  if (!bin?.intent) {
-    warnings.push('Missing "bin": { "intent": ... } entry in package.json')
-  }
-
-  const shimJs = join(root, 'bin', 'intent.js')
-  const shimMjs = join(root, 'bin', 'intent.mjs')
-  if (!existsSync(shimJs) && !existsSync(shimMjs)) {
-    warnings.push(
-      'No bin/intent.js or bin/intent.mjs shim found (run: npx @tanstack/intent add-library-bin)',
-    )
+  const keywords = pkgJson.keywords
+  if (!Array.isArray(keywords) || !keywords.includes('tanstack-intent')) {
+    warnings.push('Missing "tanstack-intent" in keywords array')
   }
 
   const files = pkgJson.files as Array<string> | undefined
@@ -264,12 +256,30 @@ function collectPackagingWarnings(root: string): Array<string> {
         '"skills" is not in the "files" array — skills won\'t be published',
       )
     }
-    if (!files.includes('bin')) {
-      warnings.push(
-        '"bin" is not in the "files" array — shim won\'t be published',
-      )
-    }
-    if (!files.includes('!skills/_artifacts')) {
+
+    // Only warn about !skills/_artifacts for non-monorepo packages.
+    // In monorepos, artifacts live at the repo root, so the negation
+    // pattern is intentionally omitted by edit-package-json.
+    const isMonorepoPkg = (() => {
+      let dir = join(root, '..')
+      for (let i = 0; i < 5; i++) {
+        const parentPkg = join(dir, 'package.json')
+        if (existsSync(parentPkg)) {
+          try {
+            const parent = JSON.parse(readFileSync(parentPkg, 'utf8'))
+            return Array.isArray(parent.workspaces) || parent.workspaces?.packages
+          } catch {
+            return false
+          }
+        }
+        const next = dirname(dir)
+        if (next === dir) break
+        dir = next
+      }
+      return false
+    })()
+
+    if (!isMonorepoPkg && !files.includes('!skills/_artifacts')) {
       warnings.push(
         '"!skills/_artifacts" is not in the "files" array — artifacts will be published unnecessarily',
       )
@@ -557,11 +567,10 @@ This produces: individual SKILL.md files.
 
 1. Run \`intent validate\` in each package directory
 2. Commit skills/ and artifacts
-3. For each publishable package, run: \`npx @tanstack/intent add-library-bin\`
-4. For each publishable package, run: \`npx @tanstack/intent edit-package-json\`
-5. Ensure each package has \`@tanstack/intent\` as a devDependency
-6. Create a \`skill:<skill-name>\` label on the GitHub repo for each skill (use \`gh label create\`)
-7. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent@latest install\`"
+3. For each publishable package, run: \`npx @tanstack/intent edit-package-json\`
+4. Ensure each package has \`@tanstack/intent\` as a devDependency
+5. Create a \`skill:<skill-name>\` label on the GitHub repo for each skill (use \`gh label create\`)
+6. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent@latest install\`"
 `
 
   console.log(prompt)
@@ -579,8 +588,7 @@ Usage:
   intent validate [<dir>]        Validate skill files (default: skills/)
   intent install                  Print a skill that guides your coding agent to set up skill-to-task mappings
   intent scaffold                Print maintainer scaffold prompt
-  intent add-library-bin         Generate bin/intent.{js,mjs} bridge file
-  intent edit-package-json       Wire package.json (files, bin) for skill publishing
+  intent edit-package-json       Wire package.json (files, keywords) for skill publishing
   intent setup-github-actions    Copy CI workflow templates to .github/workflows/
   intent stale [dir] [--json]    Check skills for staleness`
 
@@ -618,12 +626,9 @@ Examples:
   intent stale
   intent stale packages/query
   intent stale --json`,
-  'add-library-bin': `intent add-library-bin
-
-Generate bin/intent.{js,mjs} bridge files for publishable packages.`,
   'edit-package-json': `intent edit-package-json
 
-Update package.json files so skills and shims are published.`,
+Update package.json files so skills are published.`,
   'setup-github-actions': `intent setup-github-actions
 
 Copy Intent CI workflow templates into .github/workflows/.`,
@@ -717,11 +722,6 @@ export async function main(argv: Array<string> = process.argv.slice(2)) {
           }
           console.log()
         }
-        return 0
-      }
-      case 'add-library-bin': {
-        const { runAddLibraryBinAll } = await import('./setup.js')
-        runAddLibraryBinAll(process.cwd())
         return 0
       }
       case 'edit-package-json': {

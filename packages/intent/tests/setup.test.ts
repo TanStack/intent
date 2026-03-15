@@ -10,16 +10,13 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
-  runAddLibraryBin,
   runEditPackageJson,
   runEditPackageJsonAll,
-  runAddLibraryBinAll,
   runSetupGithubActions,
 } from '../src/setup.js'
 import type {
   MonorepoResult,
   EditPackageJsonResult,
-  AddLibraryBinResult,
 } from '../src/setup.js'
 
 let root: string
@@ -54,83 +51,54 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-describe('runAddLibraryBin', () => {
-  it('generates bin/intent.js for type:module packages', () => {
-    writePkg({ name: 'test-pkg', type: 'module' })
-
-    const result = runAddLibraryBin(root)
-    expect(result.shim).toBe(join(root, 'bin', 'intent.js'))
-    expect(result.skipped).toBeNull()
-    expect(existsSync(join(root, 'bin', 'intent.js'))).toBe(true)
-  })
-
-  it('generates bin/intent.mjs for non-module packages', () => {
-    writePkg({ name: 'test-pkg' })
-
-    const result = runAddLibraryBin(root)
-    expect(result.shim).toBe(join(root, 'bin', 'intent.mjs'))
-    expect(existsSync(join(root, 'bin', 'intent.mjs'))).toBe(true)
-  })
-
-  it('skips if bin/intent.js already exists', () => {
-    mkdirSync(join(root, 'bin'), { recursive: true })
-    writeFileSync(join(root, 'bin', 'intent.js'), 'existing')
-
-    const result = runAddLibraryBin(root)
-    expect(result.shim).toBeNull()
-    expect(result.skipped).toBe(join(root, 'bin', 'intent.js'))
-    expect(readFileSync(join(root, 'bin', 'intent.js'), 'utf8')).toBe(
-      'existing',
-    )
-  })
-
-  it('skips if bin/intent.mjs already exists', () => {
-    mkdirSync(join(root, 'bin'), { recursive: true })
-    writeFileSync(join(root, 'bin', 'intent.mjs'), 'existing')
-
-    const result = runAddLibraryBin(root)
-    expect(result.shim).toBeNull()
-    expect(result.skipped).toBe(join(root, 'bin', 'intent.mjs'))
-  })
-
-  it('generates shim with correct content', () => {
-    writePkg({ name: 'test-pkg', type: 'module' })
-
-    runAddLibraryBin(root)
-
-    const content = readFileSync(join(root, 'bin', 'intent.js'), 'utf8')
-    expect(content).toContain('#!/usr/bin/env node')
-    expect(content).toContain('@tanstack/intent/intent-library')
-  })
-})
-
 describe('runEditPackageJson', () => {
-  it('adds skills, bin, and !skills/_artifacts to files array', () => {
+  it('adds skills and !skills/_artifacts to files array', () => {
     writePkg({ name: 'test-pkg', files: ['dist', 'src'] }, 2)
 
     const result = runEditPackageJson(root)
     expect(result.added).toContain('files: "skills"')
-    expect(result.added).toContain('files: "bin"')
     expect(result.added).toContain('files: "!skills/_artifacts"')
 
     const pkg = readPkg()
     expect(pkg.files).toContain('skills')
-    expect(pkg.files).toContain('bin')
     expect(pkg.files).toContain('!skills/_artifacts')
     expect(pkg.files).toContain('dist')
     expect(pkg.files).toContain('src')
   })
 
-  it('adds bin field when missing', () => {
+  it('adds tanstack-intent keyword when keywords array is missing', () => {
     writePkg({ name: 'test-pkg', files: [] }, 2)
 
     const result = runEditPackageJson(root)
-    expect(result.added).toEqual(
-      expect.arrayContaining([expect.stringMatching(/^bin\.intent/)]),
-    )
+    expect(result.added).toContain('keywords: "tanstack-intent"')
 
     const pkg = readPkg()
-    expect(pkg.bin.intent).toMatch(/\.\/bin\/intent\.(js|mjs)/)
+    expect(pkg.keywords).toEqual(['tanstack-intent'])
+  })
+
+  it('adds tanstack-intent keyword to existing keywords array', () => {
+    writePkg({ name: 'test-pkg', files: [], keywords: ['react', 'router'] }, 2)
+
+    const result = runEditPackageJson(root)
+    expect(result.added).toContain('keywords: "tanstack-intent"')
+
+    const pkg = readPkg()
+    expect(pkg.keywords).toContain('tanstack-intent')
+    expect(pkg.keywords).toContain('react')
+    expect(pkg.keywords).toContain('router')
+  })
+
+  it('reports already present when tanstack-intent keyword exists', () => {
+    writePkg(
+      { name: 'test-pkg', files: [], keywords: ['tanstack-intent'] },
+      2,
+    )
+
+    const result = runEditPackageJson(root)
+    expect(result.alreadyPresent).toContain('keywords: "tanstack-intent"')
+    expect(result.added).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('keywords')]),
+    )
   })
 
   it('is idempotent — re-running does not duplicate entries', () => {
@@ -167,7 +135,7 @@ describe('runEditPackageJson', () => {
     expect(pkg.files).toContain('dist')
   })
 
-  it('preserves existing bin entries when adding intent', () => {
+  it('preserves existing bin entries untouched', () => {
     writePkg(
       { name: 'test-pkg', files: [], bin: { 'my-cli': './bin/cli.js' } },
       2,
@@ -178,23 +146,7 @@ describe('runEditPackageJson', () => {
     const pkg = readPkg() as Record<string, unknown>
     const bin = pkg.bin as Record<string, string>
     expect(bin['my-cli']).toBe('./bin/cli.js')
-    expect(bin.intent).toMatch(/\.\/bin\/intent\.(js|mjs)/)
-  })
-
-  it('converts string bin to object preserving existing entry', () => {
-    writePkg({ name: '@scope/my-tool', files: [], bin: './dist/cli.js' }, 2)
-
-    const result = runEditPackageJson(root)
-
-    const pkg = readPkg() as Record<string, unknown>
-    const bin = pkg.bin as Record<string, string>
-    expect(bin['my-tool']).toBe('./dist/cli.js')
-    expect(bin.intent).toMatch(/\.\/bin\/intent\.(js|mjs)/)
-    expect(result.added).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('converted bin from string'),
-      ]),
-    )
+    expect(bin.intent).toBeUndefined()
   })
 
   it('creates files array if missing', () => {
@@ -204,7 +156,6 @@ describe('runEditPackageJson', () => {
 
     const pkg = readPkg()
     expect(pkg.files).toContain('skills')
-    expect(pkg.files).toContain('bin')
     expect(pkg.files).toContain('!skills/_artifacts')
   })
 
@@ -230,7 +181,6 @@ describe('runEditPackageJson', () => {
 
     const result = runEditPackageJson(pkgDir)
     expect(result.added).toContain('files: "skills"')
-    expect(result.added).toContain('files: "bin"')
     expect(result.added).not.toEqual(
       expect.arrayContaining([expect.stringContaining('!skills/_artifacts')]),
     )
@@ -488,36 +438,3 @@ describe('runEditPackageJsonAll', () => {
   })
 })
 
-describe('runAddLibraryBinAll', () => {
-  it('generates shims only in packages with skills', () => {
-    const monoRoot = createMonorepo()
-
-    const results = runAddLibraryBinAll(monoRoot) as Array<
-      MonorepoResult<AddLibraryBinResult>
-    >
-
-    expect(Array.isArray(results)).toBe(true)
-    expect(results).toHaveLength(1)
-    expect(results[0]!.package).toBe(join('packages', 'lib-a'))
-    expect(results[0]!.result.shim).toBeTruthy()
-
-    // lib-b should not have a shim
-    expect(
-      existsSync(join(monoRoot, 'packages', 'lib-b', 'bin', 'intent.mjs')),
-    ).toBe(false)
-    expect(
-      existsSync(join(monoRoot, 'packages', 'lib-b', 'bin', 'intent.js')),
-    ).toBe(false)
-
-    rmSync(monoRoot, { recursive: true, force: true })
-  })
-
-  it('falls back to single-package when no workspace config exists', () => {
-    writePkg({ name: 'test-pkg' })
-
-    const result = runAddLibraryBinAll(root) as AddLibraryBinResult
-
-    expect(Array.isArray(result)).toBe(false)
-    expect(result.shim).toBeTruthy()
-  })
-})

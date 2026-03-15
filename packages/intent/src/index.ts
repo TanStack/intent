@@ -18,12 +18,10 @@ export {
   resolveDepDir,
 } from './utils.js'
 export {
-  runAddLibraryBin,
   runEditPackageJson,
   runSetupGithubActions,
 } from './setup.js'
 export type {
-  AddLibraryBinResult,
   EditPackageJsonResult,
   SetupGithubActionsResult,
 } from './setup.js'

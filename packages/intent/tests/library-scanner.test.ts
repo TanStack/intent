@@ -28,9 +28,9 @@ function writeSkillMd(dir: string, frontmatter: Record<string, unknown>): void {
   )
 }
 
-// Simulate the script path as it would appear in a library's bin/intent.js shim.
+// Construct a script path inside the package directory.
 // findHomeDir walks up from dirname(scriptPath) to find the nearest package.json.
-function shimPath(pkgDir: string): string {
+function scriptPath(pkgDir: string): string {
   return join(pkgDir, 'bin', 'intent.js')
 }
 
@@ -59,7 +59,7 @@ describe('scanLibrary', () => {
       name: '@tanstack/router',
       version: '1.2.0',
       description: 'Type-safe router for React',
-      bin: { intent: './bin/intent.js' },
+      keywords: ['tanstack-intent'],
     })
     const skillDir = createDir(pkgDir, 'skills', 'routing')
     writeSkillMd(skillDir, {
@@ -67,7 +67,7 @@ describe('scanLibrary', () => {
       description: 'File-based route definitions',
     })
 
-    const result = await scanLibrary(shimPath(pkgDir), root)
+    const result = await scanLibrary(scriptPath(pkgDir), root)
 
     expect(result.warnings).toEqual([])
     expect(result.packages).toHaveLength(1)
@@ -86,25 +86,25 @@ describe('scanLibrary', () => {
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/router',
       version: '1.0.0',
-      bin: { intent: './bin/intent.js' },
+      keywords: ['tanstack-intent'],
     })
     const skillDir = createDir(pkgDir, 'skills', 'routing')
     writeSkillMd(skillDir, { name: 'routing', description: 'Routing patterns' })
 
-    const result = await scanLibrary(shimPath(pkgDir), root)
+    const result = await scanLibrary(scriptPath(pkgDir), root)
 
     const skill = result.packages[0]!.skills[0]!
     expect(skill.path).toBe(join(pkgDir, 'skills', 'routing', 'SKILL.md'))
   })
 
-  it('recursively discovers deps with bin.intent', async () => {
+  it('recursively discovers deps with tanstack-intent keyword', async () => {
     // Home package: @tanstack/router, depends on @tanstack/query
     const routerDir = createDir(root, 'node_modules', '@tanstack', 'router')
     writeJson(join(routerDir, 'package.json'), {
       name: '@tanstack/router',
       version: '1.0.0',
       description: 'Router',
-      bin: { intent: './bin/intent.js' },
+      keywords: ['tanstack-intent'],
       dependencies: { '@tanstack/query': '^5.0.0' },
     })
     const routerSkill = createDir(routerDir, 'skills', 'routing')
@@ -119,7 +119,7 @@ describe('scanLibrary', () => {
       name: '@tanstack/query',
       version: '5.0.0',
       description: 'Async state management',
-      bin: { intent: './bin/intent.js' },
+      keywords: ['tanstack-intent'],
     })
     const querySkill = createDir(queryDir, 'skills', 'fetching')
     writeSkillMd(querySkill, {
@@ -127,7 +127,7 @@ describe('scanLibrary', () => {
       description: 'Query and mutation patterns',
     })
 
-    const result = await scanLibrary(shimPath(routerDir), root)
+    const result = await scanLibrary(scriptPath(routerDir), root)
 
     expect(result.warnings).toEqual([])
     expect(result.packages).toHaveLength(2)
@@ -146,7 +146,7 @@ describe('scanLibrary', () => {
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/router',
       version: '1.0.0',
-      bin: { intent: './bin/intent.js' },
+      keywords: ['tanstack-intent'],
       peerDependencies: { '@tanstack/query': '^5.0.0' },
     })
 
@@ -154,23 +154,23 @@ describe('scanLibrary', () => {
     writeJson(join(queryDir, 'package.json'), {
       name: '@tanstack/query',
       version: '5.0.0',
-      bin: { intent: './bin/intent.js' },
+      keywords: ['tanstack-intent'],
     })
     const querySkill = createDir(queryDir, 'skills', 'fetching')
     writeSkillMd(querySkill, { name: 'fetching', description: 'Fetching' })
 
-    const result = await scanLibrary(shimPath(pkgDir), root)
+    const result = await scanLibrary(scriptPath(pkgDir), root)
 
     const names = result.packages.map((p) => p.name)
     expect(names).toContain('@tanstack/query')
   })
 
-  it('skips deps without bin.intent', async () => {
+  it('skips deps without tanstack-intent keyword', async () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'router')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/router',
       version: '1.0.0',
-      bin: { intent: './bin/intent.js' },
+      keywords: ['tanstack-intent'],
       dependencies: { react: '^18.0.0' },
     })
 
@@ -178,15 +178,39 @@ describe('scanLibrary', () => {
     writeJson(join(reactDir, 'package.json'), {
       name: 'react',
       version: '18.0.0',
-      // no bin.intent
+      // no tanstack-intent keyword
     })
     const reactSkill = createDir(reactDir, 'skills', 'hooks')
     writeSkillMd(reactSkill, { name: 'hooks', description: 'React hooks' })
 
-    const result = await scanLibrary(shimPath(pkgDir), root)
+    const result = await scanLibrary(scriptPath(pkgDir), root)
 
     const names = result.packages.map((p) => p.name)
     expect(names).not.toContain('react')
+  })
+
+  it('skips deps with other keywords but not tanstack-intent', async () => {
+    const pkgDir = createDir(root, 'node_modules', '@tanstack', 'router')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/router',
+      version: '1.0.0',
+      keywords: ['tanstack-intent'],
+      dependencies: { 'some-lib': '^1.0.0' },
+    })
+
+    const libDir = createDir(root, 'node_modules', 'some-lib')
+    writeJson(join(libDir, 'package.json'), {
+      name: 'some-lib',
+      version: '1.0.0',
+      keywords: ['react', 'state-management'],
+    })
+    const libSkill = createDir(libDir, 'skills', 'core')
+    writeSkillMd(libSkill, { name: 'core', description: 'Core patterns' })
+
+    const result = await scanLibrary(scriptPath(pkgDir), root)
+
+    const names = result.packages.map((p) => p.name)
+    expect(names).not.toContain('some-lib')
   })
 
   it('handles packages with no skills/ directory', async () => {
@@ -194,11 +218,11 @@ describe('scanLibrary', () => {
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/router',
       version: '1.0.0',
-      bin: { intent: './bin/intent.js' },
+      keywords: ['tanstack-intent'],
     })
     // No skills/ directory
 
-    const result = await scanLibrary(shimPath(pkgDir), root)
+    const result = await scanLibrary(scriptPath(pkgDir), root)
 
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.skills).toEqual([])
@@ -210,7 +234,7 @@ describe('scanLibrary', () => {
     writeJson(join(routerDir, 'package.json'), {
       name: '@tanstack/router',
       version: '1.0.0',
-      bin: { intent: './bin/intent.js' },
+      keywords: ['tanstack-intent'],
       dependencies: { '@tanstack/query': '^5.0.0' },
     })
 
@@ -218,11 +242,11 @@ describe('scanLibrary', () => {
     writeJson(join(queryDir, 'package.json'), {
       name: '@tanstack/query',
       version: '5.0.0',
-      bin: { intent: './bin/intent.js' },
+      keywords: ['tanstack-intent'],
       dependencies: { '@tanstack/router': '^1.0.0' }, // circular back
     })
 
-    const result = await scanLibrary(shimPath(routerDir), root)
+    const result = await scanLibrary(scriptPath(routerDir), root)
 
     // Each package appears exactly once
     const names = result.packages.map((p) => p.name)
@@ -235,7 +259,7 @@ describe('scanLibrary', () => {
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/router',
       version: '1.0.0',
-      bin: { intent: './bin/intent.js' },
+      keywords: ['tanstack-intent'],
     })
     const routingDir = createDir(pkgDir, 'skills', 'routing')
     writeSkillMd(routingDir, {
@@ -248,7 +272,7 @@ describe('scanLibrary', () => {
       description: 'Nested route patterns',
     })
 
-    const result = await scanLibrary(shimPath(pkgDir), root)
+    const result = await scanLibrary(scriptPath(pkgDir), root)
 
     const skills = result.packages[0]!.skills
     expect(skills).toHaveLength(2)
