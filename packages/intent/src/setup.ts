@@ -7,7 +7,7 @@ import {
 } from 'node:fs'
 import { basename, join, relative } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { findSkillFiles } from './utils.js'
+import { findSkillFiles, normalizeRepoUrl, readPkgJsonFile } from './utils.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,30 +36,17 @@ interface TemplateVars {
   DOCS_PATH: string
   SRC_PATH: string
   WATCH_PATHS: string
+  WORKSPACE_SKILL_GLOBS: string
+}
+
+interface MonorepoTemplateContext {
+  packageDirsWithSkills: Array<string>
+  workspacePatterns: Array<string>
 }
 
 // ---------------------------------------------------------------------------
 // Variable detection from package.json
 // ---------------------------------------------------------------------------
-
-function readPackageJson(root: string): Record<string, unknown> {
-  const pkgPath = join(root, 'package.json')
-  try {
-    return JSON.parse(readFileSync(pkgPath, 'utf8')) as Record<string, unknown>
-  } catch (err: unknown) {
-    const isNotFound =
-      err &&
-      typeof err === 'object' &&
-      'code' in err &&
-      (err as NodeJS.ErrnoException).code === 'ENOENT'
-    if (!isNotFound) {
-      console.error(
-        `Warning: could not read ${pkgPath}: ${err instanceof Error ? err.message : err}`,
-      )
-    }
-    return {}
-  }
-}
 
 function detectRepo(
   pkgJson: Record<string, unknown>,
@@ -71,10 +58,7 @@ function detectRepo(
   }
 
   if (typeof pkgJson.repository === 'string') {
-    return pkgJson.repository
-      .replace(/^git\+/, '')
-      .replace(/\.git$/, '')
-      .replace(/^https?:\/\/github\.com\//, '')
+    return normalizeRepoUrl(pkgJson.repository)
   }
 
   if (
@@ -82,21 +66,145 @@ function detectRepo(
     typeof pkgJson.repository === 'object' &&
     typeof (pkgJson.repository as Record<string, unknown>).url === 'string'
   ) {
-    return ((pkgJson.repository as Record<string, unknown>).url as string)
-      .replace(/^git\+/, '')
-      .replace(/\.git$/, '')
-      .replace(/^https?:\/\/github\.com\//, '')
+    return normalizeRepoUrl(
+      (pkgJson.repository as Record<string, unknown>).url as string,
+    )
   }
 
   return fallback
+}
+
+function isEnoent(err: unknown): boolean {
+  return (
+    !!err &&
+    typeof err === 'object' &&
+    'code' in err &&
+    (err as NodeJS.ErrnoException).code === 'ENOENT'
+  )
 }
 
 function normalizePattern(pattern: string): string {
   return pattern.endsWith('**') ? pattern : pattern.replace(/\/$/, '') + '/**'
 }
 
-function buildWatchPaths(root: string, packageDirs: Array<string>): string {
+function normalizeWorkspacePattern(pattern: string): string {
+  return pattern.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/$/, '')
+}
+
+function normalizeWorkspacePatterns(
+  patterns: Array<string> | null | undefined,
+): Array<string> {
+  if (!patterns) return []
+
+  return [
+    ...new Set(patterns.map(normalizeWorkspacePattern).filter(Boolean)),
+  ].sort()
+}
+
+function sanitizeJsonc(content: string): string {
+  let result = ''
+  let inString = false
+  let escaped = false
+
+  for (let i = 0; i < content.length; i++) {
+    const char = content[i]!
+    const next = content[i + 1]
+
+    if (inString) {
+      result += char
+      if (escaped) {
+        escaped = false
+      } else if (char === '\\') {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      result += char
+      continue
+    }
+
+    // Strip // line comments
+    if (char === '/' && next === '/') {
+      while (i < content.length && content[i] !== '\n') i++
+      if (i < content.length) result += '\n'
+      continue
+    }
+
+    // Strip /* block comments */
+    if (char === '/' && next === '*') {
+      i += 2
+      while (
+        i < content.length &&
+        !(content[i] === '*' && content[i + 1] === '/')
+      ) {
+        i++
+      }
+      i++
+      continue
+    }
+
+    // Strip trailing commas before ] or }
+    if (char === ',') {
+      let j = i + 1
+      while (j < content.length && /\s/.test(content[j]!)) j++
+      if (content[j] === ']' || content[j] === '}') {
+        continue
+      }
+    }
+
+    result += char
+  }
+
+  return result
+}
+
+function readJsoncFile(path: string): Record<string, unknown> | null {
+  try {
+    const raw = readFileSync(path, 'utf8')
+    return JSON.parse(sanitizeJsonc(raw)) as Record<string, unknown>
+  } catch (err: unknown) {
+    if (!isEnoent(err)) {
+      console.error(
+        `Warning: failed to parse ${path}: ${err instanceof Error ? err.message : err}`,
+      )
+    }
+    return null
+  }
+}
+
+function buildFallbackWorkspacePaths(
+  patterns: Array<string>,
+  suffixes: Array<string>,
+): Array<string> {
   const paths = new Set<string>()
+
+  for (const pattern of patterns) {
+    const normalized = normalizeWorkspacePattern(pattern)
+    for (const suffix of suffixes) {
+      paths.add(`${normalized}/${suffix}`)
+    }
+  }
+
+  return [...paths].sort()
+}
+
+function buildWorkspaceSkillGlobs(patterns: Array<string>): string {
+  const globs = buildFallbackWorkspacePaths(patterns, ['skills'])
+  return globs.length > 0 ? globs.join(' ') : '__intent_no_workspace_skills__'
+}
+
+function buildWatchPaths(
+  root: string,
+  packageDirs: Array<string>,
+  workspacePatterns: Array<string>,
+): string {
+  const paths = new Set<string>()
+  let hasPackageSpecificPaths = false
 
   if (existsSync(join(root, 'docs'))) {
     paths.add('docs/**')
@@ -106,13 +214,24 @@ function buildWatchPaths(root: string, packageDirs: Array<string>): string {
     const relDir = relative(root, packageDir).split('\\').join('/')
     if (existsSync(join(packageDir, 'src'))) {
       paths.add(`${relDir}/src/**`)
+      hasPackageSpecificPaths = true
     }
 
-    const pkgJson = readPackageJson(packageDir)
+    const pkgJson = readPkgJsonFile(packageDir) || {}
     const intent = pkgJson.intent as Record<string, unknown> | undefined
     const docs = typeof intent?.docs === 'string' ? intent.docs : 'docs/'
     if (!docs.startsWith('http://') && !docs.startsWith('https://')) {
       paths.add(normalizePattern(join(relDir, docs).split('\\').join('/')))
+      hasPackageSpecificPaths = true
+    }
+  }
+
+  if (!hasPackageSpecificPaths) {
+    for (const path of buildFallbackWorkspacePaths(workspacePatterns, [
+      'src/**',
+      'docs/**',
+    ])) {
+      paths.add(path)
     }
   }
 
@@ -127,24 +246,43 @@ function buildWatchPaths(root: string, packageDirs: Array<string>): string {
     .join('\n')
 }
 
-function detectVars(root: string, packageDirs?: Array<string>): TemplateVars {
-  const pkgJson = readPackageJson(root)
+function detectVars(
+  root: string,
+  context?: MonorepoTemplateContext,
+): TemplateVars {
+  const pkgJson = readPkgJsonFile(root) || {}
   const name = typeof pkgJson.name === 'string' ? pkgJson.name : 'unknown'
   const docs =
     typeof (pkgJson.intent as Record<string, unknown> | undefined)?.docs ===
     'string'
       ? ((pkgJson.intent as Record<string, unknown>).docs as string)
       : 'docs/'
-  const repo = detectRepo(pkgJson, name.replace(/^@/, '').replace(/\//, '/'))
-  const isMonorepo = packageDirs !== undefined
+  const defaultRepo = name.replace(/^@/, '').replace(/\//, '/')
+  const repo = detectRepo(pkgJson, defaultRepo)
+  const workspacePatterns = context?.workspacePatterns ?? []
+  const isMonorepo = workspacePatterns.length > 0
+  const packageDirs = context?.packageDirsWithSkills ?? []
+  const isPrivateRoot = pkgJson.private === true
+  const hasUselessName =
+    name === 'unknown' || (isPrivateRoot && !name.startsWith('@'))
   const packageLabel =
-    isMonorepo && name === 'unknown' ? `${basename(root)} workspace` : name
+    isMonorepo && hasUselessName
+      ? repo !== defaultRepo
+        ? repo
+        : `${basename(root)} workspace`
+      : name
 
   // Best-guess src path from common monorepo patterns
   const shortName = name.replace(/^@[^/]+\//, '')
-  let srcPath = `packages/${shortName}/src/**`
-  if (existsSync(join(root, 'src'))) {
+  let srcPath: string
+  if (isMonorepo) {
+    srcPath =
+      buildFallbackWorkspacePaths(workspacePatterns, ['src/**'])[0] ??
+      'packages/*/src/**'
+  } else if (existsSync(join(root, 'src'))) {
     srcPath = 'src/**'
+  } else {
+    srcPath = `packages/${shortName}/src/**`
   }
 
   return {
@@ -155,8 +293,11 @@ function detectVars(root: string, packageDirs?: Array<string>): TemplateVars {
     DOCS_PATH: docs.endsWith('**') ? docs : docs.replace(/\/$/, '') + '/**',
     SRC_PATH: srcPath,
     WATCH_PATHS: isMonorepo
-      ? buildWatchPaths(root, packageDirs)
+      ? buildWatchPaths(root, packageDirs, workspacePatterns)
       : `      - '${docs.endsWith('**') ? docs : docs.replace(/\/$/, '') + '/**'}'\n      - '${srcPath}'`,
+    WORKSPACE_SKILL_GLOBS: buildWorkspaceSkillGlobs(
+      isMonorepo ? workspacePatterns : [],
+    ),
   }
 }
 
@@ -173,6 +314,7 @@ function applyVars(content: string, vars: TemplateVars): string {
     .replace(/\{\{DOCS_PATH\}\}/g, vars.DOCS_PATH)
     .replace(/\{\{SRC_PATH\}\}/g, vars.SRC_PATH)
     .replace(/\{\{WATCH_PATHS\}\}/g, vars.WATCH_PATHS)
+    .replace(/\{\{WORKSPACE_SKILL_GLOBS\}\}/g, vars.WORKSPACE_SKILL_GLOBS)
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +346,7 @@ function copyTemplates(
     if (vars.WATCH_PATHS.includes('\n')) {
       content = content.replace(
         /\s+- '?\{\{DOCS_PATH\}\}'?\n\s+- '?\{\{SRC_PATH\}\}'?/,
-        vars.WATCH_PATHS,
+        `\n${vars.WATCH_PATHS}`,
       )
     }
     const substituted = applyVars(content, vars)
@@ -263,26 +405,7 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
 
   // In monorepos, _artifacts lives at repo root, not under packages —
   // the negation pattern is a no-op and shouldn't be added.
-  // Detect monorepo by walking up to find a parent package.json with workspaces.
-  const isMonorepo = (() => {
-    let dir = join(root, '..')
-    for (let i = 0; i < 5; i++) {
-      const parentPkg = join(dir, 'package.json')
-      if (existsSync(parentPkg)) {
-        try {
-          const parent = JSON.parse(readFileSync(parentPkg, 'utf8'))
-          if (Array.isArray(parent.workspaces) || parent.workspaces?.packages) {
-            return true
-          }
-        } catch {}
-        return false
-      }
-      const next = join(dir, '..')
-      if (next === dir) break
-      dir = next
-    }
-    return false
-  })()
+  const isMonorepo = findWorkspaceRoot(join(root, '..')) !== null
   const requiredFiles = isMonorepo
     ? ['skills']
     : ['skills', '!skills/_artifacts']
@@ -311,38 +434,51 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
 
 export function readWorkspacePatterns(root: string): Array<string> | null {
   // pnpm-workspace.yaml
-  const pnpmWs = join(root, 'pnpm-workspace.yaml')
-  if (existsSync(pnpmWs)) {
-    try {
-      const config = parseYaml(readFileSync(pnpmWs, 'utf8')) as Record<
-        string,
-        unknown
-      >
-      if (Array.isArray(config.packages)) {
-        return config.packages as Array<string>
-      }
-    } catch (err: unknown) {
+  try {
+    const raw = readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8')
+    const config = parseYaml(raw) as Record<string, unknown>
+    if (Array.isArray(config.packages)) {
+      return normalizeWorkspacePatterns(config.packages as Array<string>)
+    }
+  } catch (err: unknown) {
+    if (!isEnoent(err)) {
       console.error(
-        `Warning: failed to parse ${pnpmWs}: ${err instanceof Error ? err.message : err}`,
+        `Warning: failed to parse pnpm-workspace.yaml: ${err instanceof Error ? err.message : err}`,
       )
     }
   }
 
-  // package.json workspaces
-  const pkgPath = join(root, 'package.json')
-  if (existsSync(pkgPath)) {
-    try {
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
-      if (Array.isArray(pkg.workspaces)) {
-        return pkg.workspaces
-      }
-      if (Array.isArray(pkg.workspaces?.packages)) {
-        return pkg.workspaces.packages
-      }
-    } catch (err: unknown) {
-      console.error(
-        `Warning: failed to parse ${pkgPath}: ${err instanceof Error ? err.message : err}`,
+  // package.json workspaces (npm, yarn, bun)
+  try {
+    const pkg = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    ) as Record<string, unknown>
+    const ws = pkg.workspaces
+    if (Array.isArray(ws)) {
+      return normalizeWorkspacePatterns(ws as Array<string>)
+    }
+    if (
+      ws &&
+      typeof ws === 'object' &&
+      Array.isArray((ws as Record<string, unknown>).packages)
+    ) {
+      return normalizeWorkspacePatterns(
+        (ws as Record<string, unknown>).packages as Array<string>,
       )
+    }
+  } catch (err: unknown) {
+    if (!isEnoent(err)) {
+      console.error(
+        `Warning: failed to parse package.json: ${err instanceof Error ? err.message : err}`,
+      )
+    }
+  }
+
+  // deno.json / deno.jsonc
+  for (const name of ['deno.json', 'deno.jsonc']) {
+    const config = readJsoncFile(join(root, name))
+    if (config && Array.isArray(config.workspace)) {
+      return normalizeWorkspacePatterns(config.workspace as Array<string>)
     }
   }
 
@@ -361,34 +497,10 @@ export function resolveWorkspacePackages(
   const dirs: Array<string> = []
 
   for (const pattern of patterns) {
-    // Strip trailing /* or /**/* for directory resolution
-    const base = pattern.replace(/\/\*\*?(\/\*)?$/, '')
-    const baseDir = join(root, base)
-    if (!existsSync(baseDir)) continue
-
-    if (pattern.includes('**')) {
-      // Recursive: walk all subdirectories
-      collectPackageDirs(baseDir, dirs)
-    } else if (pattern.endsWith('/*')) {
-      // Single level: direct children
-      let entries: Array<import('node:fs').Dirent>
-      try {
-        entries = readdirSync(baseDir, { withFileTypes: true })
-      } catch {
-        continue
-      }
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue
-        const dir = join(baseDir, entry.name)
-        if (existsSync(join(dir, 'package.json'))) {
-          dirs.push(dir)
-        }
-      }
-    } else {
-      // Exact path
-      const dir = join(root, pattern)
-      if (existsSync(join(dir, 'package.json'))) {
-        dirs.push(dir)
+    const segments = pattern.split('/')
+    for (const resolved of resolveGlob(root, segments)) {
+      if (existsSync(join(resolved, 'package.json'))) {
+        dirs.push(resolved)
       }
     }
   }
@@ -396,34 +508,46 @@ export function resolveWorkspacePackages(
   return dirs
 }
 
-function collectPackageDirs(dir: string, result: Array<string>): void {
-  if (existsSync(join(dir, 'package.json'))) {
-    result.push(dir)
+function resolveGlob(base: string, segments: Array<string>): Array<string> {
+  if (segments.length === 0) return [base]
+
+  const [head, ...rest] = segments
+
+  if (head === '*') {
+    return listChildDirs(base).flatMap((dir) => resolveGlob(dir, rest))
   }
-  let entries: Array<import('node:fs').Dirent>
+
+  if (head === '**') {
+    const results = resolveGlob(base, rest)
+    for (const dir of listChildDirs(base)) {
+      results.push(...resolveGlob(dir, segments))
+    }
+    return results
+  }
+
+  const next = join(base, head!)
+  return existsSync(next) ? resolveGlob(next, rest) : []
+}
+
+function listChildDirs(dir: string): Array<string> {
   try {
-    entries = readdirSync(dir, { withFileTypes: true })
-  } catch (err: unknown) {
-    console.error(
-      `Warning: could not read directory ${dir}: ${err instanceof Error ? err.message : err}`,
-    )
-    return
-  }
-  for (const entry of entries) {
-    if (
-      !entry.isDirectory() ||
-      entry.name === 'node_modules' ||
-      entry.name.startsWith('.')
-    )
-      continue
-    collectPackageDirs(join(dir, entry.name), result)
+    return readdirSync(dir, { withFileTypes: true })
+      .filter(
+        (e) =>
+          e.isDirectory() &&
+          e.name !== 'node_modules' &&
+          !e.name.startsWith('.'),
+      )
+      .map((e) => join(dir, e.name))
+  } catch {
+    return []
   }
 }
 
 export function findWorkspaceRoot(start: string): string | null {
   let dir = start
 
-  while (true) {
+  for (;;) {
     if (readWorkspacePatterns(dir)) {
       return dir
     }
@@ -461,8 +585,14 @@ function runForEachPackage<T>(
   root: string,
   runOne: (dir: string) => T,
 ): Array<MonorepoResult<T>> | T {
-  const isMonorepo = readWorkspacePatterns(root) !== null
-  const pkgsWithSkills = isMonorepo ? findPackagesWithSkills(root) : []
+  const patterns = readWorkspacePatterns(root)
+  const isMonorepo = patterns !== null
+  const pkgsWithSkills = isMonorepo
+    ? resolveWorkspacePackages(root, patterns).filter((dir) => {
+        const skillsDir = join(dir, 'skills')
+        return existsSync(skillsDir) && findSkillFiles(skillsDir).length > 0
+      })
+    : []
 
   if (!isMonorepo) {
     return runOne(root)
@@ -495,11 +625,13 @@ export function runSetupGithubActions(
   metaDir: string,
 ): SetupGithubActionsResult {
   const workspaceRoot = findWorkspaceRoot(root) ?? root
-  const packageDirs = findPackagesWithSkills(workspaceRoot)
-  const vars = detectVars(
-    workspaceRoot,
-    packageDirs.length > 0 ? packageDirs : undefined,
-  )
+  const workspacePatterns = readWorkspacePatterns(workspaceRoot)
+  const isMonorepo = workspacePatterns !== null
+  const packageDirs = isMonorepo ? findPackagesWithSkills(workspaceRoot) : []
+  const vars = detectVars(workspaceRoot, {
+    packageDirsWithSkills: packageDirs,
+    workspacePatterns: workspacePatterns ?? [],
+  })
   const result: SetupGithubActionsResult = { workflows: [], skipped: [] }
 
   const srcDir = join(metaDir, 'templates', 'workflows')
@@ -518,7 +650,7 @@ export function runSetupGithubActions(
     console.log(`  Package:  ${vars.PACKAGE_LABEL}`)
     console.log(`  Repo:     ${vars.REPO}`)
     console.log(
-      `  Mode:     ${packageDirs.length > 0 ? `monorepo (${packageDirs.length} packages with skills)` : 'single package'}`,
+      `  Mode:     ${isMonorepo ? `monorepo (${packageDirs.length} packages with skills)` : 'single package'}`,
     )
   }
 

@@ -30,23 +30,25 @@ jobs:
 
       - name: Find and validate skills
         run: |
-          # Find all directories containing SKILL.md files
-          SKILLS_DIR=""
+          shopt -s globstar 2>/dev/null || true
+          FOUND=false
+
+          # Root-level skills directory
           if [ -d "skills" ]; then
-            SKILLS_DIR="skills"
-          elif [ -d "packages" ]; then
-            # Monorepo — find skills/ under packages
-            for dir in packages/*/skills; do
-              if [ -d "$dir" ]; then
-                echo "Validating $dir..."
-                intent validate "$dir"
-              fi
-            done
-            exit 0
+            echo "Validating skills..."
+            intent validate skills
+            FOUND=true
           fi
 
-          if [ -n "$SKILLS_DIR" ]; then
-            intent validate "$SKILLS_DIR"
-          else
+          # Workspace package skills derived from workspace config
+          for dir in {{WORKSPACE_SKILL_GLOBS}}; do
+            if [ -d "$dir" ]; then
+              echo "Validating $dir..."
+              intent validate "$dir"
+              FOUND=true
+            fi
+          done
+
+          if [ "$FOUND" = "false" ]; then
             echo "No skills/ directory found — skipping validation."
           fi

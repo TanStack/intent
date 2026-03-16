@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
+import type { Dirent } from 'node:fs'
 
 /**
  * Recursively find all SKILL.md files under a directory.
@@ -171,7 +172,7 @@ export function resolveDepDir(
   // Fallback: walk up from parentDir checking node_modules/<depName>.
   // Handles packages with exports maps that don't expose ./package.json.
   let dir = parentDir
-  while (true) {
+  for (;;) {
     const candidate = join(dir, 'node_modules', depName)
     if (existsSync(join(candidate, 'package.json'))) return candidate
     const parent = dirname(dir)
@@ -180,6 +181,25 @@ export function resolveDepDir(
   }
 
   return null
+}
+
+export function normalizeRepoUrl(url: string): string {
+  return url
+    .replace(/^git\+/, '')
+    .replace(/\.git$/, '')
+    .replace(/^https?:\/\/github\.com\//, '')
+}
+
+export function readPkgJsonFile(
+  dirPath: string,
+): Record<string, unknown> | null {
+  try {
+    return JSON.parse(
+      readFileSync(join(dirPath, 'package.json'), 'utf8'),
+    ) as Record<string, unknown>
+  } catch {
+    return null
+  }
 }
 
 /**
