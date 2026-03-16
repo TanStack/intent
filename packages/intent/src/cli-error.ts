@@ -14,9 +14,5 @@ export function fail(message: string, exitCode = 1): never {
 }
 
 export function isCliFailure(value: unknown): value is CliFailure {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    CLI_FAILURE in value
-  )
+  return !!value && typeof value === 'object' && CLI_FAILURE in value
 }
