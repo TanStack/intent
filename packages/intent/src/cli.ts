@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { cac } from 'cac'
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -651,57 +652,56 @@ Run \`intent help <command>\` for details on a specific command.`)
   console.log(HELP_BY_COMMAND[command] ?? USAGE)
 }
 
-export async function main(argv: Array<string> = process.argv.slice(2)) {
-  const command = argv[0]
-  const commandArgs = argv.slice(1)
+function createCli() {
+  const cli = cac('intent')
 
-  try {
-    if (!command || isHelpFlag(command)) {
-      printHelp()
-      return 0
-    }
+  cli
+    .command('list', 'Discover intent-enabled packages')
+    .option('--json', 'Output JSON')
+    .action(async (options: { json?: boolean }) => {
+      await cmdList(options.json ? ['--json'] : [])
+    })
 
-    if (command === 'help') {
-      printHelp(commandArgs[0])
-      return 0
-    }
+  cli
+    .command('meta [name]', 'List meta-skills, or print one by name')
+    .action(async (name?: string) => {
+      await cmdMeta(name ? [name] : [])
+    })
 
-    if (isHelpFlag(commandArgs[0])) {
-      printHelp(command)
-      return 0
-    }
+  cli
+    .command('validate [dir]', 'Validate skill files')
+    .action(async (dir?: string) => {
+      await cmdValidate(dir ? [dir] : [])
+    })
 
-    switch (command) {
-      case 'list':
-        await cmdList(commandArgs)
-        return 0
-      case 'meta':
-        await cmdMeta(commandArgs)
-        return 0
-      case 'validate':
-        await cmdValidate(commandArgs)
-        return 0
-      case 'install': {
-        console.log(INSTALL_PROMPT)
-        return 0
-      }
-      case 'scaffold': {
-        cmdScaffold()
-        return 0
-      }
-      case 'stale': {
-        const jsonStale = commandArgs.includes('--json')
-        const targetDir = commandArgs.find((arg) => !arg.startsWith('-'))
+  cli
+    .command(
+      'install',
+      'Print a skill that guides your coding agent to set up skill-to-task mappings',
+    )
+    .action(() => {
+      console.log(INSTALL_PROMPT)
+    })
+
+  cli.command('scaffold', 'Print maintainer scaffold prompt').action(() => {
+    cmdScaffold()
+  })
+
+  cli
+    .command('stale [dir]', 'Check skills for staleness')
+    .option('--json', 'Output JSON')
+    .action(
+      async (targetDir: string | undefined, options: { json?: boolean }) => {
         const { reports } = await resolveStaleTargets(targetDir)
 
         if (reports.length === 0) {
           console.log('No intent-enabled packages found.')
-          return 0
+          return
         }
 
-        if (jsonStale) {
+        if (options.json) {
           console.log(JSON.stringify(reports, null, 2))
-          return 0
+          return
         }
 
         for (const report of reports) {
@@ -724,22 +724,63 @@ export async function main(argv: Array<string> = process.argv.slice(2)) {
           }
           console.log()
         }
-        return 0
-      }
-      case 'edit-package-json': {
-        const { runEditPackageJsonAll } = await import('./setup.js')
-        runEditPackageJsonAll(process.cwd())
-        return 0
-      }
-      case 'setup-github-actions': {
-        const { runSetupGithubActions } = await import('./setup.js')
-        runSetupGithubActions(process.cwd(), getMetaDir())
-        return 0
-      }
-      default:
-        printHelp()
-        return command ? 1 : 0
+      },
+    )
+
+  cli
+    .command(
+      'edit-package-json',
+      'Update package.json files so skills are published',
+    )
+    .action(async () => {
+      const { runEditPackageJsonAll } = await import('./setup.js')
+      runEditPackageJsonAll(process.cwd())
+    })
+
+  cli
+    .command(
+      'setup-github-actions',
+      'Copy Intent CI workflow templates into .github/workflows/',
+    )
+    .action(async () => {
+      const { runSetupGithubActions } = await import('./setup.js')
+      runSetupGithubActions(process.cwd(), getMetaDir())
+    })
+
+  return cli
+}
+
+export async function main(argv: Array<string> = process.argv.slice(2)) {
+  const command = argv[0]
+  const commandArgs = argv.slice(1)
+
+  try {
+    if (!command || isHelpFlag(command)) {
+      printHelp()
+      return 0
     }
+
+    if (command === 'help') {
+      printHelp(commandArgs[0])
+      return 0
+    }
+
+    if (isHelpFlag(commandArgs[0])) {
+      printHelp(command)
+      return 0
+    }
+
+    if (!(command in HELP_BY_COMMAND)) {
+      printHelp()
+      return command ? 1 : 0
+    }
+
+    const cli = createCli()
+    cli.help()
+    cli.version(false)
+    cli.parse(['intent', 'intent', ...argv], { run: false })
+    await cli.runMatchedCommand()
+    return 0
   } catch (err) {
     if (isCliFailure(err)) {
       console.error(err.message)

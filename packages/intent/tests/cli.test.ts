@@ -120,6 +120,13 @@ describe('cli commands', () => {
     expect(logSpy.mock.calls[0]?.[0]).toContain('Run `intent help <command>`')
   })
 
+  it('prints top-level help for unknown commands', async () => {
+    const exitCode = await main(['wat'])
+
+    expect(exitCode).toBe(1)
+    expect(logSpy.mock.calls[0]?.[0]).toContain(USAGE)
+  })
+
   it('prints command help for help subcommands', async () => {
     const exitCode = await main(['help', 'validate'])
 
