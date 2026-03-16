@@ -1,5 +1,19 @@
 # @tanstack/intent
 
+## 0.0.21
+
+### Patch Changes
+
+- Replace hardcoded `TanStack/intent` dispatch target in `notify-intent.yml` template with `${{ github.repository }}` so the workflow works for any repo, not just TanStack org libraries. ([#82](https://github.com/TanStack/intent/pull/82))
+
+- Replace bin.intent detection with tanstack-intent keyword check for package discovery. Remove the `add-library-bin` command and bin shim generation system — packages are now identified by having `"tanstack-intent"` in their keywords array, which was already required for registry discovery. Also fix `collectPackagingWarnings` to skip the `!skills/_artifacts` warning for monorepo packages. ([#81](https://github.com/TanStack/intent/pull/81))
+
+- Make `scanForIntents` and `scanLibrary` synchronous instead of returning Promises for purely synchronous work. Clean up unnecessary async/await throughout source and tests, extract DRY test helpers, and improve type narrowing. ([#55](https://github.com/TanStack/intent/pull/55))
+
+- Add workspace-aware scanning so `intent list` discovers skills in monorepo workspace packages when run from the root. Replace `resolveDepDir` with `createRequire`-based resolution that handles hoisted deps, pnpm symlinks, and export maps. The `resolveDepDir` public API signature changed from 4 parameters to 2 — callers using the old signature should update to `resolveDepDir(depName, parentDir)`. `detectPackageManager` now checks workspace root for lockfiles when scanning from a subdir. ([#79](https://github.com/TanStack/intent/pull/79))
+
+- Improves the intent CLI with better setup validation, clearer feedback, version conflict detection, and improved monorepo support. ([#72](https://github.com/TanStack/intent/pull/72))
+
 ## 0.0.18
 
 ### Patch Changes
