@@ -1,9 +1,10 @@
-import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import {
   detectGlobalNodeModules,
   getDeps,
   listNodeModulesPackageDirs,
+  normalizeRepoUrl,
   parseFrontmatter,
   resolveDepDir,
 } from './utils.js'
@@ -21,6 +22,7 @@ import type {
   SkillEntry,
   VersionConflict,
 } from './types.js'
+import type { Dirent } from 'node:fs'
 
 // ---------------------------------------------------------------------------
 // Package manager detection
@@ -97,18 +99,13 @@ function deriveIntentConfig(
   // Derive repo from repository field
   let repo: string | null = null
   if (typeof pkgJson.repository === 'string') {
-    repo = pkgJson.repository
+    repo = normalizeRepoUrl(pkgJson.repository)
   } else if (
     pkgJson.repository &&
     typeof pkgJson.repository === 'object' &&
     typeof (pkgJson.repository as Record<string, unknown>).url === 'string'
   ) {
-    repo = (pkgJson.repository as Record<string, unknown>).url as string
-    // Normalize git+https://github.com/foo/bar.git → foo/bar
-    repo = repo
-      .replace(/^git\+/, '')
-      .replace(/\.git$/, '')
-      .replace(/^https?:\/\/github\.com\//, '')
+    repo = normalizeRepoUrl((pkgJson.repository as { url: string }).url)
   }
 
   // Derive docs from homepage field
@@ -318,7 +315,7 @@ function toVersionConflict(
 // Main scanner
 // ---------------------------------------------------------------------------
 
-export async function scanForIntents(root?: string): Promise<ScanResult> {
+export function scanForIntents(root?: string): ScanResult {
   const projectRoot = root ?? process.cwd()
   const packageManager = detectPackageManager(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')

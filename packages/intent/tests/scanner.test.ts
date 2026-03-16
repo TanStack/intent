@@ -59,24 +59,24 @@ afterEach(() => {
 // ── Tests ──
 
 describe('scanForIntents', () => {
-  it('returns empty packages when no node_modules exists', async () => {
-    const result = await scanForIntents(root)
+  it('returns empty packages when no node_modules exists', () => {
+    const result = scanForIntents(root)
     expect(result.packages).toEqual([])
     expect(result.warnings).toEqual([])
     expect(result.nodeModules.local.exists).toBe(false)
   })
 
-  it('returns empty packages when node_modules has no intent packages', async () => {
+  it('returns empty packages when node_modules has no intent packages', () => {
     createDir(root, 'node_modules', 'some-lib')
     writeJson(join(root, 'node_modules', 'some-lib', 'package.json'), {
       name: 'some-lib',
       version: '1.0.0',
     })
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toEqual([])
   })
 
-  it('discovers an intent-enabled package with skills', async () => {
+  it('discovers an intent-enabled package with skills', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'db')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/db',
@@ -94,7 +94,7 @@ describe('scanForIntents', () => {
       type: 'core',
     })
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/db')
     expect(result.packages[0]!.version).toBe('0.5.2')
@@ -106,7 +106,7 @@ describe('scanForIntents', () => {
     )
   })
 
-  it('discovers packages through symlinks (pnpm layout)', async () => {
+  it('discovers packages through symlinks (pnpm layout)', () => {
     // pnpm stores packages outside node_modules and symlinks them in
     const store = createDir(root, '.pnpm-store', '@tanstack', 'db')
     writeJson(join(store, 'package.json'), {
@@ -125,13 +125,13 @@ describe('scanForIntents', () => {
     createDir(root, 'node_modules', '@tanstack')
     symlinkSync(store, join(root, 'node_modules', '@tanstack', 'db'))
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/db')
     expect(result.packages[0]!.skills).toHaveLength(1)
   })
 
-  it('discovers unscoped packages through symlinks (pnpm layout)', async () => {
+  it('discovers unscoped packages through symlinks (pnpm layout)', () => {
     const store = createDir(root, '.pnpm-store', 'my-lib')
     writeJson(join(store, 'package.json'), {
       name: 'my-lib',
@@ -144,12 +144,12 @@ describe('scanForIntents', () => {
     createDir(root, 'node_modules')
     symlinkSync(store, join(root, 'node_modules', 'my-lib'))
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('my-lib')
   })
 
-  it('discovers sub-skills', async () => {
+  it('discovers sub-skills', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'db')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/db',
@@ -164,14 +164,14 @@ describe('scanForIntents', () => {
       description: 'Queries',
     })
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages[0]!.skills).toHaveLength(2)
     const names = result.packages[0]!.skills.map((s) => s.name)
     expect(names).toContain('db-core')
     expect(names).toContain('db-core/live-queries')
   })
 
-  it('warns on skills/ dir without valid intent field', async () => {
+  it('warns on skills/ dir without valid intent field', () => {
     const pkgDir = createDir(root, 'node_modules', 'bad-pkg')
     writeJson(join(pkgDir, 'package.json'), {
       name: 'bad-pkg',
@@ -180,13 +180,13 @@ describe('scanForIntents', () => {
     })
     createDir(pkgDir, 'skills', 'some-skill')
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(0)
     expect(result.warnings).toHaveLength(1)
     expect(result.warnings[0]).toContain('bad-pkg')
   })
 
-  it('warns on invalid intent version', async () => {
+  it('warns on invalid intent version', () => {
     const pkgDir = createDir(root, 'node_modules', 'wrong-ver')
     writeJson(join(pkgDir, 'package.json'), {
       name: 'wrong-ver',
@@ -195,12 +195,12 @@ describe('scanForIntents', () => {
     })
     createDir(pkgDir, 'skills', 'some-skill')
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(0)
     expect(result.warnings).toHaveLength(1)
   })
 
-  it('sorts packages by dependency order (requires)', async () => {
+  it('sorts packages by dependency order (requires)', () => {
     // Create core package (no requires)
     const coreDir = createDir(root, 'node_modules', '@tanstack', 'db')
     writeJson(join(coreDir, 'package.json'), {
@@ -229,14 +229,14 @@ describe('scanForIntents', () => {
       description: 'React bindings',
     })
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(2)
     // Core should come first
     expect(result.packages[0]!.name).toBe('@tanstack/db')
     expect(result.packages[1]!.name).toBe('@tanstack/react-db')
   })
 
-  it('skips packages without skills/ directory', async () => {
+  it('skips packages without skills/ directory', () => {
     const pkgDir = createDir(root, 'node_modules', 'no-skills')
     writeJson(join(pkgDir, 'package.json'), {
       name: 'no-skills',
@@ -245,12 +245,12 @@ describe('scanForIntents', () => {
     })
     // No skills/ directory
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(0)
     expect(result.warnings).toHaveLength(0)
   })
 
-  it('discovers global-only intent packages', async () => {
+  it('discovers global-only intent packages', () => {
     process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
 
     const pkgDir = createDir(globalRoot, '@tanstack', 'query')
@@ -264,7 +264,7 @@ describe('scanForIntents', () => {
       description: 'Global fetching skill',
     })
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
 
     expect(result.nodeModules.global.detected).toBe(true)
     expect(result.nodeModules.global.exists).toBe(true)
@@ -273,7 +273,7 @@ describe('scanForIntents', () => {
     expect(result.packages[0]!.name).toBe('@tanstack/query')
   })
 
-  it('prefers local packages over global packages with the same name', async () => {
+  it('prefers local packages over global packages with the same name', () => {
     process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
 
     const localPkgDir = createDir(root, 'node_modules', '@tanstack', 'query')
@@ -298,7 +298,7 @@ describe('scanForIntents', () => {
       description: 'Global fetching skill',
     })
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
 
     expect(result.nodeModules.global.detected).toBe(true)
     expect(result.nodeModules.global.scanned).toBe(true)
@@ -316,7 +316,7 @@ describe('scanForIntents', () => {
     ).toBe(true)
   })
 
-  it('chooses the highest version when duplicate package names exist at the same depth', async () => {
+  it('chooses the highest version when duplicate package names exist at the same depth', () => {
     writeJson(join(root, 'package.json'), {
       name: 'app',
       private: true,
@@ -402,7 +402,7 @@ describe('scanForIntents', () => {
       description: 'Query v3 skill',
     })
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     const versionWarning = result.warnings.find((warning) =>
       warning.includes('@tanstack/query'),
     )
@@ -418,7 +418,7 @@ describe('scanForIntents', () => {
     expect(versionWarning).toContain('Using 5.0.0')
   })
 
-  it('prefers stable releases over prereleases at the same depth', async () => {
+  it('prefers stable releases over prereleases at the same depth', () => {
     writeJson(join(root, 'package.json'), {
       name: 'app',
       private: true,
@@ -474,14 +474,14 @@ describe('scanForIntents', () => {
       description: 'Stable query skill',
     })
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
 
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.version).toBe('5.0.0')
     expect(result.packages[0]!.packageRoot).toBe(stableDir)
   })
 
-  it('finds hoisted deps when scanning from a workspace package subdir', async () => {
+  it('finds hoisted deps when scanning from a workspace package subdir', () => {
     // Simulate npm/yarn/bun monorepo: deps hoisted to root node_modules
     writeJson(join(root, 'package.json'), {
       name: 'monorepo',
@@ -516,12 +516,12 @@ describe('scanForIntents', () => {
     })
 
     // Scan from the workspace package subdir (not root)
-    const result = await scanForIntents(appDir)
+    const result = scanForIntents(appDir)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/db')
   })
 
-  it('discovers skills in workspace package dependencies from monorepo root', async () => {
+  it('discovers skills in workspace package dependencies from monorepo root', () => {
     writeFileSync(
       join(root, 'pnpm-workspace.yaml'),
       'packages:\n  - packages/*\n',
@@ -558,13 +558,13 @@ describe('scanForIntents', () => {
 
     createDir(root, 'node_modules')
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/db')
     expect(result.packages[0]!.skills).toHaveLength(1)
   })
 
-  it('discovers transitive skills through workspace package deps', async () => {
+  it('discovers transitive skills through workspace package deps', () => {
     writeFileSync(
       join(root, 'pnpm-workspace.yaml'),
       'packages:\n  - packages/*\n',
@@ -605,12 +605,12 @@ describe('scanForIntents', () => {
 
     createDir(root, 'node_modules')
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('skills-pkg')
   })
 
-  it('discovers skills using package.json workspaces', async () => {
+  it('discovers skills using package.json workspaces', () => {
     writeJson(join(root, 'package.json'), {
       name: 'monorepo',
       private: true,
@@ -642,12 +642,12 @@ describe('scanForIntents', () => {
       description: 'Core database concepts',
     })
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/db')
   })
 
-  it('prefers valid semver versions over invalid ones at the same depth', async () => {
+  it('prefers valid semver versions over invalid ones at the same depth', () => {
     writeJson(join(root, 'package.json'), {
       name: 'app',
       private: true,
@@ -703,7 +703,7 @@ describe('scanForIntents', () => {
       description: 'Valid version query skill',
     })
 
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
 
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.version).toBe('5.0.0')
@@ -712,50 +712,48 @@ describe('scanForIntents', () => {
 })
 
 describe('package manager detection', () => {
-  it('detects npm from package-lock.json', async () => {
+  it('detects npm from package-lock.json', () => {
     writeFileSync(join(root, 'package-lock.json'), '{}')
     createDir(root, 'node_modules')
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packageManager).toBe('npm')
   })
 
-  it('detects pnpm from pnpm-lock.yaml', async () => {
+  it('detects pnpm from pnpm-lock.yaml', () => {
     writeFileSync(join(root, 'pnpm-lock.yaml'), '')
     createDir(root, 'node_modules')
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packageManager).toBe('pnpm')
   })
 
-  it('detects yarn from yarn.lock', async () => {
+  it('detects yarn from yarn.lock', () => {
     writeFileSync(join(root, 'yarn.lock'), '')
     createDir(root, 'node_modules')
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packageManager).toBe('yarn')
   })
 
-  it('detects bun from bun.lockb', async () => {
+  it('detects bun from bun.lockb', () => {
     writeFileSync(join(root, 'bun.lockb'), '')
     createDir(root, 'node_modules')
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packageManager).toBe('bun')
   })
 
-  it('returns unknown when no lockfile found', async () => {
+  it('returns unknown when no lockfile found', () => {
     createDir(root, 'node_modules')
-    const result = await scanForIntents(root)
+    const result = scanForIntents(root)
     expect(result.packageManager).toBe('unknown')
   })
 
-  it('throws for Yarn PnP', async () => {
+  it('throws for Yarn PnP', () => {
     writeFileSync(join(root, '.pnp.cjs'), '')
-    await expect(scanForIntents(root)).rejects.toThrow('Yarn PnP')
+    expect(() => scanForIntents(root)).toThrow('Yarn PnP')
   })
 
-  it('throws for Deno without node_modules', async () => {
+  it('throws for Deno without node_modules', () => {
     writeFileSync(join(root, 'deno.json'), '{}')
     // No node_modules dir
-    await expect(scanForIntents(root)).rejects.toThrow(
-      'Deno without node_modules',
-    )
+    expect(() => scanForIntents(root)).toThrow('Deno without node_modules')
   })
 })

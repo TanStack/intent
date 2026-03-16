@@ -1,6 +1,11 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
-import { getDeps, parseFrontmatter, resolveDepDir } from './utils.js'
+import {
+  getDeps,
+  parseFrontmatter,
+  readPkgJsonFile,
+  resolveDepDir,
+} from './utils.js'
 import type { SkillEntry } from './types.js'
 import type { Dirent } from 'node:fs'
 
@@ -23,14 +28,6 @@ export interface LibraryScanResult {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function readPkgJson(dir: string): Record<string, unknown> | null {
-  try {
-    return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
-  } catch {
-    return null
-  }
-}
 
 function findHomeDir(scriptPath: string): string | null {
   let dir = dirname(scriptPath)
@@ -101,10 +98,10 @@ function discoverSkills(skillsDir: string): Array<SkillEntry> {
 // Main scanner
 // ---------------------------------------------------------------------------
 
-export async function scanLibrary(
+export function scanLibrary(
   scriptPath: string,
   _projectRoot?: string,
-): Promise<LibraryScanResult> {
+): LibraryScanResult {
   const packages: Array<LibraryPackage> = []
   const warnings: Array<string> = []
   const visited = new Set<string>()
@@ -117,7 +114,7 @@ export async function scanLibrary(
     }
   }
 
-  const homePkg = readPkgJson(homeDir)
+  const homePkg = readPkgJsonFile(homeDir)
   if (!homePkg) {
     return { packages, warnings: ['Could not read home package.json'] }
   }
@@ -128,7 +125,7 @@ export async function scanLibrary(
     if (visited.has(name)) return
     visited.add(name)
 
-    const pkg = readPkgJson(dir)
+    const pkg = readPkgJsonFile(dir)
     if (!pkg) {
       warnings.push(`Could not read package.json for ${name}`)
       return
@@ -145,7 +142,7 @@ export async function scanLibrary(
     for (const depName of getDeps(pkg)) {
       const depDir = resolveDepDir(depName, dir)
       if (!depDir) continue
-      const depPkg = readPkgJson(depDir)
+      const depPkg = readPkgJsonFile(depDir)
       if (depPkg && isIntentPackage(depPkg)) {
         processPackage(depName, depDir)
       }
