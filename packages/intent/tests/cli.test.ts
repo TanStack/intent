@@ -41,19 +41,28 @@ function writeSkillMd(dir: string, frontmatter: Record<string, unknown>): void {
 
 let originalCwd: string
 let logSpy: ReturnType<typeof vi.spyOn>
+let infoSpy: ReturnType<typeof vi.spyOn>
 let errorSpy: ReturnType<typeof vi.spyOn>
 let tempDirs: Array<string>
+
+function getHelpOutput(): string {
+  return infoSpy.mock.calls
+    .map((call: Array<unknown>) => String(call[0] ?? ''))
+    .join('')
+}
 
 beforeEach(() => {
   originalCwd = process.cwd()
   tempDirs = []
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+  infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
 afterEach(() => {
   process.chdir(originalCwd)
   logSpy.mockRestore()
+  infoSpy.mockRestore()
   errorSpy.mockRestore()
   for (const dir of tempDirs) {
     if (existsSync(dir)) {
@@ -107,7 +116,7 @@ describe('intent meta', () => {
 describe('cli commands', () => {
   it('prints top-level help when no command is provided', async () => {
     const exitCode = await main([])
-    const output = String(logSpy.mock.calls[0]?.[0])
+    const output = getHelpOutput()
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Usage:')
@@ -117,7 +126,7 @@ describe('cli commands', () => {
 
   it('prints top-level help for --help', async () => {
     const exitCode = await main(['--help'])
-    const output = String(logSpy.mock.calls[0]?.[0])
+    const output = getHelpOutput()
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Usage:')
@@ -126,7 +135,7 @@ describe('cli commands', () => {
 
   it('prints top-level help for unknown commands', async () => {
     const exitCode = await main(['wat'])
-    const output = String(logSpy.mock.calls[0]?.[0])
+    const output = getHelpOutput()
 
     expect(exitCode).toBe(1)
     expect(output).toContain('Usage:')
@@ -135,7 +144,7 @@ describe('cli commands', () => {
 
   it('prints command help for help subcommands', async () => {
     const exitCode = await main(['help', 'validate'])
-    const output = String(logSpy.mock.calls[0]?.[0])
+    const output = getHelpOutput()
 
     expect(exitCode).toBe(0)
     expect(output).toContain('$ intent validate [dir]')
@@ -150,7 +159,7 @@ describe('cli commands', () => {
 
   it('prints command help when --help is passed after a subcommand', async () => {
     const exitCode = await main(['list', '--help'])
-    const output = String(logSpy.mock.calls[0]?.[0])
+    const output = getHelpOutput()
 
     expect(exitCode).toBe(0)
     expect(output).toContain('$ intent list [--json]')
