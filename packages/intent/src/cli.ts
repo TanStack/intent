@@ -8,6 +8,7 @@ import { fail, isCliFailure } from './cli-error.js'
 import { runInstallCommand } from './commands/install.js'
 import { runListCommand } from './commands/list.js'
 import { runScaffoldCommand } from './commands/scaffold.js'
+import { runStaleCommand } from './commands/stale.js'
 import { runValidateCommand } from './commands/validate.js'
 import type { ScanResult } from './types.js'
 
@@ -246,38 +247,7 @@ function createCli() {
     .option('--json', 'Output JSON')
     .action(
       async (targetDir: string | undefined, options: { json?: boolean }) => {
-        const { reports } = await resolveStaleTargets(targetDir)
-
-        if (reports.length === 0) {
-          console.log('No intent-enabled packages found.')
-          return
-        }
-
-        if (options.json) {
-          console.log(JSON.stringify(reports, null, 2))
-          return
-        }
-
-        for (const report of reports) {
-          const driftLabel = report.versionDrift
-            ? ` [${report.versionDrift} drift]`
-            : ''
-          const vLabel =
-            report.skillVersion && report.currentVersion
-              ? ` (${report.skillVersion} → ${report.currentVersion})`
-              : ''
-          console.log(`${report.library}${vLabel}${driftLabel}`)
-
-          const stale = report.skills.filter((s) => s.needsReview)
-          if (stale.length === 0) {
-            console.log('  All skills up-to-date')
-          } else {
-            for (const skill of stale) {
-              console.log(`  ⚠ ${skill.name}: ${skill.reasons.join(', ')}`)
-            }
-          }
-          console.log()
-        }
+        await runStaleCommand(targetDir, options, resolveStaleTargets)
       },
     )
 
