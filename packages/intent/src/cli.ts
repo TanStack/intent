@@ -4,32 +4,84 @@ import { cac } from 'cac'
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { INSTALL_PROMPT } from './install-prompt.js'
+import { fail, isCliFailure } from './cli-error.js'
+import { runInstallCommand } from './commands/install.js'
+import { runListCommand } from './commands/list.js'
+import { runScaffoldCommand } from './commands/scaffold.js'
 import type { ScanResult } from './types.js'
+
+export const USAGE = `TanStack Intent CLI
+
+Usage:
+  intent list [--json]           Discover intent-enabled packages
+  intent meta [name]             List meta-skills, or print one by name
+  intent validate [<dir>]        Validate skill files (default: skills/)
+  intent install                  Print a skill that guides your coding agent to set up skill-to-task mappings
+  intent scaffold                Print maintainer scaffold prompt
+  intent edit-package-json       Wire package.json (files, keywords) for skill publishing
+  intent setup-github-actions    Copy CI workflow templates to .github/workflows/
+  intent stale [dir] [--json]    Check skills for staleness`
+
+const HELP_BY_COMMAND: Record<string, string> = {
+  list: `${USAGE}
+
+Examples:
+  intent list
+  intent list --json`,
+  meta: `intent meta [name]
+
+List shipped meta-skills, or print a single meta-skill by name.
+
+Examples:
+  intent meta
+  intent meta domain-discovery`,
+  validate: `intent validate [dir]
+
+Validate SKILL.md files in the target directory.
+
+Examples:
+  intent validate
+  intent validate packages/query/skills`,
+  install: `intent install
+
+Print the install prompt used to set up skill-to-task mappings.`,
+  scaffold: `intent scaffold
+
+Print the guided maintainer prompt for generating skills.`,
+  stale: `intent stale [dir] [--json]
+
+Check installed skills for version and source drift.
+
+Examples:
+  intent stale
+  intent stale packages/query
+  intent stale --json`,
+  'edit-package-json': `intent edit-package-json
+
+Update package.json files so skills are published.`,
+  'setup-github-actions': `intent setup-github-actions
+
+Copy Intent CI workflow templates into .github/workflows/.`,
+}
+
+function isHelpFlag(arg: string | undefined): boolean {
+  return arg === '-h' || arg === '--help'
+}
+
+function printHelp(command?: string): void {
+  if (!command) {
+    console.log(`${USAGE}
+
+Run \`intent help <command>\` for details on a specific command.`)
+    return
+  }
+
+  console.log(HELP_BY_COMMAND[command] ?? USAGE)
+}
 
 function getMetaDir(): string {
   const thisDir = dirname(fileURLToPath(import.meta.url))
   return join(thisDir, '..', 'meta')
-}
-
-type CliFailure = {
-  message: string
-  exitCode: number
-}
-
-function fail(message: string, exitCode = 1): never {
-  throw { message, exitCode } satisfies CliFailure
-}
-
-function isCliFailure(value: unknown): value is CliFailure {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    'message' in value &&
-    typeof value.message === 'string' &&
-    'exitCode' in value &&
-    typeof value.exitCode === 'number'
-  )
 }
 
 async function scanIntentsOrFail(): Promise<ScanResult> {
@@ -51,34 +103,6 @@ function printWarnings(warnings: Array<string>): void {
   }
 }
 
-function formatScanCoverage(result: ScanResult): string {
-  const coverage: Array<string> = []
-
-  if (result.nodeModules.local.scanned) coverage.push('project node_modules')
-  if (result.nodeModules.global.scanned) coverage.push('global node_modules')
-
-  return coverage.join(', ')
-}
-
-function printVersionConflicts(result: ScanResult): void {
-  if (result.conflicts.length === 0) return
-
-  console.log('\nVersion conflicts:\n')
-  for (const conflict of result.conflicts) {
-    console.log(`  ${conflict.packageName} -> using ${conflict.chosen.version}`)
-    console.log(`    chosen: ${conflict.chosen.packageRoot}`)
-
-    for (const variant of conflict.variants) {
-      if (variant.packageRoot === conflict.chosen.packageRoot) continue
-      console.log(
-        `    also found: ${variant.version} at ${variant.packageRoot}`,
-      )
-    }
-
-    console.log()
-  }
-}
-
 function buildValidationFailure(
   errors: Array<{ file: string; message: string }>,
   warnings: Array<string>,
@@ -97,77 +121,6 @@ function buildValidationFailure(
   }
 
   return lines.join('\n')
-}
-
-async function cmdList(args: Array<string>): Promise<void> {
-  const { computeSkillNameWidth, printSkillTree, printTable } =
-    await import('./display.js')
-  const jsonOutput = args.includes('--json')
-  const result = await scanIntentsOrFail()
-
-  if (jsonOutput) {
-    console.log(JSON.stringify(result, null, 2))
-    return
-  }
-
-  const scanCoverage = formatScanCoverage(result)
-
-  if (result.packages.length === 0) {
-    console.log('No intent-enabled packages found.')
-    if (scanCoverage) console.log(`Scanned: ${scanCoverage}`)
-    if (result.warnings.length > 0) {
-      console.log()
-      printWarnings(result.warnings)
-    }
-    return
-  }
-
-  const totalSkills = result.packages.reduce(
-    (sum, p) => sum + p.skills.length,
-    0,
-  )
-  console.log(
-    `\n${result.packages.length} intent-enabled packages, ${totalSkills} skills (${result.packageManager})\n`,
-  )
-  if (scanCoverage) {
-    console.log(
-      `Scanned: ${scanCoverage}${result.nodeModules.global.scanned ? ' (local packages take precedence)' : ''}\n`,
-    )
-  }
-
-  // Summary table
-  const rows = result.packages.map((pkg) => [
-    pkg.name,
-    pkg.version,
-    String(pkg.skills.length),
-    pkg.intent.requires?.join(', ') || '–',
-  ])
-  printTable(['PACKAGE', 'VERSION', 'SKILLS', 'REQUIRES'], rows)
-
-  printVersionConflicts(result)
-
-  // Skills detail
-  const allSkills = result.packages.map((p) => p.skills)
-  const nameWidth = computeSkillNameWidth(allSkills)
-  const showTypes = result.packages.some((p) => p.skills.some((s) => s.type))
-
-  console.log(`\nSkills:\n`)
-  for (const pkg of result.packages) {
-    console.log(`  ${pkg.name}`)
-    printSkillTree(pkg.skills, { nameWidth, showTypes })
-    console.log()
-  }
-
-  console.log(`Feedback:`)
-  console.log(
-    `  Submit feedback on skill usage to help maintainers improve the skills.`,
-  )
-  console.log(
-    `  Load: node_modules/@tanstack/intent/meta/feedback-collection/SKILL.md`,
-  )
-  console.log()
-
-  printWarnings(result.warnings)
 }
 
 async function cmdMeta(args: Array<string>): Promise<void> {
@@ -508,150 +461,6 @@ async function cmdValidate(args: Array<string>): Promise<void> {
   printWarnings(warnings)
 }
 
-function cmdScaffold(): void {
-  const metaDir = getMetaDir()
-  const metaSkillPath = (name: string) => join(metaDir, name, 'SKILL.md')
-
-  const prompt = `You are helping a library maintainer scaffold Intent skills.
-
-Run the three meta skills below **one at a time, in order**. For each step:
-1. Load the SKILL.md file specified
-2. Follow its instructions completely
-3. Present outputs to the maintainer for review
-4. Do NOT proceed to the next step until the maintainer confirms
-
-## Before you start
-
-Gather this context yourself (do not ask the maintainer — agents should never
-ask for information they can discover):
-1. Read package.json for library name, repository URL, and homepage/docs URL
-2. Detect if this is a monorepo (look for workspaces field, packages/ directory, lerna.json)
-3. Use skills/ as the default skills root
-4. For monorepos:
-   - Domain map artifacts go at the REPO ROOT: _artifacts/
-   - Skills go INSIDE EACH PACKAGE: packages/<pkg>/skills/
-   - Identify which packages are client-facing (usually client SDKs and primary framework adapters)
-
----
-
-## Step 1 — Domain Discovery
-
-Load and follow: ${metaSkillPath('domain-discovery')}
-
-This produces: domain_map.yaml and skill_spec.md in the artifacts directory.
-Domain discovery covers the WHOLE library (one domain map even for monorepos).
-
-**STOP. Review outputs with the maintainer before continuing.**
-
----
-
-## Step 2 — Tree Generator
-
-Load and follow: ${metaSkillPath('tree-generator')}
-
-This produces: skill_tree.yaml in the artifacts directory.
-For monorepos, each skill entry should include a \`package\` field.
-
-**STOP. Review outputs with the maintainer before continuing.**
-
----
-
-## Step 3 — Generate Skills
-
-Load and follow: ${metaSkillPath('generate-skill')}
-
-This produces: individual SKILL.md files.
-- Single-repo: skills/<domain>/<skill>/SKILL.md
-- Monorepo: packages/<pkg>/skills/<domain>/<skill>/SKILL.md
-
----
-
-## After all skills are generated
-
-1. Run \`intent validate\` in each package directory
-2. Commit skills/ and artifacts
-3. For each publishable package, run: \`npx @tanstack/intent edit-package-json\`
-4. Ensure each package has \`@tanstack/intent\` as a devDependency
-5. Create a \`skill:<skill-name>\` label on the GitHub repo for each skill (use \`gh label create\`)
-6. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent@latest install\`"
-`
-
-  console.log(prompt)
-}
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
-
-export const USAGE = `TanStack Intent CLI
-
-Usage:
-  intent list [--json]           Discover intent-enabled packages
-  intent meta [name]             List meta-skills, or print one by name
-  intent validate [<dir>]        Validate skill files (default: skills/)
-  intent install                  Print a skill that guides your coding agent to set up skill-to-task mappings
-  intent scaffold                Print maintainer scaffold prompt
-  intent edit-package-json       Wire package.json (files, keywords) for skill publishing
-  intent setup-github-actions    Copy CI workflow templates to .github/workflows/
-  intent stale [dir] [--json]    Check skills for staleness`
-
-const HELP_BY_COMMAND: Record<string, string> = {
-  list: `${USAGE}
-
-Examples:
-  intent list
-  intent list --json`,
-  meta: `intent meta [name]
-
-List shipped meta-skills, or print a single meta-skill by name.
-
-Examples:
-  intent meta
-  intent meta domain-discovery`,
-  validate: `intent validate [dir]
-
-Validate SKILL.md files in the target directory.
-
-Examples:
-  intent validate
-  intent validate packages/query/skills`,
-  install: `intent install
-
-Print the install prompt used to set up skill-to-task mappings.`,
-  scaffold: `intent scaffold
-
-Print the guided maintainer prompt for generating skills.`,
-  stale: `intent stale [dir] [--json]
-
-Check installed skills for version and source drift.
-
-Examples:
-  intent stale
-  intent stale packages/query
-  intent stale --json`,
-  'edit-package-json': `intent edit-package-json
-
-Update package.json files so skills are published.`,
-  'setup-github-actions': `intent setup-github-actions
-
-Copy Intent CI workflow templates into .github/workflows/.`,
-}
-
-function isHelpFlag(arg: string | undefined): boolean {
-  return arg === '-h' || arg === '--help'
-}
-
-function printHelp(command?: string): void {
-  if (!command) {
-    console.log(`${USAGE}
-
-Run \`intent help <command>\` for details on a specific command.`)
-    return
-  }
-
-  console.log(HELP_BY_COMMAND[command] ?? USAGE)
-}
-
 function createCli() {
   const cli = cac('intent')
 
@@ -659,7 +468,7 @@ function createCli() {
     .command('list', 'Discover intent-enabled packages')
     .option('--json', 'Output JSON')
     .action(async (options: { json?: boolean }) => {
-      await cmdList(options.json ? ['--json'] : [])
+      await runListCommand(options, scanIntentsOrFail)
     })
 
   cli
@@ -680,11 +489,11 @@ function createCli() {
       'Print a skill that guides your coding agent to set up skill-to-task mappings',
     )
     .action(() => {
-      console.log(INSTALL_PROMPT)
+      runInstallCommand()
     })
 
   cli.command('scaffold', 'Print maintainer scaffold prompt').action(() => {
-    cmdScaffold()
+    runScaffoldCommand(getMetaDir())
   })
 
   cli
@@ -777,7 +586,6 @@ export async function main(argv: Array<string> = process.argv.slice(2)) {
 
     const cli = createCli()
     cli.help()
-    cli.version(false)
     cli.parse(['intent', 'intent', ...argv], { run: false })
     await cli.runMatchedCommand()
     return 0

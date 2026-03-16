@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { INSTALL_PROMPT } from '../src/install-prompt.js'
+import { INSTALL_PROMPT } from '../src/commands/install.js'
 import { main, USAGE } from '../src/cli.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
@@ -150,6 +150,15 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(logSpy).toHaveBeenCalledWith(INSTALL_PROMPT)
+  })
+
+  it('prints the scaffold prompt', async () => {
+    const exitCode = await main(['scaffold'])
+    const output = String(logSpy.mock.calls[0]?.[0])
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('## Step 1')
+    expect(output).toContain('meta/domain-discovery/SKILL.md')
   })
 
   it('lists installed intent packages as json', async () => {
