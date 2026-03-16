@@ -111,7 +111,7 @@ describe('checkStaleness', () => {
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '2.0.0' }),
+      json: () => Promise.resolve({ version: '2.0.0' }),
     } as Response)
 
     const report = await checkStaleness(tmpDir, '@example/lib')
@@ -131,7 +131,7 @@ describe('checkStaleness', () => {
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.4.0' }),
+      json: () => Promise.resolve({ version: '1.4.0' }),
     } as Response)
 
     const report = await checkStaleness(tmpDir, '@example/lib')
@@ -147,7 +147,7 @@ describe('checkStaleness', () => {
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.2.5' }),
+      json: () => Promise.resolve({ version: '1.2.5' }),
     } as Response)
 
     const report = await checkStaleness(tmpDir, '@example/lib')
@@ -163,7 +163,7 @@ describe('checkStaleness', () => {
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.2.3' }),
+      json: () => Promise.resolve({ version: '1.2.3' }),
     } as Response)
 
     const report = await checkStaleness(tmpDir, '@example/lib')
@@ -256,7 +256,7 @@ describe('checkStaleness', () => {
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '2.0.0' }),
+      json: () => Promise.resolve({ version: '2.0.0' }),
     } as Response)
 
     const report = await checkStaleness(tmpDir, '@example/lib')
@@ -286,7 +286,7 @@ describe('checkStaleness', () => {
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '4.0.0' }),
+      json: () => Promise.resolve({ version: '4.0.0' }),
     } as Response)
 
     const report = await checkStaleness(tmpDir, '@example/lib')
