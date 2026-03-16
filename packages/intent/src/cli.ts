@@ -9,6 +9,8 @@ import { runInstallCommand } from './commands/install.js'
 import { runListCommand } from './commands/list.js'
 import { runMetaCommand } from './commands/meta.js'
 import { runScaffoldCommand } from './commands/scaffold.js'
+import { runEditPackageJsonCommand } from './commands/edit-package-json.js'
+import { runSetupGithubActionsCommand } from './commands/setup-github-actions.js'
 import { runStaleCommand } from './commands/stale.js'
 import { runValidateCommand } from './commands/validate.js'
 import type { ScanResult } from './types.js'
@@ -202,8 +204,7 @@ function createCli() {
       'Update package.json files so skills are published',
     )
     .action(async () => {
-      const { runEditPackageJsonAll } = await import('./setup.js')
-      runEditPackageJsonAll(process.cwd())
+      await runEditPackageJsonCommand(process.cwd())
     })
 
   cli
@@ -212,8 +213,7 @@ function createCli() {
       'Copy Intent CI workflow templates into .github/workflows/',
     )
     .action(async () => {
-      const { runSetupGithubActions } = await import('./setup.js')
-      runSetupGithubActions(process.cwd(), getMetaDir())
+      await runSetupGithubActionsCommand(process.cwd(), getMetaDir())
     })
 
   return cli

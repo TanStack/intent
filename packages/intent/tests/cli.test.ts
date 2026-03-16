@@ -161,6 +161,53 @@ describe('cli commands', () => {
     expect(output).toContain('meta/domain-discovery/SKILL.md')
   })
 
+  it('updates package.json for skill publishing', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-edit-package-json-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'pkg',
+      version: '1.0.0',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['edit-package-json'])
+    const pkg = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    ) as {
+      keywords?: Array<string>
+      files?: Array<string>
+    }
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(pkg.keywords).toContain('tanstack-intent')
+    expect(pkg.files).toContain('skills')
+    expect(pkg.files).toContain('!skills/_artifacts')
+    expect(output).toContain('Added keywords: "tanstack-intent"')
+  })
+
+  it('copies github workflow templates', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-setup-gha-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@scope/pkg',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'scope/pkg', docs: 'docs/' },
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['setup-github-actions'])
+    const workflowsDir = join(root, '.github', 'workflows')
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(existsSync(workflowsDir)).toBe(true)
+    expect(output).toContain('Copied workflow:')
+    expect(output).toContain('Template variables applied:')
+  })
+
   it('lists installed intent packages as json', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-'))
     tempDirs.push(root)
