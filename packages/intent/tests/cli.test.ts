@@ -141,6 +141,13 @@ describe('cli commands', () => {
     expect(output).toContain('$ intent validate [dir]')
   })
 
+  it('fails cleanly for unknown help subcommands', async () => {
+    const exitCode = await main(['help', 'wat'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith('Unknown command: wat')
+  })
+
   it('prints command help when --help is passed after a subcommand', async () => {
     const exitCode = await main(['list', '--help'])
     const output = String(logSpy.mock.calls[0]?.[0])
