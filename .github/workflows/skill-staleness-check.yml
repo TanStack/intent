@@ -69,7 +69,7 @@ jobs:
           - library: ${LIBRARY}
 
           Run the staleness check for the ${LIBRARY} library. Use
-          scripts/sync-skills.mjs for detection, then evaluate whether any
+          intent stale --json for detection, then evaluate whether any
           skills need updating. If they do, update them and open a PR.
           If nothing needs updating, exit silently.
           EOF
