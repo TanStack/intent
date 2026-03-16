@@ -1,13 +1,5 @@
+import { printWarnings } from '../cli-support.js'
 import type { ScanResult } from '../types.js'
-
-function printWarnings(warnings: Array<string>): void {
-  if (warnings.length === 0) return
-
-  console.log('Warnings:')
-  for (const warning of warnings) {
-    console.log(`  ⚠ ${warning}`)
-  }
-}
 
 function formatScanCoverage(result: ScanResult): string {
   const coverage: Array<string> = []

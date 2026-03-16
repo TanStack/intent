@@ -1,18 +1,15 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fail } from '../cli-error.js'
+import { printWarnings } from '../cli-support.js'
 
-function printWarnings(warnings: Array<string>): void {
-  if (warnings.length === 0) return
-
-  console.log('Warnings:')
-  for (const warning of warnings) {
-    console.log(`  ⚠ ${warning}`)
-  }
+interface ValidationError {
+  file: string
+  message: string
 }
 
 function buildValidationFailure(
-  errors: Array<{ file: string; message: string }>,
+  errors: Array<ValidationError>,
   warnings: Array<string>,
 ): string {
   const lines = ['', `❌ Validation failed with ${errors.length} error(s):`, '']
@@ -29,6 +26,25 @@ function buildValidationFailure(
   }
 
   return lines.join('\n')
+}
+
+function isInsideMonorepo(root: string): boolean {
+  let dir = join(root, '..')
+  for (let i = 0; i < 5; i++) {
+    const parentPkg = join(dir, 'package.json')
+    if (existsSync(parentPkg)) {
+      try {
+        const parent = JSON.parse(readFileSync(parentPkg, 'utf8'))
+        return Array.isArray(parent.workspaces) || parent.workspaces?.packages
+      } catch {
+        return false
+      }
+    }
+    const next = dirname(dir)
+    if (next === dir) break
+    dir = next
+  }
+  return false
 }
 
 function collectPackagingWarnings(root: string): Array<string> {
@@ -63,26 +79,9 @@ function collectPackagingWarnings(root: string): Array<string> {
       )
     }
 
-    const isMonorepoPkg = (() => {
-      let dir = join(root, '..')
-      for (let i = 0; i < 5; i++) {
-        const parentPkg = join(dir, 'package.json')
-        if (existsSync(parentPkg)) {
-          try {
-            const parent = JSON.parse(readFileSync(parentPkg, 'utf8'))
-            return (
-              Array.isArray(parent.workspaces) || parent.workspaces?.packages
-            )
-          } catch {
-            return false
-          }
-        }
-        const next = dirname(dir)
-        if (next === dir) break
-        dir = next
-      }
-      return false
-    })()
+    // In monorepos, _artifacts lives at repo root, not under packages —
+    // the negation pattern is a no-op and shouldn't be added.
+    const isMonorepoPkg = isInsideMonorepo(root)
 
     if (!isMonorepoPkg && !files.includes('!skills/_artifacts')) {
       warnings.push(
@@ -124,11 +123,6 @@ export async function runValidateCommand(dir?: string): Promise<void> {
     fail(`Skills directory not found: ${skillsDir}`)
   }
 
-  interface ValidationError {
-    file: string
-    message: string
-  }
-
   const errors: Array<ValidationError> = []
   const skillFiles = findSkillFiles(skillsDir)
 
@@ -154,8 +148,9 @@ export async function runValidateCommand(dir?: string): Promise<void> {
     let fm: Record<string, unknown>
     try {
       fm = parseYaml(match[1]) as Record<string, unknown>
-    } catch {
-      errors.push({ file: rel, message: 'Invalid YAML frontmatter' })
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      errors.push({ file: rel, message: `Invalid YAML frontmatter: ${detail}` })
       continue
     }
 
@@ -232,10 +227,11 @@ export async function runValidateCommand(dir?: string): Promise<void> {
       if (fileName.endsWith('.yaml')) {
         try {
           parseYaml(content)
-        } catch {
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : String(err)
           errors.push({
             file: relative(process.cwd(), artifactPath),
-            message: 'Invalid YAML in artifact file',
+            message: `Invalid YAML in artifact file: ${detail}`,
           })
         }
       }

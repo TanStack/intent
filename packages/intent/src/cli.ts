@@ -1,24 +1,24 @@
 #!/usr/bin/env node
 
-import { cac } from 'cac'
 import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { type CAC, cac } from 'cac'
 import { fail, isCliFailure } from './cli-error.js'
 import {
   getMetaDir,
   resolveStaleTargets,
   scanIntentsOrFail,
 } from './cli-support.js'
+import { runEditPackageJsonCommand } from './commands/edit-package-json.js'
 import { runInstallCommand } from './commands/install.js'
 import { runListCommand } from './commands/list.js'
 import { runMetaCommand } from './commands/meta.js'
 import { runScaffoldCommand } from './commands/scaffold.js'
-import { runEditPackageJsonCommand } from './commands/edit-package-json.js'
 import { runSetupGithubActionsCommand } from './commands/setup-github-actions.js'
 import { runStaleCommand } from './commands/stale.js'
 import { runValidateCommand } from './commands/validate.js'
 
-function createCli() {
+function createCli(): CAC {
   const cli = cac('intent')
   cli.usage('<command> [options]')
 
@@ -133,6 +133,7 @@ export async function main(argv: Array<string> = process.argv.slice(2)) {
       return 0
     }
 
+    // cac expects process.argv format: first two entries (binary + script) are ignored
     cli.parse(['intent', 'intent', ...argv], { run: false })
 
     if (cli.options.help) {
@@ -150,6 +151,11 @@ export async function main(argv: Array<string> = process.argv.slice(2)) {
     if (isCliFailure(err)) {
       console.error(err.message)
       return err.exitCode
+    }
+
+    if (err instanceof Error) {
+      console.error(err.message)
+      return 1
     }
 
     throw err

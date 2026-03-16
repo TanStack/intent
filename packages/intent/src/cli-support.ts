@@ -4,6 +4,15 @@ import { fileURLToPath } from 'node:url'
 import { fail } from './cli-error.js'
 import type { ScanResult, StalenessReport } from './types.js'
 
+export function printWarnings(warnings: Array<string>): void {
+  if (warnings.length === 0) return
+
+  console.log('Warnings:')
+  for (const warning of warnings) {
+    console.log(`  ⚠ ${warning}`)
+  }
+}
+
 export function getMetaDir(): string {
   const thisDir = dirname(fileURLToPath(import.meta.url))
   return join(thisDir, '..', 'meta')
@@ -15,7 +24,7 @@ export async function scanIntentsOrFail(): Promise<ScanResult> {
   try {
     return scanForIntents()
   } catch (err) {
-    fail((err as Error).message)
+    fail(err instanceof Error ? err.message : String(err))
   }
 }
 

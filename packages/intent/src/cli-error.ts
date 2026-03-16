@@ -1,19 +1,22 @@
+const CLI_FAILURE = Symbol('CliFailure')
+
 export type CliFailure = {
+  readonly [CLI_FAILURE]: true
   message: string
   exitCode: number
 }
 
+// Throws a structured CliFailure (not an Error) — this represents an expected
+// user-facing failure, not an internal bug. Stack traces are intentionally
+// omitted since these are anticipated exit paths (bad input, missing files, etc).
 export function fail(message: string, exitCode = 1): never {
-  throw { message, exitCode } satisfies CliFailure
+  throw { [CLI_FAILURE]: true as const, message, exitCode } satisfies CliFailure
 }
 
 export function isCliFailure(value: unknown): value is CliFailure {
   return (
     !!value &&
     typeof value === 'object' &&
-    'message' in value &&
-    typeof value.message === 'string' &&
-    'exitCode' in value &&
-    typeof value.exitCode === 'number'
+    CLI_FAILURE in value
   )
 }

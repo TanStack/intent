@@ -6,8 +6,6 @@ export async function runMetaCommand(
   name: string | undefined,
   metaDir: string,
 ): Promise<void> {
-  const { parseFrontmatter } = await import('../utils.js')
-
   if (!existsSync(metaDir)) {
     fail('Meta-skills directory not found.')
   }
@@ -34,6 +32,7 @@ export async function runMetaCommand(
     return
   }
 
+  const { parseFrontmatter } = await import('../utils.js')
   const entries = readdirSync(metaDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .filter((entry) => existsSync(join(metaDir, entry.name, 'SKILL.md')))

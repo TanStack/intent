@@ -24,7 +24,7 @@ npx @tanstack/intent@latest setup-github-actions
   - Preserves existing indentation
 - `setup-github-actions`
   - Copies templates from `@tanstack/intent/meta/templates/workflows` to `.github/workflows`
-  - Applies variable substitution for `PACKAGE_NAME`, `REPO`, `DOCS_PATH`, `SRC_PATH`
+  - Applies variable substitution (`PACKAGE_NAME`, `PACKAGE_LABEL`, `PAYLOAD_PACKAGE`, `REPO`, `DOCS_PATH`, `SRC_PATH`, `WATCH_PATHS`)
   - Detects the workspace root in monorepos and writes repo-level workflows there
   - Generates monorepo-aware watch paths for package `src/` and docs directories
   - Skips files that already exist at destination

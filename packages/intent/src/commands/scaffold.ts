@@ -1,7 +1,9 @@
 import { join } from 'node:path'
 
 export function runScaffoldCommand(metaDir: string): void {
-  const metaSkillPath = (name: string) => join(metaDir, name, 'SKILL.md')
+  function metaSkillPath(name: string): string {
+    return join(metaDir, name, 'SKILL.md')
+  }
 
   const prompt = `You are helping a library maintainer scaffold Intent skills.
 

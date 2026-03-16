@@ -180,9 +180,7 @@ function detectVars(root: string, packageDirs?: Array<string>): TemplateVars {
     packageName = deriveWorkspacePackageName(root, repo, packageDirs)
   }
 
-  const packageLabel = packageName
-
-  // Best-guess src path from common monorepo patterns
+  // Derive srcPath: monorepos use a wildcard; single packages use the short name or fall back to root src/
   const shortName = packageName.replace(/^@[^/]+\//, '')
   let srcPath = isMonorepo
     ? 'packages/*/src/**'
@@ -195,7 +193,7 @@ function detectVars(root: string, packageDirs?: Array<string>): TemplateVars {
 
   return {
     PACKAGE_NAME: packageName,
-    PACKAGE_LABEL: packageLabel,
+    PACKAGE_LABEL: packageName,
     PAYLOAD_PACKAGE: packageName,
     REPO: repo,
     DOCS_PATH: docsPath.endsWith('**')
