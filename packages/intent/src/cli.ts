@@ -35,7 +35,7 @@ async function scanIntentsOrFail(): Promise<ScanResult> {
   const { scanForIntents } = await import('./scanner.js')
 
   try {
-    return await scanForIntents()
+    return scanForIntents()
   } catch (err) {
     fail((err as Error).message)
   }
@@ -225,7 +225,10 @@ async function cmdMeta(args: Array<string>): Promise<void> {
   console.log(`Path: node_modules/@tanstack/intent/meta/<name>/SKILL.md`)
 }
 
-function collectPackagingWarnings(root: string): Array<string> {
+function collectPackagingWarnings(
+  root: string,
+  isMonorepo = false,
+): Array<string> {
   const pkgJsonPath = join(root, 'package.json')
   if (!existsSync(pkgJsonPath)) return []
 
@@ -260,28 +263,7 @@ function collectPackagingWarnings(root: string): Array<string> {
     // Only warn about !skills/_artifacts for non-monorepo packages.
     // In monorepos, artifacts live at the repo root, so the negation
     // pattern is intentionally omitted by edit-package-json.
-    const isMonorepoPkg = (() => {
-      let dir = join(root, '..')
-      for (let i = 0; i < 5; i++) {
-        const parentPkg = join(dir, 'package.json')
-        if (existsSync(parentPkg)) {
-          try {
-            const parent = JSON.parse(readFileSync(parentPkg, 'utf8'))
-            return (
-              Array.isArray(parent.workspaces) || parent.workspaces?.packages
-            )
-          } catch {
-            return false
-          }
-        }
-        const next = dirname(dir)
-        if (next === dir) break
-        dir = next
-      }
-      return false
-    })()
-
-    if (!isMonorepoPkg && !files.includes('!skills/_artifacts')) {
+    if (!isMonorepo && !files.includes('!skills/_artifacts')) {
       warnings.push(
         '"!skills/_artifacts" is not in the "files" array — artifacts will be published unnecessarily',
       )
@@ -294,7 +276,7 @@ function collectPackagingWarnings(root: string): Array<string> {
 function resolvePackageRoot(startDir: string): string {
   let dir = startDir
 
-  while (true) {
+  for (;;) {
     if (existsSync(join(dir, 'package.json'))) {
       return dir
     }
@@ -496,7 +478,9 @@ async function cmdValidate(args: Array<string>): Promise<void> {
     }
   }
 
-  const warnings = collectPackagingWarnings(packageRoot)
+  const { findWorkspaceRoot } = await import('./setup.js')
+  const isMonorepo = findWorkspaceRoot(join(packageRoot, '..')) !== null
+  const warnings = collectPackagingWarnings(packageRoot, isMonorepo)
 
   if (errors.length > 0) {
     fail(buildValidationFailure(errors, warnings))

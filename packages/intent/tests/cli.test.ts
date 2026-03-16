@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { INSTALL_PROMPT } from '../src/install-prompt.js'
-import { main, USAGE } from '../src/cli.js'
+import { USAGE, main } from '../src/cli.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const metaDir = join(thisDir, '..', 'meta')
@@ -288,6 +288,36 @@ describe('cli commands', () => {
     expect(output).not.toContain('@tanstack/intent is not in devDependencies')
   })
 
+  it('validates pnpm monorepo package skills without false !skills/_artifacts warning', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-pnpm-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), { private: true })
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - "packages/*"\n',
+    )
+    writeJson(join(root, 'packages', 'router', 'package.json'), {
+      name: '@tanstack/router',
+      devDependencies: { '@tanstack/intent': '^0.0.20' },
+      keywords: ['tanstack-intent'],
+      files: ['skills'],
+    })
+    writeSkillMd(join(root, 'packages', 'router', 'skills', 'routing'), {
+      name: 'routing',
+      description: 'Routing skill',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', 'packages/router/skills'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('✅ Validated 1 skill files — all passed')
+    expect(output).not.toContain('!skills/_artifacts')
+  })
+
   it('fails cleanly when validate is run without a skills directory', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-missing-skills-'))
     tempDirs.push(root)
@@ -350,7 +380,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
