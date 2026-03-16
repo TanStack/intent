@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 
 import { cac } from 'cac'
-import { existsSync, readFileSync, realpathSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { fail, isCliFailure } from './cli-error.js'
+import {
+  getMetaDir,
+  resolveStaleTargets,
+  scanIntentsOrFail,
+} from './cli-support.js'
 import { runInstallCommand } from './commands/install.js'
 import { runListCommand } from './commands/list.js'
 import { runMetaCommand } from './commands/meta.js'
@@ -13,77 +17,6 @@ import { runEditPackageJsonCommand } from './commands/edit-package-json.js'
 import { runSetupGithubActionsCommand } from './commands/setup-github-actions.js'
 import { runStaleCommand } from './commands/stale.js'
 import { runValidateCommand } from './commands/validate.js'
-import type { ScanResult } from './types.js'
-
-function getMetaDir(): string {
-  const thisDir = dirname(fileURLToPath(import.meta.url))
-  return join(thisDir, '..', 'meta')
-}
-
-async function scanIntentsOrFail(): Promise<ScanResult> {
-  const { scanForIntents } = await import('./scanner.js')
-
-  try {
-    return scanForIntents()
-  } catch (err) {
-    fail((err as Error).message)
-  }
-}
-
-function readPackageName(root: string): string {
-  try {
-    const pkgJson = JSON.parse(
-      readFileSync(join(root, 'package.json'), 'utf8'),
-    ) as {
-      name?: unknown
-    }
-    return typeof pkgJson.name === 'string'
-      ? pkgJson.name
-      : relative(process.cwd(), root) || 'unknown'
-  } catch {
-    return relative(process.cwd(), root) || 'unknown'
-  }
-}
-
-async function resolveStaleTargets(targetDir?: string) {
-  const resolvedRoot = targetDir
-    ? join(process.cwd(), targetDir)
-    : process.cwd()
-  const { checkStaleness } = await import('./staleness.js')
-
-  if (existsSync(join(resolvedRoot, 'skills'))) {
-    return {
-      reports: [
-        await checkStaleness(resolvedRoot, readPackageName(resolvedRoot)),
-      ],
-    }
-  }
-
-  const { findPackagesWithSkills, findWorkspaceRoot } =
-    await import('./setup.js')
-  const workspaceRoot = findWorkspaceRoot(resolvedRoot)
-  if (workspaceRoot) {
-    const packageDirs = findPackagesWithSkills(workspaceRoot)
-    if (packageDirs.length > 0) {
-      return {
-        reports: await Promise.all(
-          packageDirs.map((packageDir) =>
-            checkStaleness(packageDir, readPackageName(packageDir)),
-          ),
-        ),
-      }
-    }
-  }
-
-  const staleResult = await scanIntentsOrFail()
-  return {
-    reports: await Promise.all(
-      staleResult.packages.map((pkg) =>
-        checkStaleness(pkg.packageRoot, pkg.name),
-      ),
-    ),
-  }
-}
 
 function createCli() {
   const cli = cac('intent')
