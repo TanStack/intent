@@ -19,7 +19,7 @@ export async function scanIntentsOrFail(): Promise<ScanResult> {
   }
 }
 
-export function readPackageName(root: string): string {
+function readPackageName(root: string): string {
   try {
     const pkgJson = JSON.parse(
       readFileSync(join(root, 'package.json'), 'utf8'),
