@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { checkStaleness } from '../src/staleness.js'
 
@@ -46,11 +46,29 @@ function writeSyncState(dir: string, state: Record<string, unknown>): void {
   writeFileSync(join(skillsDir, 'sync-state.json'), JSON.stringify(state))
 }
 
+function requireFirstSkill(report: Awaited<ReturnType<typeof checkStaleness>>) {
+  const skill = report.skills[0]
+  expect(skill).toBeDefined()
+  if (!skill) throw new Error('Expected at least one skill in staleness report')
+  return skill
+}
+
 // ---------------------------------------------------------------------------
 // Mock fetch for npm registry
 // ---------------------------------------------------------------------------
 
 const originalFetch = globalThis.fetch
+
+function mockFetchVersion(version: string): void {
+  globalThis.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ version }),
+  } as Response)
+}
+
+function mockFetchNotOk(): void {
+  globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
+}
 
 beforeEach(() => {
   tmpDir = setupDir()
@@ -92,7 +110,7 @@ describe('checkStaleness', () => {
       description: 'Advanced usage',
     })
 
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
+    mockFetchNotOk()
 
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.skills).toHaveLength(2)
@@ -109,17 +127,15 @@ describe('checkStaleness', () => {
       library_version: '1.2.3',
     })
 
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ version: '2.0.0' }),
-    } as Response)
+    mockFetchVersion('2.0.0')
 
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.skillVersion).toBe('1.2.3')
     expect(report.currentVersion).toBe('2.0.0')
     expect(report.versionDrift).toBe('major')
-    expect(report.skills[0]!.needsReview).toBe(true)
-    expect(report.skills[0]!.reasons[0]).toContain('version drift')
+    const skill = requireFirstSkill(report)
+    expect(skill.needsReview).toBe(true)
+    expect(skill.reasons[0]).toContain('version drift')
   })
 
   it('detects minor version drift', async () => {
@@ -129,10 +145,7 @@ describe('checkStaleness', () => {
       library_version: '1.2.3',
     })
 
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ version: '1.4.0' }),
-    } as Response)
+    mockFetchVersion('1.4.0')
 
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.versionDrift).toBe('minor')
@@ -145,10 +158,7 @@ describe('checkStaleness', () => {
       library_version: '1.2.3',
     })
 
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ version: '1.2.5' }),
-    } as Response)
+    mockFetchVersion('1.2.5')
 
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.versionDrift).toBe('patch')
@@ -161,14 +171,11 @@ describe('checkStaleness', () => {
       library_version: '1.2.3',
     })
 
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ version: '1.2.3' }),
-    } as Response)
+    mockFetchVersion('1.2.3')
 
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.versionDrift).toBeNull()
-    expect(report.skills[0]!.needsReview).toBe(false)
+    expect(requireFirstSkill(report).needsReview).toBe(false)
   })
 
   it('handles npm fetch failure gracefully', async () => {
@@ -203,11 +210,12 @@ describe('checkStaleness', () => {
       },
     })
 
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
+    mockFetchNotOk()
 
     const report = await checkStaleness(tmpDir, '@example/lib')
-    expect(report.skills[0]!.needsReview).toBe(true)
-    expect(report.skills[0]!.reasons).toEqual(
+    const skill = requireFirstSkill(report)
+    expect(skill.needsReview).toBe(true)
+    expect(skill.reasons).toEqual(
       expect.arrayContaining([expect.stringContaining('new source')]),
     )
   })
@@ -219,10 +227,10 @@ describe('checkStaleness', () => {
       sources: ['docs/api.md'],
     })
 
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
+    mockFetchNotOk()
 
     const report = await checkStaleness(tmpDir, '@example/lib')
-    expect(report.skills[0]!.needsReview).toBe(false)
+    expect(requireFirstSkill(report).needsReview).toBe(false)
   })
 
   it('ignores malformed sync-state entries instead of flagging false positives', async () => {
@@ -240,11 +248,12 @@ describe('checkStaleness', () => {
       },
     })
 
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
+    mockFetchNotOk()
 
     const report = await checkStaleness(tmpDir, '@example/lib')
-    expect(report.skills[0]!.needsReview).toBe(false)
-    expect(report.skills[0]!.reasons).toEqual([])
+    const skill = requireFirstSkill(report)
+    expect(skill.needsReview).toBe(false)
+    expect(skill.reasons).toEqual([])
   })
 
   it('handles nested skill directories', async () => {
@@ -254,15 +263,13 @@ describe('checkStaleness', () => {
       library_version: '1.0.0',
     })
 
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ version: '2.0.0' }),
-    } as Response)
+    mockFetchVersion('2.0.0')
 
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.skills).toHaveLength(1)
-    expect(report.skills[0]!.name).toBe('react/hooks')
-    expect(report.skills[0]!.needsReview).toBe(true)
+    const skill = requireFirstSkill(report)
+    expect(skill.name).toBe('react/hooks')
+    expect(skill.needsReview).toBe(true)
   })
 
   it('uses directory name when frontmatter has no name', async () => {
@@ -270,10 +277,10 @@ describe('checkStaleness', () => {
       description: 'A skill with no name field',
     })
 
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
+    mockFetchNotOk()
 
     const report = await checkStaleness(tmpDir, '@example/lib')
-    expect(report.skills[0]!.name).toBe('my-skill')
+    expect(requireFirstSkill(report).name).toBe('my-skill')
   })
 
   it('uses skillVersion from first skill that has library_version', async () => {
@@ -284,10 +291,7 @@ describe('checkStaleness', () => {
       library_version: '3.5.0',
     })
 
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ version: '4.0.0' }),
-    } as Response)
+    mockFetchVersion('4.0.0')
 
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.skillVersion).toBe('3.5.0')
@@ -299,10 +303,10 @@ describe('checkStaleness', () => {
     mkdirSync(skillDir, { recursive: true })
     writeFileSync(join(skillDir, 'SKILL.md'), 'no frontmatter here')
 
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
+    mockFetchNotOk()
 
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.skills).toHaveLength(1)
-    expect(report.skills[0]!.needsReview).toBe(false)
+    expect(requireFirstSkill(report).needsReview).toBe(false)
   })
 })

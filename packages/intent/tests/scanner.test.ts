@@ -753,7 +753,6 @@ describe('package manager detection', () => {
 
   it('throws for Deno without node_modules', () => {
     writeFileSync(join(root, 'deno.json'), '{}')
-    // No node_modules dir
     expect(() => scanForIntents(root)).toThrow('Deno without node_modules')
   })
 })
