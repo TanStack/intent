@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
 import { cac } from 'cac'
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fail, isCliFailure } from './cli-error.js'
 import { runInstallCommand } from './commands/install.js'
 import { runListCommand } from './commands/list.js'
+import { runMetaCommand } from './commands/meta.js'
 import { runScaffoldCommand } from './commands/scaffold.js'
 import { runStaleCommand } from './commands/stale.js'
 import { runValidateCommand } from './commands/validate.js'
@@ -96,62 +97,6 @@ async function scanIntentsOrFail(): Promise<ScanResult> {
   }
 }
 
-async function cmdMeta(args: Array<string>): Promise<void> {
-  const { parseFrontmatter } = await import('./utils.js')
-  const metaDir = getMetaDir()
-
-  if (!existsSync(metaDir)) {
-    fail('Meta-skills directory not found.')
-  }
-
-  if (args.length > 0) {
-    const name = args[0]!
-    if (name.includes('..') || name.includes('/') || name.includes('\\')) {
-      fail(`Invalid meta-skill name: "${name}"`)
-    }
-    const skillFile = join(metaDir, name, 'SKILL.md')
-    if (!existsSync(skillFile)) {
-      fail(
-        `Meta-skill "${name}" not found. Run \`intent meta\` to list available meta-skills.`,
-      )
-    }
-    try {
-      console.log(readFileSync(skillFile, 'utf8'))
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      fail(`Failed to read meta-skill "${name}": ${msg}`)
-    }
-    return
-  }
-
-  const entries = readdirSync(metaDir, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .filter((e) => existsSync(join(metaDir, e.name, 'SKILL.md')))
-
-  if (entries.length === 0) {
-    console.log('No meta-skills found.')
-    return
-  }
-
-  console.log('Meta-skills (for library maintainers):\n')
-
-  for (const entry of entries) {
-    const skillFile = join(metaDir, entry.name, 'SKILL.md')
-    const fm = parseFrontmatter(skillFile)
-    let description = ''
-    if (typeof fm?.description === 'string') {
-      description = fm.description.replace(/\s+/g, ' ').trim()
-    }
-
-    const shortDesc =
-      description.length > 60 ? description.slice(0, 57) + '...' : description
-    console.log(`  ${entry.name.padEnd(28)} ${shortDesc}`)
-  }
-
-  console.log(`\nUsage: load the SKILL.md into your AI agent conversation.`)
-  console.log(`Path: node_modules/@tanstack/intent/meta/<name>/SKILL.md`)
-}
-
 function readPackageName(root: string): string {
   try {
     const pkgJson = JSON.parse(
@@ -220,7 +165,7 @@ function createCli() {
   cli
     .command('meta [name]', 'List meta-skills, or print one by name')
     .action(async (name?: string) => {
-      await cmdMeta(name ? [name] : [])
+      await runMetaCommand(name, getMetaDir())
     })
 
   cli
