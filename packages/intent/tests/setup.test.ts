@@ -547,7 +547,10 @@ describe('runSetupGithubActions', () => {
       JSON.stringify({ name: '@testorg/react-router' }, null, 2),
     )
 
-    const result = runSetupGithubActions(join(root, 'packages', 'react-router'), metaDir)
+    const result = runSetupGithubActions(
+      join(root, 'packages', 'react-router'),
+      metaDir,
+    )
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(result.workflows).toEqual(
@@ -557,7 +560,9 @@ describe('runSetupGithubActions', () => {
       ]),
     )
     expect(
-      existsSync(join(root, 'packages', 'react-router', '.github', 'workflows')),
+      existsSync(
+        join(root, 'packages', 'react-router', '.github', 'workflows'),
+      ),
     ).toBe(false)
     expect(output).toContain('Mode:     monorepo (0 packages with skills)')
 
