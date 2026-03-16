@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { INSTALL_PROMPT } from '../src/commands/install.js'
-import { main, USAGE } from '../src/cli.js'
+import { main } from '../src/cli.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const metaDir = join(thisDir, '..', 'meta')
@@ -107,42 +107,47 @@ describe('intent meta', () => {
 describe('cli commands', () => {
   it('prints top-level help when no command is provided', async () => {
     const exitCode = await main([])
+    const output = String(logSpy.mock.calls[0]?.[0])
 
     expect(exitCode).toBe(0)
-    expect(logSpy.mock.calls[0]?.[0]).toContain(USAGE)
-    expect(logSpy.mock.calls[0]?.[0]).toContain('Run `intent help <command>`')
+    expect(output).toContain('Usage:')
+    expect(output).toContain('$ intent <command> [options]')
+    expect(output).toContain('Commands:')
   })
 
   it('prints top-level help for --help', async () => {
     const exitCode = await main(['--help'])
+    const output = String(logSpy.mock.calls[0]?.[0])
 
     expect(exitCode).toBe(0)
-    expect(logSpy.mock.calls[0]?.[0]).toContain('Run `intent help <command>`')
+    expect(output).toContain('Usage:')
+    expect(output).toContain('$ intent <command> [options]')
   })
 
   it('prints top-level help for unknown commands', async () => {
     const exitCode = await main(['wat'])
+    const output = String(logSpy.mock.calls[0]?.[0])
 
     expect(exitCode).toBe(1)
-    expect(logSpy.mock.calls[0]?.[0]).toContain(USAGE)
+    expect(output).toContain('Usage:')
+    expect(output).toContain('Commands:')
   })
 
   it('prints command help for help subcommands', async () => {
     const exitCode = await main(['help', 'validate'])
+    const output = String(logSpy.mock.calls[0]?.[0])
 
     expect(exitCode).toBe(0)
-    expect(logSpy).toHaveBeenCalledWith(
-      expect.stringContaining('intent validate [dir]'),
-    )
+    expect(output).toContain('$ intent validate [dir]')
   })
 
   it('prints command help when --help is passed after a subcommand', async () => {
     const exitCode = await main(['list', '--help'])
+    const output = String(logSpy.mock.calls[0]?.[0])
 
     expect(exitCode).toBe(0)
-    expect(logSpy).toHaveBeenCalledWith(
-      expect.stringContaining('intent list --json'),
-    )
+    expect(output).toContain('$ intent list [--json]')
+    expect(output).toContain('--json')
   })
 
   it('prints the install prompt', async () => {

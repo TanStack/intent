@@ -15,75 +15,6 @@ import { runStaleCommand } from './commands/stale.js'
 import { runValidateCommand } from './commands/validate.js'
 import type { ScanResult } from './types.js'
 
-export const USAGE = `TanStack Intent CLI
-
-Usage:
-  intent list [--json]           Discover intent-enabled packages
-  intent meta [name]             List meta-skills, or print one by name
-  intent validate [<dir>]        Validate skill files (default: skills/)
-  intent install                  Print a skill that guides your coding agent to set up skill-to-task mappings
-  intent scaffold                Print maintainer scaffold prompt
-  intent edit-package-json       Wire package.json (files, keywords) for skill publishing
-  intent setup-github-actions    Copy CI workflow templates to .github/workflows/
-  intent stale [dir] [--json]    Check skills for staleness`
-
-const HELP_BY_COMMAND: Record<string, string> = {
-  list: `${USAGE}
-
-Examples:
-  intent list
-  intent list --json`,
-  meta: `intent meta [name]
-
-List shipped meta-skills, or print a single meta-skill by name.
-
-Examples:
-  intent meta
-  intent meta domain-discovery`,
-  validate: `intent validate [dir]
-
-Validate SKILL.md files in the target directory.
-
-Examples:
-  intent validate
-  intent validate packages/query/skills`,
-  install: `intent install
-
-Print the install prompt used to set up skill-to-task mappings.`,
-  scaffold: `intent scaffold
-
-Print the guided maintainer prompt for generating skills.`,
-  stale: `intent stale [dir] [--json]
-
-Check installed skills for version and source drift.
-
-Examples:
-  intent stale
-  intent stale packages/query
-  intent stale --json`,
-  'edit-package-json': `intent edit-package-json
-
-Update package.json files so skills are published.`,
-  'setup-github-actions': `intent setup-github-actions
-
-Copy Intent CI workflow templates into .github/workflows/.`,
-}
-
-function isHelpFlag(arg: string | undefined): boolean {
-  return arg === '-h' || arg === '--help'
-}
-
-function printHelp(command?: string): void {
-  if (!command) {
-    console.log(`${USAGE}
-
-Run \`intent help <command>\` for details on a specific command.`)
-    return
-  }
-
-  console.log(HELP_BY_COMMAND[command] ?? USAGE)
-}
-
 function getMetaDir(): string {
   const thisDir = dirname(fileURLToPath(import.meta.url))
   return join(thisDir, '..', 'meta')
@@ -156,22 +87,32 @@ async function resolveStaleTargets(targetDir?: string) {
 
 function createCli() {
   const cli = cac('intent')
+  cli.usage('<command> [options]')
 
   cli
     .command('list', 'Discover intent-enabled packages')
+    .usage('list [--json]')
     .option('--json', 'Output JSON')
+    .example('list')
+    .example('list --json')
     .action(async (options: { json?: boolean }) => {
       await runListCommand(options, scanIntentsOrFail)
     })
 
   cli
     .command('meta [name]', 'List meta-skills, or print one by name')
+    .usage('meta [name]')
+    .example('meta')
+    .example('meta domain-discovery')
     .action(async (name?: string) => {
       await runMetaCommand(name, getMetaDir())
     })
 
   cli
     .command('validate [dir]', 'Validate skill files')
+    .usage('validate [dir]')
+    .example('validate')
+    .example('validate packages/query/skills')
     .action(async (dir?: string) => {
       await runValidateCommand(dir)
     })
@@ -181,17 +122,25 @@ function createCli() {
       'install',
       'Print a skill that guides your coding agent to set up skill-to-task mappings',
     )
+    .usage('install')
     .action(() => {
       runInstallCommand()
     })
 
-  cli.command('scaffold', 'Print maintainer scaffold prompt').action(() => {
-    runScaffoldCommand(getMetaDir())
-  })
+  cli
+    .command('scaffold', 'Print maintainer scaffold prompt')
+    .usage('scaffold')
+    .action(() => {
+      runScaffoldCommand(getMetaDir())
+    })
 
   cli
     .command('stale [dir]', 'Check skills for staleness')
+    .usage('stale [dir] [--json]')
     .option('--json', 'Output JSON')
+    .example('stale')
+    .example('stale packages/query')
+    .example('stale --json')
     .action(
       async (targetDir: string | undefined, options: { json?: boolean }) => {
         await runStaleCommand(targetDir, options, resolveStaleTargets)
@@ -203,6 +152,7 @@ function createCli() {
       'edit-package-json',
       'Update package.json files so skills are published',
     )
+    .usage('edit-package-json')
     .action(async () => {
       await runEditPackageJsonCommand(process.cwd())
     })
@@ -212,41 +162,55 @@ function createCli() {
       'setup-github-actions',
       'Copy Intent CI workflow templates into .github/workflows/',
     )
+    .usage('setup-github-actions')
     .action(async () => {
       await runSetupGithubActionsCommand(process.cwd(), getMetaDir())
     })
+
+  cli
+    .command('help [command]', 'Display help for a command')
+    .action((commandName?: string) => {
+      if (!commandName) {
+        cli.outputHelp()
+        return
+      }
+
+      const command = cli.commands.find((candidate) =>
+        candidate.isMatched(commandName),
+      )
+
+      if (!command) {
+        fail(`Unknown command: ${commandName}`)
+      }
+
+      command.outputHelp()
+    })
+
+  cli.help()
 
   return cli
 }
 
 export async function main(argv: Array<string> = process.argv.slice(2)) {
-  const command = argv[0]
-  const commandArgs = argv.slice(1)
-
   try {
-    if (!command || isHelpFlag(command)) {
-      printHelp()
-      return 0
-    }
-
-    if (command === 'help') {
-      printHelp(commandArgs[0])
-      return 0
-    }
-
-    if (isHelpFlag(commandArgs[0])) {
-      printHelp(command)
-      return 0
-    }
-
-    if (!(command in HELP_BY_COMMAND)) {
-      printHelp()
-      return command ? 1 : 0
-    }
-
     const cli = createCli()
-    cli.help()
+
+    if (argv.length === 0) {
+      cli.outputHelp()
+      return 0
+    }
+
     cli.parse(['intent', 'intent', ...argv], { run: false })
+
+    if (cli.options.help) {
+      return 0
+    }
+
+    if (!cli.matchedCommand) {
+      cli.outputHelp()
+      return 1
+    }
+
     await cli.runMatchedCommand()
     return 0
   } catch (err) {
