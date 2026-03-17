@@ -377,7 +377,7 @@ describe('runSetupGithubActions', () => {
       join(monoRoot, '.github', 'workflows', 'notify-intent.yml'),
       'utf8',
     )
-    expect(notifyContent).toContain('package: TestOrg/my-repo')
+    expect(notifyContent).toContain('package: @testorg/my-repo')
     expect(notifyContent).not.toContain('package: root')
 
     rmSync(monoRoot, { recursive: true, force: true })
@@ -394,7 +394,7 @@ describe('runSetupGithubActions', () => {
     writeFileSync(
       join(monoRoot, 'package.json'),
       JSON.stringify(
-        { name: '@tanstack/router', private: true, workspaces: ['packages/*'] },
+        { name: 'root', private: true, workspaces: ['packages/*'] },
         null,
         2,
       ),
@@ -434,9 +434,11 @@ describe('runSetupGithubActions', () => {
       'utf8',
     )
     expect(notifyContent).toContain('package: @tanstack/router')
+    expect(notifyContent).toContain('repo: TanStack/router')
     expect(notifyContent).toContain("- 'packages/router/docs/**'")
     expect(notifyContent).toContain("- 'packages/router/src/**'")
     expect(notifyContent).toContain("- 'packages/start/src/**'")
+    expect(notifyContent).not.toContain('packages/root/src/**')
 
     const checkContent = readFileSync(
       join(monoRoot, '.github', 'workflows', 'check-skills.yml'),

@@ -1,0 +1,43 @@
+import type { StalenessReport } from '../types.js'
+
+export async function runStaleCommand(
+  targetDir: string | undefined,
+  options: { json?: boolean },
+  resolveStaleTargets: (
+    targetDir?: string,
+  ) => Promise<{ reports: Array<StalenessReport> }>,
+): Promise<void> {
+  const { reports } = await resolveStaleTargets(targetDir)
+
+  if (reports.length === 0) {
+    console.log('No intent-enabled packages found.')
+    return
+  }
+
+  if (options.json) {
+    console.log(JSON.stringify(reports, null, 2))
+    return
+  }
+
+  for (const report of reports) {
+    const driftLabel = report.versionDrift
+      ? ` [${report.versionDrift} drift]`
+      : ''
+    const vLabel =
+      report.skillVersion && report.currentVersion
+        ? ` (${report.skillVersion} → ${report.currentVersion})`
+        : ''
+    console.log(`${report.library}${vLabel}${driftLabel}`)
+
+    const stale = report.skills.filter((skill) => skill.needsReview)
+    if (stale.length === 0) {
+      console.log('  All skills up-to-date')
+    } else {
+      for (const skill of stale) {
+        console.log(`  ⚠ ${skill.name}: ${skill.reasons.join(', ')}`)
+      }
+    }
+
+    console.log()
+  }
+}

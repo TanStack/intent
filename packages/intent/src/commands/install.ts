@@ -53,3 +53,7 @@ skills:
    - Keep entries concise - this block is read on every agent task
    - Preserve all content outside the block tags unchanged
    - If the user is on Deno, note that this setup is best-effort today and relies on npm interop`
+
+export function runInstallCommand(): void {
+  console.log(INSTALL_PROMPT)
+}

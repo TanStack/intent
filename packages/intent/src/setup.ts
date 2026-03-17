@@ -44,6 +44,37 @@ interface MonorepoTemplateContext {
   workspacePatterns: Array<string>
 }
 
+function isGenericWorkspaceName(name: string, root: string): boolean {
+  const normalized = name.trim().toLowerCase()
+  return (
+    normalized.length === 0 ||
+    normalized === 'unknown' ||
+    normalized === 'root' ||
+    normalized === 'workspace' ||
+    normalized === 'monorepo' ||
+    normalized === basename(root).toLowerCase()
+  )
+}
+
+function deriveWorkspacePackageName(
+  root: string,
+  repo: string,
+  packageDirs: Array<string>,
+): string {
+  const repoName = repo.split('/').filter(Boolean).pop() || basename(root)
+
+  for (const packageDir of packageDirs) {
+    const pkgJson = readPkgJsonFile(packageDir)
+    const pkgName = typeof pkgJson?.name === 'string' ? pkgJson.name : null
+    if (pkgName?.startsWith('@')) {
+      const scope = pkgName.split('/')[0]
+      return `${scope}/${repoName}`
+    }
+  }
+
+  return repo || basename(root)
+}
+
 // ---------------------------------------------------------------------------
 // Variable detection from package.json
 // ---------------------------------------------------------------------------
@@ -251,29 +282,30 @@ function detectVars(
   context?: MonorepoTemplateContext,
 ): TemplateVars {
   const pkgJson = readPkgJsonFile(root) || {}
-  const name = typeof pkgJson.name === 'string' ? pkgJson.name : 'unknown'
+  const rawName = typeof pkgJson.name === 'string' ? pkgJson.name : 'unknown'
   const docs =
     typeof (pkgJson.intent as Record<string, unknown> | undefined)?.docs ===
     'string'
       ? ((pkgJson.intent as Record<string, unknown>).docs as string)
       : 'docs/'
-  const defaultRepo = name.replace(/^@/, '').replace(/\//, '/')
-  const repo = detectRepo(pkgJson, defaultRepo)
   const workspacePatterns = context?.workspacePatterns ?? []
   const isMonorepo = workspacePatterns.length > 0
   const packageDirs = context?.packageDirsWithSkills ?? []
-  const isPrivateRoot = pkgJson.private === true
-  const hasUselessName =
-    name === 'unknown' || (isPrivateRoot && !name.startsWith('@'))
-  const packageLabel =
-    isMonorepo && hasUselessName
-      ? repo !== defaultRepo
-        ? repo
-        : `${basename(root)} workspace`
-      : name
 
-  // Best-guess src path from common monorepo patterns
-  const shortName = name.replace(/^@[^/]+\//, '')
+  const monorepoFallbackPkg = packageDirs[0]
+    ? (readPkgJsonFile(packageDirs[0]) ?? {})
+    : {}
+  const repo = detectRepo(
+    pkgJson,
+    detectRepo(monorepoFallbackPkg, basename(root)),
+  )
+
+  let packageName = rawName
+  if (isMonorepo && isGenericWorkspaceName(rawName, root)) {
+    packageName = deriveWorkspacePackageName(root, repo, packageDirs)
+  }
+
+  const shortName = packageName.replace(/^@[^/]+\//, '')
   let srcPath: string
   if (isMonorepo) {
     srcPath =
@@ -285,12 +317,16 @@ function detectVars(
     srcPath = `packages/${shortName}/src/**`
   }
 
+  const docsPath = isMonorepo ? 'packages/*/docs/**' : docs
+
   return {
-    PACKAGE_NAME: name,
-    PACKAGE_LABEL: packageLabel,
-    PAYLOAD_PACKAGE: packageLabel,
+    PACKAGE_NAME: packageName,
+    PACKAGE_LABEL: packageName,
+    PAYLOAD_PACKAGE: packageName,
     REPO: repo,
-    DOCS_PATH: docs.endsWith('**') ? docs : docs.replace(/\/$/, '') + '/**',
+    DOCS_PATH: docsPath.endsWith('**')
+      ? docsPath
+      : docsPath.replace(/\/$/, '') + '/**',
     SRC_PATH: srcPath,
     WATCH_PATHS: isMonorepo
       ? buildWatchPaths(root, packageDirs, workspacePatterns)
