@@ -113,6 +113,29 @@ describe('workspace package resolution', () => {
     ])
     expect(findPackagesWithSkills(root)).toEqual([pkgDir])
   })
+
+  it('excludes negated workspace patterns from resolution', () => {
+    writePkg({
+      private: true,
+      workspaces: ['packages/*', '!packages/internal'],
+    })
+
+    for (const name of ['public-lib', 'internal']) {
+      const pkgDir = join(root, 'packages', name)
+      mkdirSync(pkgDir, { recursive: true })
+      writeFileSync(
+        join(pkgDir, 'package.json'),
+        JSON.stringify({ name: `@test/${name}` }, null, 2),
+      )
+    }
+
+    const resolved = resolveWorkspacePackages(root, [
+      'packages/*',
+      '!packages/internal',
+    ])
+    expect(resolved).toHaveLength(1)
+    expect(resolved[0]).toContain('public-lib')
+  })
 })
 
 describe('runEditPackageJson', () => {

@@ -215,6 +215,7 @@ function buildFallbackWorkspacePaths(
   const paths = new Set<string>()
 
   for (const pattern of patterns) {
+    if (pattern.startsWith('!')) continue
     const normalized = normalizeWorkspacePattern(pattern)
     for (const suffix of suffixes) {
       paths.add(`${normalized}/${suffix}`)
@@ -530,9 +531,13 @@ export function resolveWorkspacePackages(
   root: string,
   patterns: Array<string>,
 ): Array<string> {
-  const dirs: Array<string> = []
+  const include = patterns.filter((p) => !p.startsWith('!'))
+  const exclude = patterns
+    .filter((p) => p.startsWith('!'))
+    .map((p) => p.slice(1))
 
-  for (const pattern of patterns) {
+  const dirs: Array<string> = []
+  for (const pattern of include) {
     const segments = pattern.split('/')
     for (const resolved of resolveGlob(root, segments)) {
       if (existsSync(join(resolved, 'package.json'))) {
@@ -541,7 +546,17 @@ export function resolveWorkspacePackages(
     }
   }
 
-  return dirs
+  if (exclude.length === 0) return dirs
+
+  const excludedDirs = new Set<string>()
+  for (const pattern of exclude) {
+    const segments = pattern.split('/')
+    for (const resolved of resolveGlob(root, segments)) {
+      excludedDirs.add(resolved)
+    }
+  }
+
+  return dirs.filter((dir) => !excludedDirs.has(dir))
 }
 
 function resolveGlob(base: string, segments: Array<string>): Array<string> {
