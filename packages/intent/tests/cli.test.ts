@@ -46,8 +46,8 @@ let errorSpy: ReturnType<typeof vi.spyOn>
 let tempDirs: Array<string>
 
 function getHelpOutput(): string {
-  return infoSpy.mock.calls
-    .map((call: Array<unknown>) => String(call[0] ?? ''))
+  return [...infoSpy.mock.calls, ...logSpy.mock.calls]
+    .map((call) => String(call[0] ?? ''))
     .join('')
 }
 
