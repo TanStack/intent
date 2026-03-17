@@ -27,6 +27,7 @@
     "meta"
   ],
   "dependencies": {
+    "cac": "^6.7.14",
     "yaml": "^2.7.0"
   },
   "devDependencies": {
@@ -37,6 +38,7 @@
   "scripts": {
     "prepack": "npm run build",
     "build": "tsdown src/index.ts src/cli.ts src/setup.ts src/intent-library.ts src/library-scanner.ts --format esm --dts",
+    "test:smoke": "pnpm run build && node dist/cli.mjs --help > /dev/null",
     "test:lib": "vitest run --exclude 'tests/integration/**'",
     "test:integration": "vitest run tests/integration/",
     "test:types": "tsc --noEmit"

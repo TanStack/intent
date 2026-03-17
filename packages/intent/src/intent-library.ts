@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { computeSkillNameWidth, printSkillTree, printTable } from './display.js'
-import { INSTALL_PROMPT } from './install-prompt.js'
+import { INSTALL_PROMPT } from './commands/install.js'
 import { scanLibrary } from './library-scanner.js'
 import type { LibraryScanResult } from './library-scanner.js'
 
