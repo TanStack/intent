@@ -34,6 +34,10 @@ jobs:
         run: pnpm run changeset:version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull latest main
+        run: git pull --rebase origin main
+      - name: Push changes
+        run: git push origin main
       - name: Commit Release
         id: commit
         run: |
