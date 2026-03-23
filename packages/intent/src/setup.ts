@@ -6,8 +6,18 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { basename, join, relative } from 'node:path'
-import { parse as parseYaml } from 'yaml'
-import { findSkillFiles } from './utils.js'
+import {
+  findPackagesWithSkills,
+  findWorkspaceRoot,
+  readWorkspacePatterns,
+} from './workspace-patterns.js'
+
+export {
+  findPackagesWithSkills,
+  findWorkspaceRoot,
+  readWorkspacePatterns,
+  resolveWorkspacePackages,
+} from './workspace-patterns.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -349,148 +359,6 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
   for (const a of result.alreadyPresent) console.log(`  Already present: ${a}`)
 
   return result
-}
-
-// ---------------------------------------------------------------------------
-// Monorepo workspace resolution
-// ---------------------------------------------------------------------------
-
-export function readWorkspacePatterns(root: string): Array<string> | null {
-  // pnpm-workspace.yaml
-  const pnpmWs = join(root, 'pnpm-workspace.yaml')
-  if (existsSync(pnpmWs)) {
-    try {
-      const config = parseYaml(readFileSync(pnpmWs, 'utf8')) as Record<
-        string,
-        unknown
-      >
-      if (Array.isArray(config.packages)) {
-        return config.packages as Array<string>
-      }
-    } catch (err: unknown) {
-      console.error(
-        `Warning: failed to parse ${pnpmWs}: ${err instanceof Error ? err.message : err}`,
-      )
-    }
-  }
-
-  // package.json workspaces
-  const pkgPath = join(root, 'package.json')
-  if (existsSync(pkgPath)) {
-    try {
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
-      if (Array.isArray(pkg.workspaces)) {
-        return pkg.workspaces
-      }
-      if (Array.isArray(pkg.workspaces?.packages)) {
-        return pkg.workspaces.packages
-      }
-    } catch (err: unknown) {
-      console.error(
-        `Warning: failed to parse ${pkgPath}: ${err instanceof Error ? err.message : err}`,
-      )
-    }
-  }
-
-  return null
-}
-
-/**
- * Resolve workspace glob patterns to actual package directories.
- * Handles simple patterns like "packages/*" and "packages/**".
- * Each resolved directory must contain a package.json.
- */
-export function resolveWorkspacePackages(
-  root: string,
-  patterns: Array<string>,
-): Array<string> {
-  const dirs: Array<string> = []
-
-  for (const pattern of patterns) {
-    // Strip trailing /* or /**/* for directory resolution
-    const base = pattern.replace(/\/\*\*?(\/\*)?$/, '')
-    const baseDir = join(root, base)
-    if (!existsSync(baseDir)) continue
-
-    if (pattern.includes('**')) {
-      // Recursive: walk all subdirectories
-      collectPackageDirs(baseDir, dirs)
-    } else if (pattern.endsWith('/*')) {
-      // Single level: direct children
-      let entries: Array<import('node:fs').Dirent>
-      try {
-        entries = readdirSync(baseDir, { withFileTypes: true })
-      } catch {
-        continue
-      }
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue
-        const dir = join(baseDir, entry.name)
-        if (existsSync(join(dir, 'package.json'))) {
-          dirs.push(dir)
-        }
-      }
-    } else {
-      // Exact path
-      const dir = join(root, pattern)
-      if (existsSync(join(dir, 'package.json'))) {
-        dirs.push(dir)
-      }
-    }
-  }
-
-  return dirs
-}
-
-function collectPackageDirs(dir: string, result: Array<string>): void {
-  if (existsSync(join(dir, 'package.json'))) {
-    result.push(dir)
-  }
-  let entries: Array<import('node:fs').Dirent>
-  try {
-    entries = readdirSync(dir, { withFileTypes: true })
-  } catch (err: unknown) {
-    console.error(
-      `Warning: could not read directory ${dir}: ${err instanceof Error ? err.message : err}`,
-    )
-    return
-  }
-  for (const entry of entries) {
-    if (
-      !entry.isDirectory() ||
-      entry.name === 'node_modules' ||
-      entry.name.startsWith('.')
-    )
-      continue
-    collectPackageDirs(join(dir, entry.name), result)
-  }
-}
-
-export function findWorkspaceRoot(start: string): string | null {
-  let dir = start
-
-  while (true) {
-    if (readWorkspacePatterns(dir)) {
-      return dir
-    }
-
-    const next = join(dir, '..')
-    if (next === dir) return null
-    dir = next
-  }
-}
-
-/**
- * Find workspace packages that contain at least one SKILL.md file.
- */
-export function findPackagesWithSkills(root: string): Array<string> {
-  const patterns = readWorkspacePatterns(root)
-  if (!patterns) return []
-
-  return resolveWorkspacePackages(root, patterns).filter((dir) => {
-    const skillsDir = join(dir, 'skills')
-    return existsSync(skillsDir) && findSkillFiles(skillsDir).length > 0
-  })
 }
 
 // ---------------------------------------------------------------------------
