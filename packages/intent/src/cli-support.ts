@@ -60,7 +60,7 @@ export async function resolveStaleTargets(
   }
 
   const { findPackagesWithSkills, findWorkspaceRoot } =
-    await import('./setup.js')
+    await import('./workspace-patterns.js')
   const workspaceRoot = findWorkspaceRoot(resolvedRoot)
   if (workspaceRoot) {
     const packageDirs = findPackagesWithSkills(workspaceRoot)

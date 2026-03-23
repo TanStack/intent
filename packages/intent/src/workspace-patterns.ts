@@ -7,9 +7,7 @@ function normalizeWorkspacePattern(pattern: string): string {
   return pattern.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
 }
 
-export function normalizeWorkspacePatterns(
-  patterns: Array<string>,
-): Array<string> {
+function normalizeWorkspacePatterns(patterns: Array<string>): Array<string> {
   return [
     ...new Set(patterns.map(normalizeWorkspacePattern).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b))
@@ -78,41 +76,51 @@ export function resolveWorkspacePackages(
   const dirs = new Set<string>()
 
   for (const pattern of normalizeWorkspacePatterns(patterns)) {
-    const base = pattern.replace(/\/\*\*?(\/\*)?$/, '')
-    const baseDir = join(root, base)
-    if (!existsSync(baseDir)) continue
-
-    if (pattern.includes('**')) {
-      collectPackageDirs(baseDir, dirs)
-    } else if (pattern.endsWith('/*')) {
-      let entries: Array<Dirent>
-      try {
-        entries = readdirSync(baseDir, { withFileTypes: true })
-      } catch {
-        continue
-      }
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue
-        const dir = join(baseDir, entry.name)
-        if (hasPackageJson(dir)) {
-          dirs.add(dir)
-        }
-      }
-    } else {
-      const dir = join(root, pattern)
-      if (hasPackageJson(dir)) {
-        dirs.add(dir)
-      }
-    }
+    resolveWorkspacePatternSegments(root, pattern.split('/'), dirs)
   }
 
   return [...dirs].sort((a, b) => a.localeCompare(b))
 }
 
-function collectPackageDirs(dir: string, result: Set<string>): void {
-  if (hasPackageJson(dir)) {
-    result.add(dir)
+function resolveWorkspacePatternSegments(
+  dir: string,
+  segments: Array<string>,
+  result: Set<string>,
+): void {
+  if (segments.length === 0) {
+    if (hasPackageJson(dir)) {
+      result.add(dir)
+    }
+    return
   }
+
+  const segment = segments[0]!
+  const remainingSegments = segments.slice(1)
+
+  if (segment === '**') {
+    resolveWorkspacePatternSegments(dir, remainingSegments, result)
+    for (const childDir of readChildDirectories(dir)) {
+      resolveWorkspacePatternSegments(childDir, segments, result)
+    }
+    return
+  }
+
+  if (segment === '*') {
+    for (const childDir of readChildDirectories(dir)) {
+      resolveWorkspacePatternSegments(childDir, remainingSegments, result)
+    }
+    return
+  }
+
+  const nextDir = join(dir, segment)
+  if (!existsSync(nextDir)) {
+    return
+  }
+
+  resolveWorkspacePatternSegments(nextDir, remainingSegments, result)
+}
+
+function readChildDirectories(dir: string): Array<string> {
   let entries: Array<Dirent>
   try {
     entries = readdirSync(dir, { withFileTypes: true })
@@ -120,18 +128,17 @@ function collectPackageDirs(dir: string, result: Set<string>): void {
     console.error(
       `Warning: could not read directory ${dir}: ${err instanceof Error ? err.message : err}`,
     )
-    return
+    return []
   }
-  for (const entry of entries) {
-    if (
-      !entry.isDirectory() ||
-      entry.name === 'node_modules' ||
-      entry.name.startsWith('.')
-    ) {
-      continue
-    }
-    collectPackageDirs(join(dir, entry.name), result)
-  }
+
+  return entries
+    .filter(
+      (entry) =>
+        entry.isDirectory() &&
+        entry.name !== 'node_modules' &&
+        !entry.name.startsWith('.'),
+    )
+    .map((entry) => join(dir, entry.name))
 }
 
 export function findWorkspaceRoot(start: string): string | null {

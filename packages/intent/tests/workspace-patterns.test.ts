@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  normalizeWorkspacePatterns,
+  readWorkspacePatterns,
   resolveWorkspacePackages,
 } from '../src/workspace-patterns.js'
 
@@ -24,24 +24,39 @@ function writePackage(root: string, ...parts: Array<string>): void {
   )
 }
 
+function writeDir(root: string, ...parts: Array<string>): void {
+  mkdirSync(join(root, ...parts), { recursive: true })
+}
+
 afterEach(() => {
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
 })
 
-describe('normalizeWorkspacePatterns', () => {
+describe('readWorkspacePatterns', () => {
   it('normalizes, drops empty patterns, dedupes, and sorts them', () => {
-    expect(
-      normalizeWorkspacePatterns([
-        '',
-        './apps/*/packages/*/',
-        './packages/*/',
-        'apps/*',
-        'packages\\*',
-        'apps/*',
-      ]),
-    ).toEqual(['apps/*', 'apps/*/packages/*', 'packages/*'])
+    const root = createRoot()
+
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        workspaces: [
+          '',
+          './apps/*/packages/*/',
+          './packages/*/',
+          'apps/*',
+          'packages\\*',
+          'apps/*',
+        ],
+      }),
+    )
+
+    expect(readWorkspacePatterns(root)).toEqual([
+      'apps/*',
+      'apps/*/packages/*',
+      'packages/*',
+    ])
   })
 })
 
@@ -62,5 +77,63 @@ describe('resolveWorkspacePackages', () => {
       join(root, 'packages', 'a-lib'),
       join(root, 'packages', 'b-lib'),
     ])
+  })
+
+  it('resolves nested workspace patterns segment by segment', () => {
+    const root = createRoot()
+
+    writePackage(root, 'apps', 'mobile', 'packages', 'native')
+    writePackage(root, 'apps', 'web', 'packages', 'app')
+    writePackage(root, 'apps', 'web', 'packages', 'ui')
+    writeDir(root, 'apps', 'docs', 'packages', 'guides')
+
+    expect(resolveWorkspacePackages(root, ['apps/*/packages/*'])).toEqual([
+      join(root, 'apps', 'mobile', 'packages', 'native'),
+      join(root, 'apps', 'web', 'packages', 'app'),
+      join(root, 'apps', 'web', 'packages', 'ui'),
+    ])
+  })
+
+  it('treats normalized nested patterns identically', () => {
+    const root = createRoot()
+
+    writePackage(root, 'apps', 'web', 'packages', 'app')
+
+    expect(
+      resolveWorkspacePackages(root, [
+        './apps/*/packages/*/',
+        'apps\\*\\packages\\*',
+      ]),
+    ).toEqual([join(root, 'apps', 'web', 'packages', 'app')])
+  })
+
+  it('supports recursive ** segments across multiple directory levels', () => {
+    const root = createRoot()
+
+    writePackage(root, 'apps', 'mobile', 'packages', 'native')
+    writePackage(root, 'apps', 'web', 'features', 'packages', 'charts')
+    writePackage(root, 'apps', 'web', 'packages', 'app')
+    writeDir(root, 'apps', 'web', 'drafts', 'packages', 'notes')
+
+    expect(resolveWorkspacePackages(root, ['apps/**/packages/*'])).toEqual([
+      join(root, 'apps', 'mobile', 'packages', 'native'),
+      join(root, 'apps', 'web', 'features', 'packages', 'charts'),
+      join(root, 'apps', 'web', 'packages', 'app'),
+    ])
+  })
+
+  it('ignores nonexistent literal segments and directories without package.json', () => {
+    const root = createRoot()
+
+    writePackage(root, 'apps', 'web', 'packages', 'app')
+    writeDir(root, 'apps', 'web', 'packages', 'docs')
+
+    expect(
+      resolveWorkspacePackages(root, [
+        '',
+        'apps/admin/packages/*',
+        'apps/web/packages/*',
+      ]),
+    ).toEqual([join(root, 'apps', 'web', 'packages', 'app')])
   })
 })
