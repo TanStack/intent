@@ -3,11 +3,14 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  findPackagesWithSkills,
+  findWorkspaceRoot,
   readWorkspacePatterns,
   resolveWorkspacePackages,
 } from '../src/workspace-patterns.js'
 
 const roots: Array<string> = []
+const cwdStack: Array<string> = []
 
 function createRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'workspace-patterns-test-'))
@@ -29,10 +32,19 @@ function writeDir(root: string, ...parts: Array<string>): void {
 }
 
 afterEach(() => {
+  if (cwdStack.length > 0) {
+    process.chdir(cwdStack.pop()!)
+  }
+
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+function withCwd(dir: string): void {
+  cwdStack.push(process.cwd())
+  process.chdir(dir)
+}
 
 describe('readWorkspacePatterns', () => {
   it('normalizes, drops empty patterns, dedupes, and sorts them', () => {
@@ -135,5 +147,49 @@ describe('resolveWorkspacePackages', () => {
         'apps/web/packages/*',
       ]),
     ).toEqual([join(root, 'apps', 'web', 'packages', 'app')])
+  })
+
+  it('applies exclusion patterns from pnpm-workspace.yaml', () => {
+    const root = createRoot()
+
+    writePackage(root, 'packages', 'alpha')
+    writePackage(root, 'packages', 'excluded')
+
+    expect(
+      resolveWorkspacePackages(root, ['packages/*', '!packages/excluded']),
+    ).toEqual([join(root, 'packages', 'alpha')])
+  })
+})
+
+describe('workspace helpers', () => {
+  it('resolves pnpm workspace roots and returns only packages with skills', () => {
+    const root = createRoot()
+
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      ['packages:', '  - packages/*', "  - '!packages/excluded'"].join('\n'),
+    )
+    writePackage(root, 'packages', 'alpha')
+    writePackage(root, 'packages', 'beta')
+    writePackage(root, 'packages', 'excluded')
+    writeDir(root, 'packages', 'alpha', 'skills', 'core', 'setup')
+    writeDir(root, 'packages', 'excluded', 'skills', 'core', 'setup')
+    writeFileSync(
+      join(root, 'packages', 'alpha', 'skills', 'core', 'setup', 'SKILL.md'),
+      '# alpha skill\n',
+    )
+    writeFileSync(
+      join(root, 'packages', 'excluded', 'skills', 'core', 'setup', 'SKILL.md'),
+      '# excluded skill\n',
+    )
+
+    const nestedDir = join(root, 'packages', 'alpha', 'src', 'nested')
+    writeDir(root, 'packages', 'alpha', 'src', 'nested')
+    withCwd(nestedDir)
+
+    expect(findWorkspaceRoot(process.cwd())).toBe(root)
+    expect(findPackagesWithSkills(root)).toEqual([
+      join(root, 'packages', 'alpha'),
+    ])
   })
 })
