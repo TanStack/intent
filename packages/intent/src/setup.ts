@@ -11,6 +11,7 @@ import {
   findWorkspaceRoot,
   readWorkspacePatterns,
 } from './workspace-patterns.js'
+import { resolveProjectContext } from './core/project-context.js'
 
 export {
   findPackagesWithSkills,
@@ -277,10 +278,13 @@ function copyTemplates(
 
 export function runEditPackageJson(root: string): EditPackageJsonResult {
   const result: EditPackageJsonResult = { added: [], alreadyPresent: [] }
-  const pkgPath = join(root, 'package.json')
+  const context = resolveProjectContext({ cwd: root })
+  const packageRoot = context.packageRoot ?? root
+  const pkgPath =
+    context.targetPackageJsonPath ?? join(packageRoot, 'package.json')
 
   if (!existsSync(pkgPath)) {
-    console.error('No package.json found in ' + root)
+    console.error('No package.json found in ' + packageRoot)
     process.exitCode = 1
     return result
   }
@@ -319,27 +323,7 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
 
   // In monorepos, _artifacts lives at repo root, not under packages —
   // the negation pattern is a no-op and shouldn't be added.
-  // Detect monorepo by walking up to find a parent package.json with workspaces.
-  const isMonorepo = (() => {
-    let dir = join(root, '..')
-    for (let i = 0; i < 5; i++) {
-      const parentPkg = join(dir, 'package.json')
-      if (existsSync(parentPkg)) {
-        try {
-          const parent = JSON.parse(readFileSync(parentPkg, 'utf8'))
-          if (Array.isArray(parent.workspaces) || parent.workspaces?.packages) {
-            return true
-          }
-        } catch {}
-        return false
-      }
-      const next = join(dir, '..')
-      if (next === dir) break
-      dir = next
-    }
-    return false
-  })()
-  const requiredFiles = isMonorepo
+  const requiredFiles = context.isMonorepo
     ? ['skills']
     : ['skills', '!skills/_artifacts']
 
