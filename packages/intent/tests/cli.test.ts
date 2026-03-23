@@ -372,6 +372,41 @@ describe('cli commands', () => {
     expect(output).not.toContain('@tanstack/intent is not in devDependencies')
   })
 
+  it('validates pnpm workspace package skills from repo root without false packaging warnings', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-pnpm-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+    })
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - packages/*\n',
+    )
+    writeJson(join(root, 'packages', 'router', 'package.json'), {
+      name: '@tanstack/router',
+      devDependencies: { '@tanstack/intent': '^0.0.18' },
+      keywords: ['tanstack-intent'],
+      files: ['skills'],
+    })
+    writeSkillMd(join(root, 'packages', 'router', 'skills', 'db-core'), {
+      name: 'db-core',
+      description: 'Core database concepts',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', 'packages/router/skills'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('✅ Validated 1 skill files — all passed')
+    expect(output).not.toContain('@tanstack/intent is not in devDependencies')
+    expect(output).not.toContain(
+      '"!skills/_artifacts" is not in the "files" array',
+    )
+  })
+
   it('fails cleanly when validate is run without a skills directory', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-missing-skills-'))
     tempDirs.push(root)

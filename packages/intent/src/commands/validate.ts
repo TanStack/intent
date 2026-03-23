@@ -1,7 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, relative, sep } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import { fail } from '../cli-error.js'
 import { printWarnings } from '../cli-support.js'
+import {
+  type ProjectContext,
+  resolveProjectContext,
+} from '../core/project-context.js'
 
 interface ValidationError {
   file: string
@@ -28,27 +32,10 @@ function buildValidationFailure(
   return lines.join('\n')
 }
 
-function isInsideMonorepo(root: string): boolean {
-  let dir = join(root, '..')
-  for (let i = 0; i < 5; i++) {
-    const parentPkg = join(dir, 'package.json')
-    if (existsSync(parentPkg)) {
-      try {
-        const parent = JSON.parse(readFileSync(parentPkg, 'utf8'))
-        return Array.isArray(parent.workspaces) || parent.workspaces?.packages
-      } catch {
-        return false
-      }
-    }
-    const next = dirname(dir)
-    if (next === dir) break
-    dir = next
-  }
-  return false
-}
+function collectPackagingWarnings(context: ProjectContext): Array<string> {
+  if (!context.packageRoot || !context.targetPackageJsonPath) return []
 
-function collectPackagingWarnings(root: string): Array<string> {
-  const pkgJsonPath = join(root, 'package.json')
+  const pkgJsonPath = context.targetPackageJsonPath
   if (!existsSync(pkgJsonPath)) return []
 
   let pkgJson: Record<string, unknown>
@@ -81,9 +68,7 @@ function collectPackagingWarnings(root: string): Array<string> {
 
     // In monorepos, _artifacts lives at repo root, not under packages —
     // the negation pattern is a no-op and shouldn't be added.
-    const isMonorepoPkg = isInsideMonorepo(root)
-
-    if (!isMonorepoPkg && !files.includes('!skills/_artifacts')) {
+    if (!context.isMonorepo && !files.includes('!skills/_artifacts')) {
       warnings.push(
         '"!skills/_artifacts" is not in the "files" array — artifacts will be published unnecessarily',
       )
@@ -93,31 +78,17 @@ function collectPackagingWarnings(root: string): Array<string> {
   return warnings
 }
 
-function resolvePackageRoot(startDir: string): string {
-  let dir = startDir
-
-  while (true) {
-    if (existsSync(join(dir, 'package.json'))) {
-      return dir
-    }
-
-    const next = dirname(dir)
-    if (next === dir) {
-      return startDir
-    }
-
-    dir = next
-  }
-}
-
 export async function runValidateCommand(dir?: string): Promise<void> {
   const [{ parse: parseYaml }, { findSkillFiles }] = await Promise.all([
     import('yaml'),
     import('../utils.js'),
   ])
   const targetDir = dir ?? 'skills'
-  const skillsDir = join(process.cwd(), targetDir)
-  const packageRoot = resolvePackageRoot(skillsDir)
+  const context = resolveProjectContext({
+    cwd: process.cwd(),
+    targetPath: targetDir,
+  })
+  const skillsDir = context.targetSkillsDir ?? resolve(process.cwd(), targetDir)
 
   if (!existsSync(skillsDir)) {
     fail(`Skills directory not found: ${skillsDir}`)
@@ -238,7 +209,7 @@ export async function runValidateCommand(dir?: string): Promise<void> {
     }
   }
 
-  const warnings = collectPackagingWarnings(packageRoot)
+  const warnings = collectPackagingWarnings(context)
 
   if (errors.length > 0) {
     fail(buildValidationFailure(errors, warnings))
