@@ -73,13 +73,25 @@ export function resolveWorkspacePackages(
   root: string,
   patterns: Array<string>,
 ): Array<string> {
-  const dirs = new Set<string>()
+  const includedDirs = new Set<string>()
+  const excludedDirs = new Set<string>()
 
   for (const pattern of normalizeWorkspacePatterns(patterns)) {
-    resolveWorkspacePatternSegments(root, pattern.split('/'), dirs)
+    if (pattern.startsWith('!')) {
+      resolveWorkspacePatternSegments(
+        root,
+        pattern.slice(1).split('/'),
+        excludedDirs,
+      )
+      continue
+    }
+
+    resolveWorkspacePatternSegments(root, pattern.split('/'), includedDirs)
   }
 
-  return [...dirs].sort((a, b) => a.localeCompare(b))
+  return [...includedDirs]
+    .filter((dir) => !excludedDirs.has(dir))
+    .sort((a, b) => a.localeCompare(b))
 }
 
 function resolveWorkspacePatternSegments(
