@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'node:fs'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import {
   findWorkspaceRoot,
   readWorkspacePatterns,
@@ -15,6 +15,11 @@ export type ProjectContext = {
   targetSkillsDir: string | null
 }
 
+/**
+ * Resolves project structure by walking up from targetPath (or cwd) to find the
+ * owning package.json, then searches for a workspace root from the package root.
+ * Falls back to searching from cwd when targetPath points deep into a package.
+ */
 export function resolveProjectContext({
   cwd,
   targetPath,
@@ -23,7 +28,9 @@ export function resolveProjectContext({
   targetPath?: string
 }): ProjectContext {
   const resolvedCwd = resolve(cwd)
-  const resolvedTargetPath = resolveTargetPath(resolvedCwd, targetPath)
+  const resolvedTargetPath = targetPath
+    ? resolve(resolvedCwd, targetPath)
+    : resolvedCwd
   const packageRoot = findOwningPackageRoot(resolvedTargetPath)
   const workspaceRoot =
     findWorkspaceRoot(packageRoot ?? resolvedTargetPath) ??
@@ -43,14 +50,6 @@ export function resolveProjectContext({
       : null,
     targetSkillsDir: resolveTargetSkillsDir(resolvedTargetPath, packageRoot),
   }
-}
-
-function resolveTargetPath(cwd: string, targetPath?: string): string {
-  if (!targetPath) {
-    return cwd
-  }
-
-  return isAbsolute(targetPath) ? resolve(targetPath) : resolve(cwd, targetPath)
 }
 
 function findOwningPackageRoot(startPath: string): string | null {
@@ -75,11 +74,7 @@ function toSearchDir(path: string): string {
     return path
   }
 
-  try {
-    return statSync(path).isDirectory() ? path : dirname(path)
-  } catch {
-    return path
-  }
+  return statSync(path).isDirectory() ? path : dirname(path)
 }
 
 function resolveTargetSkillsDir(
@@ -91,11 +86,8 @@ function resolveTargetSkillsDir(
   }
 
   const packageSkillsDir = join(packageRoot, 'skills')
-  if (targetPath === packageSkillsDir) {
-    return packageSkillsDir
-  }
 
-  if (isWithinDirectory(targetPath, packageSkillsDir)) {
+  if (isWithinOrEqual(targetPath, packageSkillsDir)) {
     return packageSkillsDir
   }
 
@@ -106,7 +98,7 @@ function resolveTargetSkillsDir(
   return null
 }
 
-function isWithinDirectory(path: string, parentDir: string): boolean {
-  const pathRelative = relative(parentDir, path)
-  return pathRelative !== '' && !pathRelative.startsWith('..')
+function isWithinOrEqual(path: string, parentDir: string): boolean {
+  const rel = relative(parentDir, path)
+  return rel === '' || (!rel.startsWith('..') && !rel.startsWith('/'))
 }

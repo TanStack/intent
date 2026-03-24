@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import type { Dirent } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { findSkillFiles } from './utils.js'
 
@@ -51,14 +50,11 @@ export function readWorkspacePatterns(root: string): Array<string> | null {
   if (existsSync(pkgPath)) {
     try {
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
-      const workspaces = parseWorkspacePatterns(pkg.workspaces)
-      if (workspaces) {
-        return workspaces
-      }
-
-      const workspacePackages = parseWorkspacePatterns(pkg.workspaces?.packages)
-      if (workspacePackages) {
-        return workspacePackages
+      const patterns =
+        parseWorkspacePatterns(pkg.workspaces) ??
+        parseWorkspacePatterns(pkg.workspaces?.packages)
+      if (patterns) {
+        return patterns
       }
     } catch (err: unknown) {
       console.error(
@@ -95,6 +91,7 @@ export function resolveWorkspacePackages(
     .sort((a, b) => a.localeCompare(b))
 }
 
+/** Recursively matches path segments: `*` matches one level, `**` matches zero or more levels. */
 function resolveWorkspacePatternSegments(
   dir: string,
   segments: Array<string>,
@@ -134,24 +131,21 @@ function resolveWorkspacePatternSegments(
 }
 
 function readChildDirectories(dir: string): Array<string> {
-  let entries: Array<Dirent>
   try {
-    entries = readdirSync(dir, { withFileTypes: true })
+    return readdirSync(dir, { withFileTypes: true })
+      .filter(
+        (entry) =>
+          entry.isDirectory() &&
+          entry.name !== 'node_modules' &&
+          !entry.name.startsWith('.'),
+      )
+      .map((entry) => join(dir, entry.name))
   } catch (err: unknown) {
     console.error(
       `Warning: could not read directory ${dir}: ${err instanceof Error ? err.message : err}`,
     )
     return []
   }
-
-  return entries
-    .filter(
-      (entry) =>
-        entry.isDirectory() &&
-        entry.name !== 'node_modules' &&
-        !entry.name.startsWith('.'),
-    )
-    .map((entry) => join(dir, entry.name))
 }
 
 export function findWorkspaceRoot(start: string): string | null {
@@ -162,7 +156,7 @@ export function findWorkspaceRoot(start: string): string | null {
       return dir
     }
 
-    const next = join(dir, '..')
+    const next = dirname(dir)
     if (next === dir) return null
     dir = next
   }

@@ -280,8 +280,7 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
   const result: EditPackageJsonResult = { added: [], alreadyPresent: [] }
   const context = resolveProjectContext({ cwd: root })
   const packageRoot = context.packageRoot ?? root
-  const pkgPath =
-    context.targetPackageJsonPath ?? join(packageRoot, 'package.json')
+  const pkgPath = join(packageRoot, 'package.json')
 
   if (!existsSync(pkgPath)) {
     console.error('No package.json found in ' + packageRoot)
@@ -296,6 +295,7 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
   } catch (err) {
     const detail = err instanceof SyntaxError ? err.message : String(err)
     console.error(`Failed to parse ${pkgPath}: ${detail}`)
+    process.exitCode = 1
     return result
   }
 

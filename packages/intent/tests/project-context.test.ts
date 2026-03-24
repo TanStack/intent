@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -7,7 +7,7 @@ import { resolveProjectContext } from '../src/core/project-context.js'
 const roots: Array<string> = []
 
 function createRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'project-context-test-'))
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'project-context-test-')))
   roots.push(root)
   return root
 }
@@ -92,6 +92,24 @@ describe('resolveProjectContext', () => {
       workspacePatterns: ['packages/*'],
       targetPackageJsonPath: join(packageRoot, 'package.json'),
       targetSkillsDir: join(packageRoot, 'skills'),
+    })
+  })
+
+  it('resolves a standalone project with no workspace', () => {
+    const root = createRoot()
+    writeJson(join(root, 'package.json'), { name: 'standalone-pkg' })
+    mkdirSync(join(root, 'skills'), { recursive: true })
+
+    const context = resolveProjectContext({ cwd: root })
+
+    expect(context).toEqual({
+      cwd: root,
+      workspaceRoot: null,
+      packageRoot: root,
+      isMonorepo: false,
+      workspacePatterns: [],
+      targetPackageJsonPath: join(root, 'package.json'),
+      targetSkillsDir: join(root, 'skills'),
     })
   })
 

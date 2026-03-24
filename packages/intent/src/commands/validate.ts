@@ -168,8 +168,9 @@ export async function runValidateCommand(dir?: string): Promise<void> {
     }
   }
 
+  // In monorepos, _artifacts lives at the workspace root, not under each package's skills/ dir.
   const artifactsDir = join(skillsDir, '_artifacts')
-  if (existsSync(artifactsDir)) {
+  if (!context.isMonorepo && existsSync(artifactsDir)) {
     const requiredArtifacts = [
       'domain_map.yaml',
       'skill_spec.md',
