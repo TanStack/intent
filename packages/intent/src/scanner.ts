@@ -11,7 +11,7 @@ import {
   findWorkspaceRoot,
   readWorkspacePatterns,
   resolveWorkspacePackages,
-} from './setup.js'
+} from './workspace-patterns.js'
 import type {
   InstalledVariant,
   IntentConfig,
