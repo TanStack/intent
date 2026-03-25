@@ -8,7 +8,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   runEditPackageJson,
   runEditPackageJsonAll,
@@ -181,6 +181,29 @@ describe('runEditPackageJson', () => {
 
     const pkg = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'))
     expect(pkg.files).not.toContain('!skills/_artifacts')
+
+    rmSync(monoRoot, { recursive: true, force: true })
+  })
+
+  it('warns when parent package.json is corrupted during monorepo detection', () => {
+    const monoRoot = mkdtempSync(join(tmpdir(), 'mono-root-'))
+    const pkgDir = join(monoRoot, 'packages', 'my-lib')
+    mkdirSync(pkgDir, { recursive: true })
+    writeFileSync(join(monoRoot, 'package.json'), '{invalid json')
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: '@scope/my-lib' }, null, 2),
+    )
+
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      runEditPackageJson(pkgDir)
+      expect(spy).toHaveBeenCalledWith(
+        expect.stringContaining(join(monoRoot, 'package.json')),
+      )
+    } finally {
+      spy.mockRestore()
+    }
 
     rmSync(monoRoot, { recursive: true, force: true })
   })

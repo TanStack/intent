@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -13,7 +13,7 @@ const roots: Array<string> = []
 const cwdStack: Array<string> = []
 
 function createRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'workspace-patterns-test-'))
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'workspace-patterns-test-')))
   roots.push(root)
   return root
 }
@@ -69,6 +69,59 @@ describe('readWorkspacePatterns', () => {
       'apps/*/packages/*',
       'packages/*',
     ])
+  })
+
+  it('reads and normalizes patterns from pnpm-workspace.yaml', () => {
+    const root = createRoot()
+
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - ./packages/*/\n  - apps/*\n  - ./packages/*/\n',
+    )
+
+    expect(readWorkspacePatterns(root)).toEqual(['apps/*', 'packages/*'])
+  })
+
+  it('prefers pnpm-workspace.yaml over package.json workspaces', () => {
+    const root = createRoot()
+
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - libs/*\n',
+    )
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ workspaces: ['packages/*'] }),
+    )
+
+    expect(readWorkspacePatterns(root)).toEqual(['libs/*'])
+  })
+
+  it('reads patterns from Yarn classic workspaces.packages format', () => {
+    const root = createRoot()
+
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ workspaces: { packages: ['packages/*', 'apps/*'] } }),
+    )
+
+    expect(readWorkspacePatterns(root)).toEqual(['apps/*', 'packages/*'])
+  })
+
+  it('returns null when no workspace config exists', () => {
+    const root = createRoot()
+    expect(readWorkspacePatterns(root)).toBeNull()
+  })
+
+  it('returns null when all patterns normalize to empty strings', () => {
+    const root = createRoot()
+
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ workspaces: ['', ''] }),
+    )
+
+    expect(readWorkspacePatterns(root)).toBeNull()
   })
 })
 
@@ -158,6 +211,33 @@ describe('resolveWorkspacePackages', () => {
     expect(
       resolveWorkspacePackages(root, ['packages/*', '!packages/excluded']),
     ).toEqual([join(root, 'packages', 'alpha')])
+  })
+
+  it('normalizes exclusion patterns with ./ and backslash prefixes', () => {
+    const root = createRoot()
+
+    writePackage(root, 'packages', 'alpha')
+    writePackage(root, 'packages', 'beta')
+    writePackage(root, 'packages', 'excluded')
+
+    expect(
+      resolveWorkspacePackages(root, ['packages/*', '!./packages/excluded']),
+    ).toEqual([join(root, 'packages', 'alpha'), join(root, 'packages', 'beta')])
+
+    expect(
+      resolveWorkspacePackages(root, ['packages/*', '!packages\\excluded']),
+    ).toEqual([join(root, 'packages', 'alpha'), join(root, 'packages', 'beta')])
+  })
+})
+
+describe('findWorkspaceRoot', () => {
+  it('returns null when no workspace config exists in any ancestor', () => {
+    const root = createRoot()
+    expect(findWorkspaceRoot(root)).toBeNull()
+  })
+
+  it('throws on relative paths', () => {
+    expect(() => findWorkspaceRoot('relative/path')).toThrow()
   })
 })
 

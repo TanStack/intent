@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { findSkillFiles } from './utils.js'
 
@@ -19,15 +19,17 @@ function parseWorkspacePatterns(value: unknown): Array<string> | null {
     return null
   }
 
-  return normalizeWorkspacePatterns(
+  const normalized = normalizeWorkspacePatterns(
     value.filter((pattern): pattern is string => typeof pattern === 'string'),
   )
+  return normalized.length > 0 ? normalized : null
 }
 
 function hasPackageJson(dir: string): boolean {
   return existsSync(join(dir, 'package.json'))
 }
 
+/** Reads workspace patterns from pnpm-workspace.yaml (preferred) or package.json workspaces. Returns null if no workspace config is found. */
 export function readWorkspacePatterns(root: string): Array<string> | null {
   const pnpmWs = join(root, 'pnpm-workspace.yaml')
   if (existsSync(pnpmWs)) {
@@ -70,6 +72,7 @@ export function readWorkspacePatterns(root: string): Array<string> | null {
   return null
 }
 
+/** Resolves workspace glob patterns to package directories. Supports `*`, `**`, and `!` exclusion patterns. */
 export function resolveWorkspacePackages(
   root: string,
   patterns: Array<string>,
@@ -154,7 +157,11 @@ function readChildDirectories(dir: string): Array<string> {
     .map((entry) => join(dir, entry.name))
 }
 
+/** Walks up from `start` to find the nearest directory with a workspace config. */
 export function findWorkspaceRoot(start: string): string | null {
+  if (!isAbsolute(start)) {
+    throw new Error(`findWorkspaceRoot requires an absolute path, got: ${start}`)
+  }
   let dir = start
 
   while (true) {
@@ -168,6 +175,7 @@ export function findWorkspaceRoot(start: string): string | null {
   }
 }
 
+/** Finds workspace packages that contain at least one SKILL.md file. */
 export function findPackagesWithSkills(root: string): Array<string> {
   const patterns = readWorkspacePatterns(root)
   if (!patterns) return []

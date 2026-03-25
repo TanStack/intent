@@ -330,7 +330,9 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
           if (Array.isArray(parent.workspaces) || parent.workspaces?.packages) {
             return true
           }
-        } catch {}
+        } catch (err) {
+          console.error(`Warning: could not read ${parentPkg}: ${err instanceof Error ? err.message : err}`)
+        }
         return false
       }
       const next = join(dir, '..')
