@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -13,7 +19,9 @@ const roots: Array<string> = []
 const cwdStack: Array<string> = []
 
 function createRoot(): string {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'workspace-patterns-test-')))
+  const root = realpathSync(
+    mkdtempSync(join(tmpdir(), 'workspace-patterns-test-')),
+  )
   roots.push(root)
   return root
 }

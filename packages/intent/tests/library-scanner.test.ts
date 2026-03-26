@@ -94,7 +94,9 @@ describe('scanLibrary', () => {
     const result = scanLibrary(scriptPath(pkgDir), root)
 
     const skill = result.packages[0]!.skills[0]!
-    expect(skill.path).toBe('node_modules/@tanstack/router/skills/routing/SKILL.md')
+    expect(skill.path).toBe(
+      'node_modules/@tanstack/router/skills/routing/SKILL.md',
+    )
   })
 
   it('recursively discovers deps with tanstack-intent keyword', () => {

@@ -1,6 +1,11 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import { getDeps, parseFrontmatter, resolveDepDir, toPosixPath } from './utils.js'
+import {
+  getDeps,
+  parseFrontmatter,
+  resolveDepDir,
+  toPosixPath,
+} from './utils.js'
 import type { SkillEntry } from './types.js'
 import type { Dirent } from 'node:fs'
 
