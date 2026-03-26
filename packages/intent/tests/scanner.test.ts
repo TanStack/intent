@@ -76,6 +76,21 @@ describe('scanForIntents', () => {
     expect(result.packages).toEqual([])
   })
 
+  it('handles empty package name without producing double-slash paths', () => {
+    const pkgDir = createDir(root, 'node_modules', 'no-name-pkg')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'test/pkg', docs: 'docs/' },
+    })
+    const skillDir = createDir(pkgDir, 'skills', 'core')
+    writeSkillMd(skillDir, { name: 'core', description: 'Core skill' })
+
+    const result = scanForIntents(root)
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.skills[0]!.path).not.toContain('//')
+  })
+
   it('discovers an intent-enabled package with skills', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'db')
     writeJson(join(pkgDir, 'package.json'), {

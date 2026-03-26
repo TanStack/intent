@@ -442,9 +442,9 @@ export function scanForIntents(root?: string): ScanResult {
       dirPath.startsWith(projectRoot + sep) ||
       dirPath.startsWith(projectRoot + '/')
     if (isLocal) {
-      const hasStableSymlink = existsSync(
-        join(projectRoot, 'node_modules', name),
-      )
+      const hasStableSymlink =
+        name !== '' &&
+        existsSync(join(projectRoot, 'node_modules', name))
       for (const skill of skills) {
         if (hasStableSymlink) {
           const relFromPkg = toPosixPath(relative(dirPath, skill.path))
