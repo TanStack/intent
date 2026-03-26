@@ -1,8 +1,15 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
+
+/**
+ * Convert a path to use forward slashes (for cross-platform consistency).
+ */
+export function toPosixPath(p: string): string {
+  return p.split(sep).join('/')
+}
 
 /**
  * Recursively find all SKILL.md files under a directory.

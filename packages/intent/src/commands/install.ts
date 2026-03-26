@@ -50,6 +50,13 @@ skills:
    Rules:
    - Use the user's own words for task descriptions
    - Include the exact path from \`npx @tanstack/intent@latest list\` output so agents can load it directly
+   - Paths should use the stable \`node_modules/<package-name>/skills/...\` format (no version numbers)
+   - If a skill path from \`list\` contains package-manager-internal directories (e.g. \`.pnpm/\`, \`.bun/\`)
+     with version numbers, it is a transitive dependency without a stable top-level symlink.
+     For these skills, do NOT embed the versioned path. Instead, add a comment telling the agent
+     how to locate the skill at runtime:
+       - task: "describe the task"
+         # To load this skill, run: npx @tanstack/intent@latest list | grep <skill-name>
    - Keep entries concise - this block is read on every agent task
    - Preserve all content outside the block tags unchanged
    - If the user is on Deno, note that this setup is best-effort today and relies on npm interop`

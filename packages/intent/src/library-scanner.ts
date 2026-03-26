@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { dirname, join, relative, sep } from 'node:path'
-import { getDeps, parseFrontmatter, resolveDepDir } from './utils.js'
+import { dirname, join, relative } from 'node:path'
+import { getDeps, parseFrontmatter, resolveDepDir, toPosixPath } from './utils.js'
 import type { SkillEntry } from './types.js'
 import type { Dirent } from 'node:fs'
 
@@ -76,7 +76,7 @@ function discoverSkills(skillsDir: string): Array<SkillEntry> {
       const skillFile = join(childDir, 'SKILL.md')
       if (existsSync(skillFile)) {
         const fm = parseFrontmatter(skillFile)
-        const relName = relative(skillsDir, childDir).split(sep).join('/')
+        const relName = toPosixPath(relative(skillsDir, childDir))
         skills.push({
           name: typeof fm?.name === 'string' ? fm.name : relName,
           path: skillFile,
@@ -135,11 +135,21 @@ export function scanLibrary(
     }
 
     const skillsDir = join(dir, 'skills')
+    const skills = existsSync(skillsDir) ? discoverSkills(skillsDir) : []
+
+    // Convert absolute skill paths to stable node_modules/<name>/... paths
+    if (name) {
+      for (const skill of skills) {
+        const relFromPkg = toPosixPath(relative(dir, skill.path))
+        skill.path = `node_modules/${name}/${relFromPkg}`
+      }
+    }
+
     packages.push({
       name,
       version: typeof pkg.version === 'string' ? pkg.version : '0.0.0',
       description: typeof pkg.description === 'string' ? pkg.description : '',
-      skills: existsSync(skillsDir) ? discoverSkills(skillsDir) : [],
+      skills,
     })
 
     for (const depName of getDeps(pkg)) {

@@ -94,7 +94,7 @@ describe('scanLibrary', () => {
     const result = scanLibrary(scriptPath(pkgDir), root)
 
     const skill = result.packages[0]!.skills[0]!
-    expect(skill.path).toBe(join(pkgDir, 'skills', 'routing', 'SKILL.md'))
+    expect(skill.path).toBe('node_modules/@tanstack/router/skills/routing/SKILL.md')
   })
 
   it('recursively discovers deps with tanstack-intent keyword', () => {
@@ -306,6 +306,22 @@ describe('scanLibrary', () => {
     const names = skills.map((s) => s.name)
     expect(names).toContain('routing')
     expect(names).toContain('routing/nested-routes')
+  })
+
+  it('handles missing package name without producing double slashes in paths', () => {
+    const pkgDir = createDir(root, 'node_modules', 'no-name-pkg')
+    writeJson(join(pkgDir, 'package.json'), {
+      version: '1.0.0',
+      keywords: ['tanstack-intent'],
+    })
+    const skillDir = createDir(pkgDir, 'skills', 'core')
+    writeSkillMd(skillDir, { name: 'core', description: 'Core skill' })
+
+    const result = scanLibrary(scriptPath(pkgDir), root)
+
+    expect(result.packages).toHaveLength(1)
+    const skill = result.packages[0]!.skills[0]!
+    expect(skill.path).not.toContain('//')
   })
 
   it('returns a warning when home package.json cannot be found', () => {
