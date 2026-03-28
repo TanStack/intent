@@ -3,7 +3,7 @@
   "private": true,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/TanStack/intent.git"
+    "url": "https://github.com/TanStack/intent.git"
   },
   "packageManager": "pnpm@10.26.1",
   "type": "module",
