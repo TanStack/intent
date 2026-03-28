@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "defaultBase": "main",
-  "nxCloudId": "6932bc70f7d82526902f62fa",
+  "nxCloudId": "69c71b9038eed5e74d5da8e4",
   "useInferencePlugins": false,
   "parallel": 5,
   "tui": {
@@ -27,37 +27,69 @@
   "targetDefaults": {
     "test:lib": {
       "cache": true,
-      "dependsOn": ["^build"],
-      "inputs": ["default", "^production"],
-      "outputs": ["{projectRoot}/coverage"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "default",
+        "^production"
+      ],
+      "outputs": [
+        "{projectRoot}/coverage"
+      ]
     },
     "test:eslint": {
       "cache": true,
-      "dependsOn": ["^build"],
-      "inputs": ["default", "^production", "{workspaceRoot}/eslint.config.js"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/eslint.config.js"
+      ]
     },
     "test:types": {
       "cache": true,
-      "dependsOn": ["^build"],
-      "inputs": ["default", "^production"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "default",
+        "^production"
+      ]
     },
     "build": {
       "cache": true,
-      "dependsOn": ["^build"],
-      "inputs": ["production", "^production"],
-      "outputs": ["{projectRoot}/build", "{projectRoot}/dist"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "production",
+        "^production"
+      ],
+      "outputs": [
+        "{projectRoot}/build",
+        "{projectRoot}/dist"
+      ]
     },
     "test:docs": {
       "cache": true,
-      "inputs": ["{workspaceRoot}/docs/**/*"]
+      "inputs": [
+        "{workspaceRoot}/docs/**/*"
+      ]
     },
     "test:knip": {
       "cache": true,
-      "inputs": ["{workspaceRoot}/**/*"]
+      "inputs": [
+        "{workspaceRoot}/**/*"
+      ]
     },
     "test:sherif": {
       "cache": true,
-      "inputs": ["{workspaceRoot}/**/package.json"]
+      "inputs": [
+        "{workspaceRoot}/**/package.json"
+      ]
     }
   }
 }
