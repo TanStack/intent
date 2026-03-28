@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "defaultBase": "main",
-  "nxCloudId": "6932bc70f7d82526902f62fa",
+  "nxCloudId": "69c71b9038eed5e74d5da8e4",
   "useInferencePlugins": false,
   "parallel": 5,
   "tui": {

@@ -185,6 +185,40 @@ describe('runEditPackageJson', () => {
     rmSync(monoRoot, { recursive: true, force: true })
   })
 
+  it('skips !skills/_artifacts in pnpm workspace packages', () => {
+    const monoRoot = createMonorepo()
+    const pkgDir = join(monoRoot, 'packages', 'lib-a')
+
+    const result = runEditPackageJson(pkgDir)
+
+    expect(result.added).toContain('files: "skills"')
+    expect(result.added).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('!skills/_artifacts')]),
+    )
+
+    const pkg = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'))
+    expect(pkg.files).toContain('skills')
+    expect(pkg.files).not.toContain('!skills/_artifacts')
+
+    rmSync(monoRoot, { recursive: true, force: true })
+  })
+
+  it('updates the owning package when given a workspace skills dir path', () => {
+    const monoRoot = createMonorepo()
+    const pkgDir = join(monoRoot, 'packages', 'lib-a')
+    const skillsDir = join(pkgDir, 'skills')
+
+    const result = runEditPackageJson(skillsDir)
+
+    expect(result.added).toContain('files: "skills"')
+
+    const pkg = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'))
+    expect(pkg.files).toContain('skills')
+    expect(pkg.files).not.toContain('!skills/_artifacts')
+
+    rmSync(monoRoot, { recursive: true, force: true })
+  })
+
   it('preserves 4-space indentation', () => {
     writeFileSync(
       join(root, 'package.json'),
@@ -255,7 +289,7 @@ describe('runSetupGithubActions', () => {
     writeFileSync(
       join(monoRoot, 'package.json'),
       JSON.stringify(
-        { name: '@tanstack/router', private: true, workspaces: ['packages/*'] },
+        { name: 'root', private: true, workspaces: ['packages/*'] },
         null,
         2,
       ),
@@ -295,9 +329,11 @@ describe('runSetupGithubActions', () => {
       'utf8',
     )
     expect(notifyContent).toContain('package: @tanstack/router')
+    expect(notifyContent).toContain('repo: TanStack/router')
     expect(notifyContent).toContain("- 'packages/router/docs/**'")
     expect(notifyContent).toContain("- 'packages/router/src/**'")
     expect(notifyContent).toContain("- 'packages/start/src/**'")
+    expect(notifyContent).not.toContain('packages/root/src/**')
 
     const checkContent = readFileSync(
       join(monoRoot, '.github', 'workflows', 'check-skills.yml'),

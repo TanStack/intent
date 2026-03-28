@@ -6,12 +6,13 @@ import {
   listNodeModulesPackageDirs,
   parseFrontmatter,
   resolveDepDir,
+  toPosixPath,
 } from './utils.js'
 import {
   findWorkspaceRoot,
   readWorkspacePatterns,
   resolveWorkspacePackages,
-} from './setup.js'
+} from './workspace-patterns.js'
 import type {
   InstalledVariant,
   IntentConfig,
@@ -156,7 +157,7 @@ function discoverSkills(
       const skillFile = join(childDir, 'SKILL.md')
       if (existsSync(skillFile)) {
         const fm = parseFrontmatter(skillFile)
-        const relName = relative(skillsDir, childDir).split(sep).join('/')
+        const relName = toPosixPath(relative(skillsDir, childDir))
         const desc =
           typeof fm?.description === 'string'
             ? fm.description.replace(/\s+/g, ' ').trim()
@@ -432,11 +433,32 @@ export function scanForIntents(root?: string): ScanResult {
       return false
     }
 
+    const skills = discoverSkills(skillsDir, name)
+
+    // Convert absolute skill paths to stable relative paths, preferring
+    // node_modules/<name>/... when a top-level symlink exists, otherwise
+    // falling back to a path relative to the project root.
+    const isLocal =
+      dirPath.startsWith(projectRoot + sep) ||
+      dirPath.startsWith(projectRoot + '/')
+    if (isLocal) {
+      const hasStableSymlink =
+        name !== '' && existsSync(join(projectRoot, 'node_modules', name))
+      for (const skill of skills) {
+        if (hasStableSymlink) {
+          const relFromPkg = toPosixPath(relative(dirPath, skill.path))
+          skill.path = `node_modules/${name}/${relFromPkg}`
+        } else {
+          skill.path = toPosixPath(relative(projectRoot, skill.path))
+        }
+      }
+    }
+
     const candidate: IntentPackage = {
       name,
       version,
       intent,
-      skills: discoverSkills(skillsDir, name),
+      skills,
       packageRoot: dirPath,
     }
     const existingIndex = packageIndexes.get(name)
