@@ -27,6 +27,76 @@ function hasPackageJson(dir: string): boolean {
   return existsSync(join(dir, 'package.json'))
 }
 
+function stripJsonCommentsAndTrailingCommas(source: string): string {
+  let result = ''
+  let inString = false
+  let escaped = false
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]!
+    const next = source[index + 1]
+
+    if (inString) {
+      result += char
+      if (escaped) {
+        escaped = false
+      } else if (char === '\\') {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      result += char
+      continue
+    }
+
+    if (char === '/' && next === '/') {
+      while (index < source.length && source[index] !== '\n') {
+        index += 1
+      }
+      if (index < source.length) {
+        result += source[index]!
+      }
+      continue
+    }
+
+    if (char === '/' && next === '*') {
+      index += 2
+      while (
+        index < source.length &&
+        !(source[index] === '*' && source[index + 1] === '/')
+      ) {
+        index += 1
+      }
+      index += 1
+      continue
+    }
+
+    if (char === ',') {
+      let lookahead = index + 1
+      while (lookahead < source.length && /\s/.test(source[lookahead]!)) {
+        lookahead += 1
+      }
+      if (source[lookahead] === '}' || source[lookahead] === ']') {
+        continue
+      }
+    }
+
+    result += char
+  }
+
+  return result
+}
+
+function readJsonFile(path: string, jsonc = false): unknown {
+  const source = readFileSync(path, 'utf8')
+  return JSON.parse(jsonc ? stripJsonCommentsAndTrailingCommas(source) : source)
+}
+
 export function readWorkspacePatterns(root: string): Array<string> | null {
   const pnpmWs = join(root, 'pnpm-workspace.yaml')
   if (existsSync(pnpmWs)) {
@@ -49,16 +119,46 @@ export function readWorkspacePatterns(root: string): Array<string> | null {
   const pkgPath = join(root, 'package.json')
   if (existsSync(pkgPath)) {
     try {
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+      const pkg = readJsonFile(pkgPath) as {
+        workspaces?: unknown | { packages?: unknown }
+      }
       const patterns =
         parseWorkspacePatterns(pkg.workspaces) ??
-        parseWorkspacePatterns(pkg.workspaces?.packages)
+        parseWorkspacePatterns(
+          typeof pkg.workspaces === 'object' && pkg.workspaces !== null
+            ? (pkg.workspaces as Record<string, unknown>).packages
+            : undefined,
+        )
       if (patterns) {
         return patterns
       }
     } catch (err: unknown) {
       console.error(
         `Warning: failed to parse ${pkgPath}: ${err instanceof Error ? err.message : err}`,
+      )
+    }
+  }
+
+  for (const denoConfigName of ['deno.json', 'deno.jsonc']) {
+    const denoConfigPath = join(root, denoConfigName)
+    if (!existsSync(denoConfigPath)) {
+      continue
+    }
+
+    try {
+      const denoConfig = readJsonFile(
+        denoConfigPath,
+        denoConfigName.endsWith('.jsonc'),
+      ) as {
+        workspace?: unknown
+      }
+      const patterns = parseWorkspacePatterns(denoConfig.workspace)
+      if (patterns) {
+        return patterns
+      }
+    } catch (err: unknown) {
+      console.error(
+        `Warning: failed to parse ${denoConfigPath}: ${err instanceof Error ? err.message : err}`,
       )
     }
   }
