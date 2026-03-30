@@ -7,7 +7,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   findPackagesWithSkills,
   findWorkspaceRoot,
@@ -77,6 +77,70 @@ describe('readWorkspacePatterns', () => {
       'apps/*/packages/*',
       'packages/*',
     ])
+  })
+
+  it('reads workspace patterns from deno.json', () => {
+    const root = createRoot()
+
+    writeFileSync(
+      join(root, 'deno.json'),
+      JSON.stringify({
+        workspace: ['', './apps/*/', 'packages\\*', 'apps/*'],
+      }),
+    )
+
+    expect(readWorkspacePatterns(root)).toEqual(['apps/*', 'packages/*'])
+  })
+
+  it('reads workspace patterns from deno.jsonc', () => {
+    const root = createRoot()
+
+    writeFileSync(
+      join(root, 'deno.jsonc'),
+      `{
+        // Deno supports JSONC config files.
+        "workspace": [
+          "./packages/*/",
+          "apps/*",
+        ],
+      }
+      `,
+    )
+
+    expect(readWorkspacePatterns(root)).toEqual(['apps/*', 'packages/*'])
+  })
+
+  it('prefers package.json workspaces over Deno workspace config', () => {
+    const root = createRoot()
+
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ workspaces: ['packages/*'] }),
+    )
+    writeFileSync(
+      join(root, 'deno.json'),
+      JSON.stringify({ workspace: ['apps/*'] }),
+    )
+
+    expect(readWorkspacePatterns(root)).toEqual(['packages/*'])
+  })
+
+  it('warns and returns null for invalid Deno config', () => {
+    const root = createRoot()
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    writeFileSync(join(root, 'deno.jsonc'), '{ invalid jsonc')
+
+    expect(readWorkspacePatterns(root)).toBeNull()
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `Warning: failed to parse ${join(root, 'deno.jsonc')}`,
+      ),
+    )
+
+    consoleErrorSpy.mockRestore()
   })
 })
 
