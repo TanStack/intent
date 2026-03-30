@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fail } from './cli-error.js'
+import { resolveProjectContext } from './core/project-context.js'
 import type { ScanResult, StalenessReport } from './types.js'
 
 export function printWarnings(warnings: Array<string>): void {
@@ -47,9 +48,28 @@ export async function resolveStaleTargets(
   targetDir?: string,
 ): Promise<{ reports: Array<StalenessReport> }> {
   const resolvedRoot = targetDir
-    ? join(process.cwd(), targetDir)
+    ? resolve(process.cwd(), targetDir)
     : process.cwd()
+  const context = resolveProjectContext({
+    cwd: process.cwd(),
+    targetPath: targetDir,
+  })
   const { checkStaleness } = await import('./staleness.js')
+
+  const targetsResolvedPackage =
+    context.packageRoot !== null &&
+    (context.targetSkillsDir !== null || resolvedRoot !== context.workspaceRoot)
+
+  if (targetsResolvedPackage && context.packageRoot) {
+    return {
+      reports: [
+        await checkStaleness(
+          context.packageRoot,
+          readPackageName(context.packageRoot),
+        ),
+      ],
+    }
+  }
 
   if (existsSync(join(resolvedRoot, 'skills'))) {
     return {

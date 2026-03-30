@@ -229,6 +229,43 @@ describe('cli commands', () => {
     expect(output).toContain('Template variables applied:')
   })
 
+  it('copies github workflow templates to the workspace root', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-setup-gha-mono-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(root, 'packages', 'router', 'package.json'), {
+      name: '@tanstack/router',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'TanStack/router', docs: 'docs/' },
+    })
+    writeSkillMd(join(root, 'packages', 'router', 'skills', 'routing'), {
+      name: 'routing',
+      description: 'Routing skill',
+    })
+
+    process.chdir(join(root, 'packages', 'router'))
+
+    const exitCode = await main(['setup-github-actions'])
+    const rootWorkflowsDir = join(root, '.github', 'workflows')
+    const packageWorkflowsDir = join(
+      root,
+      'packages',
+      'router',
+      '.github',
+      'workflows',
+    )
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(existsSync(rootWorkflowsDir)).toBe(true)
+    expect(existsSync(packageWorkflowsDir)).toBe(false)
+    expect(output).toContain('Mode:     monorepo')
+  })
+
   it('lists installed intent packages as json', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-'))
     tempDirs.push(root)
@@ -473,6 +510,92 @@ describe('cli commands', () => {
     } as Response)
 
     process.chdir(root)
+
+    const exitCode = await main(['stale', '--json'])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const reports = JSON.parse(String(output)) as Array<{ library: string }>
+
+    expect(exitCode).toBe(0)
+    expect(reports).toHaveLength(1)
+    expect(reports[0]!.library).toBe('@tanstack/router')
+
+    fetchSpy.mockRestore()
+  })
+
+  it('checks only the targeted workspace package for staleness', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-stale-target-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(root, 'packages', 'router', 'package.json'), {
+      name: '@tanstack/router',
+    })
+    writeJson(join(root, 'packages', 'query', 'package.json'), {
+      name: '@tanstack/query',
+    })
+    writeSkillMd(join(root, 'packages', 'router', 'skills', 'routing'), {
+      name: 'routing',
+      description: 'Routing skill',
+      library_version: '1.0.0',
+    })
+    writeSkillMd(join(root, 'packages', 'query', 'skills', 'cache'), {
+      name: 'cache',
+      description: 'Caching skill',
+      library_version: '1.0.0',
+    })
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ version: '1.0.0' }),
+    } as Response)
+
+    process.chdir(root)
+
+    const exitCode = await main(['stale', 'packages/router/skills', '--json'])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const reports = JSON.parse(String(output)) as Array<{ library: string }>
+
+    expect(exitCode).toBe(0)
+    expect(reports).toHaveLength(1)
+    expect(reports[0]!.library).toBe('@tanstack/router')
+
+    fetchSpy.mockRestore()
+  })
+
+  it('checks the current workspace package for staleness from package cwd', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-stale-package-cwd-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(root, 'packages', 'router', 'package.json'), {
+      name: '@tanstack/router',
+    })
+    writeJson(join(root, 'packages', 'query', 'package.json'), {
+      name: '@tanstack/query',
+    })
+    writeSkillMd(join(root, 'packages', 'router', 'skills', 'routing'), {
+      name: 'routing',
+      description: 'Routing skill',
+      library_version: '1.0.0',
+    })
+    writeSkillMd(join(root, 'packages', 'query', 'skills', 'cache'), {
+      name: 'cache',
+      description: 'Caching skill',
+      library_version: '1.0.0',
+    })
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ version: '1.0.0' }),
+    } as Response)
+
+    process.chdir(join(root, 'packages', 'router'))
 
     const exitCode = await main(['stale', '--json'])
     const output = logSpy.mock.calls.at(-1)?.[0]
