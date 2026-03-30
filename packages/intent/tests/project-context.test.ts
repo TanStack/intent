@@ -136,4 +136,31 @@ describe('resolveProjectContext', () => {
     expect(context.isMonorepo).toBe(true)
     expect(context.packageRoot).toBe(packageRoot)
   })
+
+  it('detects Deno workspaces from a workspace package cwd', () => {
+    const root = createRoot()
+    writeJson(join(root, 'package.json'), { name: 'repo-root', private: true })
+    writeFileSync(
+      join(root, 'deno.jsonc'),
+      `{
+        "workspace": [
+          "packages/*",
+        ],
+      }
+      `,
+    )
+    const packageRoot = createWorkspacePackage(root, 'router')
+
+    const context = resolveProjectContext({ cwd: packageRoot })
+
+    expect(context).toEqual({
+      cwd: packageRoot,
+      workspaceRoot: root,
+      packageRoot,
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      targetPackageJsonPath: join(packageRoot, 'package.json'),
+      targetSkillsDir: join(packageRoot, 'skills'),
+    })
+  })
 })
