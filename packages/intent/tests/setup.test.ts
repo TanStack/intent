@@ -344,6 +344,72 @@ describe('runSetupGithubActions', () => {
 
     rmSync(monoRoot, { recursive: true, force: true })
   })
+
+  it('writes workflows to the Deno workspace root from a workspace package', () => {
+    const monoRoot = createMonorepo({
+      usePackageJsonWorkspaces: true,
+      packages: [
+        { name: 'router', hasSkills: true },
+        { name: 'start', hasSkills: true },
+      ],
+    })
+
+    writeFileSync(
+      join(monoRoot, 'package.json'),
+      JSON.stringify({ name: 'root', private: true }, null, 2),
+    )
+    writeFileSync(
+      join(monoRoot, 'deno.jsonc'),
+      `{
+        // Deno workspace config should be used for monorepo resolution.
+        "workspace": [
+          "packages/*",
+        ],
+      }
+      `,
+    )
+    writeFileSync(
+      join(monoRoot, 'packages', 'router', 'package.json'),
+      JSON.stringify(
+        {
+          name: '@tanstack/react-router',
+          intent: { repo: 'TanStack/router', docs: 'docs/' },
+        },
+        null,
+        2,
+      ),
+    )
+    mkdirSync(join(monoRoot, 'packages', 'router', 'src'), { recursive: true })
+    mkdirSync(join(monoRoot, 'packages', 'router', 'docs'), { recursive: true })
+    mkdirSync(join(monoRoot, 'packages', 'start', 'src'), { recursive: true })
+
+    const result = runSetupGithubActions(
+      join(monoRoot, 'packages', 'router'),
+      metaDir,
+    )
+
+    expect(result.workflows).toEqual(
+      expect.arrayContaining([
+        join(monoRoot, '.github', 'workflows', 'notify-intent.yml'),
+        join(monoRoot, '.github', 'workflows', 'check-skills.yml'),
+      ]),
+    )
+    expect(
+      existsSync(join(monoRoot, 'packages', 'router', '.github', 'workflows')),
+    ).toBe(false)
+
+    const notifyContent = readFileSync(
+      join(monoRoot, '.github', 'workflows', 'notify-intent.yml'),
+      'utf8',
+    )
+    expect(notifyContent).toContain('package: @tanstack/router')
+    expect(notifyContent).toContain('repo: TanStack/router')
+    expect(notifyContent).toContain("- 'packages/router/docs/**'")
+    expect(notifyContent).toContain("- 'packages/router/src/**'")
+    expect(notifyContent).toContain("- 'packages/start/src/**'")
+
+    rmSync(monoRoot, { recursive: true, force: true })
+  })
 })
 
 // ---------------------------------------------------------------------------
