@@ -567,7 +567,9 @@ describe('cli commands', () => {
   })
 
   it('checks only the targeted workspace package when path omits /skills suffix', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-stale-target-nosuffix-'))
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-stale-target-nosuffix-'),
+    )
     tempDirs.push(root)
 
     writeJson(join(root, 'package.json'), {
@@ -687,7 +689,6 @@ describe('cli commands', () => {
 
     fetchSpy.mockRestore()
   })
-
 })
 
 describe('package metadata', () => {
