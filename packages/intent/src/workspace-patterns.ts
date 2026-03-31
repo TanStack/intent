@@ -146,9 +146,7 @@ export function readWorkspacePatterns(root: string): Array<string> | null {
   if (existsSync(pkgPath)) {
     try {
       const pkg = readJsonFile(pkgPath) as Record<string, unknown>
-      const workspaces = pkg.workspaces as
-        | Record<string, unknown>
-        | undefined
+      const workspaces = pkg.workspaces as Record<string, unknown> | undefined
       const patterns =
         parseWorkspacePatterns(workspaces) ??
         parseWorkspacePatterns(workspaces?.packages)
