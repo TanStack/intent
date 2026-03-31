@@ -34,8 +34,19 @@ function classifyVersionDrift(
 }
 
 // ---------------------------------------------------------------------------
-// npm version fetching
+// Version resolution
 // ---------------------------------------------------------------------------
+
+function readLocalVersion(packageDir: string): string | null {
+  try {
+    const pkgJson = JSON.parse(
+      readFileSync(join(packageDir, 'package.json'), 'utf8'),
+    ) as Record<string, unknown>
+    return typeof pkgJson.version === 'string' ? pkgJson.version : null
+  } catch {
+    return null
+  }
+}
 
 async function fetchNpmVersion(packageName: string): Promise<string | null> {
   try {
@@ -48,6 +59,13 @@ async function fetchNpmVersion(packageName: string): Promise<string | null> {
   } catch {
     return null
   }
+}
+
+async function fetchCurrentVersion(
+  packageDir: string,
+  packageName: string,
+): Promise<string | null> {
+  return readLocalVersion(packageDir) ?? (await fetchNpmVersion(packageName))
 }
 
 // ---------------------------------------------------------------------------
@@ -141,8 +159,8 @@ export async function checkStaleness(
   const skillVersion =
     skillMetas.find((s) => s.libraryVersion)?.libraryVersion ?? null
 
-  // Fetch current npm version
-  const currentVersion = await fetchNpmVersion(library)
+  // Resolve current version: prefer local package.json, fall back to npm registry
+  const currentVersion = await fetchCurrentVersion(packageDir, library)
 
   // Classify drift
   const versionDrift =

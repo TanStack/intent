@@ -309,4 +309,47 @@ describe('checkStaleness', () => {
     expect(report.skills).toHaveLength(1)
     expect(requireFirstSkill(report).needsReview).toBe(false)
   })
+
+  it('reads version from local package.json when npm fetch fails', async () => {
+    writeFileSync(
+      join(tmpDir, 'package.json'),
+      JSON.stringify({ name: '@private/lib', version: '2.5.0' }),
+    )
+
+    writeSkill(tmpDir, 'core', {
+      name: 'core',
+      description: 'Core',
+      library_version: '2.0.0',
+    })
+
+    mockFetchNotOk()
+
+    const report = await checkStaleness(tmpDir, '@private/lib')
+    expect(report.currentVersion).toBe('2.5.0')
+    expect(report.versionDrift).toBe('minor')
+    const skill = requireFirstSkill(report)
+    expect(skill.needsReview).toBe(true)
+    expect(skill.reasons[0]).toContain('version drift')
+  })
+
+  it('prefers local package.json over npm registry', async () => {
+    writeFileSync(
+      join(tmpDir, 'package.json'),
+      JSON.stringify({ name: '@example/lib', version: '3.0.0' }),
+    )
+
+    writeSkill(tmpDir, 'core', {
+      name: 'core',
+      description: 'Core',
+      library_version: '2.0.0',
+    })
+
+    // npm returns an older published version
+    mockFetchVersion('2.5.0')
+
+    const report = await checkStaleness(tmpDir, '@example/lib')
+    // Local package.json should take precedence
+    expect(report.currentVersion).toBe('3.0.0')
+    expect(report.versionDrift).toBe('major')
+  })
 })
