@@ -65,6 +65,7 @@ function stripJsonCommentsAndTrailingCommas(source: string): string {
     }
 
     if (char === '/' && next === '*') {
+      const commentStart = index
       index += 2
       while (
         index < source.length &&
@@ -72,14 +73,38 @@ function stripJsonCommentsAndTrailingCommas(source: string): string {
       ) {
         index += 1
       }
+      if (index >= source.length) {
+        throw new SyntaxError(
+          `Unterminated block comment starting at position ${commentStart}`,
+        )
+      }
       index += 1
       continue
     }
 
     if (char === ',') {
       let lookahead = index + 1
-      while (lookahead < source.length && /\s/.test(source[lookahead]!)) {
-        lookahead += 1
+      while (lookahead < source.length) {
+        const la = source[lookahead]!
+        if (/\s/.test(la)) {
+          lookahead += 1
+        } else if (la === '/' && source[lookahead + 1] === '/') {
+          lookahead += 2
+          while (lookahead < source.length && source[lookahead] !== '\n') {
+            lookahead += 1
+          }
+        } else if (la === '/' && source[lookahead + 1] === '*') {
+          lookahead += 2
+          while (
+            lookahead < source.length &&
+            !(source[lookahead] === '*' && source[lookahead + 1] === '/')
+          ) {
+            lookahead += 1
+          }
+          lookahead += 2
+        } else {
+          break
+        }
       }
       if (source[lookahead] === '}' || source[lookahead] === ']') {
         continue
@@ -110,8 +135,9 @@ export function readWorkspacePatterns(root: string): Array<string> | null {
         return patterns
       }
     } catch (err: unknown) {
+      const verb = err instanceof SyntaxError ? 'parse' : 'read'
       console.error(
-        `Warning: failed to parse ${pnpmWs}: ${err instanceof Error ? err.message : err}`,
+        `Warning: failed to ${verb} ${pnpmWs}: ${err instanceof Error ? err.message : err}`,
       )
     }
   }
@@ -119,22 +145,20 @@ export function readWorkspacePatterns(root: string): Array<string> | null {
   const pkgPath = join(root, 'package.json')
   if (existsSync(pkgPath)) {
     try {
-      const pkg = readJsonFile(pkgPath) as {
-        workspaces?: unknown | { packages?: unknown }
-      }
+      const pkg = readJsonFile(pkgPath) as Record<string, unknown>
+      const workspaces = pkg.workspaces as
+        | Record<string, unknown>
+        | undefined
       const patterns =
-        parseWorkspacePatterns(pkg.workspaces) ??
-        parseWorkspacePatterns(
-          typeof pkg.workspaces === 'object' && pkg.workspaces !== null
-            ? (pkg.workspaces as Record<string, unknown>).packages
-            : undefined,
-        )
+        parseWorkspacePatterns(workspaces) ??
+        parseWorkspacePatterns(workspaces?.packages)
       if (patterns) {
         return patterns
       }
     } catch (err: unknown) {
+      const verb = err instanceof SyntaxError ? 'parse' : 'read'
       console.error(
-        `Warning: failed to parse ${pkgPath}: ${err instanceof Error ? err.message : err}`,
+        `Warning: failed to ${verb} ${pkgPath}: ${err instanceof Error ? err.message : err}`,
       )
     }
   }
@@ -146,19 +170,18 @@ export function readWorkspacePatterns(root: string): Array<string> | null {
     }
 
     try {
-      const denoConfig = readJsonFile(
-        denoConfigPath,
-        denoConfigName.endsWith('.jsonc'),
-      ) as {
-        workspace?: unknown
-      }
+      const denoConfig = readJsonFile(denoConfigPath, true) as Record<
+        string,
+        unknown
+      >
       const patterns = parseWorkspacePatterns(denoConfig.workspace)
       if (patterns) {
         return patterns
       }
     } catch (err: unknown) {
+      const verb = err instanceof SyntaxError ? 'parse' : 'read'
       console.error(
-        `Warning: failed to parse ${denoConfigPath}: ${err instanceof Error ? err.message : err}`,
+        `Warning: failed to ${verb} ${denoConfigPath}: ${err instanceof Error ? err.message : err}`,
       )
     }
   }
