@@ -561,6 +561,51 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(reports).toHaveLength(1)
     expect(reports[0]!.library).toBe('@tanstack/router')
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+
+    fetchSpy.mockRestore()
+  })
+
+  it('checks only the targeted workspace package when path omits /skills suffix', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-stale-target-nosuffix-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(root, 'packages', 'router', 'package.json'), {
+      name: '@tanstack/router',
+    })
+    writeJson(join(root, 'packages', 'query', 'package.json'), {
+      name: '@tanstack/query',
+    })
+    writeSkillMd(join(root, 'packages', 'router', 'skills', 'routing'), {
+      name: 'routing',
+      description: 'Routing skill',
+      library_version: '1.0.0',
+    })
+    writeSkillMd(join(root, 'packages', 'query', 'skills', 'cache'), {
+      name: 'cache',
+      description: 'Caching skill',
+      library_version: '1.0.0',
+    })
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ version: '1.0.0' }),
+    } as Response)
+
+    process.chdir(root)
+
+    const exitCode = await main(['stale', 'packages/router', '--json'])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const reports = JSON.parse(String(output)) as Array<{ library: string }>
+
+    expect(exitCode).toBe(0)
+    expect(reports).toHaveLength(1)
+    expect(reports[0]!.library).toBe('@tanstack/router')
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
 
     fetchSpy.mockRestore()
   })
@@ -604,9 +649,45 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(reports).toHaveLength(1)
     expect(reports[0]!.library).toBe('@tanstack/router')
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
 
     fetchSpy.mockRestore()
   })
+
+  it('handles absolute targetDir path correctly', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-stale-abs-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      name: '@tanstack/router',
+      version: '1.0.0',
+    })
+    writeSkillMd(join(root, 'skills', 'routing'), {
+      name: 'routing',
+      description: 'Routing skill',
+      library_version: '1.0.0',
+    })
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ version: '1.0.0' }),
+    } as Response)
+
+    const elsewhere = mkdtempSync(join(realTmpdir, 'intent-cli-stale-abs-cwd-'))
+    tempDirs.push(elsewhere)
+    process.chdir(elsewhere)
+
+    const exitCode = await main(['stale', root, '--json'])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const reports = JSON.parse(String(output)) as Array<{ library: string }>
+
+    expect(exitCode).toBe(0)
+    expect(reports).toHaveLength(1)
+    expect(reports[0]!.library).toBe('@tanstack/router')
+
+    fetchSpy.mockRestore()
+  })
+
 })
 
 describe('package metadata', () => {

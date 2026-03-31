@@ -56,11 +56,10 @@ export async function resolveStaleTargets(
   })
   const { checkStaleness } = await import('./staleness.js')
 
-  const targetsResolvedPackage =
-    context.packageRoot !== null &&
+  if (
+    context.packageRoot &&
     (context.targetSkillsDir !== null || resolvedRoot !== context.workspaceRoot)
-
-  if (targetsResolvedPackage && context.packageRoot) {
+  ) {
     return {
       reports: [
         await checkStaleness(
