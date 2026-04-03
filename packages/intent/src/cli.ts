@@ -29,7 +29,9 @@ function createCli(): CAC {
     .example('list')
     .example('list --json')
     .action(async (options: { json?: boolean }) => {
-      await runListCommand(options, scanIntentsOrFail)
+      await runListCommand(options, () =>
+        scanIntentsOrFail({ includeGlobal: true }),
+      )
     })
 
   cli

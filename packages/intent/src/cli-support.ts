@@ -3,7 +3,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fail } from './cli-error.js'
 import { resolveProjectContext } from './core/project-context.js'
-import type { ScanResult, StalenessReport } from './types.js'
+import type { ScanOptions, ScanResult, StalenessReport } from './types.js'
 
 export function printWarnings(warnings: Array<string>): void {
   if (warnings.length === 0) return
@@ -19,11 +19,13 @@ export function getMetaDir(): string {
   return join(thisDir, '..', 'meta')
 }
 
-export async function scanIntentsOrFail(): Promise<ScanResult> {
+export async function scanIntentsOrFail(
+  options?: ScanOptions,
+): Promise<ScanResult> {
   const { scanForIntents } = await import('./scanner.js')
 
   try {
-    return scanForIntents(undefined, { includeGlobal: true })
+    return scanForIntents(undefined, options)
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err))
   }
