@@ -1,19 +1,13 @@
 import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { createPackageRegistrar } from './discovery/register.js'
+import { createDependencyWalker } from './discovery/walk.js'
 import {
   detectGlobalNodeModules,
-  getDeps,
-  listNodeModulesPackageDirs,
   parseFrontmatter,
-  resolveDepDir,
   toPosixPath,
 } from './utils.js'
-import {
-  findWorkspaceRoot,
-  readWorkspacePatterns,
-  resolveWorkspacePackages,
-} from './workspace-patterns.js'
+import { findWorkspaceRoot } from './workspace-patterns.js'
 import type {
   InstalledVariant,
   IntentConfig,
@@ -420,102 +414,14 @@ export function scanForIntents(
   // Phase 1: Check local top-level packages for skills/
   scanTarget(nodeModules.local)
 
-  // Phase 2: Walk dependency trees to discover transitive deps with skills.
-  // This handles pnpm and other non-hoisted layouts where transitive deps
-  // are not visible at the top level of node_modules.
-  const walkVisited = new Set<string>()
-
-  function walkDeps(pkgDir: string, pkgName: string): void {
-    if (walkVisited.has(pkgDir)) return
-    walkVisited.add(pkgDir)
-
-    const pkgJson = readPkgJson(pkgDir)
-    if (!pkgJson) {
-      warnings.push(
-        `Could not read package.json for ${pkgName} (skipping dependency walk)`,
-      )
-      return
-    }
-
-    for (const depName of getDeps(pkgJson)) {
-      const depDir = resolveDepDir(depName, pkgDir)
-      if (!depDir || walkVisited.has(depDir)) continue
-
-      tryRegister(depDir, depName)
-      walkDeps(depDir, depName)
-    }
-  }
-
-  function walkKnownPackages(): void {
-    for (const pkg of [...packages]) {
-      walkDeps(pkg.packageRoot, pkg.name)
-    }
-  }
-
-  function walkProjectDeps(): void {
-    let projectPkg: Record<string, unknown> | null = null
-    try {
-      projectPkg = JSON.parse(
-        readFileSync(join(projectRoot, 'package.json'), 'utf8'),
-      ) as Record<string, unknown>
-    } catch (err: unknown) {
-      const isNotFound =
-        err &&
-        typeof err === 'object' &&
-        'code' in err &&
-        (err as NodeJS.ErrnoException).code === 'ENOENT'
-      if (!isNotFound) {
-        warnings.push(
-          `Could not read project package.json: ${err instanceof Error ? err.message : String(err)}`,
-        )
-      }
-    }
-
-    if (!projectPkg) return
-    walkDepsFromPkgJson(projectPkg, projectRoot, true)
-  }
-
-  /** Resolve and walk deps listed in a package.json. */
-  function walkDepsFromPkgJson(
-    pkgJson: Record<string, unknown>,
-    fromDir: string,
-    includeDevDeps = false,
-  ): void {
-    for (const depName of getDeps(pkgJson, includeDevDeps)) {
-      const depDir = resolveDepDir(depName, fromDir)
-      if (depDir && !walkVisited.has(depDir)) {
-        tryRegister(depDir, depName)
-        walkDeps(depDir, depName)
-      }
-    }
-  }
-
-  /**
-   * In monorepos, discover workspace packages and walk their deps.
-   * Handles pnpm monorepos (workspace-specific node_modules) and ensures
-   * transitive skills packages are found through workspace package dependencies.
-   */
-  function walkWorkspacePackages(): void {
-    const workspacePatterns = readWorkspacePatterns(projectRoot)
-    if (!workspacePatterns) return
-
-    for (const wsDir of resolveWorkspacePackages(
+  const { walkKnownPackages, walkProjectDeps, walkWorkspacePackages } =
+    createDependencyWalker({
+      packages,
       projectRoot,
-      workspacePatterns,
-    )) {
-      const wsNodeModules = join(wsDir, 'node_modules')
-      if (existsSync(wsNodeModules)) {
-        for (const dirPath of listNodeModulesPackageDirs(wsNodeModules)) {
-          tryRegister(dirPath, 'unknown')
-        }
-      }
-
-      const wsPkg = readPkgJson(wsDir)
-      if (wsPkg) {
-        walkDepsFromPkgJson(wsPkg, wsDir)
-      }
-    }
-  }
+      readPkgJson,
+      tryRegister,
+      warnings,
+    })
 
   walkWorkspacePackages()
   walkKnownPackages()
