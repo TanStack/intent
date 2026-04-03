@@ -93,8 +93,10 @@ function discoverSkills(skillsDir: string): Array<SkillEntry> {
           framework:
             typeof fm?.framework === 'string' ? fm.framework : undefined,
         })
-        walk(childDir)
       }
+      // Always recurse into subdirectories so skills nested under
+      // intermediate grouping directories (dirs without SKILL.md) are found.
+      walk(childDir)
     }
   }
 

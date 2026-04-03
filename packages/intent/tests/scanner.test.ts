@@ -186,6 +186,27 @@ describe('scanForIntents', () => {
     expect(names).toContain('db-core/live-queries')
   })
 
+  it('discovers skills nested under intermediate dirs without SKILL.md', () => {
+    const pkgDir = createDir(root, 'node_modules', '@tanstack', 'db')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/db',
+      version: '0.5.2',
+      intent: { version: 1, repo: 'TanStack/db', docs: 'docs/' },
+    })
+    // intermediate directory has no SKILL.md
+    const groupDir = createDir(pkgDir, 'skills', 'group')
+    const nestedDir = createDir(groupDir, 'nested-skill')
+    writeSkillMd(nestedDir, {
+      name: 'group/nested-skill',
+      description: 'A nested skill under a grouping dir',
+    })
+
+    const result = scanForIntents(root)
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.skills).toHaveLength(1)
+    expect(result.packages[0]!.skills[0]!.name).toBe('group/nested-skill')
+  })
+
   it('warns on skills/ dir without valid intent field', () => {
     const pkgDir = createDir(root, 'node_modules', 'bad-pkg')
     writeJson(join(pkgDir, 'package.json'), {

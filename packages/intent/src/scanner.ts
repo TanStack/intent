@@ -170,9 +170,10 @@ function discoverSkills(
           framework:
             typeof fm?.framework === 'string' ? fm.framework : undefined,
         })
-        // Recurse for sub-skills
-        walk(childDir)
       }
+      // Always recurse into subdirectories so skills nested under
+      // intermediate grouping directories (dirs without SKILL.md) are found.
+      walk(childDir)
     }
   }
 

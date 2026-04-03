@@ -310,6 +310,28 @@ describe('scanLibrary', () => {
     expect(names).toContain('routing/nested-routes')
   })
 
+  it('discovers skills nested under intermediate dirs without SKILL.md', () => {
+    const pkgDir = createDir(root, 'node_modules', '@tanstack', 'router')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/router',
+      version: '1.0.0',
+      keywords: ['tanstack-intent'],
+    })
+    // intermediate directory has no SKILL.md
+    const groupDir = createDir(pkgDir, 'skills', 'group')
+    const nestedDir = createDir(groupDir, 'nested-skill')
+    writeSkillMd(nestedDir, {
+      name: 'group/nested-skill',
+      description: 'A nested skill under a grouping dir',
+    })
+
+    const result = scanLibrary(scriptPath(pkgDir), root)
+
+    const skills = result.packages[0]!.skills
+    expect(skills).toHaveLength(1)
+    expect(skills[0]!.name).toBe('group/nested-skill')
+  })
+
   it('handles missing package name without producing double slashes in paths', () => {
     const pkgDir = createDir(root, 'node_modules', 'no-name-pkg')
     writeJson(join(pkgDir, 'package.json'), {
