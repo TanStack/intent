@@ -300,7 +300,7 @@ describe('scanForIntents', () => {
       description: 'Global fetching skill',
     })
 
-    const result = scanForIntents(root)
+    const result = scanForIntents(root, { includeGlobal: true })
 
     expect(result.nodeModules.global.detected).toBe(true)
     expect(result.nodeModules.global.exists).toBe(true)
@@ -334,7 +334,7 @@ describe('scanForIntents', () => {
       description: 'Global fetching skill',
     })
 
-    const result = scanForIntents(root)
+    const result = scanForIntents(root, { includeGlobal: true })
 
     expect(result.nodeModules.global.detected).toBe(true)
     expect(result.nodeModules.global.scanned).toBe(true)
@@ -366,7 +366,7 @@ describe('scanForIntents', () => {
       description: 'Global fetching skill',
     })
 
-    const result = scanForIntents(root, { includeGlobal: true })
+    const result = scanForIntents(root)
 
     expect(result.nodeModules.global.detected).toBe(true)
     expect(result.nodeModules.global.scanned).toBe(false)
@@ -459,7 +459,7 @@ describe('scanForIntents', () => {
       description: 'Query v3 skill',
     })
 
-    const result = scanForIntents(root, { includeGlobal: true })
+    const result = scanForIntents(root)
     const versionWarning = result.warnings.find((warning) =>
       warning.includes('@tanstack/query'),
     )
