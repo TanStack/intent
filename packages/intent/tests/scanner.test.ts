@@ -307,6 +307,7 @@ describe('scanForIntents', () => {
     expect(result.nodeModules.global.scanned).toBe(true)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/query')
+    expect(result.packages[0]!.source).toBe('global')
   })
 
   it('prefers local packages over global packages with the same name', () => {
@@ -339,6 +340,7 @@ describe('scanForIntents', () => {
     expect(result.nodeModules.global.detected).toBe(true)
     expect(result.nodeModules.global.scanned).toBe(true)
     expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.source).toBe('local')
     expect(result.packages[0]!.version).toBe('5.1.0')
     expect(result.packages[0]!.skills[0]!.description).toBe(
       'Local fetching skill',
