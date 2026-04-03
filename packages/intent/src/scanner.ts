@@ -1,7 +1,9 @@
 import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
 import { join, relative, sep } from 'node:path'
-import { createPackageRegistrar } from './discovery/register.js'
-import { createDependencyWalker } from './discovery/walk.js'
+import {
+  createDependencyWalker,
+  createPackageRegistrar,
+} from './discovery/index.js'
 import {
   detectGlobalNodeModules,
   parseFrontmatter,
