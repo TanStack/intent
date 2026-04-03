@@ -408,7 +408,11 @@ export function scanForIntents(
     target.scanned = true
 
     for (const dirPath of listNodeModulesPackageDirs(target.path)) {
-      tryRegister(dirPath, 'unknown')
+      tryRegister(
+        dirPath,
+        'unknown',
+        target === nodeModules.global ? 'global' : 'local',
+      )
     }
   }
 
@@ -417,7 +421,11 @@ export function scanForIntents(
    * package.json, validates intent config, discovers skills, and pushes
    * to `packages`. Returns true if the package was registered.
    */
-  function tryRegister(dirPath: string, fallbackName: string): boolean {
+  function tryRegister(
+    dirPath: string,
+    fallbackName: string,
+    source: IntentPackage['source'] = 'local',
+  ): boolean {
     const skillsDir = join(dirPath, 'skills')
     if (!existsSync(skillsDir)) return false
 
@@ -466,6 +474,7 @@ export function scanForIntents(
       intent,
       skills,
       packageRoot: dirPath,
+      source,
     }
     const existingIndex = packageIndexes.get(name)
     if (existingIndex === undefined) {

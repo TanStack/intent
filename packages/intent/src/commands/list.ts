@@ -69,11 +69,12 @@ export async function runListCommand(
 
   const rows = result.packages.map((pkg) => [
     pkg.name,
+    pkg.source,
     pkg.version,
     String(pkg.skills.length),
     pkg.intent.requires?.join(', ') || '–',
   ])
-  printTable(['PACKAGE', 'VERSION', 'SKILLS', 'REQUIRES'], rows)
+  printTable(['PACKAGE', 'SOURCE', 'VERSION', 'SKILLS', 'REQUIRES'], rows)
 
   printVersionConflicts(result)
 

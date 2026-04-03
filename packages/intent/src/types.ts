@@ -42,6 +42,7 @@ export interface IntentPackage {
   intent: IntentConfig
   skills: Array<SkillEntry>
   packageRoot: string
+  source: 'local' | 'global'
 }
 
 export interface InstalledVariant {
