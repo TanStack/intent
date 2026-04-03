@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
 import { join, relative, sep } from 'node:path'
+import { createPackageRegistrar } from './discovery/register.js'
 import {
   detectGlobalNodeModules,
   getDeps,
@@ -17,7 +18,6 @@ import type {
   InstalledVariant,
   IntentConfig,
   IntentPackage,
-  NodeModulesScanTarget,
   ScanOptions,
   ScanResult,
   SkillEntry,
@@ -403,107 +403,19 @@ export function scanForIntents(
     }
   }
 
-  function scanTarget(target: NodeModulesScanTarget): void {
-    if (!target.path || !target.exists || target.scanned) return
-    target.scanned = true
-
-    for (const dirPath of listNodeModulesPackageDirs(target.path)) {
-      tryRegister(
-        dirPath,
-        'unknown',
-        target === nodeModules.global ? 'global' : 'local',
-      )
-    }
-  }
-
-  /**
-   * Try to register a package with a skills/ directory. Reads its
-   * package.json, validates intent config, discovers skills, and pushes
-   * to `packages`. Returns true if the package was registered.
-   */
-  function tryRegister(
-    dirPath: string,
-    fallbackName: string,
-    source: IntentPackage['source'] = 'local',
-  ): boolean {
-    const skillsDir = join(dirPath, 'skills')
-    if (!existsSync(skillsDir)) return false
-
-    const pkgJson = readPkgJson(dirPath)
-    if (!pkgJson) {
-      warnings.push(`Could not read package.json for ${dirPath}`)
-      return false
-    }
-
-    const name = typeof pkgJson.name === 'string' ? pkgJson.name : fallbackName
-    const version =
-      typeof pkgJson.version === 'string' ? pkgJson.version : '0.0.0'
-    const intent =
-      validateIntentField(name, pkgJson.intent) ?? deriveIntentConfig(pkgJson)
-    if (!intent) {
-      warnings.push(
-        `${name} has a skills/ directory but could not determine repo/docs from package.json (add a "repository" field or explicit "intent" config)`,
-      )
-      return false
-    }
-
-    const skills = discoverSkills(skillsDir, name)
-
-    // Convert absolute skill paths to stable relative paths, preferring
-    // node_modules/<name>/... when a top-level symlink exists, otherwise
-    // falling back to a path relative to the project root.
-    const isLocal =
-      dirPath.startsWith(projectRoot + sep) ||
-      dirPath.startsWith(projectRoot + '/')
-    if (isLocal) {
-      const hasStableSymlink =
-        name !== '' && existsSync(join(projectRoot, 'node_modules', name))
-      for (const skill of skills) {
-        if (hasStableSymlink) {
-          const relFromPkg = toPosixPath(relative(dirPath, skill.path))
-          skill.path = `node_modules/${name}/${relFromPkg}`
-        } else {
-          skill.path = toPosixPath(relative(projectRoot, skill.path))
-        }
-      }
-    }
-
-    const candidate: IntentPackage = {
-      name,
-      version,
-      intent,
-      skills,
-      packageRoot: dirPath,
-      source,
-    }
-    const existingIndex = packageIndexes.get(name)
-    if (existingIndex === undefined) {
-      rememberVariant(candidate)
-      packageIndexes.set(name, packages.push(candidate) - 1)
-      return true
-    }
-
-    const existing = packages[existingIndex]!
-    if (existing.packageRoot === candidate.packageRoot) {
-      return false
-    }
-
-    rememberVariant(existing)
-    rememberVariant(candidate)
-
-    const existingDepth = getPackageDepth(existing.packageRoot, projectRoot)
-    const candidateDepth = getPackageDepth(candidate.packageRoot, projectRoot)
-    const shouldReplace =
-      candidateDepth < existingDepth ||
-      (candidateDepth === existingDepth &&
-        comparePackageVersions(candidate.version, existing.version) > 0)
-
-    if (shouldReplace) {
-      packages[existingIndex] = candidate
-    }
-
-    return true
-  }
+  const { scanTarget, tryRegister } = createPackageRegistrar({
+    comparePackageVersions,
+    deriveIntentConfig,
+    discoverSkills,
+    getPackageDepth,
+    packageIndexes,
+    packages,
+    projectRoot,
+    readPkgJson,
+    rememberVariant,
+    validateIntentField,
+    warnings,
+  })
 
   // Phase 1: Check local top-level packages for skills/
   scanTarget(nodeModules.local)
@@ -611,7 +523,7 @@ export function scanForIntents(
 
   if (includeGlobal) {
     ensureGlobalNodeModules()
-    scanTarget(nodeModules.global)
+    scanTarget(nodeModules.global, 'global')
     walkKnownPackages()
     walkProjectDeps()
   }

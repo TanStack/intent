@@ -44,6 +44,7 @@ let logSpy: ReturnType<typeof vi.spyOn>
 let infoSpy: ReturnType<typeof vi.spyOn>
 let errorSpy: ReturnType<typeof vi.spyOn>
 let tempDirs: Array<string>
+let previousGlobalNodeModules: string | undefined
 
 function getHelpOutput(): string {
   return [...infoSpy.mock.calls, ...logSpy.mock.calls]
@@ -54,6 +55,8 @@ function getHelpOutput(): string {
 beforeEach(() => {
   originalCwd = process.cwd()
   tempDirs = []
+  previousGlobalNodeModules = process.env.INTENT_GLOBAL_NODE_MODULES
+  delete process.env.INTENT_GLOBAL_NODE_MODULES
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
   infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -61,6 +64,11 @@ beforeEach(() => {
 
 afterEach(() => {
   process.chdir(originalCwd)
+  if (previousGlobalNodeModules === undefined) {
+    delete process.env.INTENT_GLOBAL_NODE_MODULES
+  } else {
+    process.env.INTENT_GLOBAL_NODE_MODULES = previousGlobalNodeModules
+  }
   logSpy.mockRestore()
   infoSpy.mockRestore()
   errorSpy.mockRestore()
