@@ -106,7 +106,6 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   }
 
   return {
-    walkDeps,
     walkKnownPackages,
     walkProjectDeps,
     walkWorkspacePackages,
