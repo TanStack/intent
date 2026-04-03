@@ -18,6 +18,7 @@ import type {
   IntentConfig,
   IntentPackage,
   NodeModulesScanTarget,
+  ScanOptions,
   ScanResult,
   SkillEntry,
   VersionConflict,
@@ -320,8 +321,12 @@ function toVersionConflict(
 // Main scanner
 // ---------------------------------------------------------------------------
 
-export function scanForIntents(root?: string): ScanResult {
+export function scanForIntents(
+  root?: string,
+  options: ScanOptions = {},
+): ScanResult {
   const projectRoot = root ?? process.cwd()
+  const { includeGlobal = false } = options
   const packageManager = detectPackageManager(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')
   const explicitGlobalNodeModules =
@@ -595,11 +600,7 @@ export function scanForIntents(root?: string): ScanResult {
   walkKnownPackages()
   walkProjectDeps()
 
-  if (
-    explicitGlobalNodeModules ||
-    packages.length === 0 ||
-    !nodeModules.local.exists
-  ) {
+  if (includeGlobal) {
     ensureGlobalNodeModules()
     scanTarget(nodeModules.global)
     walkKnownPackages()

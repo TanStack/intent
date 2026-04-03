@@ -24,6 +24,10 @@ export interface ScanResult {
   }
 }
 
+export interface ScanOptions {
+  includeGlobal?: boolean
+}
+
 export interface NodeModulesScanTarget {
   path: string | null
   detected: boolean

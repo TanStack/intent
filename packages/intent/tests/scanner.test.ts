@@ -352,6 +352,27 @@ describe('scanForIntents', () => {
     ).toBe(true)
   })
 
+  it('ignores global packages by default even when configured', () => {
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+
+    const pkgDir = createDir(globalRoot, '@tanstack', 'query')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(pkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Global fetching skill',
+    })
+
+    const result = scanForIntents(root, { includeGlobal: true })
+
+    expect(result.nodeModules.global.detected).toBe(true)
+    expect(result.nodeModules.global.scanned).toBe(false)
+    expect(result.packages).toEqual([])
+  })
+
   it('chooses the highest version when duplicate package names exist at the same depth', () => {
     writeJson(join(root, 'package.json'), {
       name: 'app',
@@ -438,7 +459,7 @@ describe('scanForIntents', () => {
       description: 'Query v3 skill',
     })
 
-    const result = scanForIntents(root)
+    const result = scanForIntents(root, { includeGlobal: true })
     const versionWarning = result.warnings.find((warning) =>
       warning.includes('@tanstack/query'),
     )

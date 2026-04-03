@@ -23,7 +23,7 @@ export async function scanIntentsOrFail(): Promise<ScanResult> {
   const { scanForIntents } = await import('./scanner.js')
 
   try {
-    return scanForIntents()
+    return scanForIntents(undefined, { includeGlobal: true })
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err))
   }

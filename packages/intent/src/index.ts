@@ -30,6 +30,7 @@ export type {
   IntentProjectConfig,
   MetaFeedbackPayload,
   MetaSkillName,
+  ScanOptions,
   ScanResult,
   SkillEntry,
   StalenessReport,
