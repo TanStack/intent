@@ -276,7 +276,10 @@ describe('cli commands', () => {
 
   it('lists installed intent packages as json', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-'))
-    tempDirs.push(root)
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-list-empty-global-'),
+    )
+    tempDirs.push(root, isolatedGlobalRoot)
     const pkgDir = join(root, 'node_modules', '@tanstack', 'db')
 
     writeJson(join(pkgDir, 'package.json'), {
@@ -289,6 +292,7 @@ describe('cli commands', () => {
       description: 'Core database concepts',
     })
 
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
     process.chdir(root)
 
     const exitCode = await main(['list', '--json'])
@@ -308,6 +312,46 @@ describe('cli commands', () => {
     })
     expect(parsed.conflicts).toEqual([])
     expect(parsed.warnings).toEqual([])
+  })
+
+  it('includes configured global intent packages in list json output', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-global-'))
+    const globalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-list-global-node-modules-'),
+    )
+    tempDirs.push(root, globalRoot)
+
+    const globalPkgDir = join(globalRoot, '@tanstack', 'query')
+    writeJson(join(globalPkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(join(globalPkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Global fetching skill',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['list', '--json'])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const parsed = JSON.parse(String(output)) as {
+      packages: Array<{
+        name: string
+        version: string
+        packageRoot: string
+      }>
+    }
+
+    expect(exitCode).toBe(0)
+    expect(parsed.packages).toHaveLength(1)
+    expect(parsed.packages[0]).toMatchObject({
+      name: '@tanstack/query',
+      version: '5.0.0',
+      packageRoot: globalPkgDir,
+    })
   })
 
   it('explains which package version was chosen when conflicts exist', async () => {
@@ -528,6 +572,35 @@ describe('cli commands', () => {
     expect(reports[0]!.library).toBe('@tanstack/router')
 
     fetchSpy.mockRestore()
+  })
+
+  it('ignores configured global intent packages when checking staleness', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-stale-global-'))
+    const globalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-stale-global-node-modules-'),
+    )
+    tempDirs.push(root, globalRoot)
+
+    const globalPkgDir = join(globalRoot, '@tanstack', 'query')
+    writeJson(join(globalPkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(join(globalPkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Global fetching skill',
+      library_version: '5.0.0',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['stale', '--json'])
+    const output = String(logSpy.mock.calls.at(-1)?.[0] ?? '')
+
+    expect(exitCode).toBe(0)
+    expect(output).toBe('[]')
   })
 
   it('checks only the targeted workspace package for staleness', async () => {

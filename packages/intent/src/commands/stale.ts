@@ -9,13 +9,13 @@ export async function runStaleCommand(
 ): Promise<void> {
   const { reports } = await resolveStaleTargets(targetDir)
 
-  if (reports.length === 0) {
-    console.log('No intent-enabled packages found.')
+  if (options.json) {
+    console.log(JSON.stringify(reports, null, 2))
     return
   }
 
-  if (options.json) {
-    console.log(JSON.stringify(reports, null, 2))
+  if (reports.length === 0) {
+    console.log('No intent-enabled packages found.')
     return
   }
 
