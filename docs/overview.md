@@ -5,7 +5,7 @@ id: overview
 
 `@tanstack/intent` is a CLI for shipping and consuming Agent Skills as package artifacts.
 
-Skills are markdown documents that teach AI coding agents how to use your library correctly. Intent versions them with your releases, ships them inside npm packages, discovers them from local and accessible global `node_modules`, and helps agents load them automatically when working on matching tasks.
+Skills are markdown documents that teach AI coding agents how to use your library correctly. Intent versions them with your releases, ships them inside npm packages, discovers them from your project and workspace by default, and helps agents load them automatically when working on matching tasks.
 
 ## What Intent does
 
@@ -30,7 +30,7 @@ Intent provides tooling for two workflows:
 npx @tanstack/intent@latest list
 ```
 
-Scans local `node_modules` and any accessible global `node_modules` for intent-enabled packages, preferring local packages when both exist.
+Scans the current project's `node_modules` and workspace dependencies for intent-enabled packages. The CLI intentionally includes accessible global packages for this command and still prefers local packages when both exist.
 
 ```bash
 npx @tanstack/intent@latest install

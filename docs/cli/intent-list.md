@@ -15,15 +15,17 @@ npx @tanstack/intent@latest list [--json]
 
 ## What you get
 
-- Scans installed dependencies for intent-enabled packages and skills
+- Scans project and workspace dependencies for intent-enabled packages and skills
+- Intentionally includes accessible global packages when listing installed skills
 - Includes warnings from discovery
 - If no packages are discovered, prints `No intent-enabled packages found.`
 - Summary line with package count, skill count, and detected package manager
-- Package table columns: `PACKAGE`, `VERSION`, `SKILLS`, `REQUIRES`
+- Package table columns: `PACKAGE`, `SOURCE`, `VERSION`, `SKILLS`, `REQUIRES`
 - Skill tree grouped by package
 - Optional warnings section (`⚠ ...` per warning)
 
 `REQUIRES` uses `intent.requires` values joined by `, `; empty values render as `–`.
+`SOURCE` is a lightweight indicator showing whether the selected package came from local discovery or explicit global scanning.
 
 ## JSON output
 
@@ -36,6 +38,7 @@ npx @tanstack/intent@latest list [--json]
     {
       "name": "string",
       "version": "string",
+      "source": "local | global",
       "intent": {
         "version": 1,
         "repo": "string",
@@ -57,7 +60,7 @@ npx @tanstack/intent@latest list [--json]
 }
 ```
 
-`packages` are ordered using `intent.requires` when possible.
+`packages` are ordered using `intent.requires` when possible. When the same package exists both locally and globally, `intent list` prefers the local package.
 
 ## Common errors
 
