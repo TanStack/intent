@@ -13,20 +13,14 @@ type PackageJson = Record<string, unknown>
 export interface CreatePackageRegistrarOptions {
   comparePackageVersions: (a: string, b: string) => number
   deriveIntentConfig: (pkgJson: PackageJson) => IntentConfig | null
-  discoverSkills: (
-    skillsDir: string,
-    baseName: string,
-  ) => Array<SkillEntry>
+  discoverSkills: (skillsDir: string, baseName: string) => Array<SkillEntry>
   getPackageDepth: (packageRoot: string, projectRoot: string) => number
   packageIndexes: Map<string, number>
   packages: Array<IntentPackage>
   projectRoot: string
   readPkgJson: (dirPath: string) => PackageJson | null
   rememberVariant: (pkg: IntentPackage) => void
-  validateIntentField: (
-    pkgName: string,
-    intent: unknown,
-  ) => IntentConfig | null
+  validateIntentField: (pkgName: string, intent: unknown) => IntentConfig | null
   warnings: Array<string>
 }
 
