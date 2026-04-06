@@ -23,7 +23,10 @@ function createCli(): CAC {
   cli.usage('<command> [options]')
 
   cli
-    .command('list', 'Discover intent-enabled packages')
+    .command(
+      'list',
+      'Discover intent-enabled packages from the project, workspace, and explicit global scan',
+    )
     .usage('list [--json]')
     .option('--json', 'Output JSON')
     .example('list')

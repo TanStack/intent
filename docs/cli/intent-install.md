@@ -27,7 +27,7 @@ skills:
 They also ask you to:
 
 1. Check for an existing block first
-2. Run `intent list` to discover installed skills
+2. Run `intent list` to discover installed skills, including any packages surfaced by the command's explicit global scan
 3. Ask whether you want a config target other than `AGENTS.md`
 4. Update an existing block in place when one already exists
 5. Add task-to-skill mappings
