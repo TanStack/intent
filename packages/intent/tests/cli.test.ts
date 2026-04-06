@@ -298,7 +298,12 @@ describe('cli commands', () => {
     const exitCode = await main(['list', '--json'])
     const output = logSpy.mock.calls.at(-1)?.[0]
     const parsed = JSON.parse(String(output)) as {
-      packages: Array<{ name: string; version: string; packageRoot: string }>
+      packages: Array<{
+        name: string
+        version: string
+        packageRoot: string
+        source: 'local' | 'global'
+      }>
       conflicts: Array<{ packageName: string }>
       warnings: Array<string>
     }
@@ -309,6 +314,7 @@ describe('cli commands', () => {
       name: '@tanstack/db',
       version: '0.5.2',
       packageRoot: pkgDir,
+      source: 'local',
     })
     expect(parsed.conflicts).toEqual([])
     expect(parsed.warnings).toEqual([])
@@ -342,6 +348,7 @@ describe('cli commands', () => {
         name: string
         version: string
         packageRoot: string
+        source: 'local' | 'global'
       }>
     }
 
@@ -351,6 +358,7 @@ describe('cli commands', () => {
       name: '@tanstack/query',
       version: '5.0.0',
       packageRoot: globalPkgDir,
+      source: 'global',
     })
   })
 

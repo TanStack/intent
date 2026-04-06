@@ -33,14 +33,15 @@ export async function runListCommand(
   options: { json?: boolean },
   scanIntentsOrFail: () => Promise<ScanResult>,
 ): Promise<void> {
-  const { computeSkillNameWidth, printSkillTree, printTable } =
-    await import('../display.js')
   const result = await scanIntentsOrFail()
 
   if (options.json) {
     console.log(JSON.stringify(result, null, 2))
     return
   }
+
+  const { computeSkillNameWidth, printSkillTree, printTable } =
+    await import('../display.js')
 
   const scanCoverage = formatScanCoverage(result)
 
