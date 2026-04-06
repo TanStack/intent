@@ -162,6 +162,8 @@ Manually check which skills need updates with:
 npx @tanstack/intent@latest stale
 ```
 
+When run from a package, this checks that package's shipped skills. When run from a monorepo root, it checks the workspace packages that ship skills.
+
 This detects:
 - **Version drift** — skill targets an older library version than currently installed
 - **New sources** — sources declared in frontmatter that weren't tracked before

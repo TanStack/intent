@@ -15,7 +15,8 @@ npx @tanstack/intent@latest stale [--json]
 
 ## Behavior
 
-- Scans installed intent-enabled packages
+- Checks the current package by default, or all skill-bearing packages in the current workspace when run from a monorepo root
+- When `dir` is provided, scopes the check to the targeted package or skills directory
 - Computes one staleness report per package
 - Prints text output by default or JSON with `--json`
 - If no packages are found, prints `No intent-enabled packages found.`

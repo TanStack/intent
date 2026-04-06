@@ -73,7 +73,10 @@ function createCli(): CAC {
     })
 
   cli
-    .command('stale [dir]', 'Check skills for staleness')
+    .command(
+      'stale [dir]',
+      'Check skills for staleness in the current package or workspace',
+    )
     .usage('stale [dir] [--json]')
     .option('--json', 'Output JSON')
     .example('stale')
