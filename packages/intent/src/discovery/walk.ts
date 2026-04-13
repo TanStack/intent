@@ -5,6 +5,7 @@ import {
   readWorkspacePatterns,
   resolveWorkspacePackages,
 } from '../workspace-patterns.js'
+import type { IntentPackage } from '../types.js'
 
 type PackageJson = Record<string, unknown>
 
@@ -12,12 +13,26 @@ export interface CreateDependencyWalkerOptions {
   projectRoot: string
   readPkgJson: (dirPath: string) => PackageJson | null
   tryRegister: (dirPath: string, fallbackName: string) => boolean
-  packages: Array<{ packageRoot: string; name: string }>
+  packages: Array<IntentPackage>
   warnings: Array<string>
 }
 
 export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   const walkVisited = new Set<string>()
+
+  function walkDepsOf(
+    pkgJson: PackageJson,
+    fromDir: string,
+    includeDevDeps = false,
+  ): void {
+    for (const depName of getDeps(pkgJson, includeDevDeps)) {
+      const depDir = resolveDepDir(depName, fromDir)
+      if (!depDir || walkVisited.has(depDir)) continue
+
+      opts.tryRegister(depDir, depName)
+      walkDeps(depDir, depName)
+    }
+  }
 
   function walkDeps(pkgDir: string, pkgName: string): void {
     if (walkVisited.has(pkgDir)) return
@@ -31,13 +46,7 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
       return
     }
 
-    for (const depName of getDeps(pkgJson)) {
-      const depDir = resolveDepDir(depName, pkgDir)
-      if (!depDir || walkVisited.has(depDir)) continue
-
-      opts.tryRegister(depDir, depName)
-      walkDeps(depDir, depName)
-    }
+    walkDepsOf(pkgJson, pkgDir)
   }
 
   function walkKnownPackages(): void {
@@ -47,39 +56,27 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   }
 
   function walkProjectDeps(): void {
-    let projectPkg: PackageJson | null = null
-    try {
-      projectPkg = JSON.parse(
-        readFileSync(join(opts.projectRoot, 'package.json'), 'utf8'),
-      ) as PackageJson
-    } catch (err: unknown) {
-      const isNotFound =
-        err &&
-        typeof err === 'object' &&
-        'code' in err &&
-        (err as NodeJS.ErrnoException).code === 'ENOENT'
-      if (!isNotFound) {
-        opts.warnings.push(
-          `Could not read project package.json: ${err instanceof Error ? err.message : String(err)}`,
-        )
-      }
-    }
-
+    const projectPkg = readPkgJsonWithWarning(opts.projectRoot, 'project')
     if (!projectPkg) return
-    walkDepsFromPkgJson(projectPkg, opts.projectRoot, true)
+    walkDepsOf(projectPkg, opts.projectRoot, true)
   }
 
-  function walkDepsFromPkgJson(
-    pkgJson: PackageJson,
-    fromDir: string,
-    includeDevDeps = false,
-  ): void {
-    for (const depName of getDeps(pkgJson, includeDevDeps)) {
-      const depDir = resolveDepDir(depName, fromDir)
-      if (depDir && !walkVisited.has(depDir)) {
-        opts.tryRegister(depDir, depName)
-        walkDeps(depDir, depName)
+  function readPkgJsonWithWarning(
+    dirPath: string,
+    label: string,
+  ): PackageJson | null {
+    try {
+      return JSON.parse(
+        readFileSync(join(dirPath, 'package.json'), 'utf8'),
+      ) as PackageJson
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT') {
+        opts.warnings.push(
+          `Could not read ${label} package.json at ${dirPath}: ${(err as Error).message}`,
+        )
       }
+      return null
     }
   }
 
@@ -98,9 +95,9 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
         }
       }
 
-      const wsPkg = opts.readPkgJson(wsDir)
+      const wsPkg = readPkgJsonWithWarning(wsDir, 'workspace')
       if (wsPkg) {
-        walkDepsFromPkgJson(wsPkg, wsDir)
+        walkDepsOf(wsPkg, wsDir)
       }
     }
   }

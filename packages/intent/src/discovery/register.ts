@@ -10,6 +10,36 @@ import type {
 
 type PackageJson = Record<string, unknown>
 
+function isLocalToProject(dirPath: string, projectRoot: string): boolean {
+  return (
+    dirPath.startsWith(projectRoot + sep) ||
+    dirPath.startsWith(projectRoot + '/')
+  )
+}
+
+/**
+ * Rewrite absolute skill paths to stable relative paths. Prefers
+ * `node_modules/<name>/...` when a top-level symlink exists, otherwise
+ * falls back to a path relative to the project root.
+ */
+function rewriteSkillPaths(
+  skills: Array<SkillEntry>,
+  dirPath: string,
+  name: string,
+  projectRoot: string,
+): void {
+  const hasStableSymlink =
+    name !== '' && existsSync(join(projectRoot, 'node_modules', name))
+  for (const skill of skills) {
+    if (hasStableSymlink) {
+      const relFromPkg = toPosixPath(relative(dirPath, skill.path))
+      skill.path = `node_modules/${name}/${relFromPkg}`
+    } else {
+      skill.path = toPosixPath(relative(projectRoot, skill.path))
+    }
+  }
+}
+
 export interface CreatePackageRegistrarOptions {
   comparePackageVersions: (a: string, b: string) => number
   deriveIntentConfig: (pkgJson: PackageJson) => IntentConfig | null
@@ -66,20 +96,8 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
 
     const skills = opts.discoverSkills(skillsDir, name)
 
-    const isLocal =
-      dirPath.startsWith(opts.projectRoot + sep) ||
-      dirPath.startsWith(opts.projectRoot + '/')
-    if (isLocal) {
-      const hasStableSymlink =
-        name !== '' && existsSync(join(opts.projectRoot, 'node_modules', name))
-      for (const skill of skills) {
-        if (hasStableSymlink) {
-          const relFromPkg = toPosixPath(relative(dirPath, skill.path))
-          skill.path = `node_modules/${name}/${relFromPkg}`
-        } else {
-          skill.path = toPosixPath(relative(opts.projectRoot, skill.path))
-        }
-      }
+    if (isLocalToProject(dirPath, opts.projectRoot)) {
+      rewriteSkillPaths(skills, dirPath, name, opts.projectRoot)
     }
 
     const candidate: IntentPackage = {
