@@ -51,7 +51,7 @@ function cmdList(): void {
   console.log(`\nSkills:\n`)
   for (const pkg of result.packages) {
     console.log(`  ${pkg.name}`)
-    printSkillTree(pkg.skills, { nameWidth, showTypes })
+    printSkillTree(pkg.skills, { nameWidth, packageName: pkg.name, showTypes })
     console.log()
   }
 

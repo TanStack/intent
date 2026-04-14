@@ -393,7 +393,7 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('Global fetching skill')
     expect(output).toContain(
-      'Lookup: npx @tanstack/intent@latest list | grep fetching',
+      'Lookup: Runtime lookup only: run `npx @tanstack/intent@latest list --json`, find package "@tanstack/query" skill "fetching", and load its reported path for this session. Do not copy the resolved path into this file.',
     )
     expect(output).not.toContain(globalPkgDir)
   })

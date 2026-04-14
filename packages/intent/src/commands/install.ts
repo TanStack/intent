@@ -81,7 +81,7 @@ skills:
      (e.g. \`.pnpm/\`, \`.bun/\`) with version numbers, do NOT use it as \`load\`.
      Instead, add a comment telling the agent how to locate the skill at runtime:
        - task: "describe the task"
-         # To load this skill, run: npx @tanstack/intent@latest list | grep <skill-name>
+         # Runtime lookup only: run \`npx @tanstack/intent@latest list --json\`, find package "<package-name>" skill "<skill-name>", and load its reported path for this session. Do not copy the resolved path into this file.
    - Keep entries concise - this block is read on every agent task
    - Preserve all content outside the block tags unchanged
    - If the user is on Deno, note that this setup is best-effort today and relies on npm interop
@@ -92,6 +92,7 @@ skills:
    - Confirm it contains both managed block markers
    - Confirm every load path came from \`npx @tanstack/intent@latest list\` output, or uses a runtime lookup comment
    - Confirm no load path is absolute or machine-specific
+   - Confirm every runtime lookup comment includes both package name and skill name
    - Confirm every discovered top-level actionable skill is mapped, skipped by rule, or deferred by user choice
 
    Final response must include:

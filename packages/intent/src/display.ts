@@ -2,28 +2,16 @@
 // Shared display helpers for CLI output
 // ---------------------------------------------------------------------------
 
+import {
+  formatRuntimeSkillLookupHint,
+  isStableLoadPath,
+} from './skill-paths.js'
+
 export interface SkillDisplay {
   name: string
   description: string
   type?: string
   path?: string
-}
-
-function isAbsolutePath(path: string): boolean {
-  return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path)
-}
-
-function hasPackageManagerInternalPath(path: string): boolean {
-  const normalized = path.replace(/\\/g, '/')
-  return (
-    normalized.includes('/.pnpm/') ||
-    normalized.includes('/.bun/') ||
-    normalized.includes('/.yarn/')
-  )
-}
-
-function isStableLoadPath(path: string): boolean {
-  return !isAbsolutePath(path) && !hasPackageManagerInternalPath(path)
 }
 
 function padColumn(text: string, width: number): string {
@@ -52,7 +40,7 @@ function printSkillLine(
   displayName: string,
   skill: SkillDisplay,
   indent: number,
-  opts: { nameWidth: number; showTypes: boolean },
+  opts: { nameWidth: number; showTypes: boolean; packageName?: string },
 ): void {
   const nameStr = ' '.repeat(indent) + displayName
   const padding = ' '.repeat(Math.max(2, opts.nameWidth - nameStr.length))
@@ -66,7 +54,10 @@ function printSkillLine(
       console.log(`${pathIndent}${skill.path}`)
     } else {
       console.log(
-        `${pathIndent}Lookup: npx @tanstack/intent@latest list | grep ${skill.name}`,
+        `${pathIndent}${formatRuntimeSkillLookupHint({
+          packageName: opts.packageName,
+          skillName: skill.name,
+        })}`,
       )
     }
   }
@@ -74,7 +65,7 @@ function printSkillLine(
 
 export function printSkillTree(
   skills: Array<SkillDisplay>,
-  opts: { nameWidth: number; showTypes: boolean },
+  opts: { nameWidth: number; showTypes: boolean; packageName?: string },
 ): void {
   const roots: Array<string> = []
   const children = new Map<string, Array<SkillDisplay>>()
