@@ -1,6 +1,32 @@
-import { describe, expect, it } from 'vitest'
-import { buildIntentSkillsBlock } from '../src/commands/install-writer.js'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  buildIntentSkillsBlock,
+  writeIntentSkillsBlock,
+} from '../src/commands/install-writer.js'
 import type { IntentPackage, ScanResult, SkillEntry } from '../src/types.js'
+
+const tempDirs: Array<string> = []
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+function tempRoot(): string {
+  const root = mkdtempSync(join(tmpdir(), 'intent-install-writer-'))
+  tempDirs.push(root)
+  return root
+}
 
 function skill(overrides: Partial<SkillEntry>): SkillEntry {
   return {
@@ -45,6 +71,14 @@ function scanResult(packages: Array<IntentPackage>): ScanResult {
     },
   }
 }
+
+const exampleBlock = `<!-- intent-skills:start -->
+# Skill mappings - when working in these areas, load the linked skill file into context.
+skills:
+  - task: "Use @tanstack/query fetching"
+    load: "node_modules/@tanstack/query/skills/fetching/SKILL.md"
+<!-- intent-skills:end -->
+`
 
 describe('install writer block builder', () => {
   it('builds a deterministic block with stable load paths', () => {
@@ -137,7 +171,11 @@ skills:
             description: 'Reference material',
             type: 'reference',
           }),
-          skill({ name: 'publish', description: 'Maintainer task', type: 'meta' }),
+          skill({
+            name: 'publish',
+            description: 'Maintainer task',
+            type: 'meta',
+          }),
           skill({
             name: 'release',
             description: 'Maintainer-only task',
@@ -179,5 +217,163 @@ skills:
     expect(generated.block).toContain(
       'load: "node_modules/@tanstack/query/skills/\\"quotes\\"/SKILL.md"',
     )
+  })
+})
+
+describe('install writer file updates', () => {
+  it('creates AGENTS.md when no managed block exists', () => {
+    const root = tempRoot()
+
+    const result = writeIntentSkillsBlock({
+      block: exampleBlock,
+      mappingCount: 1,
+      root,
+    })
+
+    expect(result).toEqual({
+      mappingCount: 1,
+      status: 'created',
+      targetPath: join(root, 'AGENTS.md'),
+    })
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toBe(exampleBlock)
+  })
+
+  it('updates an existing managed block and preserves surrounding content', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    writeFileSync(
+      agentsPath,
+      `Before
+<!-- intent-skills:start -->
+old
+<!-- intent-skills:end -->
+After
+`,
+    )
+
+    const result = writeIntentSkillsBlock({
+      block: exampleBlock,
+      mappingCount: 1,
+      root,
+    })
+
+    expect(result.status).toBe('updated')
+    expect(readFileSync(agentsPath, 'utf8')).toBe(`Before
+${exampleBlock.trimEnd()}
+After
+`)
+  })
+
+  it('appends to an existing AGENTS.md without a managed block', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    writeFileSync(agentsPath, 'Existing guidance\n')
+
+    const result = writeIntentSkillsBlock({
+      block: exampleBlock,
+      mappingCount: 1,
+      root,
+    })
+
+    expect(result.status).toBe('updated')
+    expect(readFileSync(agentsPath, 'utf8')).toBe(
+      `Existing guidance\n${exampleBlock}`,
+    )
+  })
+
+  it('updates the existing managed config instead of creating AGENTS.md', () => {
+    const root = tempRoot()
+    const claudePath = join(root, 'CLAUDE.md')
+    writeFileSync(
+      claudePath,
+      `Intro
+<!-- intent-skills:start -->
+old
+<!-- intent-skills:end -->
+`,
+    )
+
+    const result = writeIntentSkillsBlock({
+      block: exampleBlock,
+      mappingCount: 1,
+      root,
+    })
+
+    expect(result).toEqual({
+      mappingCount: 1,
+      status: 'updated',
+      targetPath: claudePath,
+    })
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('preserves CRLF newline style when replacing a managed block', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    writeFileSync(
+      agentsPath,
+      [
+        'Before',
+        '<!-- intent-skills:start -->',
+        'old',
+        '<!-- intent-skills:end -->',
+        'After',
+        '',
+      ].join('\r\n'),
+    )
+
+    writeIntentSkillsBlock({
+      block: exampleBlock,
+      mappingCount: 1,
+      root,
+    })
+
+    const content = readFileSync(agentsPath, 'utf8')
+    const expected = [
+      'Before',
+      ...exampleBlock.trimEnd().split('\n'),
+      'After',
+      '',
+    ].join('\r\n')
+
+    expect(content).toContain('\r\n')
+    expect(content.replace(/\r\n/g, '')).not.toContain('\n')
+    expect(content).toBe(expected)
+  })
+
+  it('returns unchanged when the managed block is already current', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    writeFileSync(agentsPath, exampleBlock)
+
+    const result = writeIntentSkillsBlock({
+      block: exampleBlock,
+      mappingCount: 1,
+      root,
+    })
+
+    expect(result).toEqual({
+      mappingCount: 1,
+      status: 'unchanged',
+      targetPath: agentsPath,
+    })
+    expect(readFileSync(agentsPath, 'utf8')).toBe(exampleBlock)
+  })
+
+  it('skips writing when there are no mappings', () => {
+    const root = tempRoot()
+
+    const result = writeIntentSkillsBlock({
+      block: exampleBlock,
+      mappingCount: 0,
+      root,
+    })
+
+    expect(result).toEqual({
+      mappingCount: 0,
+      status: 'skipped',
+      targetPath: null,
+    })
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 })
