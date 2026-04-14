@@ -35,7 +35,17 @@ Follow these steps in order:
    - Survey the directory layout (src/, app/, routes/, components/, api/, etc.)
    - Note recurring patterns (routing, data fetching, auth, UI components, etc.)
 
-   Based on this, propose 3-5 skill-to-task mappings. For each one explain:
+   Mapping coverage rule:
+   - Create mappings for all discovered top-level actionable skills.
+   - Do not omit a top-level actionable skill only because the repo does not currently appear to use it.
+   - Do not map reference-only, meta, or maintainer-only skills by default.
+   - For sub-skills, include them only when they describe distinct user tasks not covered by the parent skill.
+   - If the proposed block would exceed 12 mappings, show the full discovered list and ask which packages
+     or skill groups to include before writing.
+   - Add one fallback note telling the agent to run \`npx @tanstack/intent@latest list\` for less common skills.
+
+   Based on the repository scan and the coverage rule, propose the skill-to-task mappings.
+   For each one explain:
    - The task or code area (in plain language the user would recognise)
    - Which skill applies and why
 
@@ -79,6 +89,7 @@ skills:
    - Confirm the target file exists
    - Confirm it contains both managed block markers
    - Confirm every load path came from \`npx @tanstack/intent@latest list\` output, or uses a runtime lookup comment
+   - Confirm every discovered top-level actionable skill is mapped, skipped by rule, or deferred by user choice
 
    Final response must include:
    - The target file path
