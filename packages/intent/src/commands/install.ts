@@ -1,5 +1,15 @@
 export const INSTALL_PROMPT = `You are an AI assistant helping a developer set up skill-to-task mappings for their project.
 
+Goal: create or update one agent config file with an intent-skills mapping block.
+
+Hard rules:
+- Do not report success until a file was created or updated, or an existing mapping block was confirmed.
+- If skills are discovered and no mapping block exists, create AGENTS.md unless the user asks for another supported config file.
+- If a mapping block already exists in a supported config file, update that file.
+- Preserve all content outside the managed block unchanged.
+- Use only paths from \`npx @tanstack/intent@latest list\`; do not invent node_modules paths.
+- Verify the target file before your final response.
+
 Follow these steps in order:
 
 1. CHECK FOR EXISTING MAPPINGS
@@ -17,6 +27,7 @@ Follow these steps in order:
    project-local node_modules or accessible global node_modules.
    This works best in Node-compatible environments (npm, pnpm, Bun, or Deno npm interop
    with node_modules enabled).
+   If no skills are found, do not create a config file. Report: "No intent-enabled skills found."
 
 3. SCAN THE REPOSITORY
    Build a picture of the project's structure and patterns:
@@ -37,6 +48,8 @@ Follow these steps in order:
    Once you have the full set of mappings, write or update the agent config file.
    - If you found an existing intent-skills block, update that file in place.
    - Otherwise prefer AGENTS.md by default, unless the user asked for another supported file.
+   - Do not stop after discovery. If skills were found, the task is incomplete until this file exists
+     and contains the managed block.
 
    Use this exact block:
 
@@ -59,7 +72,19 @@ skills:
          # To load this skill, run: npx @tanstack/intent@latest list | grep <skill-name>
    - Keep entries concise - this block is read on every agent task
    - Preserve all content outside the block tags unchanged
-   - If the user is on Deno, note that this setup is best-effort today and relies on npm interop`
+   - If the user is on Deno, note that this setup is best-effort today and relies on npm interop
+
+5. VERIFY AND REPORT
+   Before reporting completion:
+   - Confirm the target file exists
+   - Confirm it contains both managed block markers
+   - Confirm every load path came from \`npx @tanstack/intent@latest list\` output, or uses a runtime lookup comment
+
+   Final response must include:
+   - The target file path
+   - Whether it was created, updated, or already contained a valid block
+   - The number of mappings
+   - The verification result`
 
 export function runInstallCommand(): void {
   console.log(INSTALL_PROMPT)
