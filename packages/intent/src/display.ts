@@ -9,6 +9,23 @@ export interface SkillDisplay {
   path?: string
 }
 
+function isAbsolutePath(path: string): boolean {
+  return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path)
+}
+
+function hasPackageManagerInternalPath(path: string): boolean {
+  const normalized = path.replace(/\\/g, '/')
+  return (
+    normalized.includes('/.pnpm/') ||
+    normalized.includes('/.bun/') ||
+    normalized.includes('/.yarn/')
+  )
+}
+
+function isStableLoadPath(path: string): boolean {
+  return !isAbsolutePath(path) && !hasPackageManagerInternalPath(path)
+}
+
 function padColumn(text: string, width: number): string {
   return text.length >= width ? text + '  ' : text.padEnd(width)
 }
@@ -44,7 +61,14 @@ function printSkillLine(
     : ''
   console.log(`${nameStr}${padding}${typeCol}${skill.description}`)
   if (skill.path) {
-    console.log(`${' '.repeat(indent + 2)}${skill.path}`)
+    const pathIndent = ' '.repeat(indent + 2)
+    if (isStableLoadPath(skill.path)) {
+      console.log(`${pathIndent}${skill.path}`)
+    } else {
+      console.log(
+        `${pathIndent}Lookup: npx @tanstack/intent@latest list | grep ${skill.name}`,
+      )
+    }
   }
 }
 

@@ -7,7 +7,8 @@ Hard rules:
 - If skills are discovered and no mapping block exists, create AGENTS.md unless the user asks for another supported config file.
 - If a mapping block already exists in a supported config file, update that file.
 - Preserve all content outside the managed block unchanged.
-- Use only paths from \`npx @tanstack/intent@latest list\`; do not invent node_modules paths.
+- Use only stable, repo-relative paths from \`npx @tanstack/intent@latest list\`; do not invent node_modules paths.
+- Never write absolute local file paths in the managed block.
 - Verify the target file before your final response.
 
 Follow these steps in order:
@@ -72,12 +73,13 @@ skills:
 
    Rules:
    - Use the user's own words for task descriptions
-   - Include the exact path from \`npx @tanstack/intent@latest list\` output so agents can load it directly
+   - Include the exact stable, repo-relative path from \`npx @tanstack/intent@latest list\` output so agents can load it directly
    - Paths should use the stable \`node_modules/<package-name>/skills/...\` format (no version numbers)
-   - If a skill path from \`list\` contains package-manager-internal directories (e.g. \`.pnpm/\`, \`.bun/\`)
-     with version numbers, it is a transitive dependency without a stable top-level symlink.
-     For these skills, do NOT embed the versioned path. Instead, add a comment telling the agent
-     how to locate the skill at runtime:
+   - Do not include machine-specific directories such as \`/Users/...\`, \`/home/...\`, \`/private/...\`,
+     drive letters, or temp workspace paths.
+   - If a skill path from \`list\` is absolute or contains package-manager-internal directories
+     (e.g. \`.pnpm/\`, \`.bun/\`) with version numbers, do NOT use it as \`load\`.
+     Instead, add a comment telling the agent how to locate the skill at runtime:
        - task: "describe the task"
          # To load this skill, run: npx @tanstack/intent@latest list | grep <skill-name>
    - Keep entries concise - this block is read on every agent task
@@ -89,6 +91,7 @@ skills:
    - Confirm the target file exists
    - Confirm it contains both managed block markers
    - Confirm every load path came from \`npx @tanstack/intent@latest list\` output, or uses a runtime lookup comment
+   - Confirm no load path is absolute or machine-specific
    - Confirm every discovered top-level actionable skill is mapped, skipped by rule, or deferred by user choice
 
    Final response must include:

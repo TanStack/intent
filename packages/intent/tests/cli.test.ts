@@ -349,6 +349,7 @@ describe('cli commands', () => {
         version: string
         packageRoot: string
         source: 'local' | 'global'
+        skills: Array<{ path: string }>
       }>
     }
 
@@ -360,6 +361,41 @@ describe('cli commands', () => {
       packageRoot: globalPkgDir,
       source: 'global',
     })
+    expect(parsed.packages[0]!.skills[0]!.path).toBe(
+      join(globalPkgDir, 'skills', 'fetching', 'SKILL.md'),
+    )
+  })
+
+  it('does not print absolute global skill paths in list output', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-global-human-'))
+    const globalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-list-global-human-node-modules-'),
+    )
+    tempDirs.push(root, globalRoot)
+
+    const globalPkgDir = join(globalRoot, '@tanstack', 'query')
+    writeJson(join(globalPkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(join(globalPkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Global fetching skill',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['list'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('Global fetching skill')
+    expect(output).toContain(
+      'Lookup: npx @tanstack/intent@latest list | grep fetching',
+    )
+    expect(output).not.toContain(globalPkgDir)
   })
 
   it('prefers local over global in list json output when both exist', async () => {
