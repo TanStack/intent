@@ -1,9 +1,11 @@
 import { relative } from 'node:path'
+import { fail } from '../cli-error.js'
 import { printWarnings } from '../cli-support.js'
 import type { ScanResult } from '../types.js'
 import {
   buildIntentSkillsBlock,
   resolveIntentSkillsBlockTargetPath,
+  verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from './install-writer.js'
 
@@ -172,6 +174,21 @@ export async function runInstallCommand(
   }
 
   const target = formatTargetPath(result.targetPath)
+  const verification = verifyIntentSkillsBlockFile({
+    expectedBlock: generated.block,
+    expectedMappingCount: generated.mappingCount,
+    targetPath: result.targetPath,
+  })
+
+  if (!verification.ok) {
+    fail(
+      [
+        `Install verification failed for ${target}:`,
+        ...verification.errors.map((error) => `- ${error}`),
+      ].join('\n'),
+    )
+  }
+
   switch (result.status) {
     case 'created':
       console.log(

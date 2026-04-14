@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { parse as parseYaml } from 'yaml'
 import {
   formatRuntimeSkillLookupComment,
   isStableLoadPath,
@@ -23,6 +24,9 @@ const NON_ACTIONABLE_SKILL_TYPES = new Set([
   'reference',
 ])
 
+const RUNTIME_LOOKUP_COMMENT =
+  /# Runtime lookup only: run `npx @tanstack\/intent@latest list --json`, find package "[^"]+" skill "[^"]+", and load its reported path for this session\. Do not copy the resolved path into this file\./
+
 export interface IntentSkillsBlockResult {
   block: string
   mappingCount: number
@@ -42,6 +46,136 @@ export interface WriteIntentSkillsBlockResult {
   mappingCount: number
   status: IntentSkillsWriteStatus
   targetPath: string | null
+}
+
+function normalizeBlock(content: string): string {
+  return content.replace(/\r\n/g, '\n').trimEnd()
+}
+
+function extractManagedBlock(content: string): {
+  block: string | null
+  errors: Array<string>
+} {
+  const start = content.indexOf(INTENT_SKILLS_START)
+  const errors: Array<string> = []
+  if (start === -1) errors.push('Missing intent-skills start marker.')
+
+  const endMarkerStart =
+    start === -1 ? -1 : content.indexOf(INTENT_SKILLS_END, start)
+  if (endMarkerStart === -1) errors.push('Missing intent-skills end marker.')
+
+  if (errors.length > 0 || start === -1 || endMarkerStart === -1) {
+    return { block: null, errors }
+  }
+
+  return {
+    block: content.slice(start, endMarkerStart + INTENT_SKILLS_END.length),
+    errors,
+  }
+}
+
+function parseSkillsList(block: string, errors: Array<string>): Array<unknown> {
+  const yamlBody = normalizeBlock(block)
+    .split('\n')
+    .filter(
+      (line) => line !== INTENT_SKILLS_START && line !== INTENT_SKILLS_END,
+    )
+    .join('\n')
+
+  try {
+    const parsed = parseYaml(yamlBody) as { skills?: unknown } | null
+    if (!parsed || !Array.isArray(parsed.skills)) {
+      errors.push('Managed block must contain a skills list.')
+      return []
+    }
+
+    return parsed.skills
+  } catch (err) {
+    errors.push(
+      `Managed block contains invalid YAML: ${err instanceof Error ? err.message : String(err)}`,
+    )
+    return []
+  }
+}
+
+function validateRuntimeLookupEntries(
+  block: string,
+  missingLoadCount: number,
+  errors: Array<string>,
+): void {
+  if (missingLoadCount === 0) return
+
+  const validRuntimeLookupCount = normalizeBlock(block)
+    .split('\n')
+    .filter((line) => line.includes('Runtime lookup only:'))
+    .filter((line) => RUNTIME_LOOKUP_COMMENT.test(line)).length
+
+  if (validRuntimeLookupCount < missingLoadCount) {
+    errors.push('Runtime lookup entries must include package and skill names.')
+  }
+}
+
+export function verifyIntentSkillsBlockFile({
+  expectedBlock,
+  expectedMappingCount,
+  targetPath,
+}: {
+  expectedBlock: string
+  expectedMappingCount: number
+  targetPath: string
+}) {
+  const errors: Array<string> = []
+
+  if (!existsSync(targetPath)) {
+    return {
+      errors: [`Agent config file was not created: ${targetPath}`],
+      ok: false,
+    }
+  }
+
+  const { block, errors: markerErrors } = extractManagedBlock(
+    readFileSync(targetPath, 'utf8'),
+  )
+  errors.push(...markerErrors)
+
+  if (!block) {
+    return { errors, ok: false }
+  }
+
+  if (normalizeBlock(block) !== normalizeBlock(expectedBlock)) {
+    errors.push('Managed block does not match generated mappings.')
+  }
+
+  const skills = parseSkillsList(block, errors)
+  if (skills.length !== expectedMappingCount) {
+    errors.push(
+      `Expected ${expectedMappingCount} skill mappings, found ${skills.length}.`,
+    )
+  }
+
+  let missingLoadCount = 0
+  for (const skill of skills) {
+    if (!skill || typeof skill !== 'object') {
+      errors.push('Each skill mapping must be an object.')
+      continue
+    }
+
+    const load = (skill as { load?: unknown }).load
+    if (typeof load === 'string') {
+      if (!isStableLoadPath(load)) {
+        errors.push(`Unsafe load path in managed block: ${load}`)
+      }
+    } else {
+      missingLoadCount++
+    }
+  }
+
+  validateRuntimeLookupEntries(block, missingLoadCount, errors)
+
+  return {
+    errors,
+    ok: errors.length === 0,
+  }
 }
 
 export function resolveIntentSkillsBlockTargetPath(

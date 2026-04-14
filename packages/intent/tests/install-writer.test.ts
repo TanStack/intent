@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildIntentSkillsBlock,
+  verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from '../src/commands/install-writer.js'
 import type { IntentPackage, ScanResult, SkillEntry } from '../src/types.js'
@@ -375,5 +376,117 @@ old
       targetPath: null,
     })
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+})
+
+describe('install writer verification', () => {
+  it('accepts a written block with runtime lookup comments', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    const block = `<!-- intent-skills:start -->
+# Skill mappings - when working in these areas, load the linked skill file into context.
+skills:
+  - task: "Use @tanstack/query fetching"
+    # Runtime lookup only: run \`npx @tanstack/intent@latest list --json\`, find package "@tanstack/query" skill "fetching", and load its reported path for this session. Do not copy the resolved path into this file.
+<!-- intent-skills:end -->
+`
+    writeFileSync(agentsPath, block)
+
+    expect(
+      verifyIntentSkillsBlockFile({
+        expectedBlock: block,
+        expectedMappingCount: 1,
+        targetPath: agentsPath,
+      }),
+    ).toEqual({ errors: [], ok: true })
+  })
+
+  it('rejects missing managed block markers', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    writeFileSync(agentsPath, 'skills: []\n')
+
+    const result = verifyIntentSkillsBlockFile({
+      expectedBlock: exampleBlock,
+      expectedMappingCount: 1,
+      targetPath: agentsPath,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors).toContain('Missing intent-skills start marker.')
+    expect(result.errors).toContain('Missing intent-skills end marker.')
+  })
+
+  it('rejects stale managed blocks', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    writeFileSync(
+      agentsPath,
+      exampleBlock.replace('@tanstack/query fetching', '@tanstack/query cache'),
+    )
+
+    const result = verifyIntentSkillsBlockFile({
+      expectedBlock: exampleBlock,
+      expectedMappingCount: 1,
+      targetPath: agentsPath,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors).toContain(
+      'Managed block does not match generated mappings.',
+    )
+  })
+
+  it('rejects unsafe load paths', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    const block = `<!-- intent-skills:start -->
+# Skill mappings - when working in these areas, load the linked skill file into context.
+skills:
+  - task: "Use @tanstack/query global"
+    load: "/home/sarah/.npm-global/lib/node_modules/@tanstack/query/skills/global/SKILL.md"
+  - task: "Use @tanstack/query pnpm"
+    load: "node_modules/.pnpm/@tanstack+query@1.0.0/node_modules/@tanstack/query/skills/pnpm/SKILL.md"
+<!-- intent-skills:end -->
+`
+    writeFileSync(agentsPath, block)
+
+    const result = verifyIntentSkillsBlockFile({
+      expectedBlock: block,
+      expectedMappingCount: 2,
+      targetPath: agentsPath,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors).toContain(
+      'Unsafe load path in managed block: /home/sarah/.npm-global/lib/node_modules/@tanstack/query/skills/global/SKILL.md',
+    )
+    expect(result.errors).toContain(
+      'Unsafe load path in managed block: node_modules/.pnpm/@tanstack+query@1.0.0/node_modules/@tanstack/query/skills/pnpm/SKILL.md',
+    )
+  })
+
+  it('rejects runtime lookup comments without package and skill names', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    const block = `<!-- intent-skills:start -->
+# Skill mappings - when working in these areas, load the linked skill file into context.
+skills:
+  - task: "Use @tanstack/query fetching"
+    # Runtime lookup only: run \`npx @tanstack/intent@latest list --json\`.
+<!-- intent-skills:end -->
+`
+    writeFileSync(agentsPath, block)
+
+    const result = verifyIntentSkillsBlockFile({
+      expectedBlock: block,
+      expectedMappingCount: 1,
+      targetPath: agentsPath,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors).toContain(
+      'Runtime lookup entries must include package and skill names.',
+    )
   })
 })
