@@ -39,6 +39,33 @@ function writeSkillMd(dir: string, frontmatter: Record<string, unknown>): void {
   )
 }
 
+function writeInstalledIntentPackage(
+  root: string,
+  {
+    description,
+    name,
+    skillName,
+    version,
+  }: {
+    description: string
+    name: string
+    skillName: string
+    version: string
+  },
+): string {
+  const pkgDir = join(root, 'node_modules', ...name.split('/'))
+  writeJson(join(pkgDir, 'package.json'), {
+    name,
+    version,
+    intent: { version: 1, repo: 'TanStack/test', docs: 'docs/' },
+  })
+  writeSkillMd(join(pkgDir, 'skills', skillName), {
+    name: skillName,
+    description,
+  })
+  return pkgDir
+}
+
 let originalCwd: string
 let logSpy: ReturnType<typeof vi.spyOn>
 let infoSpy: ReturnType<typeof vi.spyOn>
@@ -175,10 +202,98 @@ describe('cli commands', () => {
   })
 
   it('prints the install prompt', async () => {
-    const exitCode = await main(['install'])
+    const exitCode = await main(['install', '--print-prompt'])
 
     expect(exitCode).toBe(0)
     expect(logSpy).toHaveBeenCalledWith(INSTALL_PROMPT)
+  })
+
+  it('writes install mappings and is idempotent', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-'))
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-empty-global-'),
+    )
+    tempDirs.push(root, isolatedGlobalRoot)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['install'])
+    const agentsPath = join(root, 'AGENTS.md')
+    const content = readFileSync(agentsPath, 'utf8')
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('Created AGENTS.md with 1 mapping.')
+    expect(content).toContain(
+      'task: "Use @tanstack/query fetching: Query data fetching patterns"',
+    )
+    expect(content).toContain(
+      'load: "node_modules/@tanstack/query/skills/fetching/SKILL.md"',
+    )
+    expect(content).not.toContain(root)
+
+    logSpy.mockClear()
+
+    const secondExitCode = await main(['install'])
+    const secondOutput = logSpy.mock.calls.flat().join('\n')
+
+    expect(secondExitCode).toBe(0)
+    expect(secondOutput).toContain(
+      'No changes to AGENTS.md; 1 mapping already current.',
+    )
+    expect(readFileSync(agentsPath, 'utf8')).toBe(content)
+  })
+
+  it('prints generated install mappings without writing during dry run', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-dry-run-'))
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-dry-run-empty-global-'),
+    )
+    tempDirs.push(root, isolatedGlobalRoot)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/router',
+      version: '1.0.0',
+      skillName: 'routing',
+      description: 'Router patterns',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--dry-run'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('Generated 1 mapping for AGENTS.md.')
+    expect(output).toContain(
+      'task: "Use @tanstack/router routing: Router patterns"',
+    )
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('does not create an agent config when install has no actionable skills', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-empty-'))
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-empty-global-'),
+    )
+    tempDirs.push(root, isolatedGlobalRoot)
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['install'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('No top-level actionable intent skills found.')
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
   it('prints the scaffold prompt', async () => {

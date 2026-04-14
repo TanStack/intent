@@ -58,11 +58,21 @@ function createCli(): CAC {
   cli
     .command(
       'install',
-      'Print a skill that guides your coding agent to set up skill-to-task mappings',
+      'Create or update skill-to-task mappings in an agent config file',
     )
-    .usage('install')
-    .action(() => {
-      runInstallCommand()
+    .usage('install [--dry-run] [--print-prompt]')
+    .option('--dry-run', 'Print the generated mapping block without writing')
+    .option(
+      '--print-prompt',
+      'Print the legacy agent setup prompt instead of writing',
+    )
+    .example('install')
+    .example('install --dry-run')
+    .example('install --print-prompt')
+    .action(async (options: { dryRun?: boolean; printPrompt?: boolean }) => {
+      await runInstallCommand(options, () =>
+        scanIntentsOrFail({ includeGlobal: true }),
+      )
     })
 
   cli

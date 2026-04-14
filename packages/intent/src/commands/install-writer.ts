@@ -6,8 +6,8 @@ import {
 } from '../skill-paths.js'
 import type { ScanResult, SkillEntry } from '../types.js'
 
-export const INTENT_SKILLS_START = '<!-- intent-skills:start -->'
-export const INTENT_SKILLS_END = '<!-- intent-skills:end -->'
+const INTENT_SKILLS_START = '<!-- intent-skills:start -->'
+const INTENT_SKILLS_END = '<!-- intent-skills:end -->'
 
 const SUPPORTED_AGENT_CONFIG_FILES = [
   'AGENTS.md',
@@ -28,7 +28,7 @@ export interface IntentSkillsBlockResult {
   mappingCount: number
 }
 
-export type IntentSkillsWriteStatus =
+type IntentSkillsWriteStatus =
   | 'created'
   | 'skipped'
   | 'unchanged'
@@ -42,6 +42,16 @@ export interface WriteIntentSkillsBlockResult {
   mappingCount: number
   status: IntentSkillsWriteStatus
   targetPath: string | null
+}
+
+export function resolveIntentSkillsBlockTargetPath(
+  root: string,
+  mappingCount: number,
+): string | null {
+  if (mappingCount === 0) return null
+  return (
+    findExistingConfigWithManagedBlock(root)?.filePath ?? join(root, 'AGENTS.md')
+  )
 }
 
 function compareNames(a: { name: string }, b: { name: string }): number {

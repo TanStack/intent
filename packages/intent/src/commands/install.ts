@@ -1,3 +1,12 @@
+import { relative } from 'node:path'
+import { printWarnings } from '../cli-support.js'
+import type { ScanResult } from '../types.js'
+import {
+  buildIntentSkillsBlock,
+  resolveIntentSkillsBlockTargetPath,
+  writeIntentSkillsBlock,
+} from './install-writer.js'
+
 export const INSTALL_PROMPT = `You are an AI assistant helping a developer set up skill-to-task mappings for their project.
 
 Goal: create or update one agent config file with an intent-skills mapping block.
@@ -101,6 +110,88 @@ skills:
    - The number of mappings
    - The verification result`
 
-export function runInstallCommand(): void {
-  console.log(INSTALL_PROMPT)
+export interface InstallCommandOptions {
+  dryRun?: boolean
+  printPrompt?: boolean
+}
+
+function formatTargetPath(targetPath: string): string {
+  return relative(process.cwd(), targetPath) || targetPath
+}
+
+function formatMappingCount(mappingCount: number): string {
+  return `${mappingCount} ${mappingCount === 1 ? 'mapping' : 'mappings'}`
+}
+
+async function scanIntentsFromCwd(): Promise<ScanResult> {
+  const { scanForIntents } = await import('../scanner.js')
+  return scanForIntents(undefined, { includeGlobal: true })
+}
+
+export async function runInstallCommand(
+  options: InstallCommandOptions = {},
+  scanIntentsOrFail: () => Promise<ScanResult> = scanIntentsFromCwd,
+): Promise<void> {
+  if (options.printPrompt) {
+    console.log(INSTALL_PROMPT)
+    return
+  }
+
+  const scanResult = await scanIntentsOrFail()
+  const generated = buildIntentSkillsBlock(scanResult)
+
+  if (options.dryRun) {
+    const targetPath = resolveIntentSkillsBlockTargetPath(
+      process.cwd(),
+      generated.mappingCount,
+    )
+
+    if (!targetPath) {
+      console.log('No top-level actionable intent skills found.')
+      printWarnings(scanResult.warnings)
+      return
+    }
+
+    console.log(
+      `Generated ${formatMappingCount(generated.mappingCount)} for ${formatTargetPath(targetPath)}.`,
+    )
+    console.log(generated.block)
+    printWarnings(scanResult.warnings)
+    return
+  }
+
+  const result = writeIntentSkillsBlock({
+    ...generated,
+    root: process.cwd(),
+  })
+
+  if (!result.targetPath) {
+    console.log('No top-level actionable intent skills found.')
+    printWarnings(scanResult.warnings)
+    return
+  }
+
+  const target = formatTargetPath(result.targetPath)
+  switch (result.status) {
+    case 'created':
+      console.log(
+        `Created ${target} with ${formatMappingCount(result.mappingCount)}.`,
+      )
+      break
+    case 'updated':
+      console.log(
+        `Updated ${target} with ${formatMappingCount(result.mappingCount)}.`,
+      )
+      break
+    case 'unchanged':
+      console.log(
+        `No changes to ${target}; ${formatMappingCount(result.mappingCount)} already current.`,
+      )
+      break
+    case 'skipped':
+      console.log('No top-level actionable intent skills found.')
+      break
+  }
+
+  printWarnings(scanResult.warnings)
 }
