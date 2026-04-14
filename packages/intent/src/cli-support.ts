@@ -5,14 +5,7 @@ import { fail } from './cli-error.js'
 import { resolveProjectContext } from './core/project-context.js'
 import type { ScanOptions, ScanResult, StalenessReport } from './types.js'
 
-export function printWarnings(warnings: Array<string>): void {
-  if (warnings.length === 0) return
-
-  console.log('Warnings:')
-  for (const warning of warnings) {
-    console.log(`  ⚠ ${warning}`)
-  }
-}
+export { printWarnings } from './cli-output.js'
 
 export function getMetaDir(): string {
   const thisDir = dirname(fileURLToPath(import.meta.url))

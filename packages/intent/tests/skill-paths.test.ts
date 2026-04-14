@@ -4,6 +4,7 @@ import {
   formatRuntimeSkillLookupHint,
   hasPackageManagerInternalPath,
   isAbsolutePath,
+  isRuntimeSkillLookupComment,
   isStableLoadPath,
 } from '../src/skill-paths.js'
 
@@ -41,6 +42,7 @@ describe('skill path helpers', () => {
       isStableLoadPath('node_modules/@tanstack/query/skills/core/SKILL.md'),
     ).toBe(true)
     expect(isStableLoadPath('/home/sarah/project/SKILL.md')).toBe(false)
+    expect(isStableLoadPath('../outside/skills/core/SKILL.md')).toBe(false)
     expect(
       isStableLoadPath(
         'node_modules/.pnpm/@tanstack+query@1.0.0/node_modules/@tanstack/query/skills/core/SKILL.md',
@@ -65,5 +67,12 @@ describe('skill path helpers', () => {
     expect(comment).not.toContain('grep')
     expect(comment).not.toContain('|')
     expect(hint).toBe(`Lookup: ${comment}`)
+    expect(isRuntimeSkillLookupComment(comment)).toBe(true)
+    expect(isRuntimeSkillLookupComment(`# ${comment}`)).toBe(true)
+    expect(
+      isRuntimeSkillLookupComment(
+        'Runtime lookup only: run `npx @tanstack/intent@latest list --json`.',
+      ),
+    ).toBe(false)
   })
 })

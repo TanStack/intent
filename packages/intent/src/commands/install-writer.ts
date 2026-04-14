@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import {
   formatRuntimeSkillLookupComment,
+  isRuntimeSkillLookupComment,
   isStableLoadPath,
 } from '../skill-paths.js'
 import type { ScanResult, SkillEntry } from '../types.js'
@@ -24,57 +25,83 @@ const NON_ACTIONABLE_SKILL_TYPES = new Set([
   'reference',
 ])
 
-const RUNTIME_LOOKUP_COMMENT =
-  /# Runtime lookup only: run `npx @tanstack\/intent@latest list --json`, find package "[^"]+" skill "[^"]+", and load its reported path for this session\. Do not copy the resolved path into this file\./
-
 export interface IntentSkillsBlockResult {
   block: string
   mappingCount: number
 }
 
-type IntentSkillsWriteStatus =
-  | 'created'
-  | 'skipped'
-  | 'unchanged'
-  | 'updated'
-
 export interface WriteIntentSkillsBlockOptions extends IntentSkillsBlockResult {
   root: string
 }
 
-export interface WriteIntentSkillsBlockResult {
+interface WriteIntentSkillsBlockFileResult {
   mappingCount: number
-  status: IntentSkillsWriteStatus
-  targetPath: string | null
+  status: 'created' | 'unchanged' | 'updated'
+  targetPath: string
+}
+
+interface WriteIntentSkillsBlockSkippedResult {
+  mappingCount: number
+  status: 'skipped'
+  targetPath: null
+}
+
+export type WriteIntentSkillsBlockResult =
+  | WriteIntentSkillsBlockFileResult
+  | WriteIntentSkillsBlockSkippedResult
+
+interface ManagedBlock {
+  end: number
+  start: number
+  text: string
+}
+
+interface IntentSkillsVerificationResult {
+  errors: Array<string>
+  ok: boolean
 }
 
 function normalizeBlock(content: string): string {
   return content.replace(/\r\n/g, '\n').trimEnd()
 }
 
-function extractManagedBlock(content: string): {
-  block: string | null
+function readManagedBlock(content: string): {
   errors: Array<string>
+  hasMarker: boolean
+  managedBlock: ManagedBlock | null
 } {
   const start = content.indexOf(INTENT_SKILLS_START)
   const errors: Array<string> = []
   if (start === -1) errors.push('Missing intent-skills start marker.')
 
   const endMarkerStart =
-    start === -1 ? -1 : content.indexOf(INTENT_SKILLS_END, start)
+    start === -1
+      ? content.indexOf(INTENT_SKILLS_END)
+      : content.indexOf(INTENT_SKILLS_END, start)
   if (endMarkerStart === -1) errors.push('Missing intent-skills end marker.')
 
+  const hasMarker = start !== -1 || endMarkerStart !== -1
+
   if (errors.length > 0 || start === -1 || endMarkerStart === -1) {
-    return { block: null, errors }
+    return { errors, hasMarker, managedBlock: null }
   }
 
+  const end = endMarkerStart + INTENT_SKILLS_END.length
   return {
-    block: content.slice(start, endMarkerStart + INTENT_SKILLS_END.length),
     errors,
+    hasMarker,
+    managedBlock: {
+      end,
+      start,
+      text: content.slice(start, end),
+    },
   }
 }
 
-function parseSkillsList(block: string, errors: Array<string>): Array<unknown> {
+function parseSkillsList(block: string): {
+  errors: Array<string>
+  skills: Array<unknown>
+} {
   const yamlBody = normalizeBlock(block)
     .split('\n')
     .filter(
@@ -85,34 +112,62 @@ function parseSkillsList(block: string, errors: Array<string>): Array<unknown> {
   try {
     const parsed = parseYaml(yamlBody) as { skills?: unknown } | null
     if (!parsed || !Array.isArray(parsed.skills)) {
-      errors.push('Managed block must contain a skills list.')
-      return []
+      return {
+        errors: ['Managed block must contain a skills list.'],
+        skills: [],
+      }
     }
 
-    return parsed.skills
+    return { errors: [], skills: parsed.skills }
   } catch (err) {
-    errors.push(
-      `Managed block contains invalid YAML: ${err instanceof Error ? err.message : String(err)}`,
-    )
-    return []
+    return {
+      errors: [
+        `Managed block contains invalid YAML: ${err instanceof Error ? err.message : String(err)}`,
+      ],
+      skills: [],
+    }
   }
 }
 
 function validateRuntimeLookupEntries(
   block: string,
-  missingLoadCount: number,
-  errors: Array<string>,
-): void {
-  if (missingLoadCount === 0) return
+  skills: Array<unknown>,
+): Array<string> {
+  const skillEntryBlocks = readSkillEntryBlocks(block)
+  for (let index = 0; index < skills.length; index++) {
+    const skill = skills[index]
+    if (!skill || typeof skill !== 'object') continue
+    if (typeof (skill as { load?: unknown }).load === 'string') continue
+    if (skillEntryBlocks[index]?.some(isRuntimeSkillLookupComment)) continue
 
-  const validRuntimeLookupCount = normalizeBlock(block)
-    .split('\n')
-    .filter((line) => line.includes('Runtime lookup only:'))
-    .filter((line) => RUNTIME_LOOKUP_COMMENT.test(line)).length
-
-  if (validRuntimeLookupCount < missingLoadCount) {
-    errors.push('Runtime lookup entries must include package and skill names.')
+    return ['Runtime lookup entries must include package and skill names.']
   }
+
+  return []
+}
+
+function readSkillEntryBlocks(block: string): Array<Array<string>> {
+  const entries: Array<Array<string>> = []
+  let currentEntry: Array<string> | null = null
+
+  for (const line of normalizeBlock(block).split('\n')) {
+    if (line === INTENT_SKILLS_START || line === INTENT_SKILLS_END) {
+      currentEntry = null
+      continue
+    }
+
+    if (/^\s*-\s+/.test(line)) {
+      currentEntry = [line]
+      entries.push(currentEntry)
+      continue
+    }
+
+    if (currentEntry && /^\s+/.test(line)) {
+      currentEntry.push(line)
+    }
+  }
+
+  return entries
 }
 
 export function verifyIntentSkillsBlockFile({
@@ -123,7 +178,7 @@ export function verifyIntentSkillsBlockFile({
   expectedBlock: string
   expectedMappingCount: number
   targetPath: string
-}) {
+}): IntentSkillsVerificationResult {
   const errors: Array<string> = []
 
   if (!existsSync(targetPath)) {
@@ -133,27 +188,28 @@ export function verifyIntentSkillsBlockFile({
     }
   }
 
-  const { block, errors: markerErrors } = extractManagedBlock(
+  const { managedBlock, errors: markerErrors } = readManagedBlock(
     readFileSync(targetPath, 'utf8'),
   )
   errors.push(...markerErrors)
 
-  if (!block) {
+  if (!managedBlock) {
     return { errors, ok: false }
   }
 
+  const block = managedBlock.text
   if (normalizeBlock(block) !== normalizeBlock(expectedBlock)) {
     errors.push('Managed block does not match generated mappings.')
   }
 
-  const skills = parseSkillsList(block, errors)
+  const { skills, errors: parseErrors } = parseSkillsList(block)
+  errors.push(...parseErrors)
   if (skills.length !== expectedMappingCount) {
     errors.push(
       `Expected ${expectedMappingCount} skill mappings, found ${skills.length}.`,
     )
   }
 
-  let missingLoadCount = 0
   for (const skill of skills) {
     if (!skill || typeof skill !== 'object') {
       errors.push('Each skill mapping must be an object.')
@@ -165,12 +221,10 @@ export function verifyIntentSkillsBlockFile({
       if (!isStableLoadPath(load)) {
         errors.push(`Unsafe load path in managed block: ${load}`)
       }
-    } else {
-      missingLoadCount++
     }
   }
 
-  validateRuntimeLookupEntries(block, missingLoadCount, errors)
+  errors.push(...validateRuntimeLookupEntries(block, skills))
 
   return {
     errors,
@@ -184,7 +238,8 @@ export function resolveIntentSkillsBlockTargetPath(
 ): string | null {
   if (mappingCount === 0) return null
   return (
-    findExistingConfigWithManagedBlock(root)?.filePath ?? join(root, 'AGENTS.md')
+    findExistingConfigWithManagedBlock(root)?.filePath ??
+    join(root, 'AGENTS.md')
   )
 }
 
@@ -259,35 +314,23 @@ function withNewlineStyle(content: string, newline: string): string {
   return newline === '\n' ? content : content.replace(/\n/g, newline)
 }
 
-function findManagedBlock(
-  content: string,
-): { end: number; start: number } | null {
-  const start = content.indexOf(INTENT_SKILLS_START)
-  if (start === -1) return null
-
-  const endMarkerStart = content.indexOf(INTENT_SKILLS_END, start)
-  if (endMarkerStart === -1) return null
-
-  return {
-    start,
-    end: endMarkerStart + INTENT_SKILLS_END.length,
-  }
-}
-
-function findExistingConfigWithManagedBlock(
-  root: string,
-): {
+function findExistingConfigWithManagedBlock(root: string): {
   content: string
   filePath: string
-  managedBlock: { end: number; start: number }
+  managedBlock: ManagedBlock
 } | null {
   for (const file of SUPPORTED_AGENT_CONFIG_FILES) {
     const filePath = join(root, file)
     if (!existsSync(filePath)) continue
 
     const content = readFileSync(filePath, 'utf8')
-    const managedBlock = findManagedBlock(content)
+    const { managedBlock, errors, hasMarker } = readManagedBlock(content)
     if (managedBlock) return { content, filePath, managedBlock }
+    if (hasMarker) {
+      throw new Error(
+        `Invalid intent-skills block in ${filePath}: ${errors.join(' ')}`,
+      )
+    }
   }
 
   return null
@@ -295,7 +338,7 @@ function findExistingConfigWithManagedBlock(
 
 function replaceManagedBlock(
   content: string,
-  managedBlock: { end: number; start: number },
+  managedBlock: ManagedBlock,
   block: string,
 ): string {
   const newline = detectNewline(content)

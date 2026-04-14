@@ -125,14 +125,9 @@ function formatMappingCount(mappingCount: number): string {
   return `${mappingCount} ${mappingCount === 1 ? 'mapping' : 'mappings'}`
 }
 
-async function scanIntentsFromCwd(): Promise<ScanResult> {
-  const { scanForIntents } = await import('../scanner.js')
-  return scanForIntents(undefined, { includeGlobal: true })
-}
-
 export async function runInstallCommand(
-  options: InstallCommandOptions = {},
-  scanIntentsOrFail: () => Promise<ScanResult> = scanIntentsFromCwd,
+  options: InstallCommandOptions,
+  scanIntentsOrFail: () => Promise<ScanResult>,
 ): Promise<void> {
   if (options.printPrompt) {
     console.log(INSTALL_PROMPT)
@@ -204,9 +199,6 @@ export async function runInstallCommand(
       console.log(
         `No changes to ${target}; ${formatMappingCount(result.mappingCount)} already current.`,
       )
-      break
-    case 'skipped':
-      console.log('No top-level actionable intent skills found.')
       break
   }
 

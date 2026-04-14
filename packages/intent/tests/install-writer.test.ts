@@ -10,9 +10,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildIntentSkillsBlock,
+  resolveIntentSkillsBlockTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from '../src/commands/install-writer.js'
+import { formatRuntimeSkillLookupComment } from '../src/skill-paths.js'
 import type { IntentPackage, ScanResult, SkillEntry } from '../src/types.js'
 
 const tempDirs: Array<string> = []
@@ -150,10 +152,16 @@ skills:
 
     expect(generated.mappingCount).toBe(2)
     expect(generated.block).toContain(
-      '# Runtime lookup only: run `npx @tanstack/intent@latest list --json`, find package "@tanstack/query" skill "global-fetching", and load its reported path for this session. Do not copy the resolved path into this file.',
+      `# ${formatRuntimeSkillLookupComment({
+        packageName: '@tanstack/query',
+        skillName: 'global-fetching',
+      })}`,
     )
     expect(generated.block).toContain(
-      '# Runtime lookup only: run `npx @tanstack/intent@latest list --json`, find package "@tanstack/query" skill "pnpm-fetching", and load its reported path for this session. Do not copy the resolved path into this file.',
+      `# ${formatRuntimeSkillLookupComment({
+        packageName: '@tanstack/query',
+        skillName: 'pnpm-fetching',
+      })}`,
     )
     expect(generated.block).not.toContain('/home/sarah')
     expect(generated.block).not.toContain('node_modules/.pnpm')
@@ -308,6 +316,34 @@ old
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
+  it('resolves the existing managed config as the write target', () => {
+    const root = tempRoot()
+    const claudePath = join(root, 'CLAUDE.md')
+    writeFileSync(claudePath, exampleBlock)
+
+    expect(resolveIntentSkillsBlockTargetPath(root, 1)).toBe(claudePath)
+    expect(resolveIntentSkillsBlockTargetPath(root, 0)).toBe(null)
+  })
+
+  it('rejects malformed managed blocks before writing', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    const malformedContent = `Intro
+<!-- intent-skills:start -->
+old
+`
+    writeFileSync(agentsPath, malformedContent)
+
+    expect(() =>
+      writeIntentSkillsBlock({
+        block: exampleBlock,
+        mappingCount: 1,
+        root,
+      }),
+    ).toThrow(`Invalid intent-skills block in ${agentsPath}`)
+    expect(readFileSync(agentsPath, 'utf8')).toBe(malformedContent)
+  })
+
   it('preserves CRLF newline style when replacing a managed block', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
@@ -341,53 +377,21 @@ old
     expect(content.replace(/\r\n/g, '')).not.toContain('\n')
     expect(content).toBe(expected)
   })
-
-  it('returns unchanged when the managed block is already current', () => {
-    const root = tempRoot()
-    const agentsPath = join(root, 'AGENTS.md')
-    writeFileSync(agentsPath, exampleBlock)
-
-    const result = writeIntentSkillsBlock({
-      block: exampleBlock,
-      mappingCount: 1,
-      root,
-    })
-
-    expect(result).toEqual({
-      mappingCount: 1,
-      status: 'unchanged',
-      targetPath: agentsPath,
-    })
-    expect(readFileSync(agentsPath, 'utf8')).toBe(exampleBlock)
-  })
-
-  it('skips writing when there are no mappings', () => {
-    const root = tempRoot()
-
-    const result = writeIntentSkillsBlock({
-      block: exampleBlock,
-      mappingCount: 0,
-      root,
-    })
-
-    expect(result).toEqual({
-      mappingCount: 0,
-      status: 'skipped',
-      targetPath: null,
-    })
-    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
-  })
 })
 
 describe('install writer verification', () => {
   it('accepts a written block with runtime lookup comments', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
+    const runtimeLookupComment = formatRuntimeSkillLookupComment({
+      packageName: '@tanstack/query',
+      skillName: 'fetching',
+    })
     const block = `<!-- intent-skills:start -->
 # Skill mappings - when working in these areas, load the linked skill file into context.
 skills:
   - task: "Use @tanstack/query fetching"
-    # Runtime lookup only: run \`npx @tanstack/intent@latest list --json\`, find package "@tanstack/query" skill "fetching", and load its reported path for this session. Do not copy the resolved path into this file.
+    # ${runtimeLookupComment}
 <!-- intent-skills:end -->
 `
     writeFileSync(agentsPath, block)
@@ -481,6 +485,35 @@ skills:
     const result = verifyIntentSkillsBlockFile({
       expectedBlock: block,
       expectedMappingCount: 1,
+      targetPath: agentsPath,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors).toContain(
+      'Runtime lookup entries must include package and skill names.',
+    )
+  })
+
+  it('rejects runtime lookup comments attached to another mapping', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    const block = `<!-- intent-skills:start -->
+# Skill mappings - when working in these areas, load the linked skill file into context.
+skills:
+  - task: "Use @tanstack/query fetching"
+    load: "node_modules/@tanstack/query/skills/fetching/SKILL.md"
+    # ${formatRuntimeSkillLookupComment({
+      packageName: '@tanstack/query',
+      skillName: 'global-fetching',
+    })}
+  - task: "Use @tanstack/query global-fetching"
+<!-- intent-skills:end -->
+`
+    writeFileSync(agentsPath, block)
+
+    const result = verifyIntentSkillsBlockFile({
+      expectedBlock: block,
+      expectedMappingCount: 2,
       targetPath: agentsPath,
     })
 

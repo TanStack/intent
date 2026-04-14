@@ -52,7 +52,7 @@ function writeInstalledIntentPackage(
     skillName: string
     version: string
   },
-): string {
+): void {
   const pkgDir = join(root, 'node_modules', ...name.split('/'))
   writeJson(join(pkgDir, 'package.json'), {
     name,
@@ -63,7 +63,6 @@ function writeInstalledIntentPackage(
     name: skillName,
     description,
   })
-  return pkgDir
 }
 
 let originalCwd: string
