@@ -3,18 +3,25 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:perf": "vitest bench --config ./vite.config.ts ./speed.bench.ts"
+    "test:perf": "vitest bench --config ./vitest.config.ts ./*.bench.ts"
   },
   "devDependencies": {
     "@codspeed/vitest-plugin": "^5.0.1",
-    "typescript": "^5.9.3",
-    "vite": "^8.0.0",
+    "typescript": "5.9.3",
     "vitest": "^4.0.17"
   },
   "nx": {
     "targets": {
       "test:perf": {
-        "cache": false
+        "cache": false,
+        "dependsOn": [
+          {
+            "projects": [
+              "@tanstack/intent"
+            ],
+            "target": "build"
+          }
+        ]
       }
     }
   }

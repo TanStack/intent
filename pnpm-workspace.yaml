@@ -2,7 +2,12 @@ cleanupUnusedCatalogs: true
 linkWorkspacePackages: true
 preferWorkspacePackages: true
 
+packageExtensions:
+  '@codspeed/vitest-plugin@*':
+    peerDependenciesMeta:
+      vite:
+        optional: true
+
 packages:
   - 'benchmarks/*'
-  - 'examples/**/*'
   - 'packages/*'

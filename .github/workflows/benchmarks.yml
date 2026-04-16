@@ -41,4 +41,4 @@ jobs:
         uses: CodSpeedHQ/action@v4
         with:
           mode: simulation
-          run: WITH_INSTRUMENTATION=1 pnpm --dir benchmarks/intent test:perf
+          run: WITH_INSTRUMENTATION=1 pnpm exec nx run @benchmarks/intent:test:perf
