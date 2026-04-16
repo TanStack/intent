@@ -39,6 +39,10 @@
           "to": "cli/intent-list"
         },
         {
+          "label": "intent resolve",
+          "to": "cli/intent-resolve"
+        },
+        {
           "label": "intent meta",
           "to": "cli/intent-meta"
         },

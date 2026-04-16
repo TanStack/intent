@@ -40,12 +40,24 @@ Set up skill-to-task mappings in your project's agent config files (CLAUDE.md, .
 npx @tanstack/intent@latest install
 ```
 
-No per-library setup. No hunting for rules files. Install the package, run `npx @tanstack/intent@latest install` through your preferred command runner, and the agent understands the tool. Update the package, and skills update too.
+No per-library setup. No hunting for rules files. Install the package, run `npx @tanstack/intent@latest install` through your preferred command runner, and Intent writes compact `when`/`use` mappings to your agent config. Update the package, and skills update too.
 
-List available skills from installed packages:
+List available skills from local installed packages:
 
 ```bash
 npx @tanstack/intent@latest list
+```
+
+Include global packages explicitly:
+
+```bash
+npx @tanstack/intent@latest list --global
+```
+
+Resolve a compact mapping to the installed skill path:
+
+```bash
+npx @tanstack/intent@latest resolve @tanstack/query#fetching
 ```
 
 ### For library maintainers
@@ -112,7 +124,8 @@ The feedback loop runs both directions. `npx @tanstack/intent@latest feedback` l
 | Command                                            | Description                                         |
 | -------------------------------------------------- | --------------------------------------------------- |
 | `npx @tanstack/intent@latest install`              | Set up skill-to-task mappings in agent config files |
-| `npx @tanstack/intent@latest list [--json]`        | Discover intent-enabled packages                    |
+| `npx @tanstack/intent@latest list [--json]`        | Discover local intent-enabled packages              |
+| `npx @tanstack/intent@latest resolve <use>`        | Resolve `<package>#<skill>` to a skill file path    |
 | `npx @tanstack/intent@latest meta`                 | List meta-skills for library maintainers            |
 | `npx @tanstack/intent@latest scaffold`             | Print the guided skill generation prompt            |
 | `npx @tanstack/intent@latest validate [dir]`       | Validate SKILL.md files                             |

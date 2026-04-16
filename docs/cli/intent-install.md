@@ -3,39 +3,59 @@ title: intent install
 id: intent-install
 ---
 
-`intent install` prints instructions for setting up an `intent-skills` mapping block in your project guidance file.
+`intent install` creates or updates an `intent-skills` mapping block in a project guidance file.
 
 ```bash
-npx @tanstack/intent@latest install
+npx @tanstack/intent@latest install [--dry-run] [--print-prompt] [--global] [--global-only]
 ```
 
-The command prints text only. It does not edit files.
+## Options
+
+- `--dry-run`: print the generated mapping block without writing files
+- `--print-prompt`: print the agent setup prompt instead of writing files
+- `--global`: include global packages after project packages
+- `--global-only`: install mappings from global packages only
+
+## Behavior
+
+- Scans project-local packages by default.
+- Includes global packages only when `--global` or `--global-only` is passed.
+- Creates `AGENTS.md` when actionable skills are found and no managed block exists.
+- Updates an existing managed block in a supported config file.
+- Preserves all content outside the managed block.
+- Skips reference-only, meta, maintainer, and maintainer-only skills.
+- Writes compact `when` and `use` entries instead of load paths.
+- Verifies the managed block before reporting success.
+- Prints `No actionable intent skills found.` and does not create a config file when no actionable skills are discovered.
+
+Supported config files: `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`.
 
 ## Output
 
-The printed instructions include this tagged block template:
+The generated block uses compact skill identities:
 
 ```yaml
 <!-- intent-skills:start -->
-# Skill mappings — when working in these areas, load the linked skill file into context.
+# Skill mappings - resolve `use` with `npx @tanstack/intent@latest resolve <use>`.
 skills:
-  - task: "describe the task or code area here"
-    load: "node_modules/package-name/skills/skill-name/SKILL.md"
+  - when: "Query data fetching patterns"
+    use: "@tanstack/query#fetching"
 <!-- intent-skills:end -->
 ```
 
-They also ask you to:
+- `when`: task-routing phrase for agents
+- `use`: portable skill identity in `<package>#<skill>` format
+- The block does not store `load` paths, absolute paths, or package-manager-internal paths
 
-1. Check for an existing block first
-2. Run `intent list` to discover installed skills, including any packages surfaced by the command's explicit global scan
-3. Ask whether you want a config target other than `AGENTS.md`
-4. Update an existing block in place when one already exists
-5. Add task-to-skill mappings
-6. Preserve all content outside the tagged block
+## Status messages
 
-If no existing block is found, `AGENTS.md` is the default target.
+- Created: `Created AGENTS.md with 1 mapping.`
+- Updated: `Updated AGENTS.md with 2 mappings.`
+- Unchanged: `No changes to AGENTS.md; 2 mappings already current.`
+- No actionable skills: `No actionable intent skills found.`
 
 ## Related
 
 - [intent list](./intent-list)
+- [intent resolve](./intent-resolve)
 - [Quick Start for Consumers](../getting-started/quick-start-consumers)

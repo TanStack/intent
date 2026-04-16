@@ -30,13 +30,21 @@ Intent provides tooling for two workflows:
 npx @tanstack/intent@latest list
 ```
 
-Scans the current project's `node_modules` and workspace dependencies for intent-enabled packages. The CLI intentionally includes accessible global packages for this command and still prefers local packages when both exist.
+Scans the current project's `node_modules` and workspace dependencies for intent-enabled packages.
+Global package scanning is explicit; pass `--global` to include global packages or `--global-only` to ignore local packages.
+When both local and global packages are scanned, local packages take precedence.
 
 ```bash
 npx @tanstack/intent@latest install
 ```
 
-Prints instructions for your agent to create `intent-skills` mappings in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.). Existing mappings are updated in place; otherwise `AGENTS.md` is the default target.
+Creates or updates compact `intent-skills` mappings in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.). Existing mappings are updated in place; otherwise `AGENTS.md` is the default target.
+
+```bash
+npx @tanstack/intent@latest resolve @tanstack/query#fetching
+```
+
+Resolves a compact `<package>#<skill>` mapping to the installed skill file path. Agents can use this at runtime instead of storing package-manager-specific paths in config files.
 
 ### Scaffolding and validation
 
