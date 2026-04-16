@@ -40,7 +40,7 @@ function printSkillLine(
   displayName: string,
   skill: SkillDisplay,
   indent: number,
-  opts: { nameWidth: number; showTypes: boolean; packageName?: string },
+  opts: { nameWidth: number; showTypes: boolean; packageName: string },
 ): void {
   const nameStr = ' '.repeat(indent) + displayName
   const padding = ' '.repeat(Math.max(2, opts.nameWidth - nameStr.length))
@@ -65,7 +65,7 @@ function printSkillLine(
 
 export function printSkillTree(
   skills: Array<SkillDisplay>,
-  opts: { nameWidth: number; showTypes: boolean; packageName?: string },
+  opts: { nameWidth: number; showTypes: boolean; packageName: string },
 ): void {
   const roots: Array<string> = []
   const children = new Map<string, Array<SkillDisplay>>()

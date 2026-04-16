@@ -4,7 +4,7 @@ import type { SkillEntry } from './types.js'
 import { toPosixPath } from './utils.js'
 
 export interface SkillLookupTarget {
-  packageName?: string
+  packageName: string
   skillName: string
 }
 
@@ -68,8 +68,7 @@ export function rewriteSkillLoadPaths({
 }
 
 function formatSkillLookupTarget(target: SkillLookupTarget): string {
-  const skill = `skill "${target.skillName}"`
-  return target.packageName ? `package "${target.packageName}" ${skill}` : skill
+  return `package "${target.packageName}" skill "${target.skillName}"`
 }
 
 export function formatRuntimeSkillLookupComment(

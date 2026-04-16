@@ -128,6 +128,11 @@ function formatMappingCount(mappingCount: number): string {
   return `${mappingCount} ${mappingCount === 1 ? 'mapping' : 'mappings'}`
 }
 
+function printNoActionableSkills(warnings: Array<string>): void {
+  console.log('No actionable intent skills found.')
+  printWarnings(warnings)
+}
+
 export async function runInstallCommand(
   options: InstallCommandOptions,
   scanIntentsOrFail: (options?: ScanOptions) => Promise<ScanResult>,
@@ -149,8 +154,7 @@ export async function runInstallCommand(
     )
 
     if (!targetPath) {
-      console.log('No actionable intent skills found.')
-      printWarnings(scanResult.warnings)
+      printNoActionableSkills(scanResult.warnings)
       return
     }
 
@@ -168,8 +172,7 @@ export async function runInstallCommand(
   })
 
   if (!result.targetPath) {
-    console.log('No actionable intent skills found.')
-    printWarnings(scanResult.warnings)
+    printNoActionableSkills(scanResult.warnings)
     return
   }
 
