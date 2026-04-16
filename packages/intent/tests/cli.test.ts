@@ -857,6 +857,42 @@ describe('cli commands', () => {
     )
   })
 
+  it('fails cleanly when resolve cannot find the package', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-resolve-missing-package-'),
+    )
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main(['resolve', '@tanstack/query#fetching'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Cannot resolve skill use "@tanstack/query#fetching": package "@tanstack/query" was not found.',
+    )
+  })
+
+  it('fails cleanly when resolve cannot find the skill', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-resolve-missing-skill-'),
+    )
+    tempDirs.push(root)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['resolve', '@tanstack/query#mutations'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Cannot resolve skill use "@tanstack/query#mutations": skill "mutations" was not found in package "@tanstack/query". Available skills: fetching.',
+    )
+  })
+
   it('explains which package version was chosen when conflicts exist', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-conflicts-'))
     tempDirs.push(root)
