@@ -7,6 +7,11 @@ import type { ScanOptions, ScanResult, StalenessReport } from './types.js'
 
 export { printWarnings } from './cli-output.js'
 
+export interface GlobalScanFlags {
+  global?: boolean
+  globalOnly?: boolean
+}
+
 export function getMetaDir(): string {
   const thisDir = dirname(fileURLToPath(import.meta.url))
   return join(thisDir, '..', 'meta')
@@ -22,6 +27,24 @@ export async function scanIntentsOrFail(
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err))
   }
+}
+
+export function scanOptionsFromGlobalFlags(
+  options: GlobalScanFlags,
+): ScanOptions {
+  if (options.global && options.globalOnly) {
+    fail('Use either --global or --global-only, not both.')
+  }
+
+  if (options.globalOnly) {
+    return { scope: 'global' }
+  }
+
+  if (options.global) {
+    return { scope: 'local-and-global' }
+  }
+
+  return { scope: 'local' }
 }
 
 function readPackageName(root: string): string {

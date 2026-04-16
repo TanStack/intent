@@ -1,5 +1,13 @@
-import { printWarnings } from '../cli-support.js'
-import type { ScanResult } from '../types.js'
+import {
+  printWarnings,
+  scanOptionsFromGlobalFlags,
+  type GlobalScanFlags,
+} from '../cli-support.js'
+import type { ScanOptions, ScanResult } from '../types.js'
+
+export interface ListCommandOptions extends GlobalScanFlags {
+  json?: boolean
+}
 
 function formatScanCoverage(result: ScanResult): string {
   const coverage: Array<string> = []
@@ -30,10 +38,10 @@ function printVersionConflicts(result: ScanResult): void {
 }
 
 export async function runListCommand(
-  options: { json?: boolean },
-  scanIntentsOrFail: () => Promise<ScanResult>,
+  options: ListCommandOptions,
+  scanIntentsOrFail: (options?: ScanOptions) => Promise<ScanResult>,
 ): Promise<void> {
-  const result = await scanIntentsOrFail()
+  const result = await scanIntentsOrFail(scanOptionsFromGlobalFlags(options))
 
   if (options.json) {
     console.log(JSON.stringify(result, null, 2))

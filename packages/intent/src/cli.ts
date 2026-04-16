@@ -10,8 +10,11 @@ import {
   scanIntentsOrFail,
 } from './cli-support.js'
 import { runEditPackageJsonCommand } from './commands/edit-package-json.js'
-import { runInstallCommand } from './commands/install.js'
-import { runListCommand } from './commands/list.js'
+import {
+  runInstallCommand,
+  type InstallCommandOptions,
+} from './commands/install.js'
+import { runListCommand, type ListCommandOptions } from './commands/list.js'
 import { runMetaCommand } from './commands/meta.js'
 import { runResolveCommand } from './commands/resolve.js'
 import { runScaffoldCommand } from './commands/scaffold.js'
@@ -26,16 +29,17 @@ function createCli(): CAC {
   cli
     .command(
       'list',
-      'Discover intent-enabled packages from the project, workspace, and explicit global scan',
+      'Discover intent-enabled packages from the project or workspace',
     )
-    .usage('list [--json]')
+    .usage('list [--json] [--global] [--global-only]')
     .option('--json', 'Output JSON')
+    .option('--global', 'Include global packages after project packages')
+    .option('--global-only', 'List global packages only')
     .example('list')
     .example('list --json')
-    .action(async (options: { json?: boolean }) => {
-      await runListCommand(options, () =>
-        scanIntentsOrFail({ includeGlobal: true }),
-      )
+    .example('list --global')
+    .action(async (options: ListCommandOptions) => {
+      await runListCommand(options, scanIntentsOrFail)
     })
 
   cli
@@ -82,19 +86,20 @@ function createCli(): CAC {
       'install',
       'Create or update skill-to-task mappings in an agent config file',
     )
-    .usage('install [--dry-run] [--print-prompt]')
+    .usage('install [--dry-run] [--print-prompt] [--global] [--global-only]')
     .option('--dry-run', 'Print the generated mapping block without writing')
     .option(
       '--print-prompt',
       'Print the legacy agent setup prompt instead of writing',
     )
+    .option('--global', 'Include global packages after project packages')
+    .option('--global-only', 'Install mappings from global packages only')
     .example('install')
     .example('install --dry-run')
     .example('install --print-prompt')
-    .action(async (options: { dryRun?: boolean; printPrompt?: boolean }) => {
-      await runInstallCommand(options, () =>
-        scanIntentsOrFail({ includeGlobal: true }),
-      )
+    .example('install --global')
+    .action(async (options: InstallCommandOptions) => {
+      await runInstallCommand(options, scanIntentsOrFail)
     })
 
   cli

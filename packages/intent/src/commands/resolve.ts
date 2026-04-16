@@ -1,4 +1,5 @@
 import { fail } from '../cli-error.js'
+import { scanOptionsFromGlobalFlags } from '../cli-support.js'
 import { resolveSkillUse } from '../resolver.js'
 import type { ScanOptions, ScanResult } from '../types.js'
 
@@ -17,11 +18,7 @@ export async function runResolveCommand(
     fail('Missing skill use. Expected: intent resolve <package>#<skill>')
   }
 
-  if (options.global && options.globalOnly) {
-    fail('Use either --global or --global-only, not both.')
-  }
-
-  const result = await scanIntentsOrFail(getScanOptions(options))
+  const result = await scanIntentsOrFail(scanOptionsFromGlobalFlags(options))
   const resolved = resolveSkillUse(use, result)
 
   if (options.json) {
@@ -47,16 +44,4 @@ export async function runResolveCommand(
   for (const warning of resolved.warnings) {
     console.error(`Warning: ${warning}`)
   }
-}
-
-function getScanOptions(options: ResolveCommandOptions): ScanOptions {
-  if (options.globalOnly) {
-    return { scope: 'global' }
-  }
-
-  if (options.global) {
-    return { scope: 'local-and-global' }
-  }
-
-  return { scope: 'local' }
 }

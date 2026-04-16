@@ -1,7 +1,11 @@
 import { relative } from 'node:path'
 import { fail } from '../cli-error.js'
-import { printWarnings } from '../cli-support.js'
-import type { ScanResult } from '../types.js'
+import {
+  printWarnings,
+  scanOptionsFromGlobalFlags,
+  type GlobalScanFlags,
+} from '../cli-support.js'
+import type { ScanOptions, ScanResult } from '../types.js'
 import {
   buildIntentSkillsBlock,
   resolveIntentSkillsBlockTargetPath,
@@ -112,7 +116,7 @@ skills:
    - The number of mappings
    - The verification result`
 
-export interface InstallCommandOptions {
+export interface InstallCommandOptions extends GlobalScanFlags {
   dryRun?: boolean
   printPrompt?: boolean
 }
@@ -127,14 +131,16 @@ function formatMappingCount(mappingCount: number): string {
 
 export async function runInstallCommand(
   options: InstallCommandOptions,
-  scanIntentsOrFail: () => Promise<ScanResult>,
+  scanIntentsOrFail: (options?: ScanOptions) => Promise<ScanResult>,
 ): Promise<void> {
   if (options.printPrompt) {
     console.log(INSTALL_PROMPT)
     return
   }
 
-  const scanResult = await scanIntentsOrFail()
+  const scanResult = await scanIntentsOrFail(
+    scanOptionsFromGlobalFlags(options),
+  )
   const generated = buildIntentSkillsBlock(scanResult)
 
   if (options.dryRun) {
