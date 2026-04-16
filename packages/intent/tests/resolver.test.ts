@@ -111,6 +111,25 @@ describe('resolveSkillUse', () => {
     )
   })
 
+  it('returns pnpm-internal paths reported by the scanner', () => {
+    const pnpmPath =
+      'node_modules/.pnpm/@tanstack+query@5.0.0/node_modules/@tanstack/query/skills/core/SKILL.md'
+    const pkg = intentPackage({
+      name: '@tanstack/query',
+      packageRoot:
+        'node_modules/.pnpm/@tanstack+query@5.0.0/node_modules/@tanstack/query',
+      skills: [skill('core', pnpmPath)],
+      version: '5.0.0',
+    })
+
+    const result = resolveSkillUse('@tanstack/query#core', scanResult([pkg]))
+
+    expect(result.path).toBe(pnpmPath)
+    expect(result.path).not.toBe(
+      'node_modules/@tanstack/query/skills/core/SKILL.md',
+    )
+  })
+
   it('prefers local packages over global packages when both are present', () => {
     const globalPkg = intentPackage({
       name: '@tanstack/query',
