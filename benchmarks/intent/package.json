@@ -1,0 +1,21 @@
+{
+  "name": "@benchmarks/intent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:perf": "vitest bench --config ./vite.config.ts ./speed.bench.ts"
+  },
+  "devDependencies": {
+    "@codspeed/vitest-plugin": "^5.0.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.0",
+    "vitest": "^4.0.17"
+  },
+  "nx": {
+    "targets": {
+      "test:perf": {
+        "cache": false
+      }
+    }
+  }
+}
