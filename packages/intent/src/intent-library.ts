@@ -12,7 +12,7 @@ import type { LibraryScanResult } from './library-scanner.js'
 function cmdList(): void {
   let result: LibraryScanResult
   try {
-    result = scanLibrary(process.argv[1]!)
+    result = scanLibrary(process.argv[1]!, process.cwd())
   } catch (err) {
     console.error((err as Error).message)
     process.exit(1)

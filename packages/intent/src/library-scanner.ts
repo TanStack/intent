@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
+import { rewriteSkillLoadPaths } from './skill-paths.js'
 import {
   getDeps,
   parseFrontmatter,
@@ -110,7 +111,7 @@ function discoverSkills(skillsDir: string): Array<SkillEntry> {
 
 export function scanLibrary(
   scriptPath: string,
-  _projectRoot?: string,
+  projectRoot?: string,
 ): LibraryScanResult {
   const packages: Array<LibraryPackage> = []
   const warnings: Array<string> = []
@@ -130,6 +131,7 @@ export function scanLibrary(
   }
 
   const homeName = typeof homePkg.name === 'string' ? homePkg.name : ''
+  const scanRoot = projectRoot ?? homeDir
 
   function processPackage(name: string, dir: string): void {
     if (visited.has(name)) return
@@ -144,13 +146,12 @@ export function scanLibrary(
     const skillsDir = join(dir, 'skills')
     const skills = existsSync(skillsDir) ? discoverSkills(skillsDir) : []
 
-    // Convert absolute skill paths to stable node_modules/<name>/... paths
-    if (name) {
-      for (const skill of skills) {
-        const relFromPkg = toPosixPath(relative(dir, skill.path))
-        skill.path = `node_modules/${name}/${relFromPkg}`
-      }
-    }
+    rewriteSkillLoadPaths({
+      packageName: name,
+      packageRoot: dir,
+      projectRoot: scanRoot,
+      skills,
+    })
 
     packages.push({
       name,

@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -141,6 +147,62 @@ describe('scanLibrary', () => {
     const query = result.packages.find((p) => p.name === '@tanstack/query')!
     expect(query.skills[0]!.name).toBe('fetching')
     expect(query.skills[0]!.description).toBe('Query and mutation patterns')
+  })
+
+  it('does not invent top-level load paths for pnpm-style transitive deps', () => {
+    const routerStoreDir = createDir(
+      root,
+      'node_modules',
+      '.pnpm',
+      '@tanstack+router@1.0.0',
+      'node_modules',
+      '@tanstack',
+      'router',
+    )
+    writeJson(join(routerStoreDir, 'package.json'), {
+      name: '@tanstack/router',
+      version: '1.0.0',
+      keywords: ['tanstack-intent'],
+      dependencies: { '@tanstack/query': '^5.0.0' },
+    })
+    const routerSkill = createDir(routerStoreDir, 'skills', 'routing')
+    writeSkillMd(routerSkill, { name: 'routing', description: 'Routing' })
+
+    const queryStoreDir = createDir(
+      root,
+      'node_modules',
+      '.pnpm',
+      '@tanstack+query@5.0.0',
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    writeJson(join(queryStoreDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      keywords: ['tanstack-intent'],
+    })
+    const querySkill = createDir(queryStoreDir, 'skills', 'fetching')
+    writeSkillMd(querySkill, { name: 'fetching', description: 'Fetching' })
+
+    createDir(routerStoreDir, 'node_modules', '@tanstack')
+    symlinkSync(
+      queryStoreDir,
+      join(routerStoreDir, 'node_modules', '@tanstack', 'query'),
+    )
+    createDir(root, 'node_modules', '@tanstack')
+    symlinkSync(routerStoreDir, join(root, 'node_modules', '@tanstack', 'router'))
+
+    const result = scanLibrary(
+      scriptPath(join(root, 'node_modules', '@tanstack', 'router')),
+      root,
+    )
+
+    const query = result.packages.find((p) => p.name === '@tanstack/query')!
+    expect(query.skills[0]!.path).not.toBe(
+      'node_modules/@tanstack/query/skills/fetching/SKILL.md',
+    )
+    expect(query.skills[0]!.path).toContain('node_modules/.pnpm/')
   })
 
   it('discovers deps via peerDependencies', () => {

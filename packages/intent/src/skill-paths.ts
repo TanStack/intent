@@ -1,3 +1,8 @@
+import { existsSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import type { SkillEntry } from './types.js'
+import { toPosixPath } from './utils.js'
+
 export interface SkillLookupTarget {
   packageName?: string
   skillName: string
@@ -35,6 +40,31 @@ export function isStableLoadPath(path: string): boolean {
     !segments.includes('..') &&
     !segments.some(isPackageManagerInternalSegment)
   )
+}
+
+export function rewriteSkillLoadPaths({
+  packageName,
+  packageRoot,
+  projectRoot,
+  skills,
+}: {
+  packageName: string
+  packageRoot: string
+  projectRoot: string
+  skills: Array<SkillEntry>
+}): void {
+  const hasStableSymlink =
+    packageName !== '' &&
+    existsSync(join(projectRoot, 'node_modules', packageName))
+
+  for (const skill of skills) {
+    if (hasStableSymlink) {
+      const relFromPackage = toPosixPath(relative(packageRoot, skill.path))
+      skill.path = `node_modules/${packageName}/${relFromPackage}`
+    } else {
+      skill.path = toPosixPath(relative(projectRoot, skill.path))
+    }
+  }
 }
 
 function formatSkillLookupTarget(target: SkillLookupTarget): string {
