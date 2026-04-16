@@ -12,7 +12,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { INSTALL_PROMPT } from '../src/commands/install.js'
+import { runResolveCommand } from '../src/commands/resolve.js'
 import { main } from '../src/cli.js'
+import type { ScanOptions, ScanResult } from '../src/types.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const metaDir = join(thisDir, '..', 'meta')
@@ -855,6 +857,21 @@ describe('cli commands', () => {
     expect(errorSpy).toHaveBeenCalledWith(
       'Invalid skill use "@tanstack/query": expected <package>#<skill>.',
     )
+  })
+
+  it('validates resolve use strings before scanning', async () => {
+    const scanSpy = vi.fn(
+      async (_options?: ScanOptions): Promise<ScanResult> => {
+        throw new Error('should not scan')
+      },
+    )
+
+    await expect(
+      runResolveCommand('@tanstack/query', {}, scanSpy),
+    ).rejects.toThrow(
+      'Invalid skill use "@tanstack/query": expected <package>#<skill>.',
+    )
+    expect(scanSpy).not.toHaveBeenCalled()
   })
 
   it('fails cleanly when resolve cannot find the package', async () => {

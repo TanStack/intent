@@ -1,6 +1,7 @@
 import { fail } from '../cli-error.js'
 import { scanOptionsFromGlobalFlags } from '../cli-support.js'
 import { resolveSkillUse } from '../resolver.js'
+import { parseSkillUse } from '../skill-use.js'
 import type { ScanOptions, ScanResult } from '../types.js'
 
 export interface ResolveCommandOptions {
@@ -17,6 +18,8 @@ export async function runResolveCommand(
   if (!use) {
     fail('Missing skill use. Expected: intent resolve <package>#<skill>')
   }
+
+  parseSkillUse(use)
 
   const result = await scanIntentsOrFail(scanOptionsFromGlobalFlags(options))
   const resolved = resolveSkillUse(use, result)
