@@ -13,6 +13,7 @@ import { runEditPackageJsonCommand } from './commands/edit-package-json.js'
 import { runInstallCommand } from './commands/install.js'
 import { runListCommand } from './commands/list.js'
 import { runMetaCommand } from './commands/meta.js'
+import { runResolveCommand } from './commands/resolve.js'
 import { runScaffoldCommand } from './commands/scaffold.js'
 import { runSetupGithubActionsCommand } from './commands/setup-github-actions.js'
 import { runStaleCommand } from './commands/stale.js'
@@ -36,6 +37,27 @@ function createCli(): CAC {
         scanIntentsOrFail({ includeGlobal: true }),
       )
     })
+
+  cli
+    .command('resolve [use]', 'Resolve a compact skill use to a loadable path')
+    .usage('resolve <use> [--json] [--global] [--global-only]')
+    .option('--json', 'Output JSON')
+    .option('--global', 'Resolve from project packages, then global packages')
+    .option('--global-only', 'Resolve from global packages only')
+    .example('resolve @tanstack/query#core')
+    .example('resolve @tanstack/query#core --json')
+    .action(
+      async (
+        use: string | undefined,
+        options: {
+          json?: boolean
+          global?: boolean
+          globalOnly?: boolean
+        },
+      ) => {
+        await runResolveCommand(use, options, scanIntentsOrFail)
+      },
+    )
 
   cli
     .command('meta [name]', 'List meta-skills, or print one by name')

@@ -24,8 +24,11 @@ export interface ScanResult {
   }
 }
 
+export type ScanScope = 'local' | 'local-and-global' | 'global'
+
 export interface ScanOptions {
   includeGlobal?: boolean
+  scope?: ScanScope
 }
 
 export interface NodeModulesScanTarget {

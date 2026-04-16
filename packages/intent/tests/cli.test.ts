@@ -563,6 +563,159 @@ describe('cli commands', () => {
     })
   })
 
+  it('resolves a local skill use to a path', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-resolve-'))
+    tempDirs.push(root)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['resolve', '@tanstack/query#fetching'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toBe('node_modules/@tanstack/query/skills/fetching/SKILL.md')
+  })
+
+  it('resolves a skill use as json', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-resolve-json-'))
+    tempDirs.push(root)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main([
+      'resolve',
+      '@tanstack/query#fetching',
+      '--json',
+    ])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const parsed = JSON.parse(String(output)) as {
+      package: string
+      path: string
+      skill: string
+      source: 'local' | 'global'
+      version: string
+      warnings: Array<string>
+    }
+
+    expect(exitCode).toBe(0)
+    expect(parsed).toEqual({
+      package: '@tanstack/query',
+      path: 'node_modules/@tanstack/query/skills/fetching/SKILL.md',
+      skill: 'fetching',
+      source: 'local',
+      version: '5.0.0',
+      warnings: [],
+    })
+  })
+
+  it('resolves global fallback when requested', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-resolve-global-'))
+    const globalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-resolve-global-node-modules-'),
+    )
+    tempDirs.push(root, globalRoot)
+
+    const globalPkgDir = join(globalRoot, '@tanstack', 'query')
+    writeJson(join(globalPkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(join(globalPkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Global fetching skill',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+    process.chdir(root)
+
+    const exitCode = await main([
+      'resolve',
+      '@tanstack/query#fetching',
+      '--global',
+    ])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toBe(join(globalPkgDir, 'skills', 'fetching', 'SKILL.md'))
+  })
+
+  it('resolves global-only without using local packages', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-resolve-global-only-'),
+    )
+    const globalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-resolve-global-only-node-modules-'),
+    )
+    tempDirs.push(root, globalRoot)
+
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.1.0',
+      skillName: 'fetching',
+      description: 'Local fetching skill',
+    })
+
+    const globalPkgDir = join(globalRoot, '@tanstack', 'query')
+    writeJson(join(globalPkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '4.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(join(globalPkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Global fetching skill',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+    process.chdir(root)
+
+    const exitCode = await main([
+      'resolve',
+      '@tanstack/query#fetching',
+      '--global-only',
+      '--json',
+    ])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const parsed = JSON.parse(String(output)) as {
+      path: string
+      source: 'local' | 'global'
+      version: string
+    }
+
+    expect(exitCode).toBe(0)
+    expect(parsed.source).toBe('global')
+    expect(parsed.version).toBe('4.0.0')
+    expect(parsed.path).toBe(
+      join(globalPkgDir, 'skills', 'fetching', 'SKILL.md'),
+    )
+  })
+
+  it('fails cleanly for invalid resolve use strings', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-resolve-invalid-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main(['resolve', '@tanstack/query'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Invalid skill use "@tanstack/query": expected <package>#<skill>.',
+    )
+  })
+
   it('explains which package version was chosen when conflicts exist', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-conflicts-'))
     tempDirs.push(root)

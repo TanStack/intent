@@ -16,6 +16,7 @@ import type {
   IntentPackage,
   ScanOptions,
   ScanResult,
+  ScanScope,
   SkillEntry,
   VersionConflict,
 } from './types.js'
@@ -317,12 +318,16 @@ function toVersionConflict(
 // Main scanner
 // ---------------------------------------------------------------------------
 
+function getScanScope(options: ScanOptions): ScanScope {
+  return options.scope ?? (options.includeGlobal ? 'local-and-global' : 'local')
+}
+
 export function scanForIntents(
   root?: string,
   options: ScanOptions = {},
 ): ScanResult {
   const projectRoot = root ?? process.cwd()
-  const { includeGlobal = false } = options
+  const scanScope = getScanScope(options)
   const packageManager = detectPackageManager(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')
   const explicitGlobalNodeModules =
@@ -413,9 +418,6 @@ export function scanForIntents(
     warnings,
   })
 
-  // Phase 1: Check local top-level packages for skills/
-  scanTarget(nodeModules.local)
-
   const { walkKnownPackages, walkProjectDeps, walkWorkspacePackages } =
     createDependencyWalker({
       packages,
@@ -425,15 +427,31 @@ export function scanForIntents(
       warnings,
     })
 
-  walkWorkspacePackages()
-  walkKnownPackages()
-  walkProjectDeps()
-
-  if (includeGlobal) {
-    ensureGlobalNodeModules()
-    scanTarget(nodeModules.global, 'global')
+  function scanLocalPackages(): void {
+    scanTarget(nodeModules.local)
+    walkWorkspacePackages()
     walkKnownPackages()
     walkProjectDeps()
+  }
+
+  function scanGlobalPackages(): void {
+    ensureGlobalNodeModules()
+    scanTarget(nodeModules.global, 'global')
+  }
+
+  switch (scanScope) {
+    case 'local':
+      scanLocalPackages()
+      break
+    case 'local-and-global':
+      scanLocalPackages()
+      scanGlobalPackages()
+      walkKnownPackages()
+      walkProjectDeps()
+      break
+    case 'global':
+      scanGlobalPackages()
+      break
   }
 
   if (!nodeModules.local.exists && !nodeModules.global.exists) {
