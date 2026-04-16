@@ -191,7 +191,10 @@ describe('scanLibrary', () => {
       join(routerStoreDir, 'node_modules', '@tanstack', 'query'),
     )
     createDir(root, 'node_modules', '@tanstack')
-    symlinkSync(routerStoreDir, join(root, 'node_modules', '@tanstack', 'router'))
+    symlinkSync(
+      routerStoreDir,
+      join(root, 'node_modules', '@tanstack', 'router'),
+    )
 
     const result = scanLibrary(
       scriptPath(join(root, 'node_modules', '@tanstack', 'router')),
