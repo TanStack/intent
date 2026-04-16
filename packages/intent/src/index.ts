@@ -17,7 +17,14 @@ export {
   parseFrontmatter,
   resolveDepDir,
 } from './utils.js'
+export {
+  formatSkillUse,
+  isSkillUseParseError,
+  parseSkillUse,
+  SkillUseParseError,
+} from './skill-use.js'
 export { runEditPackageJson, runSetupGithubActions } from './setup.js'
+export type { SkillUse, SkillUseParseErrorCode } from './skill-use.js'
 export type {
   EditPackageJsonResult,
   SetupGithubActionsResult,
