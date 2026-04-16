@@ -222,22 +222,76 @@ function install(dir: string, pm: PackageManager, registryUrl: string): void {
 
   switch (pm) {
     case 'npm':
-      execSync(`npm install ${reg}`, { cwd: dir, stdio: 'ignore', env })
+      runInstallCommand(`npm install ${reg}`, dir, env)
       break
     case 'pnpm':
-      execSync(`pnpm install ${reg} --no-frozen-lockfile`, {
-        cwd: dir,
-        stdio: 'ignore',
-        env,
-      })
+      runInstallCommand(`pnpm install ${reg} --no-frozen-lockfile`, dir, env)
       break
     case 'yarn':
-      execSync(`yarn install ${reg}`, { cwd: dir, stdio: 'ignore', env })
+      runInstallCommand(`yarn install ${reg}`, dir, env)
       break
     case 'bun':
-      execSync(`bun install ${reg}`, { cwd: dir, stdio: 'ignore', env })
+      runInstallCommand(`bun install ${reg}`, dir, env)
       break
   }
+}
+
+function runInstallCommand(
+  command: string,
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+): void {
+  try {
+    execSync(command, { cwd, env, stdio: 'pipe' })
+  } catch (error) {
+    throw new Error(formatInstallError(command, cwd, error))
+  }
+}
+
+function formatInstallError(
+  command: string,
+  cwd: string,
+  error: unknown,
+): string {
+  const processError = error as {
+    message?: string
+    signal?: NodeJS.Signals
+    status?: number
+    stderr?: Buffer | string
+    stdout?: Buffer | string
+  }
+  const lines = [`Command failed: ${command}`, `cwd: ${cwd}`]
+
+  if (typeof processError.status === 'number') {
+    lines.push(`exit code: ${processError.status}`)
+  }
+  if (processError.signal) {
+    lines.push(`signal: ${processError.signal}`)
+  }
+
+  const stdout = commandOutputToString(processError.stdout)
+  if (stdout) {
+    lines.push(`stdout:\n${stdout}`)
+  }
+
+  const stderr = commandOutputToString(processError.stderr)
+  if (stderr) {
+    lines.push(`stderr:\n${stderr}`)
+  }
+
+  if (!stdout && !stderr && processError.message) {
+    lines.push(processError.message)
+  }
+
+  return lines.join('\n')
+}
+
+function commandOutputToString(output: Buffer | string | undefined): string {
+  if (!output) {
+    return ''
+  }
+
+  return output.toString().trim()
 }
 
 // ---------------------------------------------------------------------------
