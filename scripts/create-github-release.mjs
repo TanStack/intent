@@ -9,6 +9,7 @@ const rootDir = path.resolve(import.meta.dirname, '..')
 const packagesDir = path.join(rootDir, 'packages')
 const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
 const isPrerelease = process.argv.includes('--prerelease')
+const isDryRun = process.argv.includes('--dry-run')
 
 function run(command, options = {}) {
   return execSync(command, {
@@ -37,6 +38,22 @@ function getReleaseCommits() {
   }
 
   return output.split('\n').filter(Boolean)
+}
+
+function getPreviousGitHubReleaseCommit() {
+  const output = maybeRun('git tag --list "release-*" --sort=-creatordate')
+
+  if (!output) {
+    return null
+  }
+
+  const [tag] = output.split('\n').filter(Boolean)
+
+  if (!tag) {
+    return null
+  }
+
+  return maybeRun(`git rev-list -n 1 ${tag}`)
 }
 
 function getPackages() {
@@ -98,33 +115,90 @@ function getChangedPackages(previousReleaseCommit) {
     .sort((left, right) => left.name.localeCompare(right.name))
 }
 
-function getChangelogSection(changelogPath, version) {
-  if (!fs.existsSync(changelogPath)) {
+function parseVersion(version) {
+  const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/)
+
+  if (!match) {
     return null
+  }
+
+  return match.slice(1).map(Number)
+}
+
+function compareVersions(leftVersion, rightVersion) {
+  const left = parseVersion(leftVersion)
+  const right = parseVersion(rightVersion)
+
+  if (!left || !right) {
+    return leftVersion.localeCompare(rightVersion)
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return left[index] - right[index]
+    }
+  }
+
+  return 0
+}
+
+function isVersionInRange(version, previousVersion, currentVersion) {
+  if (compareVersions(version, currentVersion) > 0) {
+    return false
+  }
+
+  if (!previousVersion) {
+    return true
+  }
+
+  return compareVersions(version, previousVersion) > 0
+}
+
+function getChangelogSections(changelogPath, previousVersion, currentVersion) {
+  if (!fs.existsSync(changelogPath)) {
+    return []
   }
 
   const changelog = fs.readFileSync(changelogPath, 'utf8')
-  const marker = `## ${version}`
-  const start = changelog.indexOf(marker)
+  const sections = []
+  const headingPattern = /^## (\d+\.\d+\.\d+)\s*$/gm
+  const headings = Array.from(changelog.matchAll(headingPattern))
 
-  if (start === -1) {
-    return null
+  for (let index = 0; index < headings.length; index += 1) {
+    const heading = headings[index]
+    const version = heading[1]
+
+    if (!isVersionInRange(version, previousVersion, currentVersion)) {
+      continue
+    }
+
+    const nextHeading = headings[index + 1]
+    const bodyStart = changelog.indexOf('\n', heading.index)
+    const body = changelog
+      .slice(bodyStart + 1, nextHeading?.index)
+      .trim()
+
+    sections.push({
+      version,
+      body: body || '- No changelog entries',
+    })
   }
 
-  const bodyStart = changelog.indexOf('\n', start)
-  const nextSection = changelog.indexOf('\n## ', bodyStart + 1)
-
-  return changelog
-    .slice(bodyStart + 1, nextSection === -1 ? undefined : nextSection)
-    .trim()
+  return sections
 }
 
 function buildReleaseNotes(changedPackages) {
   const sections = changedPackages.map((pkg) => {
     const changelogPath = path.join(packagesDir, pkg.dir, 'CHANGELOG.md')
+    const changelogSections = getChangelogSections(
+      changelogPath,
+      pkg.previousVersion,
+      pkg.version,
+    )
     const content =
-      getChangelogSection(changelogPath, pkg.version) ||
-      '- No changelog entries'
+      changelogSections
+        .map((section) => `### ${section.version}\n\n${section.body}`)
+        .join('\n\n') || '- No changelog entries'
 
     return `#### ${pkg.name}\n\n${content}`
   })
@@ -207,7 +281,9 @@ function rollbackTag(tag) {
 
 function main() {
   const [, previousReleaseCommit] = getReleaseCommits()
-  const changedPackages = getChangedPackages(previousReleaseCommit)
+  const changedPackages = getChangedPackages(
+    getPreviousGitHubReleaseCommit() || previousReleaseCommit,
+  )
 
   if (changedPackages.length === 0) {
     console.log('No changed packages found for GitHub release.')
@@ -217,6 +293,11 @@ function main() {
   const notes = buildReleaseNotes(changedPackages)
   const { tag, title } = createReleaseTag()
   const body = createReleaseBody(title, changedPackages, notes)
+
+  if (isDryRun) {
+    console.log(body)
+    return
+  }
 
   let createdTag = false
 

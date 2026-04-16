@@ -1,12 +1,12 @@
 {
   "name": "@tanstack/intent",
-  "version": "0.0.32",
+  "version": "0.0.31",
   "description": "Ship compositional knowledge for AI coding agents alongside your npm packages",
   "license": "MIT",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tanstack/intent"
+    "url": "https://github.com/TanStack/intent"
   },
   "exports": {
     ".": {
