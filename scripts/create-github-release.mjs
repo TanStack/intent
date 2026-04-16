@@ -174,9 +174,7 @@ function getChangelogSections(changelogPath, previousVersion, currentVersion) {
 
     const nextHeading = headings[index + 1]
     const bodyStart = changelog.indexOf('\n', heading.index)
-    const body = changelog
-      .slice(bodyStart + 1, nextHeading?.index)
-      .trim()
+    const body = changelog.slice(bodyStart + 1, nextHeading?.index).trim()
 
     sections.push({
       version,
