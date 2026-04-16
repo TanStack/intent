@@ -23,8 +23,17 @@ export {
   parseSkillUse,
   SkillUseParseError,
 } from './skill-use.js'
+export {
+  isResolveSkillUseError,
+  resolveSkillUse,
+  ResolveSkillUseError,
+} from './resolver.js'
 export { runEditPackageJson, runSetupGithubActions } from './setup.js'
 export type { SkillUse, SkillUseParseErrorCode } from './skill-use.js'
+export type {
+  ResolveSkillResult,
+  ResolveSkillUseErrorCode,
+} from './resolver.js'
 export type {
   EditPackageJsonResult,
   SetupGithubActionsResult,
