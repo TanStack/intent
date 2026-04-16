@@ -14,7 +14,6 @@ import {
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from '../src/commands/install-writer.js'
-import { formatRuntimeSkillLookupComment } from '../src/skill-paths.js'
 import type { IntentPackage, ScanResult, SkillEntry } from '../src/types.js'
 
 const tempDirs: Array<string> = []
@@ -76,15 +75,15 @@ function scanResult(packages: Array<IntentPackage>): ScanResult {
 }
 
 const exampleBlock = `<!-- intent-skills:start -->
-# Skill mappings - when working in these areas, load the linked skill file into context.
+# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
 skills:
-  - task: "Use @tanstack/query fetching"
-    load: "node_modules/@tanstack/query/skills/fetching/SKILL.md"
+  - when: "Query data fetching"
+    use: "@tanstack/query#fetching"
 <!-- intent-skills:end -->
 `
 
 describe('install writer block builder', () => {
-  it('builds a deterministic block with stable load paths', () => {
+  it('builds a deterministic compact block', () => {
     const result = scanResult([
       pkg({
         name: '@tanstack/router',
@@ -117,19 +116,19 @@ describe('install writer block builder', () => {
 
     expect(generated.mappingCount).toBe(3)
     expect(generated.block).toBe(`<!-- intent-skills:start -->
-# Skill mappings - when working in these areas, load the linked skill file into context.
+# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
 skills:
-  - task: "Use @tanstack/query fetching: Query data fetching patterns"
-    load: "node_modules/@tanstack/query/skills/fetching/SKILL.md"
-  - task: "Use @tanstack/query mutations: Mutation patterns"
-    load: "node_modules/@tanstack/query/skills/mutations/SKILL.md"
-  - task: "Use @tanstack/router routing: Routing patterns"
-    load: "node_modules/@tanstack/router/skills/routing/SKILL.md"
+  - when: "Query data fetching patterns"
+    use: "@tanstack/query#fetching"
+  - when: "Mutation patterns"
+    use: "@tanstack/query#mutations"
+  - when: "Routing patterns"
+    use: "@tanstack/router#routing"
 <!-- intent-skills:end -->
 `)
   })
 
-  it('uses runtime lookup comments for unsafe paths', () => {
+  it('does not emit paths for unsafe skill paths', () => {
     const result = scanResult([
       pkg({
         name: '@tanstack/query',
@@ -151,24 +150,14 @@ skills:
     const generated = buildIntentSkillsBlock(result)
 
     expect(generated.mappingCount).toBe(2)
-    expect(generated.block).toContain(
-      `# ${formatRuntimeSkillLookupComment({
-        packageName: '@tanstack/query',
-        skillName: 'global-fetching',
-      })}`,
-    )
-    expect(generated.block).toContain(
-      `# ${formatRuntimeSkillLookupComment({
-        packageName: '@tanstack/query',
-        skillName: 'pnpm-fetching',
-      })}`,
-    )
+    expect(generated.block).toContain('use: "@tanstack/query#global-fetching"')
+    expect(generated.block).toContain('use: "@tanstack/query#pnpm-fetching"')
     expect(generated.block).not.toContain('/home/sarah')
     expect(generated.block).not.toContain('node_modules/.pnpm')
     expect(generated.block).not.toContain('load:')
   })
 
-  it('maps only top-level actionable skills', () => {
+  it('maps actionable skills including slash-named sub-skills', () => {
     const result = scanResult([
       pkg({
         name: '@tanstack/query',
@@ -196,15 +185,17 @@ skills:
 
     const generated = buildIntentSkillsBlock(result)
 
-    expect(generated.mappingCount).toBe(1)
-    expect(generated.block).toContain('Use @tanstack/query core: Core skill')
-    expect(generated.block).not.toContain('core/fetching')
+    expect(generated.mappingCount).toBe(2)
+    expect(generated.block).toContain('when: "Core skill"')
+    expect(generated.block).toContain('use: "@tanstack/query#core"')
+    expect(generated.block).toContain('when: "Sub-skill"')
+    expect(generated.block).toContain('use: "@tanstack/query#core/fetching"')
     expect(generated.block).not.toContain('Reference material')
     expect(generated.block).not.toContain('Maintainer task')
     expect(generated.block).not.toContain('Maintainer-only task')
   })
 
-  it('escapes generated task and load strings', () => {
+  it('escapes generated when and use strings', () => {
     const result = scanResult([
       pkg({
         name: '@tanstack/query',
@@ -220,12 +211,8 @@ skills:
 
     const generated = buildIntentSkillsBlock(result)
 
-    expect(generated.block).toContain(
-      'task: "Use @tanstack/query quotes: Use \\"quoted\\" names"',
-    )
-    expect(generated.block).toContain(
-      'load: "node_modules/@tanstack/query/skills/\\"quotes\\"/SKILL.md"',
-    )
+    expect(generated.block).toContain('when: "Use \\"quoted\\" names"')
+    expect(generated.block).toContain('use: "@tanstack/query#quotes"')
   })
 })
 
@@ -380,18 +367,14 @@ old
 })
 
 describe('install writer verification', () => {
-  it('accepts a written block with runtime lookup comments', () => {
+  it('accepts a written compact block', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
-    const runtimeLookupComment = formatRuntimeSkillLookupComment({
-      packageName: '@tanstack/query',
-      skillName: 'fetching',
-    })
     const block = `<!-- intent-skills:start -->
-# Skill mappings - when working in these areas, load the linked skill file into context.
+# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
 skills:
-  - task: "Use @tanstack/query fetching"
-    # ${runtimeLookupComment}
+  - when: "Query data fetching"
+    use: "@tanstack/query#fetching"
 <!-- intent-skills:end -->
 `
     writeFileSync(agentsPath, block)
@@ -426,7 +409,7 @@ skills:
     const agentsPath = join(root, 'AGENTS.md')
     writeFileSync(
       agentsPath,
-      exampleBlock.replace('@tanstack/query fetching', '@tanstack/query cache'),
+      exampleBlock.replace('Query data fetching', 'Query cache management'),
     )
 
     const result = verifyIntentSkillsBlockFile({
@@ -441,16 +424,14 @@ skills:
     )
   })
 
-  it('rejects unsafe load paths', () => {
+  it('rejects legacy load paths', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - when working in these areas, load the linked skill file into context.
+# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
 skills:
-  - task: "Use @tanstack/query global"
+  - when: "Global query skill"
     load: "/home/sarah/.npm-global/lib/node_modules/@tanstack/query/skills/global/SKILL.md"
-  - task: "Use @tanstack/query pnpm"
-    load: "node_modules/.pnpm/@tanstack+query@1.0.0/node_modules/@tanstack/query/skills/pnpm/SKILL.md"
 <!-- intent-skills:end -->
 `
     writeFileSync(agentsPath, block)
@@ -463,21 +444,20 @@ skills:
 
     expect(result.ok).toBe(false)
     expect(result.errors).toContain(
-      'Unsafe load path in managed block: /home/sarah/.npm-global/lib/node_modules/@tanstack/query/skills/global/SKILL.md',
+      'Skill mappings must use compact `use` entries, not `load`.',
     )
     expect(result.errors).toContain(
-      'Unsafe load path in managed block: node_modules/.pnpm/@tanstack+query@1.0.0/node_modules/@tanstack/query/skills/pnpm/SKILL.md',
+      'Each skill mapping must include a `use` field.',
     )
   })
 
-  it('rejects runtime lookup comments without package and skill names', () => {
+  it('rejects mappings without when', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - when working in these areas, load the linked skill file into context.
+# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
 skills:
-  - task: "Use @tanstack/query fetching"
-    # Runtime lookup only: run \`npx @tanstack/intent@latest list --json\`.
+  - use: "@tanstack/query#fetching"
 <!-- intent-skills:end -->
 `
     writeFileSync(agentsPath, block)
@@ -490,23 +470,17 @@ skills:
 
     expect(result.ok).toBe(false)
     expect(result.errors).toContain(
-      'Runtime lookup entries must include package and skill names.',
+      'Each skill mapping must include a non-empty `when` field.',
     )
   })
 
-  it('rejects runtime lookup comments attached to another mapping', () => {
+  it('rejects mappings without use', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - when working in these areas, load the linked skill file into context.
+# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
 skills:
-  - task: "Use @tanstack/query fetching"
-    load: "node_modules/@tanstack/query/skills/fetching/SKILL.md"
-    # ${formatRuntimeSkillLookupComment({
-      packageName: '@tanstack/query',
-      skillName: 'global-fetching',
-    })}
-  - task: "Use @tanstack/query global-fetching"
+  - when: "Query data fetching"
 <!-- intent-skills:end -->
 `
     writeFileSync(agentsPath, block)
@@ -519,7 +493,31 @@ skills:
 
     expect(result.ok).toBe(false)
     expect(result.errors).toContain(
-      'Runtime lookup entries must include package and skill names.',
+      'Each skill mapping must include a `use` field.',
+    )
+  })
+
+  it('rejects invalid use values', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    const block = `<!-- intent-skills:start -->
+# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
+skills:
+  - when: "Query data fetching"
+    use: "@tanstack/query"
+<!-- intent-skills:end -->
+`
+    writeFileSync(agentsPath, block)
+
+    const result = verifyIntentSkillsBlockFile({
+      expectedBlock: block,
+      expectedMappingCount: 1,
+      targetPath: agentsPath,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors).toContain(
+      'Invalid skill use "@tanstack/query": expected <package>#<skill>.',
     )
   })
 })

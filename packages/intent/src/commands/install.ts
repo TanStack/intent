@@ -22,8 +22,8 @@ Hard rules:
 - If skills are discovered and no mapping block exists, create AGENTS.md unless the user asks for another supported config file.
 - If a mapping block already exists in a supported config file, update that file.
 - Preserve all content outside the managed block unchanged.
-- Use only stable, repo-relative paths from \`npx @tanstack/intent@latest list\`; do not invent node_modules paths.
-- Never write absolute local file paths in the managed block.
+- Store compact \`use\` values in the managed block; do not write \`load\` paths.
+- Never write absolute local file paths, node_modules paths, or package-manager-internal paths in the managed block.
 - Verify the target file before your final response.
 
 Follow these steps in order:
@@ -39,7 +39,7 @@ Follow these steps in order:
 
 2. DISCOVER AVAILABLE SKILLS
    Run: \`npx @tanstack/intent@latest list\`
-   This outputs each skill's name, description, full path, and whether it was found in
+   This outputs each package and skill's name, description, and whether it was found in
    project-local node_modules or accessible global node_modules.
    This works best in Node-compatible environments (npm, pnpm, Bun, or Deno npm interop
    with node_modules enabled).
@@ -52,10 +52,10 @@ Follow these steps in order:
    - Note recurring patterns (routing, data fetching, auth, UI components, etc.)
 
    Mapping coverage rule:
-   - Create mappings for all discovered top-level actionable skills.
-   - Do not omit a top-level actionable skill only because the repo does not currently appear to use it.
+   - Create mappings for all discovered actionable skills.
+   - Do not omit an actionable skill only because the repo does not currently appear to use it.
    - Do not map reference-only, meta, or maintainer-only skills by default.
-   - For sub-skills, include them only when they describe distinct user tasks not covered by the parent skill.
+   - Include slash-named sub-skills when no parent mapping exists, or when they describe distinct user tasks.
    - If the proposed block would exceed 12 mappings, show the full discovered list and ask which packages
      or skill groups to include before writing.
    - Add one fallback note telling the agent to run \`npx @tanstack/intent@latest list\` for less common skills.
@@ -80,23 +80,19 @@ Follow these steps in order:
    Use this exact block:
 
 <!-- intent-skills:start -->
-# Skill mappings - when working in these areas, load the linked skill file into context.
+# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
 skills:
-  - task: "describe the task or code area here"
-    load: "node_modules/package-name/skills/skill-name/SKILL.md"
+  - when: "describe the task or code area here"
+    use: "@scope/package#skill-name"
 <!-- intent-skills:end -->
 
    Rules:
-   - Use the user's own words for task descriptions
-   - Include the exact stable, repo-relative path from \`npx @tanstack/intent@latest list\` output so agents can load it directly
-   - Paths should use the stable \`node_modules/<package-name>/skills/...\` format (no version numbers)
+   - Use the user's own words for \`when\` descriptions
+   - Use compact \`use\` values in \`<package>#<skill>\` format
+   - Do not include \`load\`
    - Do not include machine-specific directories such as \`/Users/...\`, \`/home/...\`, \`/private/...\`,
-     drive letters, or temp workspace paths.
-   - If a skill path from \`list\` is absolute or contains package-manager-internal directories
-     (e.g. \`.pnpm/\`, \`.bun/\`) with version numbers, do NOT use it as \`load\`.
-     Instead, add a comment telling the agent how to locate the skill at runtime:
-       - task: "describe the task"
-         # Runtime lookup only: run \`npx @tanstack/intent@latest list --json\`, find package "<package-name>" skill "<skill-name>", and load its reported path for this session. Do not copy the resolved path into this file.
+     drive letters, temp workspace paths, \`.pnpm/\`, \`.bun/\`, or \`.yarn/\`.
+   - Agents should resolve \`use\` at runtime with \`npx @tanstack/intent@latest resolve <use>\`
    - Keep entries concise - this block is read on every agent task
    - Preserve all content outside the block tags unchanged
    - If the user is on Deno, note that this setup is best-effort today and relies on npm interop
@@ -105,10 +101,11 @@ skills:
    Before reporting completion:
    - Confirm the target file exists
    - Confirm it contains both managed block markers
-   - Confirm every load path came from \`npx @tanstack/intent@latest list\` output, or uses a runtime lookup comment
-   - Confirm no load path is absolute or machine-specific
-   - Confirm every runtime lookup comment includes both package name and skill name
-   - Confirm every discovered top-level actionable skill is mapped, skipped by rule, or deferred by user choice
+   - Confirm every mapping has \`when\` and \`use\`
+   - Confirm every \`use\` parses as \`<package>#<skill>\`
+   - Confirm no mapping includes \`load\`
+   - Confirm no path-like machine-specific values are stored in the managed block
+   - Confirm every discovered actionable skill is mapped, skipped by rule, or deferred by user choice
 
    Final response must include:
    - The target file path
@@ -150,7 +147,7 @@ export async function runInstallCommand(
     )
 
     if (!targetPath) {
-      console.log('No top-level actionable intent skills found.')
+      console.log('No actionable intent skills found.')
       printWarnings(scanResult.warnings)
       return
     }
@@ -169,7 +166,7 @@ export async function runInstallCommand(
   })
 
   if (!result.targetPath) {
-    console.log('No top-level actionable intent skills found.')
+    console.log('No actionable intent skills found.')
     printWarnings(scanResult.warnings)
     return
   }

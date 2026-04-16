@@ -230,12 +230,9 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Created AGENTS.md with 1 mapping.')
-    expect(content).toContain(
-      'task: "Use @tanstack/query fetching: Query data fetching patterns"',
-    )
-    expect(content).toContain(
-      'load: "node_modules/@tanstack/query/skills/fetching/SKILL.md"',
-    )
+    expect(content).toContain('when: "Query data fetching patterns"')
+    expect(content).toContain('use: "@tanstack/query#fetching"')
+    expect(content).not.toContain('load:')
     expect(content).not.toContain(root)
 
     logSpy.mockClear()
@@ -271,9 +268,8 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Generated 1 mapping for AGENTS.md.')
-    expect(output).toContain(
-      'task: "Use @tanstack/router routing: Router patterns"',
-    )
+    expect(output).toContain('when: "Router patterns"')
+    expect(output).toContain('use: "@tanstack/router#routing"')
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
@@ -291,7 +287,7 @@ describe('cli commands', () => {
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
-    expect(output).toContain('No top-level actionable intent skills found.')
+    expect(output).toContain('No actionable intent skills found.')
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
@@ -320,7 +316,7 @@ describe('cli commands', () => {
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
-    expect(output).toContain('No top-level actionable intent skills found.')
+    expect(output).toContain('No actionable intent skills found.')
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
@@ -350,9 +346,8 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Generated 1 mapping for AGENTS.md.')
-    expect(output).toContain(
-      'task: "Use @tanstack/query fetching: Global fetching skill"',
-    )
+    expect(output).toContain('when: "Global fetching skill"')
+    expect(output).toContain('use: "@tanstack/query#fetching"')
   })
 
   it('prints the scaffold prompt', async () => {

@@ -1,11 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import {
-  formatRuntimeSkillLookupComment,
-  isRuntimeSkillLookupComment,
-  isStableLoadPath,
-} from '../skill-paths.js'
+import { formatSkillUse, parseSkillUse } from '../skill-use.js'
 import type { ScanResult, SkillEntry } from '../types.js'
 
 const INTENT_SKILLS_START = '<!-- intent-skills:start -->'
@@ -129,47 +125,6 @@ function parseSkillsList(block: string): {
   }
 }
 
-function validateRuntimeLookupEntries(
-  block: string,
-  skills: Array<unknown>,
-): Array<string> {
-  const skillEntryBlocks = readSkillEntryBlocks(block)
-  for (let index = 0; index < skills.length; index++) {
-    const skill = skills[index]
-    if (!skill || typeof skill !== 'object') continue
-    if (typeof (skill as { load?: unknown }).load === 'string') continue
-    if (skillEntryBlocks[index]?.some(isRuntimeSkillLookupComment)) continue
-
-    return ['Runtime lookup entries must include package and skill names.']
-  }
-
-  return []
-}
-
-function readSkillEntryBlocks(block: string): Array<Array<string>> {
-  const entries: Array<Array<string>> = []
-  let currentEntry: Array<string> | null = null
-
-  for (const line of normalizeBlock(block).split('\n')) {
-    if (line === INTENT_SKILLS_START || line === INTENT_SKILLS_END) {
-      currentEntry = null
-      continue
-    }
-
-    if (/^\s*-\s+/.test(line)) {
-      currentEntry = [line]
-      entries.push(currentEntry)
-      continue
-    }
-
-    if (currentEntry && /^\s+/.test(line)) {
-      currentEntry.push(line)
-    }
-  }
-
-  return entries
-}
-
 export function verifyIntentSkillsBlockFile({
   expectedBlock,
   expectedMappingCount,
@@ -216,15 +171,26 @@ export function verifyIntentSkillsBlockFile({
       continue
     }
 
-    const load = (skill as { load?: unknown }).load
-    if (typeof load === 'string') {
-      if (!isStableLoadPath(load)) {
-        errors.push(`Unsafe load path in managed block: ${load}`)
+    const mapping = skill as { load?: unknown; use?: unknown; when?: unknown }
+
+    if (mapping.load !== undefined) {
+      errors.push('Skill mappings must use compact `use` entries, not `load`.')
+    }
+
+    if (typeof mapping.when !== 'string' || mapping.when.trim() === '') {
+      errors.push('Each skill mapping must include a non-empty `when` field.')
+    }
+
+    if (typeof mapping.use !== 'string') {
+      errors.push('Each skill mapping must include a `use` field.')
+    } else {
+      try {
+        parseSkillUse(mapping.use)
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err))
       }
     }
   }
-
-  errors.push(...validateRuntimeLookupEntries(block, skills))
 
   return {
     errors,
@@ -253,16 +219,14 @@ function quoteYamlString(value: string): string {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 }
 
-function isTopLevelActionableSkill(skill: SkillEntry): boolean {
-  if (skill.name.includes('/')) return false
+function isActionableSkill(skill: SkillEntry): boolean {
   const type = skill.type?.trim().toLowerCase()
   return !type || !NON_ACTIONABLE_SKILL_TYPES.has(type)
 }
 
-function formatTask(packageName: string, skill: SkillEntry): string {
+function formatWhen(packageName: string, skill: SkillEntry): string {
   const description = skill.description.replace(/\s+/g, ' ').trim()
-  const prefix = `Use ${packageName} ${skill.name}`
-  return description ? `${prefix}: ${description}` : prefix
+  return description || `Use ${packageName} ${skill.name}`
 }
 
 export function buildIntentSkillsBlock(
@@ -270,28 +234,20 @@ export function buildIntentSkillsBlock(
 ): IntentSkillsBlockResult {
   const lines = [
     INTENT_SKILLS_START,
-    '# Skill mappings - when working in these areas, load the linked skill file into context.',
+    '# Skill mappings - resolve `use` with `npx @tanstack/intent@latest resolve <use>`.',
     'skills:',
   ]
   let mappingCount = 0
 
   for (const pkg of [...scanResult.packages].sort(compareNames)) {
     for (const skill of [...pkg.skills].sort(compareNames)) {
-      if (!isTopLevelActionableSkill(skill)) continue
+      if (!isActionableSkill(skill)) continue
 
       mappingCount++
-      lines.push(`  - task: ${quoteYamlString(formatTask(pkg.name, skill))}`)
-
-      if (isStableLoadPath(skill.path)) {
-        lines.push(`    load: ${quoteYamlString(skill.path)}`)
-      } else {
-        lines.push(
-          `    # ${formatRuntimeSkillLookupComment({
-            packageName: pkg.name,
-            skillName: skill.name,
-          })}`,
-        )
-      }
+      lines.push(`  - when: ${quoteYamlString(formatWhen(pkg.name, skill))}`)
+      lines.push(
+        `    use: ${quoteYamlString(formatSkillUse(pkg.name, skill.name))}`,
+      )
     }
   }
 
