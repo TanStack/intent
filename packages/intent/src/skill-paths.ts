@@ -63,9 +63,7 @@ export function rewriteSkillLoadPaths({
   }
 }
 
-export function formatRuntimeSkillLookupComment(
-  target: SkillUse,
-): string {
+export function formatRuntimeSkillLookupComment(target: SkillUse): string {
   return `Runtime lookup only: run \`npx @tanstack/intent@latest resolve ${target.packageName}#${target.skillName}\`, and load its reported path for this session. Do not copy the resolved path into this file.`
 }
 
@@ -74,8 +72,6 @@ export function isRuntimeSkillLookupComment(value: string): boolean {
   return RUNTIME_SKILL_LOOKUP_COMMENT_PATTERN.test(comment)
 }
 
-export function formatRuntimeSkillLookupHint(
-  target: SkillUse,
-): string {
+export function formatRuntimeSkillLookupHint(target: SkillUse): string {
   return `Lookup: ${formatRuntimeSkillLookupComment(target)}`
 }
