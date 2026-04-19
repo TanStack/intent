@@ -597,7 +597,7 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('Global fetching skill')
     expect(output).toContain(
-      'Lookup: Runtime lookup only: run `npx @tanstack/intent@latest list --json`, find package "@tanstack/query" skill "fetching", and load its reported path for this session. Do not copy the resolved path into this file.',
+      'Lookup: Runtime lookup only: run `npx @tanstack/intent@latest resolve @tanstack/query#fetching`, and load its reported path for this session. Do not copy the resolved path into this file.',
     )
     expect(output).not.toContain(globalPkgDir)
   })
@@ -704,6 +704,54 @@ describe('cli commands', () => {
       source: 'global',
       version: '4.0.0',
     })
+  })
+
+  it('rejects --global and --global-only together on list', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-mutual-excl-list-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main(['list', '--global', '--global-only'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Use either --global or --global-only, not both.',
+    )
+  })
+
+  it('rejects --global and --global-only together on install', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-mutual-excl-install-'),
+    )
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--global', '--global-only'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Use either --global or --global-only, not both.',
+    )
+  })
+
+  it('rejects --global and --global-only together on resolve', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-mutual-excl-resolve-'),
+    )
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main([
+      'resolve',
+      '@tanstack/query#core',
+      '--global',
+      '--global-only',
+    ])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Use either --global or --global-only, not both.',
+    )
   })
 
   it('resolves a local skill use to a path', async () => {

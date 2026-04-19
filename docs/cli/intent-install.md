@@ -23,7 +23,7 @@ npx @tanstack/intent@latest install [--dry-run] [--print-prompt] [--global] [--g
 - Creates `AGENTS.md` when actionable skills are found and no managed block exists.
 - Updates an existing managed block in a supported config file.
 - Preserves all content outside the managed block.
-- Skips reference-only, meta, maintainer, and maintainer-only skills.
+- Skips reference, meta, maintainer, and maintainer-only skills.
 - Writes compact `when` and `use` entries instead of load paths.
 - Verifies the managed block before reporting success.
 - Prints `No actionable intent skills found.` and does not create a config file when no actionable skills are discovered.

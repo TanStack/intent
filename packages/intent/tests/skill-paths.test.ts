@@ -134,9 +134,9 @@ describe('skill path helpers', () => {
     const comment = formatRuntimeSkillLookupComment(target)
     const hint = formatRuntimeSkillLookupHint(target)
 
-    expect(comment).toContain('npx @tanstack/intent@latest list --json')
-    expect(comment).toContain('package "@tanstack/query"')
-    expect(comment).toContain('skill "query-core/fetching"')
+    expect(comment).toContain(
+      'npx @tanstack/intent@latest resolve @tanstack/query#query-core/fetching',
+    )
     expect(comment).toContain('Do not copy the resolved path into this file.')
     expect(comment).not.toContain('grep')
     expect(comment).not.toContain('|')
@@ -145,7 +145,7 @@ describe('skill path helpers', () => {
     expect(isRuntimeSkillLookupComment(`# ${comment}`)).toBe(true)
     expect(
       isRuntimeSkillLookupComment(
-        'Runtime lookup only: run `npx @tanstack/intent@latest list --json`.',
+        'Runtime lookup only: run `npx @tanstack/intent@latest resolve foo#bar`.',
       ),
     ).toBe(false)
   })

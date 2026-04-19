@@ -56,7 +56,7 @@ Follow these steps in order:
    Mapping coverage rule:
    - Create mappings for all discovered actionable skills.
    - Do not omit an actionable skill only because the repo does not currently appear to use it.
-   - Do not map reference-only, meta, or maintainer-only skills by default.
+   - Do not map reference, meta, maintainer, or maintainer-only skills by default.
    - Include slash-named sub-skills when no parent mapping exists, or when they describe distinct user tasks.
    - If the proposed block would exceed 12 mappings, show the full discovered list and ask which packages
      or skill groups to include before writing.

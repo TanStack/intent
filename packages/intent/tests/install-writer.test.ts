@@ -214,6 +214,44 @@ skills:
     expect(generated.block).toContain('when: "Use \\"quoted\\" names"')
     expect(generated.block).toContain('use: "@tanstack/query#quotes"')
   })
+
+  it('collapses whitespace in skill descriptions including newlines', () => {
+    const result = scanResult([
+      pkg({
+        name: '@tanstack/query',
+        skills: [
+          skill({
+            name: 'fetching',
+            path: 'node_modules/@tanstack/query/skills/fetching/SKILL.md',
+            description: 'Line one\nLine two\ttabbed',
+          }),
+        ],
+      }),
+    ])
+
+    const generated = buildIntentSkillsBlock(result)
+
+    expect(generated.block).toContain('when: "Line one Line two tabbed"')
+  })
+
+  it('uses fallback when description for skills with empty descriptions', () => {
+    const result = scanResult([
+      pkg({
+        name: '@tanstack/query',
+        skills: [
+          skill({
+            name: 'fetching',
+            path: 'node_modules/@tanstack/query/skills/fetching/SKILL.md',
+            description: '',
+          }),
+        ],
+      }),
+    ])
+
+    const generated = buildIntentSkillsBlock(result)
+
+    expect(generated.block).toContain('when: "Use @tanstack/query fetching"')
+  })
 })
 
 describe('install writer file updates', () => {
@@ -386,6 +424,20 @@ skills:
         targetPath: agentsPath,
       }),
     ).toEqual({ errors: [], ok: true })
+  })
+
+  it('rejects when target file does not exist', () => {
+    const root = tempRoot()
+    const missingPath = join(root, 'AGENTS.md')
+
+    const result = verifyIntentSkillsBlockFile({
+      expectedBlock: exampleBlock,
+      expectedMappingCount: 1,
+      targetPath: missingPath,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors[0]).toContain('Agent config file was not created')
   })
 
   it('rejects missing managed block markers', () => {

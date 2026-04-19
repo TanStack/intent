@@ -95,9 +95,9 @@ export function resolveSkillUse(
   }
 
   const conflict =
-    scanResult.conflicts.find((candidate) => {
-      return candidate.packageName === packageName
-    }) ?? null
+    scanResult.conflicts.find(
+      (candidate) => candidate.packageName === packageName,
+    ) ?? null
 
   return {
     packageName,
@@ -107,7 +107,10 @@ export function resolveSkillUse(
     version: pkg.version,
     packageRoot: pkg.packageRoot,
     warnings: scanResult.warnings.filter((warning) => {
-      return warning.includes(packageName)
+      const idx = warning.indexOf(packageName)
+      if (idx === -1) return false
+      const after = warning[idx + packageName.length]
+      return after === undefined || /[^a-zA-Z0-9_-]/.test(after)
     }),
     conflict,
   }

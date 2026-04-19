@@ -1,13 +1,14 @@
 import { fail } from '../cli-error.js'
-import { scanOptionsFromGlobalFlags } from '../cli-support.js'
+import {
+  scanOptionsFromGlobalFlags,
+  type GlobalScanFlags,
+} from '../cli-support.js'
 import { resolveSkillUse } from '../resolver.js'
 import { parseSkillUse } from '../skill-use.js'
 import type { ScanOptions, ScanResult } from '../types.js'
 
-export interface ResolveCommandOptions {
+export interface ResolveCommandOptions extends GlobalScanFlags {
   json?: boolean
-  global?: boolean
-  globalOnly?: boolean
 }
 
 export async function runResolveCommand(

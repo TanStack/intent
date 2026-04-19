@@ -16,7 +16,10 @@ import {
 } from './commands/install.js'
 import { runListCommand, type ListCommandOptions } from './commands/list.js'
 import { runMetaCommand } from './commands/meta.js'
-import { runResolveCommand } from './commands/resolve.js'
+import {
+  runResolveCommand,
+  type ResolveCommandOptions,
+} from './commands/resolve.js'
 import { runScaffoldCommand } from './commands/scaffold.js'
 import { runSetupGithubActionsCommand } from './commands/setup-github-actions.js'
 import { runStaleCommand } from './commands/stale.js'
@@ -50,18 +53,9 @@ function createCli(): CAC {
     .option('--global-only', 'Resolve from global packages only')
     .example('resolve @tanstack/query#core')
     .example('resolve @tanstack/query#core --json')
-    .action(
-      async (
-        use: string | undefined,
-        options: {
-          json?: boolean
-          global?: boolean
-          globalOnly?: boolean
-        },
-      ) => {
-        await runResolveCommand(use, options, scanIntentsOrFail)
-      },
-    )
+    .action(async (use: string | undefined, options: ResolveCommandOptions) => {
+      await runResolveCommand(use, options, scanIntentsOrFail)
+    })
 
   cli
     .command('meta [name]', 'List meta-skills, or print one by name')

@@ -42,6 +42,7 @@ When both local and global packages are scanned, local packages take precedence.
       "name": "string",
       "version": "string",
       "source": "local | global",
+      "packageRoot": "string",
       "intent": {
         "version": 1,
         "repo": "string",

@@ -207,6 +207,30 @@ describe('resolveSkillUse', () => {
     expect(result.warnings).toEqual([warning])
   })
 
+  it('does not include warnings from packages with similar name prefixes', () => {
+    const queryPkg = intentPackage({
+      name: '@tanstack/query',
+      version: '5.0.0',
+    })
+    const queryCorePkg = intentPackage({
+      name: '@tanstack/query-core',
+      skills: [skill('internal')],
+      version: '5.0.0',
+    })
+
+    const queryCoreWarning =
+      'Found 2 installed variants of @tanstack/query-core across 2 versions. Using 5.0.0.'
+
+    const result = resolveSkillUse(
+      '@tanstack/query#core',
+      scanResult([queryPkg, queryCorePkg], {
+        warnings: [queryCoreWarning],
+      }),
+    )
+
+    expect(result.warnings).toEqual([])
+  })
+
   it('fails clearly when the package is missing', () => {
     expect(() => {
       resolveSkillUse(
