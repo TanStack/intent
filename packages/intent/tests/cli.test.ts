@@ -283,7 +283,9 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('Generated skill loading guidance for AGENTS.md.')
     expect(output).toContain('npx @tanstack/intent@latest list')
-    expect(output).toContain('npx @tanstack/intent@latest load <package>#<skill>')
+    expect(output).toContain(
+      'npx @tanstack/intent@latest load <package>#<skill>',
+    )
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
@@ -789,9 +791,7 @@ describe('cli commands', () => {
   })
 
   it('rejects --global and --global-only together on load', async () => {
-    const root = mkdtempSync(
-      join(realTmpdir, 'intent-cli-mutual-excl-load-'),
-    )
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-mutual-excl-load-'))
     tempDirs.push(root)
     process.chdir(root)
 
@@ -839,11 +839,7 @@ describe('cli commands', () => {
 
     process.chdir(root)
 
-    const exitCode = await main([
-      'load',
-      '@tanstack/query#fetching',
-      '--path',
-    ])
+    const exitCode = await main(['load', '@tanstack/query#fetching', '--path'])
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
@@ -862,11 +858,7 @@ describe('cli commands', () => {
 
     process.chdir(root)
 
-    const exitCode = await main([
-      'load',
-      '@tanstack/query#fetching',
-      '--json',
-    ])
+    const exitCode = await main(['load', '@tanstack/query#fetching', '--json'])
     const output = logSpy.mock.calls.at(-1)?.[0]
     const parsed = JSON.parse(String(output)) as {
       package: string
@@ -926,9 +918,7 @@ describe('cli commands', () => {
   })
 
   it('loads global-only without using local packages', async () => {
-    const root = mkdtempSync(
-      join(realTmpdir, 'intent-cli-load-global-only-'),
-    )
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-global-only-'))
     const globalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-load-global-only-node-modules-'),
     )
@@ -1020,9 +1010,7 @@ describe('cli commands', () => {
   })
 
   it('fails cleanly when load cannot find the skill', async () => {
-    const root = mkdtempSync(
-      join(realTmpdir, 'intent-cli-load-missing-skill-'),
-    )
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-missing-skill-'))
     tempDirs.push(root)
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',

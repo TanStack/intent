@@ -17,7 +17,10 @@ function resolveFromCwd(path: string): string {
 }
 
 function isPathInsidePackageRoot(path: string, packageRoot: string): boolean {
-  const relativePath = relative(resolveFromCwd(packageRoot), resolveFromCwd(path))
+  const relativePath = relative(
+    resolveFromCwd(packageRoot),
+    resolveFromCwd(path),
+  )
   return (
     relativePath === '' ||
     (!relativePath.startsWith('..') && !isAbsolute(relativePath))

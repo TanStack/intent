@@ -1,9 +1,6 @@
 import { relative } from 'node:path'
 import { fail } from '../cli-error.js'
-import {
-  printWarnings,
-  scanOptionsFromGlobalFlags,
-} from '../cli-support.js'
+import { printWarnings, scanOptionsFromGlobalFlags } from '../cli-support.js'
 import {
   buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
