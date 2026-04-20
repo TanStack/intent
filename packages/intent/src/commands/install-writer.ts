@@ -28,6 +28,7 @@ export interface IntentSkillsBlockResult {
 
 export interface WriteIntentSkillsBlockOptions extends IntentSkillsBlockResult {
   root: string
+  skipWhenEmpty?: boolean
 }
 
 interface WriteIntentSkillsBlockFileResult {
@@ -131,7 +132,7 @@ export function verifyIntentSkillsBlockFile({
   targetPath,
 }: {
   expectedBlock: string
-  expectedMappingCount: number
+  expectedMappingCount?: number
   targetPath: string
 }): IntentSkillsVerificationResult {
   const errors: Array<string> = []
@@ -155,6 +156,13 @@ export function verifyIntentSkillsBlockFile({
   const block = managedBlock.text
   if (normalizeBlock(block) !== normalizeBlock(expectedBlock)) {
     errors.push('Managed block does not match generated mappings.')
+  }
+
+  if (expectedMappingCount === undefined) {
+    return {
+      errors,
+      ok: errors.length === 0,
+    }
   }
 
   const { skills, errors: parseErrors } = parseSkillsList(block)
@@ -232,7 +240,7 @@ export function buildIntentSkillsBlock(
 ): IntentSkillsBlockResult {
   const lines = [
     INTENT_SKILLS_START,
-    '# Skill mappings - resolve `use` with `npx @tanstack/intent@latest resolve <use>`.',
+    '# Skill mappings - load `use` with `npx @tanstack/intent@latest load <use>`.',
     'skills:',
   ]
   let mappingCount = 0
@@ -257,6 +265,23 @@ export function buildIntentSkillsBlock(
   return {
     block: `${lines.join('\n')}\n`,
     mappingCount,
+  }
+}
+
+export function buildIntentSkillGuidanceBlock(): IntentSkillsBlockResult {
+  return {
+    block: `${[
+      INTENT_SKILLS_START,
+      '## Skill Loading',
+      '',
+      'Before substantial work:',
+      '- Skill check: run `npx @tanstack/intent@latest list`, or use skills already listed in context.',
+      '- Skill guidance: if one local skill clearly matches the task, run `npx @tanstack/intent@latest load <package>#<skill>` and follow the returned `SKILL.md`.',
+      '- Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.',
+      '- Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.',
+      INTENT_SKILLS_END,
+    ].join('\n')}\n`,
+    mappingCount: 0,
   }
 }
 
@@ -304,8 +329,9 @@ export function writeIntentSkillsBlock({
   block,
   mappingCount,
   root,
+  skipWhenEmpty = true,
 }: WriteIntentSkillsBlockOptions): WriteIntentSkillsBlockResult {
-  if (mappingCount === 0) {
+  if (mappingCount === 0 && skipWhenEmpty) {
     return {
       mappingCount,
       status: 'skipped',
@@ -341,9 +367,8 @@ export function writeIntentSkillsBlock({
   if (existsSync(targetPath)) {
     const currentContent = readFileSync(targetPath, 'utf8')
     const newline = detectNewline(currentContent)
-    const separator =
-      currentContent.endsWith('\n') || currentContent === '' ? '' : newline
-    const nextContent = `${currentContent}${separator}${withNewlineStyle(block, newline)}`
+    const separator = currentContent === '' ? '' : newline
+    const nextContent = `${withNewlineStyle(block, newline)}${separator}${currentContent}`
 
     writeFileSync(targetPath, nextContent)
     return {

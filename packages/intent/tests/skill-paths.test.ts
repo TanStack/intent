@@ -75,6 +75,7 @@ describe('skill path helpers', () => {
         'node_modules/.pnpm/@tanstack+query@1.0.0/node_modules/@tanstack/query/skills/core/SKILL.md',
       ),
     ).toBe(false)
+    expect(isStableLoadPath('\\Users\\sarah\\project\\SKILL.md')).toBe(false)
     expect(isStableLoadPath('')).toBe(false)
   })
 
@@ -135,7 +136,7 @@ describe('skill path helpers', () => {
     const hint = formatRuntimeSkillLookupHint(target)
 
     expect(comment).toContain(
-      'npx @tanstack/intent@latest resolve @tanstack/query#query-core/fetching',
+      'npx @tanstack/intent@latest load @tanstack/query#query-core/fetching --path',
     )
     expect(comment).toContain('Do not copy the resolved path into this file.')
     expect(comment).not.toContain('grep')
@@ -145,7 +146,7 @@ describe('skill path helpers', () => {
     expect(isRuntimeSkillLookupComment(`# ${comment}`)).toBe(true)
     expect(
       isRuntimeSkillLookupComment(
-        'Runtime lookup only: run `npx @tanstack/intent@latest resolve foo#bar`.',
+        'Runtime lookup only: run `npx @tanstack/intent@latest load foo#bar`.',
       ),
     ).toBe(false)
   })

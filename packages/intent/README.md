@@ -34,13 +34,13 @@ If you use Deno, support is best-effort today via `npm:` interop with `node_modu
 
 ### For library consumers
 
-Set up skill-to-task mappings in your project's agent config files (CLAUDE.md, .cursorrules, etc.):
+Set up skill loading guidance in your project's agent config files (CLAUDE.md, .cursorrules, etc.):
 
 ```bash
 npx @tanstack/intent@latest install
 ```
 
-No per-library setup. No hunting for rules files. Install the package, run `npx @tanstack/intent@latest install` through your preferred command runner, and Intent writes compact `when`/`use` mappings to your agent config. Update the package, and skills update too.
+No per-library setup. No hunting for rules files. Install the package, run `npx @tanstack/intent@latest install` through your preferred command runner, and Intent writes guidance that tells your agent to discover and load matching package skills. Update the package, and skills update too. Pass `--map` if you want explicit task-to-skill mappings in your agent config.
 
 List available skills from local installed packages:
 
@@ -54,10 +54,10 @@ Include global packages explicitly:
 npx @tanstack/intent@latest list --global
 ```
 
-Resolve a compact mapping to the installed skill path:
+Load an installed skill:
 
 ```bash
-npx @tanstack/intent@latest resolve @tanstack/query#fetching
+npx @tanstack/intent@latest load @tanstack/query#fetching
 ```
 
 ### For library maintainers
@@ -123,9 +123,9 @@ The feedback loop runs both directions. `npx @tanstack/intent@latest feedback` l
 
 | Command                                            | Description                                         |
 | -------------------------------------------------- | --------------------------------------------------- |
-| `npx @tanstack/intent@latest install`              | Set up skill-to-task mappings in agent config files |
+| `npx @tanstack/intent@latest install`              | Set up skill loading guidance in agent config files |
 | `npx @tanstack/intent@latest list [--json]`        | Discover local intent-enabled packages              |
-| `npx @tanstack/intent@latest resolve <use>`        | Resolve `<package>#<skill>` to a skill file path    |
+| `npx @tanstack/intent@latest load <use>`           | Load `<package>#<skill>` SKILL.md content           |
 | `npx @tanstack/intent@latest meta`                 | List meta-skills for library maintainers            |
 | `npx @tanstack/intent@latest scaffold`             | Print the guided skill generation prompt            |
 | `npx @tanstack/intent@latest validate [dir]`       | Validate SKILL.md files                             |

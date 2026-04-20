@@ -26,7 +26,7 @@ npx @tanstack/intent@latest list [--json] [--global] [--global-only]
 - Skill tree grouped by package
 - Optional warnings section (`⚠ ...` per warning)
 
-`REQUIRES` uses `intent.requires` values joined by `, `; empty values render as `–`.
+`REQUIRES` uses `intent.requires` values joined by a comma and space; empty values render as `–`.
 `SOURCE` is a lightweight indicator showing whether the selected package came from local discovery or explicit global scanning.
 When both local and global packages are scanned, local packages take precedence.
 
@@ -78,7 +78,7 @@ When both local and global packages are scanned, local packages take precedence.
   ],
   "nodeModules": {
     "local": {
-      "path": "string",
+      "path": "string | null",
       "detected": true,
       "exists": true,
       "scanned": true

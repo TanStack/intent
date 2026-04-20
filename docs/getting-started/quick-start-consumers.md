@@ -3,7 +3,7 @@ title: Quick Start for Consumers
 id: quick-start-consumers
 ---
 
-Get started using Intent to set up skill-to-task mappings for your agent.
+Get started using Intent to help your agent discover and load package skills.
 
 ## 1. Run install
 
@@ -13,41 +13,47 @@ The install command guides your agent through the setup process:
 npx @tanstack/intent@latest install
 ```
 
-This creates or updates an `intent-skills` block. It:
+This creates or updates an `intent-skills` guidance block. It:
 
-1. Check for existing `intent-skills` mappings in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.)
-2. Run a local package scan to discover available skills from installed packages
-3. Write compact mappings for actionable skills
-4. Preserve content outside the managed block
-5. Verify the managed block before reporting success
+1. Checks for existing `intent-skills` guidance in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.)
+2. Writes lightweight instructions for skill discovery and loading
+3. Preserves content outside the managed block
+4. Verifies the managed block before reporting success
 
 If an `intent-skills` block already exists, Intent updates that file in place.
 If no block exists, `AGENTS.md` is the default target.
 
-Intent creates mappings like:
+Intent creates guidance like:
 
 ```markdown
 <!-- intent-skills:start -->
-# Skill mappings - resolve `use` with `npx @tanstack/intent@latest resolve <use>`.
-skills:
-  - when: "Query data fetching patterns"
-    use: "@tanstack/react-query#core"
-  - when: "Router patterns"
-    use: "@tanstack/react-router#core"
+## Skill Loading
+
+Before substantial work:
+- Skill check: run `npx @tanstack/intent@latest list`, or use skills already listed in context.
+- Skill guidance: if one local skill clearly matches the task, run `npx @tanstack/intent@latest load <package>#<skill>` and follow the returned `SKILL.md`.
+- Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.
+- Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
 <!-- intent-skills:end -->
 ```
 
 ## 2. Use skills in your workflow
 
-When your agent works on a task that matches a mapping, it resolves the compact `use` value and loads the matching SKILL.md into context.
+When your agent works on a task that matches an available skill, it loads the matching `SKILL.md` into context.
 
-Resolve a mapping manually:
+Load a skill manually:
 
 ```bash
-npx @tanstack/intent@latest resolve @tanstack/react-query#core
+npx @tanstack/intent@latest load @tanstack/react-query#core
 ```
 
-This prints the skill file path for the installed package version.
+This prints the skill content for the installed package version.
+
+If you want explicit task-to-skill mappings in your agent config, opt in:
+
+```bash
+npx @tanstack/intent@latest install --map
+```
 
 ## 3. Keep skills up-to-date
 
@@ -92,7 +98,3 @@ npx @tanstack/intent@latest meta feedback-collection
 ```
 
 This prints a skill that guides your agent to collect structured feedback about gaps, errors, and improvements.
-
-
-
-

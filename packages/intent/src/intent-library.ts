@@ -83,7 +83,7 @@ const USAGE = `TanStack Intent
 Usage:
   intent list        List all available skills from this library and its dependencies
   intent install     Print a skill that guides your coding agent to scan the project
-                     and set up skill-to-task mappings in your agent config`
+                     and set up skill loading guidance in your agent config`
 
 const command = process.argv[2]
 

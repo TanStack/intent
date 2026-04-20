@@ -3,15 +3,16 @@ import { fail } from '../cli-error.js'
 import {
   printWarnings,
   scanOptionsFromGlobalFlags,
-  type GlobalScanFlags,
 } from '../cli-support.js'
-import type { ScanOptions, ScanResult } from '../types.js'
 import {
+  buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
   resolveIntentSkillsBlockTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from './install-writer.js'
+import type { GlobalScanFlags } from '../cli-support.js'
+import type { ScanOptions, ScanResult } from '../types.js'
 
 export const INSTALL_PROMPT = `You are an AI assistant helping a developer set up skill-to-task mappings for their project.
 
@@ -82,7 +83,7 @@ Follow these steps in order:
    Use this exact block:
 
 <!-- intent-skills:start -->
-# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
+# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
 skills:
   - when: "describe the task or code area here"
     use: "@scope/package#skill-name"
@@ -94,7 +95,7 @@ skills:
    - Do not include \`load\`
    - Do not include machine-specific directories such as \`/Users/...\`, \`/home/...\`, \`/private/...\`,
      drive letters, temp workspace paths, \`.pnpm/\`, \`.bun/\`, or \`.yarn/\`.
-   - Agents should resolve \`use\` at runtime with \`npx @tanstack/intent@latest resolve <use>\`
+   - Agents should load \`use\` at runtime with \`npx @tanstack/intent@latest load <use>\`
    - Keep entries concise - this block is read on every agent task
    - Preserve all content outside the block tags unchanged
    - If the user is on Deno, note that this setup is best-effort today and relies on npm interop
@@ -117,6 +118,7 @@ skills:
 
 export interface InstallCommandOptions extends GlobalScanFlags {
   dryRun?: boolean
+  map?: boolean
   printPrompt?: boolean
 }
 
@@ -129,8 +131,57 @@ function formatMappingCount(mappingCount: number): string {
 }
 
 function printNoActionableSkills(warnings: Array<string>): void {
-  console.log('No actionable intent skills found.')
+  console.log('No intent-enabled skills found.')
   printWarnings(warnings)
+}
+
+function printPlacementTip(targetPath: string): void {
+  console.log(
+    `Tip: Keep the intent-skills block near the top of ${formatTargetPath(targetPath)} so agents read it before task-specific instructions.`,
+  )
+}
+
+function printWriteResult({
+  mappingCount,
+  status,
+  targetPath,
+}: {
+  mappingCount: number
+  status: 'created' | 'unchanged' | 'updated'
+  targetPath: string
+}): void {
+  const target = formatTargetPath(targetPath)
+
+  if (mappingCount === 0) {
+    switch (status) {
+      case 'created':
+        console.log(`Created ${target} with skill loading guidance.`)
+        break
+      case 'updated':
+        console.log(`Updated ${target} with skill loading guidance.`)
+        break
+      case 'unchanged':
+        console.log(
+          `No changes to ${target}; skill loading guidance already current.`,
+        )
+        break
+    }
+    return
+  }
+
+  switch (status) {
+    case 'created':
+      console.log(`Created ${target} with ${formatMappingCount(mappingCount)}.`)
+      break
+    case 'updated':
+      console.log(`Updated ${target} with ${formatMappingCount(mappingCount)}.`)
+      break
+    case 'unchanged':
+      console.log(
+        `No changes to ${target}; ${formatMappingCount(mappingCount)} already current.`,
+      )
+      break
+  }
 }
 
 export async function runInstallCommand(
@@ -139,6 +190,50 @@ export async function runInstallCommand(
 ): Promise<void> {
   if (options.printPrompt) {
     console.log(INSTALL_PROMPT)
+    return
+  }
+
+  scanOptionsFromGlobalFlags(options)
+
+  if (!options.map) {
+    const generated = buildIntentSkillGuidanceBlock()
+
+    if (options.dryRun) {
+      const targetPath = resolveIntentSkillsBlockTargetPath(process.cwd(), 1)
+      console.log(
+        `Generated skill loading guidance for ${formatTargetPath(targetPath!)}.`,
+      )
+      console.log(generated.block)
+      return
+    }
+
+    const result = writeIntentSkillsBlock({
+      ...generated,
+      root: process.cwd(),
+      skipWhenEmpty: false,
+    })
+
+    if (!result.targetPath) {
+      fail('Install guidance target was not created.')
+    }
+
+    const verification = verifyIntentSkillsBlockFile({
+      expectedBlock: generated.block,
+      targetPath: result.targetPath,
+    })
+
+    const target = formatTargetPath(result.targetPath)
+    if (!verification.ok) {
+      fail(
+        [
+          `Install verification failed for ${target}:`,
+          ...verification.errors.map((error) => `- ${error}`),
+        ].join('\n'),
+      )
+    }
+
+    printWriteResult(result)
+    printPlacementTip(result.targetPath)
     return
   }
 
@@ -192,23 +287,8 @@ export async function runInstallCommand(
     )
   }
 
-  switch (result.status) {
-    case 'created':
-      console.log(
-        `Created ${target} with ${formatMappingCount(result.mappingCount)}.`,
-      )
-      break
-    case 'updated':
-      console.log(
-        `Updated ${target} with ${formatMappingCount(result.mappingCount)}.`,
-      )
-      break
-    case 'unchanged':
-      console.log(
-        `No changes to ${target}; ${formatMappingCount(result.mappingCount)} already current.`,
-      )
-      break
-  }
+  printWriteResult(result)
+  printPlacementTip(result.targetPath)
 
   printWarnings(scanResult.warnings)
 }

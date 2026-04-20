@@ -100,8 +100,8 @@ export async function startRegistry(): Promise<Registry> {
       }
     }
 
-    child.stdout?.on('data', onData)
-    child.stderr?.on('data', onData)
+    child.stdout.on('data', onData)
+    child.stderr.on('data', onData)
 
     child.on('error', (err) => {
       clearTimeout(timeout)

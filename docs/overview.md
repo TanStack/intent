@@ -13,7 +13,7 @@ Intent provides tooling for two workflows:
 
 **For consumers:**
 - Discover skills from installed dependencies
-- Generate task-to-skill mappings for your agent config
+- Add lightweight skill loading guidance to your agent config
 - Keep skills synchronized with library versions
 
 **For maintainers (library teams):**
@@ -38,13 +38,13 @@ When both local and global packages are scanned, local packages take precedence.
 npx @tanstack/intent@latest install
 ```
 
-Creates or updates compact `intent-skills` mappings in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.). Existing mappings are updated in place; otherwise `AGENTS.md` is the default target.
+Creates or updates lightweight `intent-skills` guidance in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.). Existing guidance is updated in place; otherwise `AGENTS.md` is the default target. Pass `--map` to opt in to explicit task-to-skill mappings.
 
 ```bash
-npx @tanstack/intent@latest resolve @tanstack/query#fetching
+npx @tanstack/intent@latest load @tanstack/query#fetching
 ```
 
-Resolves a compact `<package>#<skill>` mapping to the installed skill file path. Agents can use this at runtime instead of storing package-manager-specific paths in config files.
+Loads the matching `SKILL.md` content for the installed package version. Pass `--path` when you need the resolved skill file path for debugging.
 
 ### Scaffolding and validation
 

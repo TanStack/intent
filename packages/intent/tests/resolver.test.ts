@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveSkillUse, ResolveSkillUseError } from '../src/resolver.js'
+import { ResolveSkillUseError, resolveSkillUse } from '../src/resolver.js'
 import type {
   IntentPackage,
   ScanResult,

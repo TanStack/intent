@@ -1,19 +1,20 @@
 ---
-title: intent resolve
-id: intent-resolve
+title: intent load
+id: intent-load
 ---
 
-`intent resolve` resolves a compact skill identity to the skill file path reported by the current install.
+`intent load` loads a compact skill identity from the current install and prints the matching `SKILL.md` content.
 
 ```bash
-npx @tanstack/intent@latest resolve <package>#<skill> [--json] [--global] [--global-only]
+npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--global] [--global-only]
 ```
 
 ## Options
 
-- `--json`: print structured JSON instead of only the path
-- `--global`: resolve from project packages first, then global packages
-- `--global-only`: resolve from global packages only
+- `--path`: print the resolved skill path instead of the file content
+- `--json`: print structured JSON with metadata and content
+- `--global`: load from project packages first, then global packages
+- `--global-only`: load from global packages only
 
 ## What you get
 
@@ -21,17 +22,17 @@ npx @tanstack/intent@latest resolve <package>#<skill> [--json] [--global] [--glo
 - Scans project-local packages by default
 - Includes global packages only when `--global` or `--global-only` is passed
 - Prefers local packages when `--global` is used and the same package exists locally and globally
-- Prints the resolved skill path by default
-- Returns scanner-reported paths, including package-manager-internal paths for transitive installs
+- Prints raw `SKILL.md` content by default
+- Prints the scanner-reported path when `--path` is passed
 
 The package can be scoped or unscoped. The skill can include slash-separated sub-skill names.
 
 Examples:
 
 ```bash
-npx @tanstack/intent@latest resolve @tanstack/query#fetching
-npx @tanstack/intent@latest resolve @tanstack/query#core/fetching
-npx @tanstack/intent@latest resolve some-lib#core
+npx @tanstack/intent@latest load @tanstack/query#fetching
+npx @tanstack/intent@latest load @tanstack/query#core/fetching
+npx @tanstack/intent@latest load some-lib#core --path
 ```
 
 ## JSON output
@@ -43,8 +44,10 @@ npx @tanstack/intent@latest resolve some-lib#core
   "package": "@tanstack/query",
   "skill": "fetching",
   "path": "node_modules/@tanstack/query/skills/fetching/SKILL.md",
+  "packageRoot": "node_modules/@tanstack/query",
   "source": "local",
   "version": "5.0.0",
+  "content": "---\nname: fetching\n---\n\n...",
   "warnings": []
 }
 ```

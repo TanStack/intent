@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { INSTALL_PROMPT } from '../src/commands/install.js'
-import { runResolveCommand } from '../src/commands/resolve.js'
+import { runLoadCommand } from '../src/commands/load.js'
 import { main } from '../src/cli.js'
 import type { ScanOptions, ScanResult } from '../src/types.js'
 
@@ -71,6 +71,7 @@ let originalCwd: string
 let logSpy: ReturnType<typeof vi.spyOn>
 let infoSpy: ReturnType<typeof vi.spyOn>
 let errorSpy: ReturnType<typeof vi.spyOn>
+let stdoutWriteSpy: ReturnType<typeof vi.spyOn>
 let tempDirs: Array<string>
 let previousGlobalNodeModules: string | undefined
 
@@ -88,6 +89,9 @@ beforeEach(() => {
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
   infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  stdoutWriteSpy = vi
+    .spyOn(process.stdout, 'write')
+    .mockImplementation(() => true)
 })
 
 afterEach(() => {
@@ -100,6 +104,7 @@ afterEach(() => {
   logSpy.mockRestore()
   infoSpy.mockRestore()
   errorSpy.mockRestore()
+  stdoutWriteSpy.mockRestore()
   for (const dir of tempDirs) {
     if (existsSync(dir)) {
       rmSync(dir, { recursive: true, force: true })
@@ -209,7 +214,7 @@ describe('cli commands', () => {
     expect(logSpy).toHaveBeenCalledWith(INSTALL_PROMPT)
   })
 
-  it('writes install mappings and is idempotent', async () => {
+  it('writes skill loading guidance by default and is idempotent', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-'))
     const isolatedGlobalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-install-empty-global-'),
@@ -231,11 +236,18 @@ describe('cli commands', () => {
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
-    expect(output).toContain('Created AGENTS.md with 1 mapping.')
-    expect(content).toContain('when: "Query data fetching patterns"')
-    expect(content).toContain('use: "@tanstack/query#fetching"')
-    expect(content).not.toContain('load:')
+    expect(output).toContain('Created AGENTS.md with skill loading guidance.')
+    expect(content).toContain('## Skill Loading')
+    expect(content).toContain('npx @tanstack/intent@latest list')
+    expect(content).toContain('if one local skill clearly matches the task')
+    expect(content).toContain('Monorepos:')
+    expect(content).toContain('Multiple matches:')
+    expect(content).not.toContain('--global')
+    expect(content).not.toContain('use: "@tanstack/query#fetching"')
     expect(content).not.toContain(root)
+    expect(output).toContain(
+      'Tip: Keep the intent-skills block near the top of AGENTS.md',
+    )
 
     logSpy.mockClear()
 
@@ -244,12 +256,12 @@ describe('cli commands', () => {
 
     expect(secondExitCode).toBe(0)
     expect(secondOutput).toContain(
-      'No changes to AGENTS.md; 1 mapping already current.',
+      'No changes to AGENTS.md; skill loading guidance already current.',
     )
     expect(readFileSync(agentsPath, 'utf8')).toBe(content)
   })
 
-  it('prints generated install mappings without writing during dry run', async () => {
+  it('prints generated skill loading guidance without writing during dry run', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-dry-run-'))
     const isolatedGlobalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-install-dry-run-empty-global-'),
@@ -269,13 +281,13 @@ describe('cli commands', () => {
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
-    expect(output).toContain('Generated 1 mapping for AGENTS.md.')
-    expect(output).toContain('when: "Router patterns"')
-    expect(output).toContain('use: "@tanstack/router#routing"')
+    expect(output).toContain('Generated skill loading guidance for AGENTS.md.')
+    expect(output).toContain('npx @tanstack/intent@latest list')
+    expect(output).toContain('npx @tanstack/intent@latest load <package>#<skill>')
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
-  it('does not create an agent config when install has no actionable skills', async () => {
+  it('writes skill loading guidance even with no discovered skills', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-empty-'))
     const isolatedGlobalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-install-empty-global-'),
@@ -289,11 +301,53 @@ describe('cli commands', () => {
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
-    expect(output).toContain('No actionable intent skills found.')
-    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+    expect(output).toContain('Created AGENTS.md with skill loading guidance.')
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+      'npx @tanstack/intent@latest list',
+    )
   })
 
-  it('ignores configured global packages during install by default', async () => {
+  it('writes install mappings with --map and is idempotent', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-map-'))
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-map-empty-global-'),
+    )
+    tempDirs.push(root, isolatedGlobalRoot)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--map'])
+    const agentsPath = join(root, 'AGENTS.md')
+    const content = readFileSync(agentsPath, 'utf8')
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('Created AGENTS.md with 1 mapping.')
+    expect(content).toContain('when: "Query data fetching patterns"')
+    expect(content).toContain('use: "@tanstack/query#fetching"')
+    expect(content).not.toContain('load:')
+    expect(content).not.toContain(root)
+
+    logSpy.mockClear()
+
+    const secondExitCode = await main(['install', '--map'])
+    const secondOutput = logSpy.mock.calls.flat().join('\n')
+
+    expect(secondExitCode).toBe(0)
+    expect(secondOutput).toContain(
+      'No changes to AGENTS.md; 1 mapping already current.',
+    )
+    expect(readFileSync(agentsPath, 'utf8')).toBe(content)
+  })
+
+  it('ignores configured global packages during install --map by default', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-local-only-'))
     const globalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-install-local-only-global-'),
@@ -314,15 +368,15 @@ describe('cli commands', () => {
     process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
     process.chdir(root)
 
-    const exitCode = await main(['install', '--dry-run'])
+    const exitCode = await main(['install', '--map', '--dry-run'])
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
-    expect(output).toContain('No actionable intent skills found.')
+    expect(output).toContain('No intent-enabled skills found.')
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
-  it('includes configured global packages during install when requested', async () => {
+  it('includes configured global packages during install --map when requested', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-global-'))
     const globalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-install-global-node-modules-'),
@@ -343,7 +397,7 @@ describe('cli commands', () => {
     process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
     process.chdir(root)
 
-    const exitCode = await main(['install', '--global', '--dry-run'])
+    const exitCode = await main(['install', '--map', '--global', '--dry-run'])
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
@@ -597,7 +651,7 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('Global fetching skill')
     expect(output).toContain(
-      'Lookup: Runtime lookup only: run `npx @tanstack/intent@latest resolve @tanstack/query#fetching`, and load its reported path for this session. Do not copy the resolved path into this file.',
+      'Lookup: Runtime lookup only: run `npx @tanstack/intent@latest load @tanstack/query#fetching --path`, and load its reported path for this session. Do not copy the resolved path into this file.',
     )
     expect(output).not.toContain(globalPkgDir)
   })
@@ -734,15 +788,15 @@ describe('cli commands', () => {
     )
   })
 
-  it('rejects --global and --global-only together on resolve', async () => {
+  it('rejects --global and --global-only together on load', async () => {
     const root = mkdtempSync(
-      join(realTmpdir, 'intent-cli-mutual-excl-resolve-'),
+      join(realTmpdir, 'intent-cli-mutual-excl-load-'),
     )
     tempDirs.push(root)
     process.chdir(root)
 
     const exitCode = await main([
-      'resolve',
+      'load',
       '@tanstack/query#core',
       '--global',
       '--global-only',
@@ -754,8 +808,8 @@ describe('cli commands', () => {
     )
   })
 
-  it('resolves a local skill use to a path', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-resolve-'))
+  it('loads a local skill use as markdown', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-'))
     tempDirs.push(root)
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',
@@ -766,15 +820,15 @@ describe('cli commands', () => {
 
     process.chdir(root)
 
-    const exitCode = await main(['resolve', '@tanstack/query#fetching'])
-    const output = logSpy.mock.calls.flat().join('\n')
+    const exitCode = await main(['load', '@tanstack/query#fetching'])
+    const output = stdoutWriteSpy.mock.calls.flat().join('')
 
     expect(exitCode).toBe(0)
-    expect(output).toBe('node_modules/@tanstack/query/skills/fetching/SKILL.md')
+    expect(output).toContain('Skill content here.')
   })
 
-  it('resolves a skill use as json', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-resolve-json-'))
+  it('loads a local skill use to a path with --path', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-path-'))
     tempDirs.push(root)
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',
@@ -786,14 +840,39 @@ describe('cli commands', () => {
     process.chdir(root)
 
     const exitCode = await main([
-      'resolve',
+      'load',
+      '@tanstack/query#fetching',
+      '--path',
+    ])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toBe('node_modules/@tanstack/query/skills/fetching/SKILL.md')
+  })
+
+  it('loads a skill use as json', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-json-'))
+    tempDirs.push(root)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main([
+      'load',
       '@tanstack/query#fetching',
       '--json',
     ])
     const output = logSpy.mock.calls.at(-1)?.[0]
     const parsed = JSON.parse(String(output)) as {
       package: string
+      content: string
       path: string
+      packageRoot: string
       skill: string
       source: 'local' | 'global'
       version: string
@@ -803,7 +882,9 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(parsed).toEqual({
       package: '@tanstack/query',
+      content: expect.stringContaining('Skill content here.'),
       path: 'node_modules/@tanstack/query/skills/fetching/SKILL.md',
+      packageRoot: join(root, 'node_modules', '@tanstack', 'query'),
       skill: 'fetching',
       source: 'local',
       version: '5.0.0',
@@ -811,10 +892,10 @@ describe('cli commands', () => {
     })
   })
 
-  it('resolves global fallback when requested', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-resolve-global-'))
+  it('loads global fallback path when requested', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-global-'))
     const globalRoot = mkdtempSync(
-      join(realTmpdir, 'intent-cli-resolve-global-node-modules-'),
+      join(realTmpdir, 'intent-cli-load-global-node-modules-'),
     )
     tempDirs.push(root, globalRoot)
 
@@ -833,9 +914,10 @@ describe('cli commands', () => {
     process.chdir(root)
 
     const exitCode = await main([
-      'resolve',
+      'load',
       '@tanstack/query#fetching',
       '--global',
+      '--path',
     ])
     const output = logSpy.mock.calls.flat().join('\n')
 
@@ -843,12 +925,12 @@ describe('cli commands', () => {
     expect(output).toBe(join(globalPkgDir, 'skills', 'fetching', 'SKILL.md'))
   })
 
-  it('resolves global-only without using local packages', async () => {
+  it('loads global-only without using local packages', async () => {
     const root = mkdtempSync(
-      join(realTmpdir, 'intent-cli-resolve-global-only-'),
+      join(realTmpdir, 'intent-cli-load-global-only-'),
     )
     const globalRoot = mkdtempSync(
-      join(realTmpdir, 'intent-cli-resolve-global-only-node-modules-'),
+      join(realTmpdir, 'intent-cli-load-global-only-node-modules-'),
     )
     tempDirs.push(root, globalRoot)
 
@@ -874,7 +956,7 @@ describe('cli commands', () => {
     process.chdir(root)
 
     const exitCode = await main([
-      'resolve',
+      'load',
       '@tanstack/query#fetching',
       '--global-only',
       '--json',
@@ -894,12 +976,12 @@ describe('cli commands', () => {
     )
   })
 
-  it('fails cleanly for invalid resolve use strings', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-resolve-invalid-'))
+  it('fails cleanly for invalid load use strings', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-invalid-'))
     tempDirs.push(root)
     process.chdir(root)
 
-    const exitCode = await main(['resolve', '@tanstack/query'])
+    const exitCode = await main(['load', '@tanstack/query'])
 
     expect(exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledWith(
@@ -907,7 +989,7 @@ describe('cli commands', () => {
     )
   })
 
-  it('validates resolve use strings before scanning', async () => {
+  it('validates load use strings before scanning', async () => {
     const scanSpy = vi.fn(
       async (_options?: ScanOptions): Promise<ScanResult> => {
         throw new Error('should not scan')
@@ -915,21 +997,21 @@ describe('cli commands', () => {
     )
 
     await expect(
-      runResolveCommand('@tanstack/query', {}, scanSpy),
+      runLoadCommand('@tanstack/query', {}, scanSpy),
     ).rejects.toThrow(
       'Invalid skill use "@tanstack/query": expected <package>#<skill>.',
     )
     expect(scanSpy).not.toHaveBeenCalled()
   })
 
-  it('fails cleanly when resolve cannot find the package', async () => {
+  it('fails cleanly when load cannot find the package', async () => {
     const root = mkdtempSync(
-      join(realTmpdir, 'intent-cli-resolve-missing-package-'),
+      join(realTmpdir, 'intent-cli-load-missing-package-'),
     )
     tempDirs.push(root)
     process.chdir(root)
 
-    const exitCode = await main(['resolve', '@tanstack/query#fetching'])
+    const exitCode = await main(['load', '@tanstack/query#fetching'])
 
     expect(exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledWith(
@@ -937,9 +1019,9 @@ describe('cli commands', () => {
     )
   })
 
-  it('fails cleanly when resolve cannot find the skill', async () => {
+  it('fails cleanly when load cannot find the skill', async () => {
     const root = mkdtempSync(
-      join(realTmpdir, 'intent-cli-resolve-missing-skill-'),
+      join(realTmpdir, 'intent-cli-load-missing-skill-'),
     )
     tempDirs.push(root)
     writeInstalledIntentPackage(root, {
@@ -950,7 +1032,7 @@ describe('cli commands', () => {
     })
     process.chdir(root)
 
-    const exitCode = await main(['resolve', '@tanstack/query#mutations'])
+    const exitCode = await main(['load', '@tanstack/query#mutations'])
 
     expect(exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledWith(

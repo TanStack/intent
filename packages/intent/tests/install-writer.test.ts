@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
   resolveIntentSkillsBlockTargetPath,
   verifyIntentSkillsBlockFile,
@@ -75,7 +76,7 @@ function scanResult(packages: Array<IntentPackage>): ScanResult {
 }
 
 const exampleBlock = `<!-- intent-skills:start -->
-# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
+# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
 skills:
   - when: "Query data fetching"
     use: "@tanstack/query#fetching"
@@ -83,6 +84,21 @@ skills:
 `
 
 describe('install writer block builder', () => {
+  it('builds the default skill loading guidance block', () => {
+    const generated = buildIntentSkillGuidanceBlock()
+
+    expect(generated.mappingCount).toBe(0)
+    expect(generated.block).toContain('## Skill Loading')
+    expect(generated.block).toContain('npx @tanstack/intent@latest list')
+    expect(generated.block).toContain(
+      'if one local skill clearly matches the task',
+    )
+    expect(generated.block).toContain('Monorepos:')
+    expect(generated.block).toContain('Multiple matches:')
+    expect(generated.block).not.toContain('install --map')
+    expect(generated.block).not.toContain('--global')
+  })
+
   it('builds a deterministic compact block', () => {
     const result = scanResult([
       pkg({
@@ -116,7 +132,7 @@ describe('install writer block builder', () => {
 
     expect(generated.mappingCount).toBe(3)
     expect(generated.block).toBe(`<!-- intent-skills:start -->
-# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
+# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
 skills:
   - when: "Query data fetching patterns"
     use: "@tanstack/query#fetching"
@@ -298,7 +314,7 @@ After
 `)
   })
 
-  it('appends to an existing AGENTS.md without a managed block', () => {
+  it('prepends to an existing AGENTS.md without a managed block', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     writeFileSync(agentsPath, 'Existing guidance\n')
@@ -311,7 +327,7 @@ After
 
     expect(result.status).toBe('updated')
     expect(readFileSync(agentsPath, 'utf8')).toBe(
-      `Existing guidance\n${exampleBlock}`,
+      `${exampleBlock}\nExisting guidance\n`,
     )
   })
 
@@ -405,11 +421,25 @@ old
 })
 
 describe('install writer verification', () => {
+  it('accepts a written guidance block', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    const generated = buildIntentSkillGuidanceBlock()
+    writeFileSync(agentsPath, generated.block)
+
+    expect(
+      verifyIntentSkillsBlockFile({
+        expectedBlock: generated.block,
+        targetPath: agentsPath,
+      }),
+    ).toEqual({ errors: [], ok: true })
+  })
+
   it('accepts a written compact block', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
+# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
 skills:
   - when: "Query data fetching"
     use: "@tanstack/query#fetching"
@@ -480,7 +510,7 @@ skills:
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
+# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
 skills:
   - when: "Global query skill"
     load: "/home/sarah/.npm-global/lib/node_modules/@tanstack/query/skills/global/SKILL.md"
@@ -507,7 +537,7 @@ skills:
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
+# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
 skills:
   - use: "@tanstack/query#fetching"
 <!-- intent-skills:end -->
@@ -530,7 +560,7 @@ skills:
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
+# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
 skills:
   - when: "Query data fetching"
 <!-- intent-skills:end -->
@@ -553,7 +583,7 @@ skills:
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - resolve \`use\` with \`npx @tanstack/intent@latest resolve <use>\`.
+# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
 skills:
   - when: "Query data fetching"
     use: "@tanstack/query"

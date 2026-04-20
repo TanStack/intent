@@ -1,16 +1,16 @@
 import { existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { toPosixPath } from './utils.js'
 import type { SkillUse } from './skill-use.js'
 import type { SkillEntry } from './types.js'
-import { toPosixPath } from './utils.js'
 
 const RUNTIME_SKILL_LOOKUP_COMMENT_PATTERN =
-  /^Runtime lookup only: run `npx @tanstack\/intent@latest resolve [^`]+`, and load its reported path for this session\. Do not copy the resolved path into this file\.$/
+  /^Runtime lookup only: run `npx @tanstack\/intent@latest load [^`]+ --path`, and load its reported path for this session\. Do not copy the resolved path into this file\.$/
 
 export function isAbsolutePath(path: string): boolean {
   return (
     path.startsWith('/') ||
-    path.startsWith('\\\\') ||
+    path.startsWith('\\') ||
     /^[A-Za-z]:[\\/]/.test(path)
   )
 }
@@ -64,7 +64,7 @@ export function rewriteSkillLoadPaths({
 }
 
 export function formatRuntimeSkillLookupComment(target: SkillUse): string {
-  return `Runtime lookup only: run \`npx @tanstack/intent@latest resolve ${target.packageName}#${target.skillName}\`, and load its reported path for this session. Do not copy the resolved path into this file.`
+  return `Runtime lookup only: run \`npx @tanstack/intent@latest load ${target.packageName}#${target.skillName} --path\`, and load its reported path for this session. Do not copy the resolved path into this file.`
 }
 
 export function isRuntimeSkillLookupComment(value: string): boolean {
