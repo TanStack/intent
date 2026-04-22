@@ -12,7 +12,7 @@ import type { LibraryScanResult } from './library-scanner.js'
 function cmdList(): void {
   let result: LibraryScanResult
   try {
-    result = scanLibrary(process.argv[1]!)
+    result = scanLibrary(process.argv[1]!, process.cwd())
   } catch (err) {
     console.error((err as Error).message)
     process.exit(1)
@@ -51,7 +51,7 @@ function cmdList(): void {
   console.log(`\nSkills:\n`)
   for (const pkg of result.packages) {
     console.log(`  ${pkg.name}`)
-    printSkillTree(pkg.skills, { nameWidth, showTypes })
+    printSkillTree(pkg.skills, { nameWidth, packageName: pkg.name, showTypes })
     console.log()
   }
 
@@ -83,7 +83,7 @@ const USAGE = `TanStack Intent
 Usage:
   intent list        List all available skills from this library and its dependencies
   intent install     Print a skill that guides your coding agent to scan the project
-                     and set up skill-to-task mappings in your agent config`
+                     and set up skill loading guidance in your agent config`
 
 const command = process.argv[2]
 

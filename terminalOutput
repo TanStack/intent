@@ -1,0 +1,42 @@
+
+> @tanstack/intent@0.0.31 build /home/runner/work/intent/intent/packages/intent
+> tsdown src/index.ts src/cli.ts src/setup.ts src/intent-library.ts src/library-scanner.ts --format esm --dts
+
+[34mℹ[39m tsdown [2mv0.19.0[22m powered by rolldown [2mv1.0.0-beta.59[22m
+[34mℹ[39m entry: [34msrc/index.ts, src/cli.ts, src/setup.ts, src/intent-library.ts, src/library-scanner.ts[39m
+[34mℹ[39m tsconfig: [34mtsconfig.json[39m
+[34mℹ[39m Build start
+[34mℹ[39m Granting execute permission to [4mdist/cli.d.mts[24m
+[34mℹ[39m Granting execute permission to [4mdist/cli.mjs[24m
+[34mℹ[39m Granting execute permission to [4mdist/intent-library.mjs[24m
+[34mℹ[39m [2mdist/[22m[1mcli.mjs[22m                          [2m19.88 kB[22m [2m│ gzip: 6.14 kB[22m
+[34mℹ[39m [2mdist/[22m[1mindex.mjs[22m                        [2m 8.77 kB[22m [2m│ gzip: 2.68 kB[22m
+[34mℹ[39m [2mdist/[22m[1mintent-library.mjs[22m               [2m 2.47 kB[22m [2m│ gzip: 1.11 kB[22m
+[34mℹ[39m [2mdist/[22m[1msetup.mjs[22m                        [2m 0.53 kB[22m [2m│ gzip: 0.26 kB[22m
+[34mℹ[39m [2mdist/[22m[1mlibrary-scanner.mjs[22m              [2m 0.16 kB[22m [2m│ gzip: 0.13 kB[22m
+[34mℹ[39m [2mdist/[22minstall-BmVqcbEi.mjs             [2m20.02 kB[22m [2m│ gzip: 6.37 kB[22m
+[34mℹ[39m [2mdist/[22mscanner-DKL8v8is.mjs             [2m14.89 kB[22m [2m│ gzip: 4.34 kB[22m
+[34mℹ[39m [2mdist/[22msetup-JJvjiGkM.mjs               [2m 8.95 kB[22m [2m│ gzip: 2.92 kB[22m
+[34mℹ[39m [2mdist/[22mworkspace-patterns-U35B5AO-.mjs  [2m 6.44 kB[22m [2m│ gzip: 1.85 kB[22m
+[34mℹ[39m [2mdist/[22mutils-COlDcU72.mjs               [2m 4.68 kB[22m [2m│ gzip: 1.84 kB[22m
+[34mℹ[39m [2mdist/[22mstaleness-DorwfGrf.mjs           [2m 3.95 kB[22m [2m│ gzip: 1.37 kB[22m
+[34mℹ[39m [2mdist/[22mlibrary-scanner-DFFreLjW.mjs     [2m 3.38 kB[22m [2m│ gzip: 1.29 kB[22m
+[34mℹ[39m [2mdist/[22mresolver-aFigTqXi.mjs            [2m 2.60 kB[22m [2m│ gzip: 0.89 kB[22m
+[34mℹ[39m [2mdist/[22mdisplay-DUgtRJkt.mjs             [2m 2.54 kB[22m [2m│ gzip: 1.01 kB[22m
+[34mℹ[39m [2mdist/[22mproject-context-CKG-q4rD.mjs     [2m 2.13 kB[22m [2m│ gzip: 0.82 kB[22m
+[34mℹ[39m [2mdist/[22mskill-paths-8k9K9y26.mjs         [2m 1.65 kB[22m [2m│ gzip: 0.71 kB[22m
+[34mℹ[39m [2mdist/[22mskill-use-CXOnncWK.mjs           [2m 1.63 kB[22m [2m│ gzip: 0.56 kB[22m
+[34mℹ[39m [2mdist/[22mutils-dkVvY7D7.mjs               [2m 0.33 kB[22m [2m│ gzip: 0.20 kB[22m
+[34mℹ[39m [2mdist/[22mworkspace-patterns-DbnA0peB.mjs  [2m 0.25 kB[22m [2m│ gzip: 0.17 kB[22m
+[34mℹ[39m [2mdist/[22mdisplay-DCRCp4-C.mjs             [2m 0.24 kB[22m [2m│ gzip: 0.17 kB[22m
+[34mℹ[39m [2mdist/[22mscanner-CRZITpcY.mjs             [2m 0.20 kB[22m [2m│ gzip: 0.16 kB[22m
+[34mℹ[39m [2mdist/[22mstaleness-NF-lxfXf.mjs           [2m 0.12 kB[22m [2m│ gzip: 0.11 kB[22m
+[34mℹ[39m [2mdist/[22m[32m[1mindex.d.mts[22m[39m                      [2m 5.02 kB[22m [2m│ gzip: 1.51 kB[22m
+[34mℹ[39m [2mdist/[22m[32m[1msetup.d.mts[22m[39m                      [2m 0.55 kB[22m [2m│ gzip: 0.23 kB[22m
+[34mℹ[39m [2mdist/[22m[32m[1mlibrary-scanner.d.mts[22m[39m            [2m 0.46 kB[22m [2m│ gzip: 0.27 kB[22m
+[34mℹ[39m [2mdist/[22m[32m[1mcli.d.mts[22m[39m                        [2m 0.13 kB[22m [2m│ gzip: 0.13 kB[22m
+[34mℹ[39m [2mdist/[22m[32m[1mintent-library.d.mts[22m[39m             [2m 0.01 kB[22m [2m│ gzip: 0.03 kB[22m
+[34mℹ[39m [2mdist/[22m[32mtypes-CsySN6Vw.d.mts[39m             [2m 2.72 kB[22m [2m│ gzip: 0.96 kB[22m
+[34mℹ[39m [2mdist/[22m[32msetup-DDoOLriA.d.mts[39m             [2m 1.23 kB[22m [2m│ gzip: 0.40 kB[22m
+[34mℹ[39m 29 files, total: 115.92 kB
+[32m✔[39m Build complete in [32m1394ms[39m

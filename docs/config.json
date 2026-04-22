@@ -39,6 +39,10 @@
           "to": "cli/intent-list"
         },
         {
+          "label": "intent load",
+          "to": "cli/intent-load"
+        },
+        {
           "label": "intent meta",
           "to": "cli/intent-meta"
         },

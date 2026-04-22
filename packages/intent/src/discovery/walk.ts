@@ -19,6 +19,24 @@ export interface CreateDependencyWalkerOptions {
 
 export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   const walkVisited = new Set<string>()
+  const depDirCache = new Map<string, Map<string, string | null>>()
+
+  function resolveDepDirCached(
+    depName: string,
+    fromDir: string,
+  ): string | null {
+    let byDepName = depDirCache.get(fromDir)
+    if (!byDepName) {
+      byDepName = new Map()
+      depDirCache.set(fromDir, byDepName)
+    }
+
+    if (!byDepName.has(depName)) {
+      byDepName.set(depName, resolveDepDir(depName, fromDir))
+    }
+
+    return byDepName.get(depName) ?? null
+  }
 
   function walkDepsOf(
     pkgJson: PackageJson,
@@ -26,7 +44,7 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
     includeDevDeps = false,
   ): void {
     for (const depName of getDeps(pkgJson, includeDevDeps)) {
-      const depDir = resolveDepDir(depName, fromDir)
+      const depDir = resolveDepDirCached(depName, fromDir)
       if (!depDir || walkVisited.has(depDir)) continue
 
       opts.tryRegister(depDir, depName)

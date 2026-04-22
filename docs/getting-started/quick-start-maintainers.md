@@ -122,7 +122,7 @@ Skills ship inside your npm package. When you publish:
 npm publish
 ```
 
-Consumers who install your library automatically get the skills. They discover them with `intent list` and map them with `intent install`.
+Consumers who install your library automatically get the skills. They discover local installed skills with `intent list`, add loading guidance with `intent install`, and load matching skills with `intent load`.
 
 **Version alignment:**
 - Skills version with your library releases

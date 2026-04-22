@@ -13,7 +13,7 @@ Intent provides tooling for two workflows:
 
 **For consumers:**
 - Discover skills from installed dependencies
-- Generate task-to-skill mappings for your agent config
+- Add lightweight skill loading guidance to your agent config
 - Keep skills synchronized with library versions
 
 **For maintainers (library teams):**
@@ -30,13 +30,21 @@ Intent provides tooling for two workflows:
 npx @tanstack/intent@latest list
 ```
 
-Scans the current project's `node_modules` and workspace dependencies for intent-enabled packages. The CLI intentionally includes accessible global packages for this command and still prefers local packages when both exist.
+Scans the current project's `node_modules` and workspace dependencies for intent-enabled packages.
+Global package scanning is explicit; pass `--global` to include global packages or `--global-only` to ignore local packages.
+When both local and global packages are scanned, local packages take precedence.
 
 ```bash
 npx @tanstack/intent@latest install
 ```
 
-Prints instructions for your agent to create `intent-skills` mappings in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.). Existing mappings are updated in place; otherwise `AGENTS.md` is the default target.
+Creates or updates lightweight `intent-skills` guidance in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.). Existing guidance is updated in place; otherwise `AGENTS.md` is the default target. Pass `--map` to opt in to explicit task-to-skill mappings.
+
+```bash
+npx @tanstack/intent@latest load @tanstack/query#fetching
+```
+
+Loads the matching `SKILL.md` content for the installed package version. Pass `--path` when you need the resolved skill file path for debugging.
 
 ### Scaffolding and validation
 

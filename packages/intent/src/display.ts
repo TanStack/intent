@@ -2,6 +2,11 @@
 // Shared display helpers for CLI output
 // ---------------------------------------------------------------------------
 
+import {
+  formatRuntimeSkillLookupHint,
+  isStableLoadPath,
+} from './skill-paths.js'
+
 export interface SkillDisplay {
   name: string
   description: string
@@ -35,7 +40,7 @@ function printSkillLine(
   displayName: string,
   skill: SkillDisplay,
   indent: number,
-  opts: { nameWidth: number; showTypes: boolean },
+  opts: { nameWidth: number; showTypes: boolean; packageName: string },
 ): void {
   const nameStr = ' '.repeat(indent) + displayName
   const padding = ' '.repeat(Math.max(2, opts.nameWidth - nameStr.length))
@@ -44,13 +49,23 @@ function printSkillLine(
     : ''
   console.log(`${nameStr}${padding}${typeCol}${skill.description}`)
   if (skill.path) {
-    console.log(`${' '.repeat(indent + 2)}${skill.path}`)
+    const pathIndent = ' '.repeat(indent + 2)
+    if (isStableLoadPath(skill.path)) {
+      console.log(`${pathIndent}${skill.path}`)
+    } else {
+      console.log(
+        `${pathIndent}${formatRuntimeSkillLookupHint({
+          packageName: opts.packageName,
+          skillName: skill.name,
+        })}`,
+      )
+    }
   }
 }
 
 export function printSkillTree(
   skills: Array<SkillDisplay>,
-  opts: { nameWidth: number; showTypes: boolean },
+  opts: { nameWidth: number; showTypes: boolean; packageName: string },
 ): void {
   const roots: Array<string> = []
   const children = new Map<string, Array<SkillDisplay>>()

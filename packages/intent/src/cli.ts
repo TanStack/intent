@@ -2,7 +2,7 @@
 
 import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { type CAC, cac } from 'cac'
+import { cac } from 'cac'
 import { fail, isCliFailure } from './cli-error.js'
 import {
   getMetaDir,
@@ -12,11 +12,16 @@ import {
 import { runEditPackageJsonCommand } from './commands/edit-package-json.js'
 import { runInstallCommand } from './commands/install.js'
 import { runListCommand } from './commands/list.js'
+import { runLoadCommand } from './commands/load.js'
 import { runMetaCommand } from './commands/meta.js'
 import { runScaffoldCommand } from './commands/scaffold.js'
 import { runSetupGithubActionsCommand } from './commands/setup-github-actions.js'
 import { runStaleCommand } from './commands/stale.js'
 import { runValidateCommand } from './commands/validate.js'
+import type { CAC } from 'cac'
+import type { InstallCommandOptions } from './commands/install.js'
+import type { ListCommandOptions } from './commands/list.js'
+import type { LoadCommandOptions } from './commands/load.js'
 
 function createCli(): CAC {
   const cli = cac('intent')
@@ -25,16 +30,30 @@ function createCli(): CAC {
   cli
     .command(
       'list',
-      'Discover intent-enabled packages from the project, workspace, and explicit global scan',
+      'Discover intent-enabled packages from the project or workspace',
     )
-    .usage('list [--json]')
+    .usage('list [--json] [--global] [--global-only]')
     .option('--json', 'Output JSON')
+    .option('--global', 'Include global packages after project packages')
+    .option('--global-only', 'List global packages only')
     .example('list')
     .example('list --json')
-    .action(async (options: { json?: boolean }) => {
-      await runListCommand(options, () =>
-        scanIntentsOrFail({ includeGlobal: true }),
-      )
+    .example('list --global')
+    .action(async (options: ListCommandOptions) => {
+      await runListCommand(options, scanIntentsOrFail)
+    })
+
+  cli
+    .command('load [use]', 'Load a compact skill use and print its SKILL.md')
+    .usage('load <use> [--path] [--json] [--global] [--global-only]')
+    .option('--path', 'Print the resolved skill path instead of file content')
+    .option('--json', 'Output JSON')
+    .option('--global', 'Load from project packages, then global packages')
+    .option('--global-only', 'Load from global packages only')
+    .example('load @tanstack/query#core')
+    .example('load @tanstack/query#core --path')
+    .action(async (use: string | undefined, options: LoadCommandOptions) => {
+      await runLoadCommand(use, options, scanIntentsOrFail)
     })
 
   cli
@@ -58,11 +77,26 @@ function createCli(): CAC {
   cli
     .command(
       'install',
-      'Print a skill that guides your coding agent to set up skill-to-task mappings',
+      'Create or update skill loading guidance in an agent config file',
     )
-    .usage('install')
-    .action(() => {
-      runInstallCommand()
+    .usage(
+      'install [--map] [--dry-run] [--print-prompt] [--global] [--global-only]',
+    )
+    .option('--map', 'Write explicit skill-to-task mappings')
+    .option('--dry-run', 'Print the generated block without writing')
+    .option(
+      '--print-prompt',
+      'Print the legacy agent setup prompt instead of writing',
+    )
+    .option('--global', 'Include global packages after project packages')
+    .option('--global-only', 'Install mappings from global packages only')
+    .example('install')
+    .example('install --map')
+    .example('install --dry-run')
+    .example('install --print-prompt')
+    .example('install --global')
+    .action(async (options: InstallCommandOptions) => {
+      await runInstallCommand(options, scanIntentsOrFail)
     })
 
   cli

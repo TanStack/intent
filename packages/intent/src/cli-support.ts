@@ -5,13 +5,11 @@ import { fail } from './cli-error.js'
 import { resolveProjectContext } from './core/project-context.js'
 import type { ScanOptions, ScanResult, StalenessReport } from './types.js'
 
-export function printWarnings(warnings: Array<string>): void {
-  if (warnings.length === 0) return
+export { printWarnings } from './cli-output.js'
 
-  console.log('Warnings:')
-  for (const warning of warnings) {
-    console.log(`  ⚠ ${warning}`)
-  }
+export interface GlobalScanFlags {
+  global?: boolean
+  globalOnly?: boolean
 }
 
 export function getMetaDir(): string {
@@ -29,6 +27,24 @@ export async function scanIntentsOrFail(
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err))
   }
+}
+
+export function scanOptionsFromGlobalFlags(
+  options: GlobalScanFlags,
+): ScanOptions {
+  if (options.global && options.globalOnly) {
+    fail('Use either --global or --global-only, not both.')
+  }
+
+  if (options.globalOnly) {
+    return { scope: 'global' }
+  }
+
+  if (options.global) {
+    return { scope: 'local-and-global' }
+  }
+
+  return { scope: 'local' }
 }
 
 function readPackageName(root: string): string {

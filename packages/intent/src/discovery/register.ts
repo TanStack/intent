@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
-import { join, relative, sep } from 'node:path'
-import { listNodeModulesPackageDirs, toPosixPath } from '../utils.js'
+import { join, sep } from 'node:path'
+import { rewriteSkillLoadPaths } from '../skill-paths.js'
+import { listNodeModulesPackageDirs } from '../utils.js'
 import type {
   IntentConfig,
   IntentPackage,
@@ -15,29 +16,6 @@ function isLocalToProject(dirPath: string, projectRoot: string): boolean {
     dirPath.startsWith(projectRoot + sep) ||
     dirPath.startsWith(projectRoot + '/')
   )
-}
-
-/**
- * Rewrite absolute skill paths to stable relative paths. Prefers
- * `node_modules/<name>/...` when a top-level symlink exists, otherwise
- * falls back to a path relative to the project root.
- */
-function rewriteSkillPaths(
-  skills: Array<SkillEntry>,
-  dirPath: string,
-  name: string,
-  projectRoot: string,
-): void {
-  const hasStableSymlink =
-    name !== '' && existsSync(join(projectRoot, 'node_modules', name))
-  for (const skill of skills) {
-    if (hasStableSymlink) {
-      const relFromPkg = toPosixPath(relative(dirPath, skill.path))
-      skill.path = `node_modules/${name}/${relFromPkg}`
-    } else {
-      skill.path = toPosixPath(relative(projectRoot, skill.path))
-    }
-  }
 }
 
 export interface CreatePackageRegistrarOptions {
@@ -97,7 +75,12 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     const skills = opts.discoverSkills(skillsDir, name)
 
     if (isLocalToProject(dirPath, opts.projectRoot)) {
-      rewriteSkillPaths(skills, dirPath, name, opts.projectRoot)
+      rewriteSkillLoadPaths({
+        packageName: name,
+        packageRoot: dirPath,
+        projectRoot: opts.projectRoot,
+        skills,
+      })
     }
 
     const candidate: IntentPackage = {
