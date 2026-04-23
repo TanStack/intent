@@ -1,0 +1,132 @@
+import { describe, expect, it } from 'vitest'
+import {
+  buildStaleReviewBody,
+  collectStaleReviewItems,
+  createFailedStaleReviewItem,
+} from '../src/workflow-review.js'
+import type { StalenessReport } from '../src/types.js'
+
+function report(overrides: Partial<StalenessReport>): StalenessReport {
+  return {
+    library: '@tanstack/router',
+    currentVersion: null,
+    skillVersion: null,
+    versionDrift: null,
+    skills: [],
+    signals: [],
+    ...overrides,
+  }
+}
+
+describe('workflow review helpers', () => {
+  it('collects stale skills and review signals into one item list', () => {
+    const items = collectStaleReviewItems([
+      report({
+        skills: [
+          {
+            name: 'routing',
+            reasons: ['version drift (1.0.0 -> 1.1.0)'],
+            needsReview: true,
+          },
+          {
+            name: 'clean',
+            reasons: [],
+            needsReview: false,
+          },
+        ],
+        signals: [
+          {
+            type: 'missing-package-coverage',
+            library: '@tanstack/react-start-rsc',
+            packageName: '@tanstack/react-start-rsc',
+            packageRoot: 'packages/react-start-rsc',
+            reasons: ['workspace package is not represented'],
+            needsReview: true,
+          },
+          {
+            type: 'artifact-source-drift',
+            skill: 'start-core',
+            reasons: ['artifact sources differ'],
+            needsReview: true,
+          },
+        ],
+      }),
+    ])
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        type: 'stale-skill',
+        library: '@tanstack/router',
+        subject: 'routing',
+      }),
+      expect.objectContaining({
+        type: 'missing-package-coverage',
+        library: '@tanstack/react-start-rsc',
+        subject: '@tanstack/react-start-rsc',
+        packageRoot: 'packages/react-start-rsc',
+      }),
+      expect.objectContaining({
+        type: 'artifact-source-drift',
+        library: '@tanstack/router',
+        subject: 'start-core',
+      }),
+    ])
+  })
+
+  it('returns no review items for clean reports', () => {
+    expect(
+      collectStaleReviewItems([
+        report({
+          skills: [{ name: 'routing', reasons: [], needsReview: false }],
+        }),
+      ]),
+    ).toEqual([])
+  })
+
+  it('builds a grouped review body with maintainer prompt', () => {
+    const body = buildStaleReviewBody([
+      {
+        type: 'stale-skill',
+        library: '@tanstack/router',
+        subject: 'routing',
+        reasons: ['version drift'],
+      },
+      {
+        type: 'missing-package-coverage',
+        library: '@tanstack/react-start-rsc',
+        subject: '@tanstack/react-start-rsc',
+        reasons: ['workspace package is not represented'],
+        packageName: '@tanstack/react-start-rsc',
+      },
+      {
+        type: 'missing-package-coverage',
+        library: '@tanstack/start-server-functions',
+        subject: '@tanstack/start-server-functions',
+        reasons: ['workspace package is not represented'],
+        packageName: '@tanstack/start-server-functions',
+      },
+    ])
+
+    expect(body).toContain('| `missing-package-coverage` | 2 |')
+    expect(body).toContain('| `stale-skill` | 1 |')
+    expect(body).toContain('`@tanstack/react-start-rsc`')
+    expect(body).toContain('Before editing skills or artifacts, ask the maintainer:')
+    expect(body).toContain('- Do not auto-generate skills.')
+    expect(body).toContain(
+      'Summarize every package as one of: existing-skill coverage, new skill, ignored, or deferred.',
+    )
+  })
+
+  it('builds a useful failed stale check review item', () => {
+    const item = createFailedStaleReviewItem('@tanstack/router')
+    const body = buildStaleReviewBody([item])
+
+    expect(item).toMatchObject({
+      type: 'stale-check-failed',
+      library: '@tanstack/router',
+      subject: 'intent stale --json',
+    })
+    expect(body).toContain('| `stale-check-failed` | 1 |')
+    expect(body).toContain('Review the workflow logs before updating skills.')
+  })
+})

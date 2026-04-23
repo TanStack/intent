@@ -59,9 +59,12 @@ export async function resolveStaleTargets(
   })
   const { buildWorkspaceCoverageSignals, checkStaleness, readPackageName } =
     await import('./staleness.js')
+  const isWorkspaceRootTarget =
+    context.workspaceRoot !== null && resolvedRoot === context.workspaceRoot
 
   if (
     context.packageRoot &&
+    !isWorkspaceRootTarget &&
     (context.targetSkillsDir !== null || resolvedRoot !== context.workspaceRoot)
   ) {
     return {
@@ -71,14 +74,6 @@ export async function resolveStaleTargets(
           readPackageName(context.packageRoot),
           context.workspaceRoot ?? context.packageRoot,
         ),
-      ],
-    }
-  }
-
-  if (existsSync(join(resolvedRoot, 'skills'))) {
-    return {
-      reports: [
-        await checkStaleness(resolvedRoot, readPackageName(resolvedRoot)),
       ],
     }
   }
@@ -123,6 +118,14 @@ export async function resolveStaleTargets(
       return {
         reports,
       }
+    }
+  }
+
+  if (existsSync(join(resolvedRoot, 'skills'))) {
+    return {
+      reports: [
+        await checkStaleness(resolvedRoot, readPackageName(resolvedRoot)),
+      ],
     }
   }
 

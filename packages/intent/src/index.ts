@@ -2,6 +2,12 @@ export { scanForIntents } from './scanner.js'
 export { checkStaleness } from './staleness.js'
 export { readIntentArtifacts } from './artifact-coverage.js'
 export {
+  buildStaleReviewBody,
+  collectStaleReviewItems,
+  createFailedStaleReviewItem,
+  type StaleReviewItem,
+} from './workflow-review.js'
+export {
   containsSecrets,
   hasGhCli,
   metaToMarkdown,

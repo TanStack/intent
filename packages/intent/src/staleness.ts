@@ -135,17 +135,19 @@ function readSyncState(packageDir: string): SyncState | null {
 }
 
 export function readPackageName(packageDir: string): string {
+  const packageJson = readPackageJson(packageDir)
+  return typeof packageJson?.name === 'string'
+    ? packageJson.name
+    : relative(process.cwd(), packageDir) || 'unknown'
+}
+
+function readPackageJson(packageDir: string): Record<string, unknown> | null {
   try {
-    const pkgJson = JSON.parse(
+    return JSON.parse(
       readFileSync(join(packageDir, 'package.json'), 'utf8'),
-    ) as {
-      name?: unknown
-    }
-    return typeof pkgJson.name === 'string'
-      ? pkgJson.name
-      : relative(process.cwd(), packageDir) || 'unknown'
+    ) as Record<string, unknown>
   } catch {
-    return relative(process.cwd(), packageDir) || 'unknown'
+    return null
   }
 }
 
@@ -387,6 +389,9 @@ export function buildWorkspaceCoverageSignals({
 
   const signals: Array<StalenessSignal> = []
   for (const packageDir of packageDirs) {
+    const packageJson = readPackageJson(packageDir)
+    if (packageJson?.private === true) continue
+
     const packageName = readPackageName(packageDir)
     if (
       artifactIgnoresPackage(artifacts, packageDir, packageName, artifactRoot)
