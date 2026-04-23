@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   buildStaleReviewBody,
@@ -5,6 +7,8 @@ import {
   createFailedStaleReviewItem,
 } from '../src/workflow-review.js'
 import type { StalenessReport } from '../src/types.js'
+
+const repoRoot = join(import.meta.dirname, '..', '..', '..')
 
 function report(overrides: Partial<StalenessReport>): StalenessReport {
   return {
@@ -130,5 +134,33 @@ describe('workflow review helpers', () => {
     })
     expect(body).toContain('| `stale-check-failed` | 1 |')
     expect(body).toContain('Review the workflow logs before updating skills.')
+  })
+
+  it('keeps the generated workflow wired to grouped review items and PR body updates', () => {
+    const template = readFileSync(
+      join(
+        repoRoot,
+        'packages',
+        'intent',
+        'meta',
+        'templates',
+        'workflows',
+        'check-skills.yml',
+      ),
+      'utf8',
+    )
+
+    expect(template).toContain('intent stale --json > stale.json')
+    expect(template).toContain('const reports = JSON.parse')
+    expect(template).toContain('for (const skill of report.skills ?? [])')
+    expect(template).toContain('for (const signal of report.signals ?? [])')
+    expect(template).toContain("type: signal?.type ?? 'review-signal'")
+    expect(template).toContain(
+      "fs.writeFileSync('review-items.json', JSON.stringify(items, null, 2) + '\\n')",
+    )
+    expect(template).toContain("fs.writeFileSync('pr-body.md', body + '\\n')")
+    expect(template).toContain('gh pr edit "$PR_URL" --body-file pr-body.md')
+    expect(template).toContain('gh pr create \\')
+    expect(template).toContain('--body-file pr-body.md')
   })
 })

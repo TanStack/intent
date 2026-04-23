@@ -15,7 +15,8 @@ npx @tanstack/intent@latest stale [--json]
 
 ## Behavior
 
-- Checks the current package by default, or all skill-bearing packages in the current workspace when run from a monorepo root
+- Checks the current package by default
+- From a monorepo root, checks workspace packages that ship skills and also reports public workspace packages with no skill or artifact coverage
 - When `dir` is provided, scopes the check to the targeted package or skills directory
 - Computes one staleness report per package
 - Reads repo-root `_artifacts/*domain_map.yaml` and `_artifacts/*skill_tree.yaml` when present

@@ -41,13 +41,22 @@ function getReleaseCommits() {
 }
 
 function getPreviousGitHubReleaseCommit() {
-  const output = maybeRun('git tag --list "release-*" --sort=-creatordate')
+  const output = maybeRun(
+    'git tag --list "v*" --list "release-*" --sort=-creatordate',
+  )
 
   if (!output) {
     return null
   }
 
-  const [tag] = output.split('\n').filter(Boolean)
+  const [tag] = output
+    .split('\n')
+    .filter((candidate) => /^v\d+\.\d+\.\d+$/.test(candidate))
+    .concat(
+      output
+        .split('\n')
+        .filter((candidate) => candidate.startsWith('release-')),
+    )
 
   if (!tag) {
     return null
