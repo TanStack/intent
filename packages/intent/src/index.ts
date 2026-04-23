@@ -1,5 +1,6 @@
 export { scanForIntents } from './scanner.js'
 export { checkStaleness } from './staleness.js'
+export { readIntentArtifacts } from './artifact-coverage.js'
 export {
   containsSecrets,
   hasGhCli,
@@ -41,6 +42,11 @@ export type {
   AgentName,
   FeedbackPayload,
   IntentConfig,
+  IntentArtifactCoverageIgnore,
+  IntentArtifactFile,
+  IntentArtifactSet,
+  IntentArtifactSkill,
+  IntentArtifactWarning,
   IntentPackage,
   IntentProjectConfig,
   MetaFeedbackPayload,

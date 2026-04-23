@@ -98,6 +98,46 @@ export interface StalenessSignal {
   skill?: string
 }
 
+export interface IntentArtifactSet {
+  root: string
+  artifactsDir: string
+  skillTrees: Array<IntentArtifactFile>
+  domainMaps: Array<IntentArtifactFile>
+  skills: Array<IntentArtifactSkill>
+  ignoredPackages: Array<IntentArtifactCoverageIgnore>
+  warnings: Array<IntentArtifactWarning>
+}
+
+export interface IntentArtifactFile {
+  path: string
+  kind: 'skill-tree' | 'domain-map'
+  libraryName?: string
+  libraryVersion?: string
+}
+
+export interface IntentArtifactSkill {
+  artifactPath: string
+  artifactKind: 'skill-tree' | 'domain-map'
+  name?: string
+  slug?: string
+  path?: string
+  package?: string
+  packages: Array<string>
+  sources: Array<string>
+  covers: Array<string>
+}
+
+export interface IntentArtifactCoverageIgnore {
+  packageName: string
+  reason?: string
+  artifactPath: string
+}
+
+export interface IntentArtifactWarning {
+  artifactPath: string
+  message: string
+}
+
 // ---------------------------------------------------------------------------
 // Feedback types
 // ---------------------------------------------------------------------------
