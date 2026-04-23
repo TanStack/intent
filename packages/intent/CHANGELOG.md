@@ -1,5 +1,13 @@
 # @tanstack/intent
 
+## 0.0.33
+
+### Patch Changes
+
+- Improve `intent stale` for monorepos by checking repo `_artifacts` coverage, flagging uncovered public workspace packages, and ignoring private workspaces. ([#120](https://github.com/TanStack/intent/pull/120))
+
+  The generated skills workflow now opens one grouped review PR with maintainer prompts, includes a workflow version stamp, and `intent stale` warns when maintainers should rerun `intent setup`.
+
 ## 0.0.32
 
 ### Patch Changes
