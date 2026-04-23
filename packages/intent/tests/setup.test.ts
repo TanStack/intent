@@ -38,6 +38,7 @@ beforeEach(() => {
     join(metaDir, 'templates', 'workflows', 'check-skills.yml'),
     [
       'label: {{PACKAGE_LABEL}}',
+      '# intent-workflow-version: 2',
       'install: npm install -g @tanstack/intent',
       'signals: report.signals',
       'has_review=true',
@@ -264,6 +265,7 @@ describe('runSetupGithubActions', () => {
       'utf8',
     )
     expect(checkContent).toContain('label: @tanstack/query')
+    expect(checkContent).toContain('# intent-workflow-version: 2')
     expect(checkContent).toContain('install: npm install -g @tanstack/intent')
     expect(checkContent).toContain('signals: report.signals')
     expect(checkContent).toContain('has_review=true')

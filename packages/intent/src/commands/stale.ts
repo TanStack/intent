@@ -5,13 +5,25 @@ export async function runStaleCommand(
   options: { json?: boolean },
   resolveStaleTargets: (
     targetDir?: string,
-  ) => Promise<{ reports: Array<StalenessReport> }>,
+  ) => Promise<{
+    reports: Array<StalenessReport>
+    workflowAdvisories?: Array<string>
+  }>,
 ): Promise<void> {
-  const { reports } = await resolveStaleTargets(targetDir)
+  const { reports, workflowAdvisories = [] } = await resolveStaleTargets(
+    targetDir,
+  )
 
   if (options.json) {
     console.log(JSON.stringify(reports, null, 2))
     return
+  }
+
+  for (const advisory of workflowAdvisories) {
+    console.log(advisory)
+  }
+  if (workflowAdvisories.length > 0) {
+    console.log()
   }
 
   if (reports.length === 0) {

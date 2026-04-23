@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fail } from './cli-error.js'
@@ -12,9 +12,36 @@ export interface GlobalScanFlags {
   globalOnly?: boolean
 }
 
+export interface StaleTargetResult {
+  reports: Array<StalenessReport>
+  workflowAdvisories: Array<string>
+}
+
+export const INTENT_CHECK_SKILLS_WORKFLOW_VERSION = 2
+
 export function getMetaDir(): string {
   const thisDir = dirname(fileURLToPath(import.meta.url))
   return join(thisDir, '..', 'meta')
+}
+
+export function getCheckSkillsWorkflowAdvisories(root: string): Array<string> {
+  const workflowPath = join(root, '.github', 'workflows', 'check-skills.yml')
+  if (!existsSync(workflowPath)) return []
+
+  let content: string
+  try {
+    content = readFileSync(workflowPath, 'utf8')
+  } catch {
+    return []
+  }
+
+  const versionMatch = content.match(/intent-workflow-version:\s*(\d+)/)
+  const installedVersion = versionMatch ? Number(versionMatch[1]) : 0
+  if (installedVersion >= INTENT_CHECK_SKILLS_WORKFLOW_VERSION) return []
+
+  return [
+    `Intent workflow update available: run \`npx @tanstack/intent@latest setup\` to refresh ${relative(process.cwd(), workflowPath) || workflowPath}.`,
+  ]
 }
 
 export async function scanIntentsOrFail(
@@ -49,7 +76,7 @@ export function scanOptionsFromGlobalFlags(
 
 export async function resolveStaleTargets(
   targetDir?: string,
-): Promise<{ reports: Array<StalenessReport> }> {
+): Promise<StaleTargetResult> {
   const resolvedRoot = targetDir
     ? resolve(process.cwd(), targetDir)
     : process.cwd()
@@ -57,6 +84,9 @@ export async function resolveStaleTargets(
     cwd: process.cwd(),
     targetPath: targetDir,
   })
+  const advisoryRoot =
+    context.workspaceRoot ?? context.packageRoot ?? resolvedRoot
+  const workflowAdvisories = getCheckSkillsWorkflowAdvisories(advisoryRoot)
   const { buildWorkspaceCoverageSignals, checkStaleness, readPackageName } =
     await import('./staleness.js')
   const isWorkspaceRootTarget =
@@ -75,6 +105,7 @@ export async function resolveStaleTargets(
           context.workspaceRoot ?? context.packageRoot,
         ),
       ],
+      workflowAdvisories,
     }
   }
 
@@ -117,6 +148,7 @@ export async function resolveStaleTargets(
     if (reports.length > 0) {
       return {
         reports,
+        workflowAdvisories,
       }
     }
   }
@@ -126,6 +158,7 @@ export async function resolveStaleTargets(
       reports: [
         await checkStaleness(resolvedRoot, readPackageName(resolvedRoot)),
       ],
+      workflowAdvisories,
     }
   }
 
@@ -136,5 +169,6 @@ export async function resolveStaleTargets(
         checkStaleness(pkg.packageRoot, pkg.name),
       ),
     ),
+    workflowAdvisories,
   }
 }
