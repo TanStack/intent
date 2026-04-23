@@ -36,7 +36,18 @@ beforeEach(() => {
 
   writeFileSync(
     join(metaDir, 'templates', 'workflows', 'check-skills.yml'),
-    'label: {{PACKAGE_LABEL}}\ninstall: npm install -g @tanstack/intent',
+    [
+      'label: {{PACKAGE_LABEL}}',
+      'install: npm install -g @tanstack/intent',
+      'signals: report.signals',
+      'has_review=true',
+      'No stale skills or coverage gaps found.',
+      'gh pr list --head "$BRANCH"',
+      'gh pr edit "$PR_URL" --body-file pr-body.md',
+      'Review intent skills',
+      'Ask the maintainer before editing skills or artifacts.',
+      'Do not auto-generate skills.',
+    ].join('\n'),
   )
   writeFileSync(
     join(metaDir, 'templates', 'workflows', 'validate-skills.yml'),
@@ -254,6 +265,18 @@ describe('runSetupGithubActions', () => {
     )
     expect(checkContent).toContain('label: @tanstack/query')
     expect(checkContent).toContain('install: npm install -g @tanstack/intent')
+    expect(checkContent).toContain('signals: report.signals')
+    expect(checkContent).toContain('has_review=true')
+    expect(checkContent).toContain('No stale skills or coverage gaps found.')
+    expect(checkContent).toContain('gh pr list --head "$BRANCH"')
+    expect(checkContent).toContain(
+      'gh pr edit "$PR_URL" --body-file pr-body.md',
+    )
+    expect(checkContent).toContain('Review intent skills')
+    expect(checkContent).toContain(
+      'Ask the maintainer before editing skills or artifacts.',
+    )
+    expect(checkContent).toContain('Do not auto-generate skills.')
 
     const validateContent = readFileSync(
       join(root, '.github', 'workflows', 'validate-skills.yml'),
@@ -349,6 +372,8 @@ describe('runSetupGithubActions', () => {
     )
     expect(checkContent).toContain('label: @tanstack/router')
     expect(checkContent).toContain('npm install -g @tanstack/intent')
+    expect(checkContent).toContain('signals: report.signals')
+    expect(checkContent).toContain('No stale skills or coverage gaps found.')
 
     rmSync(monoRoot, { recursive: true, force: true })
   })
