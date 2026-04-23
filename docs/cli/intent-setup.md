@@ -3,17 +3,18 @@ title: setup commands
 id: intent-setup
 ---
 
-Intent exposes setup as two separate commands.
+Intent exposes publishing setup as two commands.
 
 ```bash
 npx @tanstack/intent@latest edit-package-json
-npx @tanstack/intent@latest setup-github-actions
+npx @tanstack/intent@latest setup
 ```
 
 ## Commands
 
 - `edit-package-json`: add or normalize `package.json` entries needed to publish skills
-- `setup-github-actions`: copy workflow templates to `.github/workflows`
+- `setup`: copy workflow templates to `.github/workflows`
+- `setup-github-actions`: legacy alias for `setup`
 
 ## What each command changes
 
@@ -22,11 +23,10 @@ npx @tanstack/intent@latest setup-github-actions
   - Ensures `keywords` includes `tanstack-intent`
   - Ensures `files` includes required publish entries
   - Preserves existing indentation
-- `setup-github-actions`
+- `setup`
   - Copies templates from `@tanstack/intent/meta/templates/workflows` to `.github/workflows`
   - Applies variable substitution (`PACKAGE_NAME`, `PACKAGE_LABEL`, `PAYLOAD_PACKAGE`, `REPO`, `DOCS_PATH`, `SRC_PATH`, `WATCH_PATHS`)
   - Detects the workspace root in monorepos and writes repo-level workflows there
-  - Generates monorepo-aware watch paths for package `src/` and docs directories
   - Skips files that already exist at destination
 
 ## Required `files` entries
@@ -39,12 +39,12 @@ npx @tanstack/intent@latest setup-github-actions
 ## Common errors
 
 - Missing or invalid `package.json` when running `edit-package-json`
-- Missing template source when running `setup-github-actions`
+- Missing template source when running `setup`
 
 ## Notes
 
-- `setup-github-actions` skips existing files
-- In monorepos, run `setup-github-actions` from either the repo root or a package directory; Intent writes workflows to the workspace root
+- `setup` skips existing files
+- In monorepos, run `setup` from either the repo root or a package directory; Intent writes workflows to the workspace root
 
 ## Related
 

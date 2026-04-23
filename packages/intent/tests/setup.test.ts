@@ -35,12 +35,24 @@ beforeEach(() => {
   mkdirSync(join(metaDir, 'templates', 'workflows'), { recursive: true })
 
   writeFileSync(
-    join(metaDir, 'templates', 'workflows', 'notify-intent.yml'),
-    'package: {{PAYLOAD_PACKAGE}}\nrepo: {{REPO}}\npaths:\n  - {{DOCS_PATH}}\n  - {{SRC_PATH}}',
+    join(metaDir, 'templates', 'workflows', 'check-skills.yml'),
+    [
+      'label: {{PACKAGE_LABEL}}',
+      '# intent-workflow-version: 2',
+      'install: npm install -g @tanstack/intent',
+      'signals: report.signals',
+      'has_review=true',
+      'No stale skills or coverage gaps found.',
+      'gh pr list --head "$BRANCH"',
+      'gh pr edit "$PR_URL" --body-file pr-body.md',
+      'Review intent skills',
+      'Ask the maintainer before editing skills or artifacts.',
+      'Do not auto-generate skills.',
+    ].join('\n'),
   )
   writeFileSync(
-    join(metaDir, 'templates', 'workflows', 'check-skills.yml'),
-    'label: {{PACKAGE_LABEL}}\ninstall: npm install -g @tanstack/intent',
+    join(metaDir, 'templates', 'workflows', 'validate-skills.yml'),
+    'validate: npx @tanstack/intent@latest validate',
   )
 })
 
@@ -244,24 +256,52 @@ describe('runSetupGithubActions', () => {
     expect(result.workflows).toHaveLength(2)
     expect(result.skipped).toHaveLength(0)
 
-    const wfContent = readFileSync(
-      join(root, '.github', 'workflows', 'notify-intent.yml'),
+    expect(
+      existsSync(join(root, '.github', 'workflows', 'notify-intent.yml')),
+    ).toBe(false)
+
+    const checkContent = readFileSync(
+      join(root, '.github', 'workflows', 'check-skills.yml'),
       'utf8',
     )
-    expect(wfContent).toContain('package: @tanstack/query')
-    expect(wfContent).toContain('repo: TanStack/query')
-    expect(wfContent).toContain('paths:')
-    expect(wfContent).toContain("'docs/**'")
+    expect(checkContent).toContain('label: @tanstack/query')
+    expect(checkContent).toContain('# intent-workflow-version: 2')
+    expect(checkContent).toContain('install: npm install -g @tanstack/intent')
+    expect(checkContent).toContain('signals: report.signals')
+    expect(checkContent).toContain('has_review=true')
+    expect(checkContent).toContain('No stale skills or coverage gaps found.')
+    expect(checkContent).toContain('gh pr list --head "$BRANCH"')
+    expect(checkContent).toContain(
+      'gh pr edit "$PR_URL" --body-file pr-body.md',
+    )
+    expect(checkContent).toContain('Review intent skills')
+    expect(checkContent).toContain(
+      'Ask the maintainer before editing skills or artifacts.',
+    )
+    expect(checkContent).toContain('Do not auto-generate skills.')
+
+    const validateContent = readFileSync(
+      join(root, '.github', 'workflows', 'validate-skills.yml'),
+      'utf8',
+    )
+    expect(validateContent).toContain(
+      'validate: npx @tanstack/intent@latest validate',
+    )
   })
 
   it('copies templates with defaults when no package.json', () => {
     const result = runSetupGithubActions(root, metaDir)
     expect(result.workflows).toHaveLength(2)
 
-    const wfPath = join(root, '.github', 'workflows', 'notify-intent.yml')
-    expect(existsSync(wfPath)).toBe(true)
-    const content = readFileSync(wfPath, 'utf8')
-    expect(content).toContain('package: unknown')
+    expect(
+      existsSync(join(root, '.github', 'workflows', 'notify-intent.yml')),
+    ).toBe(false)
+    expect(
+      existsSync(join(root, '.github', 'workflows', 'check-skills.yml')),
+    ).toBe(true)
+    expect(
+      existsSync(join(root, '.github', 'workflows', 'validate-skills.yml')),
+    ).toBe(true)
   })
 
   it('skips existing workflow files', () => {
@@ -316,24 +356,17 @@ describe('runSetupGithubActions', () => {
 
     expect(result.workflows).toEqual(
       expect.arrayContaining([
-        join(monoRoot, '.github', 'workflows', 'notify-intent.yml'),
         join(monoRoot, '.github', 'workflows', 'check-skills.yml'),
+        join(monoRoot, '.github', 'workflows', 'validate-skills.yml'),
       ]),
     )
     expect(
       existsSync(join(monoRoot, 'packages', 'router', '.github', 'workflows')),
     ).toBe(false)
 
-    const notifyContent = readFileSync(
-      join(monoRoot, '.github', 'workflows', 'notify-intent.yml'),
-      'utf8',
-    )
-    expect(notifyContent).toContain('package: @tanstack/router')
-    expect(notifyContent).toContain('repo: TanStack/router')
-    expect(notifyContent).toContain("- 'packages/router/docs/**'")
-    expect(notifyContent).toContain("- 'packages/router/src/**'")
-    expect(notifyContent).toContain("- 'packages/start/src/**'")
-    expect(notifyContent).not.toContain('packages/root/src/**')
+    expect(
+      existsSync(join(monoRoot, '.github', 'workflows', 'notify-intent.yml')),
+    ).toBe(false)
 
     const checkContent = readFileSync(
       join(monoRoot, '.github', 'workflows', 'check-skills.yml'),
@@ -341,6 +374,8 @@ describe('runSetupGithubActions', () => {
     )
     expect(checkContent).toContain('label: @tanstack/router')
     expect(checkContent).toContain('npm install -g @tanstack/intent')
+    expect(checkContent).toContain('signals: report.signals')
+    expect(checkContent).toContain('No stale skills or coverage gaps found.')
 
     rmSync(monoRoot, { recursive: true, force: true })
   })
@@ -390,23 +425,17 @@ describe('runSetupGithubActions', () => {
 
     expect(result.workflows).toEqual(
       expect.arrayContaining([
-        join(monoRoot, '.github', 'workflows', 'notify-intent.yml'),
         join(monoRoot, '.github', 'workflows', 'check-skills.yml'),
+        join(monoRoot, '.github', 'workflows', 'validate-skills.yml'),
       ]),
     )
     expect(
       existsSync(join(monoRoot, 'packages', 'router', '.github', 'workflows')),
     ).toBe(false)
 
-    const notifyContent = readFileSync(
-      join(monoRoot, '.github', 'workflows', 'notify-intent.yml'),
-      'utf8',
-    )
-    expect(notifyContent).toContain('package: @tanstack/router')
-    expect(notifyContent).toContain('repo: TanStack/router')
-    expect(notifyContent).toContain("- 'packages/router/docs/**'")
-    expect(notifyContent).toContain("- 'packages/router/src/**'")
-    expect(notifyContent).toContain("- 'packages/start/src/**'")
+    expect(
+      existsSync(join(monoRoot, '.github', 'workflows', 'notify-intent.yml')),
+    ).toBe(false)
 
     rmSync(monoRoot, { recursive: true, force: true })
   })

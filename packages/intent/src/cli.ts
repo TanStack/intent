@@ -134,6 +134,16 @@ function createCli(): CAC {
 
   cli
     .command(
+      'setup',
+      'Copy Intent CI workflow templates into .github/workflows/',
+    )
+    .usage('setup')
+    .action(async () => {
+      await runSetupGithubActionsCommand(process.cwd(), getMetaDir())
+    })
+
+  cli
+    .command(
       'setup-github-actions',
       'Copy Intent CI workflow templates into .github/workflows/',
     )

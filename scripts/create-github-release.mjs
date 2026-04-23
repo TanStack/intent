@@ -41,13 +41,22 @@ function getReleaseCommits() {
 }
 
 function getPreviousGitHubReleaseCommit() {
-  const output = maybeRun('git tag --list "release-*" --sort=-creatordate')
+  const output = maybeRun(
+    'git tag --list "v*" --list "release-*" --sort=-creatordate',
+  )
 
   if (!output) {
     return null
   }
 
-  const [tag] = output.split('\n').filter(Boolean)
+  const [tag] = output
+    .split('\n')
+    .filter((candidate) => /^v\d+\.\d+\.\d+$/.test(candidate))
+    .concat(
+      output
+        .split('\n')
+        .filter((candidate) => candidate.startsWith('release-')),
+    )
 
   if (!tag) {
     return null
@@ -204,10 +213,21 @@ function buildReleaseNotes(changedPackages) {
   return sections.join('\n\n')
 }
 
-function createReleaseTag() {
+function createReleaseTag(changedPackages) {
+  const versions = [...new Set(changedPackages.map((pkg) => pkg.version))]
+  if (versions.length === 1) {
+    const version = versions[0]
+    return {
+      tag: `v${version}`,
+      title: `v${version}`,
+    }
+  }
+
   const now = new Date().toISOString()
   const tag = `release-${now.slice(0, 10)}-${now.slice(11, 13)}${now.slice(14, 16)}`
-  const title = `Release ${now.slice(0, 10)} ${now.slice(11, 16)}`
+  const title = `Release ${changedPackages
+    .map((pkg) => `${pkg.name}@${pkg.version}`)
+    .join(', ')}`
 
   return { tag, title }
 }
@@ -289,7 +309,7 @@ function main() {
   }
 
   const notes = buildReleaseNotes(changedPackages)
-  const { tag, title } = createReleaseTag()
+  const { tag, title } = createReleaseTag(changedPackages)
   const body = createReleaseBody(title, changedPackages, notes)
 
   if (isDryRun) {

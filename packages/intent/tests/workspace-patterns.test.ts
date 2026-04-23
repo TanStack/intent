@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   findPackagesWithSkills,
+  findWorkspacePackages,
   findWorkspaceRoot,
   readWorkspacePatterns,
   resolveWorkspacePackages,
@@ -262,6 +263,10 @@ describe('workspace helpers', () => {
     expect(findWorkspaceRoot(process.cwd())).toBe(root)
     expect(findPackagesWithSkills(root)).toEqual([
       join(root, 'packages', 'alpha'),
+    ])
+    expect(findWorkspacePackages(root)).toEqual([
+      join(root, 'packages', 'alpha'),
+      join(root, 'packages', 'beta'),
     ])
   })
 })

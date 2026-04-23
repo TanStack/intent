@@ -1,5 +1,12 @@
 export { scanForIntents } from './scanner.js'
 export { checkStaleness } from './staleness.js'
+export { readIntentArtifacts } from './artifact-coverage.js'
+export {
+  buildStaleReviewBody,
+  collectStaleReviewItems,
+  createFailedStaleReviewItem,
+  type StaleReviewItem,
+} from './workflow-review.js'
 export {
   containsSecrets,
   hasGhCli,
@@ -41,6 +48,11 @@ export type {
   AgentName,
   FeedbackPayload,
   IntentConfig,
+  IntentArtifactCoverageIgnore,
+  IntentArtifactFile,
+  IntentArtifactSet,
+  IntentArtifactSkill,
+  IntentArtifactWarning,
   IntentPackage,
   IntentProjectConfig,
   MetaFeedbackPayload,
@@ -50,4 +62,5 @@ export type {
   SkillEntry,
   StalenessReport,
   SkillStaleness,
+  StalenessSignal,
 } from './types.js'

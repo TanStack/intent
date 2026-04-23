@@ -77,12 +77,65 @@ export interface StalenessReport {
   skillVersion: string | null
   versionDrift: 'major' | 'minor' | 'patch' | null
   skills: Array<SkillStaleness>
+  signals: Array<StalenessSignal>
 }
 
 export interface SkillStaleness {
   name: string
   reasons: Array<string>
   needsReview: boolean
+}
+
+export interface StalenessSignal {
+  type: string
+  library?: string
+  subject?: string
+  reasons: Array<string>
+  needsReview: boolean
+  artifactPath?: string
+  packageName?: string
+  packageRoot?: string
+  skill?: string
+}
+
+export interface IntentArtifactSet {
+  root: string
+  artifactsDir: string
+  skillTrees: Array<IntentArtifactFile>
+  domainMaps: Array<IntentArtifactFile>
+  skills: Array<IntentArtifactSkill>
+  ignoredPackages: Array<IntentArtifactCoverageIgnore>
+  warnings: Array<IntentArtifactWarning>
+}
+
+export interface IntentArtifactFile {
+  path: string
+  kind: 'skill-tree' | 'domain-map'
+  libraryName?: string
+  libraryVersion?: string
+}
+
+export interface IntentArtifactSkill {
+  artifactPath: string
+  artifactKind: 'skill-tree' | 'domain-map'
+  name?: string
+  slug?: string
+  path?: string
+  package?: string
+  packages: Array<string>
+  sources: Array<string>
+  covers: Array<string>
+}
+
+export interface IntentArtifactCoverageIgnore {
+  packageName: string
+  reason?: string
+  artifactPath: string
+}
+
+export interface IntentArtifactWarning {
+  artifactPath: string
+  message: string
 }
 
 // ---------------------------------------------------------------------------

@@ -90,10 +90,10 @@ npx @tanstack/intent@latest stale
 
 From a monorepo root, `intent stale` checks every workspace package that ships skills. To scope it to one package, pass a directory like `intent stale packages/router`.
 
-Copy CI workflow templates into your repo so validation and staleness checks run on every push:
+Copy CI workflow templates into your repo so validation and staleness checks can run in GitHub Actions:
 
 ```bash
-npx @tanstack/intent@latest setup-github-actions
+npx @tanstack/intent@latest setup
 ```
 
 ## Compatibility
@@ -108,14 +108,14 @@ npx @tanstack/intent@latest setup-github-actions
 
 ## Monorepos
 
-- Run `npx @tanstack/intent@latest setup-github-actions` from either the repo root or a package directory. Intent detects the workspace root and writes workflows to the repo-level `.github/workflows/` directory.
-- Generated workflows are monorepo-aware: validation loops over workspace packages with skills, staleness checks run from the workspace root, and notify workflows watch package `src/` and docs paths.
+- Run `npx @tanstack/intent@latest setup` from either the repo root or a package directory. Intent detects the workspace root and writes workflows to the repo-level `.github/workflows/` directory.
+- Generated workflows are monorepo-aware: validation loops over workspace packages with skills, and staleness checks run from the workspace root.
 - Run `npx @tanstack/intent@latest validate packages/<pkg>/skills` from the repo root to validate one package without root-level packaging warnings.
-- Run `npx @tanstack/intent@latest stale` from the repo root to check all workspace packages with skills, or `intent stale packages/<pkg>` to check one package.
+- Run `npx @tanstack/intent@latest stale` from the repo root to check workspace packages with skills and public workspace packages missing skill or `_artifacts` coverage, or `intent stale packages/<pkg>` to check one package.
 
 ## Keeping skills current
 
-The real risk with any derived artifact is staleness. `npx @tanstack/intent@latest stale` flags skills whose source docs have changed, and CI templates catch drift before it ships.
+The real risk with any derived artifact is staleness. `npx @tanstack/intent@latest stale` flags skills whose source docs have changed, generated skills that drift from `_artifacts`, and public workspace packages missing coverage. CI templates catch drift before it ships.
 
 The feedback loop runs both directions. `npx @tanstack/intent@latest feedback` lets users submit structured reports when a skill produces wrong output — which skill, which version, what broke. That context flows back to the maintainer, and the fix ships to everyone on the next package update. Every support interaction produces an artifact that prevents the same class of problem for all future users — not just the one who reported it.
 
@@ -129,7 +129,7 @@ The feedback loop runs both directions. `npx @tanstack/intent@latest feedback` l
 | `npx @tanstack/intent@latest meta`                 | List meta-skills for library maintainers            |
 | `npx @tanstack/intent@latest scaffold`             | Print the guided skill generation prompt            |
 | `npx @tanstack/intent@latest validate [dir]`       | Validate SKILL.md files                             |
-| `npx @tanstack/intent@latest setup-github-actions` | Copy CI templates into your repo                    |
+| `npx @tanstack/intent@latest setup`                | Copy CI templates into your repo                    |
 | `npx @tanstack/intent@latest stale [dir] [--json]` | Check skills for version drift                      |
 | `npx @tanstack/intent@latest feedback`             | Submit skill feedback                               |
 

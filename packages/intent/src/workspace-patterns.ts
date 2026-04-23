@@ -292,3 +292,10 @@ export function findPackagesWithSkills(root: string): Array<string> {
     return existsSync(skillsDir) && findSkillFiles(skillsDir).length > 0
   })
 }
+
+export function findWorkspacePackages(root: string): Array<string> {
+  const patterns = readWorkspacePatterns(root)
+  if (!patterns) return []
+
+  return resolveWorkspacePackages(root, patterns)
+}

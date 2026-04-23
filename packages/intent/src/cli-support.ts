@@ -12,9 +12,36 @@ export interface GlobalScanFlags {
   globalOnly?: boolean
 }
 
+export interface StaleTargetResult {
+  reports: Array<StalenessReport>
+  workflowAdvisories: Array<string>
+}
+
+export const INTENT_CHECK_SKILLS_WORKFLOW_VERSION = 2
+
 export function getMetaDir(): string {
   const thisDir = dirname(fileURLToPath(import.meta.url))
   return join(thisDir, '..', 'meta')
+}
+
+export function getCheckSkillsWorkflowAdvisories(root: string): Array<string> {
+  const workflowPath = join(root, '.github', 'workflows', 'check-skills.yml')
+  if (!existsSync(workflowPath)) return []
+
+  let content: string
+  try {
+    content = readFileSync(workflowPath, 'utf8')
+  } catch {
+    return []
+  }
+
+  const versionMatch = content.match(/intent-workflow-version:\s*(\d+)/)
+  const installedVersion = versionMatch ? Number(versionMatch[1]) : 0
+  if (installedVersion >= INTENT_CHECK_SKILLS_WORKFLOW_VERSION) return []
+
+  return [
+    `Intent workflow update available: run \`npx @tanstack/intent@latest setup\` to refresh ${relative(process.cwd(), workflowPath) || workflowPath}.`,
+  ]
 }
 
 export async function scanIntentsOrFail(
@@ -47,24 +74,9 @@ export function scanOptionsFromGlobalFlags(
   return { scope: 'local' }
 }
 
-function readPackageName(root: string): string {
-  try {
-    const pkgJson = JSON.parse(
-      readFileSync(join(root, 'package.json'), 'utf8'),
-    ) as {
-      name?: unknown
-    }
-    return typeof pkgJson.name === 'string'
-      ? pkgJson.name
-      : relative(process.cwd(), root) || 'unknown'
-  } catch {
-    return relative(process.cwd(), root) || 'unknown'
-  }
-}
-
 export async function resolveStaleTargets(
   targetDir?: string,
-): Promise<{ reports: Array<StalenessReport> }> {
+): Promise<StaleTargetResult> {
   const resolvedRoot = targetDir
     ? resolve(process.cwd(), targetDir)
     : process.cwd()
@@ -72,19 +84,67 @@ export async function resolveStaleTargets(
     cwd: process.cwd(),
     targetPath: targetDir,
   })
-  const { checkStaleness } = await import('./staleness.js')
+  const advisoryRoot =
+    context.workspaceRoot ?? context.packageRoot ?? resolvedRoot
+  const workflowAdvisories = getCheckSkillsWorkflowAdvisories(advisoryRoot)
+  const { buildWorkspaceCoverageSignals, checkStaleness, readPackageName } =
+    await import('./staleness.js')
+  const isWorkspaceRootTarget =
+    context.workspaceRoot !== null && resolvedRoot === context.workspaceRoot
 
   if (
     context.packageRoot &&
-    (context.targetSkillsDir !== null || resolvedRoot !== context.workspaceRoot)
+    !isWorkspaceRootTarget &&
+    (context.targetSkillsDir !== null || context.workspaceRoot === null)
   ) {
     return {
       reports: [
         await checkStaleness(
           context.packageRoot,
           readPackageName(context.packageRoot),
+          context.workspaceRoot ?? context.packageRoot,
         ),
       ],
+      workflowAdvisories,
+    }
+  }
+
+  const { findPackagesWithSkills, findWorkspacePackages, findWorkspaceRoot } =
+    await import('./workspace-patterns.js')
+  const workspaceRoot = findWorkspaceRoot(resolvedRoot)
+  if (workspaceRoot) {
+    const packageDirsWithSkills = findPackagesWithSkills(workspaceRoot)
+    const allPackageDirs = findWorkspacePackages(workspaceRoot)
+    const reports = await Promise.all(
+      packageDirsWithSkills.map((packageDir) =>
+        checkStaleness(packageDir, readPackageName(packageDir), workspaceRoot),
+      ),
+    )
+    const { readIntentArtifacts } = await import('./artifact-coverage.js')
+    const artifacts = existsSync(join(workspaceRoot, '_artifacts'))
+      ? readIntentArtifacts(workspaceRoot)
+      : null
+    const coverageSignals = buildWorkspaceCoverageSignals({
+      artifactRoot: workspaceRoot,
+      artifacts,
+      packageDirs: allPackageDirs,
+    })
+    if (coverageSignals.length > 0) {
+      reports.push({
+        library: relative(process.cwd(), workspaceRoot) || 'workspace',
+        currentVersion: null,
+        skillVersion: null,
+        versionDrift: null,
+        skills: [],
+        signals: coverageSignals,
+      })
+    }
+
+    if (reports.length > 0) {
+      return {
+        reports,
+        workflowAdvisories,
+      }
     }
   }
 
@@ -93,22 +153,7 @@ export async function resolveStaleTargets(
       reports: [
         await checkStaleness(resolvedRoot, readPackageName(resolvedRoot)),
       ],
-    }
-  }
-
-  const { findPackagesWithSkills, findWorkspaceRoot } =
-    await import('./workspace-patterns.js')
-  const workspaceRoot = findWorkspaceRoot(resolvedRoot)
-  if (workspaceRoot) {
-    const packageDirs = findPackagesWithSkills(workspaceRoot)
-    if (packageDirs.length > 0) {
-      return {
-        reports: await Promise.all(
-          packageDirs.map((packageDir) =>
-            checkStaleness(packageDir, readPackageName(packageDir)),
-          ),
-        ),
-      }
+      workflowAdvisories,
     }
   }
 
@@ -119,5 +164,6 @@ export async function resolveStaleTargets(
         checkStaleness(pkg.packageRoot, pkg.name),
       ),
     ),
+    workflowAdvisories,
   }
 }
