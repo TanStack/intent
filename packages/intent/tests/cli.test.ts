@@ -1248,6 +1248,180 @@ describe('cli commands', () => {
     fetchSpy.mockRestore()
   })
 
+  it('flags workspace packages missing skill and artifact coverage', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-stale-coverage-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(root, 'packages', 'router', 'package.json'), {
+      name: '@tanstack/router',
+    })
+    writeJson(join(root, 'packages', 'react-start-rsc', 'package.json'), {
+      name: '@tanstack/react-start-rsc',
+    })
+    writeSkillMd(join(root, 'packages', 'router', 'skills', 'routing'), {
+      name: 'routing',
+      description: 'Routing skill',
+      library_version: '1.0.0',
+    })
+    mkdirSync(join(root, '_artifacts'), { recursive: true })
+    writeFileSync(
+      join(root, '_artifacts', 'skill_tree.yaml'),
+      [
+        'library:',
+        "  name: '@tanstack/router'",
+        "  version: '1.0.0'",
+        'skills:',
+        "  - name: 'Routing'",
+        "    slug: 'routing'",
+        "    path: 'packages/router/skills/routing/SKILL.md'",
+        "    package: 'packages/router'",
+      ].join('\n'),
+    )
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ version: '1.0.0' }),
+    } as Response)
+
+    process.chdir(root)
+
+    const exitCode = await main(['stale', '--json'])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const reports = JSON.parse(String(output)) as Array<{
+      signals?: Array<{
+        type: string
+        packageName?: string
+      }>
+    }>
+    const signals = reports.flatMap((report) => report.signals ?? [])
+
+    expect(exitCode).toBe(0)
+    expect(signals).toEqual([
+      expect.objectContaining({
+        type: 'missing-package-coverage',
+        packageName: '@tanstack/react-start-rsc',
+      }),
+    ])
+
+    fetchSpy.mockRestore()
+  })
+
+  it('does not flag workspace packages ignored in artifact coverage', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-stale-coverage-ignore-'),
+    )
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(root, 'packages', 'router', 'package.json'), {
+      name: '@tanstack/router',
+    })
+    writeJson(join(root, 'packages', 'react-start-rsc', 'package.json'), {
+      name: '@tanstack/react-start-rsc',
+    })
+    writeSkillMd(join(root, 'packages', 'router', 'skills', 'routing'), {
+      name: 'routing',
+      description: 'Routing skill',
+      library_version: '1.0.0',
+    })
+    mkdirSync(join(root, '_artifacts'), { recursive: true })
+    writeFileSync(
+      join(root, '_artifacts', 'skill_tree.yaml'),
+      [
+        'library:',
+        "  name: '@tanstack/router'",
+        "  version: '1.0.0'",
+        'coverage:',
+        '  ignored_packages:',
+        "    - '@tanstack/react-start-rsc'",
+        'skills:',
+        "  - name: 'Routing'",
+        "    slug: 'routing'",
+        "    path: 'packages/router/skills/routing/SKILL.md'",
+        "    package: 'packages/router'",
+      ].join('\n'),
+    )
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ version: '1.0.0' }),
+    } as Response)
+
+    process.chdir(root)
+
+    const exitCode = await main(['stale', '--json'])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const reports = JSON.parse(String(output)) as Array<{
+      signals?: Array<{
+        type: string
+        packageName?: string
+      }>
+    }>
+    const signals = reports.flatMap((report) => report.signals ?? [])
+
+    expect(exitCode).toBe(0)
+    expect(signals).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'missing-package-coverage',
+          packageName: '@tanstack/react-start-rsc',
+        }),
+      ]),
+    )
+
+    fetchSpy.mockRestore()
+  })
+
+  it('flags missing coverage even when no workspace package has generated skills yet', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-stale-all-missing-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(root, 'packages', 'react-start-rsc', 'package.json'), {
+      name: '@tanstack/react-start-rsc',
+    })
+    mkdirSync(join(root, '_artifacts'), { recursive: true })
+    writeFileSync(
+      join(root, '_artifacts', 'skill_tree.yaml'),
+      [
+        'library:',
+        "  name: '@tanstack/router'",
+        "  version: '1.0.0'",
+        'skills: []',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['stale', '--json'])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const reports = JSON.parse(String(output)) as Array<{
+      signals?: Array<{
+        type: string
+        packageName?: string
+      }>
+    }>
+
+    expect(exitCode).toBe(0)
+    expect(reports).toHaveLength(1)
+    expect(reports[0]?.signals).toEqual([
+      expect.objectContaining({
+        type: 'missing-package-coverage',
+        packageName: '@tanstack/react-start-rsc',
+      }),
+    ])
+  })
+
   it('ignores configured global intent packages when checking staleness', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-stale-global-'))
     const globalRoot = mkdtempSync(

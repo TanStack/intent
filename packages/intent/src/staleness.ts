@@ -134,6 +134,21 @@ function readSyncState(packageDir: string): SyncState | null {
   }
 }
 
+export function readPackageName(packageDir: string): string {
+  try {
+    const pkgJson = JSON.parse(
+      readFileSync(join(packageDir, 'package.json'), 'utf8'),
+    ) as {
+      name?: unknown
+    }
+    return typeof pkgJson.name === 'string'
+      ? pkgJson.name
+      : relative(process.cwd(), packageDir) || 'unknown'
+  } catch {
+    return relative(process.cwd(), packageDir) || 'unknown'
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Artifact signals
 // ---------------------------------------------------------------------------
@@ -324,6 +339,80 @@ function buildArtifactSignals({
         skill: matchingSkill.name,
       })
     }
+  }
+
+  return signals
+}
+
+function artifactCoversPackage(
+  artifact: IntentArtifactSkill,
+  packageDir: string,
+  packageName: string,
+  artifactRoot: string,
+): boolean {
+  const relPackageDir = relative(artifactRoot, packageDir).split(sep).join('/')
+  return (
+    artifact.packages.includes(packageName) ||
+    artifact.packages.includes(relPackageDir) ||
+    artifact.package === packageName ||
+    artifact.package === relPackageDir ||
+    artifact.path?.startsWith(`${relPackageDir}/`) === true
+  )
+}
+
+function artifactIgnoresPackage(
+  artifacts: IntentArtifactSet,
+  packageDir: string,
+  packageName: string,
+  artifactRoot: string,
+): boolean {
+  const relPackageDir = relative(artifactRoot, packageDir).split(sep).join('/')
+  return artifacts.ignoredPackages.some(
+    (ignored) =>
+      ignored.packageName === packageName ||
+      ignored.packageName === relPackageDir,
+  )
+}
+
+export function buildWorkspaceCoverageSignals({
+  artifactRoot,
+  artifacts,
+  packageDirs,
+}: {
+  artifactRoot: string
+  artifacts: IntentArtifactSet | null
+  packageDirs: Array<string>
+}): Array<StalenessSignal> {
+  if (!artifacts) return []
+
+  const signals: Array<StalenessSignal> = []
+  for (const packageDir of packageDirs) {
+    const packageName = readPackageName(packageDir)
+    if (
+      artifactIgnoresPackage(artifacts, packageDir, packageName, artifactRoot)
+    ) {
+      continue
+    }
+
+    const hasGeneratedSkill =
+      findSkillFiles(join(packageDir, 'skills')).length > 0
+    const hasArtifactCoverage = artifacts.skills.some((artifact) =>
+      artifactCoversPackage(artifact, packageDir, packageName, artifactRoot),
+    )
+
+    if (hasGeneratedSkill || hasArtifactCoverage) continue
+
+    signals.push({
+      type: 'missing-package-coverage',
+      library: packageName,
+      subject: packageName,
+      reasons: [
+        'workspace package is not represented by generated skills or _artifacts coverage',
+      ],
+      needsReview: true,
+      packageName,
+      packageRoot: relative(artifactRoot, packageDir).split(sep).join('/'),
+    })
   }
 
   return signals

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fail } from './cli-error.js'
@@ -47,21 +47,6 @@ export function scanOptionsFromGlobalFlags(
   return { scope: 'local' }
 }
 
-function readPackageName(root: string): string {
-  try {
-    const pkgJson = JSON.parse(
-      readFileSync(join(root, 'package.json'), 'utf8'),
-    ) as {
-      name?: unknown
-    }
-    return typeof pkgJson.name === 'string'
-      ? pkgJson.name
-      : relative(process.cwd(), root) || 'unknown'
-  } catch {
-    return relative(process.cwd(), root) || 'unknown'
-  }
-}
-
 export async function resolveStaleTargets(
   targetDir?: string,
 ): Promise<{ reports: Array<StalenessReport> }> {
@@ -72,7 +57,8 @@ export async function resolveStaleTargets(
     cwd: process.cwd(),
     targetPath: targetDir,
   })
-  const { checkStaleness } = await import('./staleness.js')
+  const { buildWorkspaceCoverageSignals, checkStaleness, readPackageName } =
+    await import('./staleness.js')
 
   if (
     context.packageRoot &&
@@ -97,22 +83,45 @@ export async function resolveStaleTargets(
     }
   }
 
-  const { findPackagesWithSkills, findWorkspaceRoot } =
+  const { findPackagesWithSkills, findWorkspacePackages, findWorkspaceRoot } =
     await import('./workspace-patterns.js')
   const workspaceRoot = findWorkspaceRoot(resolvedRoot)
   if (workspaceRoot) {
-    const packageDirs = findPackagesWithSkills(workspaceRoot)
-    if (packageDirs.length > 0) {
+    const packageDirsWithSkills = findPackagesWithSkills(workspaceRoot)
+    const allPackageDirs = findWorkspacePackages(workspaceRoot)
+    const reports = await Promise.all(
+      packageDirsWithSkills.map((packageDir) =>
+        checkStaleness(packageDir, readPackageName(packageDir), workspaceRoot),
+      ),
+    )
+    const { readIntentArtifacts } = await import('./artifact-coverage.js')
+    const artifacts = existsSync(join(workspaceRoot, '_artifacts'))
+      ? readIntentArtifacts(workspaceRoot)
+      : null
+    const coverageSignals = buildWorkspaceCoverageSignals({
+      artifactRoot: workspaceRoot,
+      artifacts,
+      packageDirs: allPackageDirs,
+    })
+    if (coverageSignals.length > 0) {
+      const workspaceReport = reports[0]
+      if (workspaceReport) {
+        workspaceReport.signals.push(...coverageSignals)
+      } else {
+        reports.push({
+          library: relative(process.cwd(), workspaceRoot) || 'workspace',
+          currentVersion: null,
+          skillVersion: null,
+          versionDrift: null,
+          skills: [],
+          signals: coverageSignals,
+        })
+      }
+    }
+
+    if (reports.length > 0) {
       return {
-        reports: await Promise.all(
-          packageDirs.map((packageDir) =>
-            checkStaleness(
-              packageDir,
-              readPackageName(packageDir),
-              workspaceRoot,
-            ),
-          ),
-        ),
+        reports,
       }
     }
   }
