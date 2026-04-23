@@ -3,16 +3,13 @@ import type { StalenessReport } from '../types.js'
 export async function runStaleCommand(
   targetDir: string | undefined,
   options: { json?: boolean },
-  resolveStaleTargets: (
-    targetDir?: string,
-  ) => Promise<{
+  resolveStaleTargets: (targetDir?: string) => Promise<{
     reports: Array<StalenessReport>
     workflowAdvisories?: Array<string>
   }>,
 ): Promise<void> {
-  const { reports, workflowAdvisories = [] } = await resolveStaleTargets(
-    targetDir,
-  )
+  const { reports, workflowAdvisories = [] } =
+    await resolveStaleTargets(targetDir)
 
   if (options.json) {
     console.log(JSON.stringify(reports, null, 2))

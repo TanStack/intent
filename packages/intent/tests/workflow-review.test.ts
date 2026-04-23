@@ -110,7 +110,9 @@ describe('workflow review helpers', () => {
     expect(body).toContain('| `missing-package-coverage` | 2 |')
     expect(body).toContain('| `stale-skill` | 1 |')
     expect(body).toContain('`@tanstack/react-start-rsc`')
-    expect(body).toContain('Before editing skills or artifacts, ask the maintainer:')
+    expect(body).toContain(
+      'Before editing skills or artifacts, ask the maintainer:',
+    )
     expect(body).toContain('- Do not auto-generate skills.')
     expect(body).toContain(
       'Summarize every package as one of: existing-skill coverage, new skill, ignored, or deferred.',

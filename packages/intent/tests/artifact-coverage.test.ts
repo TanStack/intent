@@ -114,10 +114,7 @@ skills:
           artifactKind: 'domain-map',
           slug: 'start-setup',
           packages: ['@tanstack/react-start', '@tanstack/start-plugin-core'],
-          covers: [
-            'tanstackStart Vite plugin',
-            'getRouter() factory pattern',
-          ],
+          covers: ['tanstackStart Vite plugin', 'getRouter() factory pattern'],
         }),
       ]),
     )

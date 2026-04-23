@@ -46,7 +46,11 @@ function writeSyncState(dir: string, state: Record<string, unknown>): void {
   writeFileSync(join(skillsDir, 'sync-state.json'), JSON.stringify(state))
 }
 
-function writeArtifact(rootDir: string, fileName: string, content: string): void {
+function writeArtifact(
+  rootDir: string,
+  fileName: string,
+  content: string,
+): void {
   const artifactsDir = join(rootDir, '_artifacts')
   mkdirSync(artifactsDir, { recursive: true })
   writeFileSync(join(artifactsDir, fileName), content)
@@ -522,11 +526,7 @@ skills:
     )
     mockFetchNotOk()
 
-    const report = await checkStaleness(
-      packageDir,
-      '@tanstack/router',
-      tmpDir,
-    )
+    const report = await checkStaleness(packageDir, '@tanstack/router', tmpDir)
 
     expect(report.signals).toEqual([])
   })

@@ -51,9 +51,7 @@ export function collectStaleReviewItems(
   return items
 }
 
-export function createFailedStaleReviewItem(
-  library: string,
-): StaleReviewItem {
+export function createFailedStaleReviewItem(library: string): StaleReviewItem {
   return {
     type: 'stale-check-failed',
     library,
