@@ -50,4 +50,5 @@ export type {
   SkillEntry,
   StalenessReport,
   SkillStaleness,
+  StalenessSignal,
 } from './types.js'

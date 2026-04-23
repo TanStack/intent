@@ -77,12 +77,25 @@ export interface StalenessReport {
   skillVersion: string | null
   versionDrift: 'major' | 'minor' | 'patch' | null
   skills: Array<SkillStaleness>
+  signals: Array<StalenessSignal>
 }
 
 export interface SkillStaleness {
   name: string
   reasons: Array<string>
   needsReview: boolean
+}
+
+export interface StalenessSignal {
+  type: string
+  library?: string
+  subject?: string
+  reasons: Array<string>
+  needsReview: boolean
+  artifactPath?: string
+  packageName?: string
+  packageRoot?: string
+  skill?: string
 }
 
 // ---------------------------------------------------------------------------

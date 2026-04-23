@@ -93,6 +93,7 @@ describe('checkStaleness', () => {
     expect(report.currentVersion).toBeNull()
     expect(report.skillVersion).toBeNull()
     expect(report.versionDrift).toBeNull()
+    expect(report.signals).toEqual([])
   })
 
   it('defaults library to "unknown" when no name provided', async () => {

@@ -30,11 +30,22 @@ export async function runStaleCommand(
     console.log(`${report.library}${vLabel}${driftLabel}`)
 
     const stale = report.skills.filter((skill) => skill.needsReview)
-    if (stale.length === 0) {
+    const signals = report.signals.filter((signal) => signal.needsReview)
+    if (stale.length === 0 && signals.length === 0) {
       console.log('  All skills up-to-date')
     } else {
       for (const skill of stale) {
         console.log(`  ⚠ ${skill.name}: ${skill.reasons.join(', ')}`)
+      }
+      for (const signal of signals) {
+        const subject =
+          signal.subject ??
+          signal.packageName ??
+          signal.packageRoot ??
+          signal.skill ??
+          signal.artifactPath ??
+          signal.type
+        console.log(`  ⚠ ${subject}: ${signal.reasons.join(', ')}`)
       }
     }
 

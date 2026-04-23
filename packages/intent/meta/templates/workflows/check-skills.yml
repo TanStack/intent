@@ -5,7 +5,7 @@
 #
 # Triggers: new release published, or manual workflow_dispatch.
 #
-# Template variables (replaced by `intent setup-github-actions`):
+# Template variables (replaced by `intent setup`):
 #   {{PACKAGE_LABEL}} — e.g. @tanstack/query or my-workspace workspace
 
 name: Check Skills

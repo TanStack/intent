@@ -212,5 +212,6 @@ export async function checkStaleness(
     skillVersion,
     versionDrift,
     skills,
+    signals: [],
   }
 }
