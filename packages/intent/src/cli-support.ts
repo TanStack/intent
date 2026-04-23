@@ -17,7 +17,7 @@ export interface StaleTargetResult {
   workflowAdvisories: Array<string>
 }
 
-const INTENT_CHECK_SKILLS_WORKFLOW_VERSION = 2
+export const INTENT_CHECK_SKILLS_WORKFLOW_VERSION = 2
 
 export function getMetaDir(): string {
   const thisDir = dirname(fileURLToPath(import.meta.url))
@@ -95,7 +95,7 @@ export async function resolveStaleTargets(
   if (
     context.packageRoot &&
     !isWorkspaceRootTarget &&
-    (context.targetSkillsDir !== null || resolvedRoot !== context.workspaceRoot)
+    (context.targetSkillsDir !== null || context.workspaceRoot === null)
   ) {
     return {
       reports: [
@@ -130,19 +130,14 @@ export async function resolveStaleTargets(
       packageDirs: allPackageDirs,
     })
     if (coverageSignals.length > 0) {
-      const workspaceReport = reports[0]
-      if (workspaceReport) {
-        workspaceReport.signals.push(...coverageSignals)
-      } else {
-        reports.push({
-          library: relative(process.cwd(), workspaceRoot) || 'workspace',
-          currentVersion: null,
-          skillVersion: null,
-          versionDrift: null,
-          skills: [],
-          signals: coverageSignals,
-        })
-      }
+      reports.push({
+        library: relative(process.cwd(), workspaceRoot) || 'workspace',
+        currentVersion: null,
+        skillVersion: null,
+        versionDrift: null,
+        skills: [],
+        signals: coverageSignals,
+      })
     }
 
     if (reports.length > 0) {

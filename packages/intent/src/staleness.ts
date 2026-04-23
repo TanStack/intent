@@ -182,7 +182,7 @@ function artifactPackageMatches(
   artifactRoot: string,
 ): boolean {
   const relPackageDir = relative(artifactRoot, packageDir).split(sep).join('/')
-  if (!relPackageDir || relPackageDir === '') return true
+  if (!relPackageDir) return true
 
   if (artifact.packages.includes(packageName)) return true
   if (artifact.packages.includes(relPackageDir)) return true

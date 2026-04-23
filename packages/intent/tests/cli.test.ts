@@ -1567,6 +1567,11 @@ describe('cli commands', () => {
       ].join('\n'),
     )
 
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ version: '1.0.0' }),
+    } as Response)
+
     process.chdir(root)
 
     const exitCode = await main(['stale', '--json'])
@@ -1586,6 +1591,8 @@ describe('cli commands', () => {
         packageName: '@tanstack/react-start-rsc',
       }),
     ])
+
+    fetchSpy.mockRestore()
   })
 
   it('ignores configured global intent packages when checking staleness', async () => {

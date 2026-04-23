@@ -155,6 +155,8 @@ describe('workflow review helpers', () => {
     expect(template).toContain('for (const skill of report.skills ?? [])')
     expect(template).toContain('for (const signal of report.signals ?? [])')
     expect(template).toContain("type: signal?.type ?? 'review-signal'")
+    expect(template).toContain('signal?.subject ??')
+    expect(template).not.toContain('signal?.message')
     expect(template).toContain(
       "fs.writeFileSync('review-items.json', JSON.stringify(items, null, 2) + '\\n')",
     )

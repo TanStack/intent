@@ -89,8 +89,9 @@ jobs:
                   signal?.packageRoot ??
                   signal?.skill ??
                   signal?.artifactPath ??
+                  signal?.subject ??
                   report.library,
-                reasons: signal?.reasons ?? [signal?.message].filter(Boolean),
+                reasons: signal?.reasons ?? [],
                 artifactPath: signal?.artifactPath,
                 packageName: signal?.packageName,
                 packageRoot: signal?.packageRoot,

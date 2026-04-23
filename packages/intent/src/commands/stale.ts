@@ -48,12 +48,12 @@ export async function runStaleCommand(
       }
       for (const signal of signals) {
         const subject =
-          signal.subject ??
           signal.packageName ??
           signal.packageRoot ??
           signal.skill ??
           signal.artifactPath ??
-          signal.type
+          signal.subject ??
+          report.library
         console.log(`  ⚠ ${subject}: ${signal.reasons.join(', ')}`)
       }
     }

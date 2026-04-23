@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getCheckSkillsWorkflowAdvisories } from '../src/cli-support.js'
+import {
+  getCheckSkillsWorkflowAdvisories,
+  INTENT_CHECK_SKILLS_WORKFLOW_VERSION,
+} from '../src/cli-support.js'
 import { runStaleCommand } from '../src/commands/stale.js'
 
 describe('runStaleCommand', () => {
@@ -99,7 +102,9 @@ describe('getCheckSkillsWorkflowAdvisories', () => {
   })
 
   it('advises when the workflow has an old intent version stamp', () => {
-    const root = writeWorkflow('# intent-workflow-version: 1\n')
+    const root = writeWorkflow(
+      `# intent-workflow-version: ${INTENT_CHECK_SKILLS_WORKFLOW_VERSION - 1}\n`,
+    )
 
     expect(getCheckSkillsWorkflowAdvisories(root)).toEqual([
       expect.stringContaining('npx @tanstack/intent@latest setup'),
@@ -107,7 +112,9 @@ describe('getCheckSkillsWorkflowAdvisories', () => {
   })
 
   it('does not advise when the workflow has the current version stamp', () => {
-    const root = writeWorkflow('# intent-workflow-version: 2\n')
+    const root = writeWorkflow(
+      `# intent-workflow-version: ${INTENT_CHECK_SKILLS_WORKFLOW_VERSION}\n`,
+    )
 
     expect(getCheckSkillsWorkflowAdvisories(root)).toEqual([])
   })
