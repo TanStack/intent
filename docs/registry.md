@@ -59,10 +59,10 @@ npx @tanstack/intent@latest stale
 Flags skills whose source docs have changed since the skill was last updated.
 
 ```bash
-npx @tanstack/intent@latest setup-github-actions
+npx @tanstack/intent@latest setup
 ```
 
-Copies CI workflow templates into your repo so validation and staleness checks run on every push. Catch drift before it ships.
+Copies CI workflow templates into your repo so validation and staleness checks run in GitHub Actions. Catch drift before it ships.
 
 ## Requesting a library
 

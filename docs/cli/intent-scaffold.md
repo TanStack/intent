@@ -31,7 +31,7 @@ The prompt also includes a post-generation checklist:
 - Ensure `@tanstack/intent` is in `devDependencies`
 - Run setup commands as needed:
   - `npx @tanstack/intent@latest edit-package-json`
-  - `npx @tanstack/intent@latest setup-github-actions`
+  - `npx @tanstack/intent@latest setup`
 
 ## Related
 

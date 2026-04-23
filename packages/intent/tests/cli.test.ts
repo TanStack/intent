@@ -464,6 +464,27 @@ describe('cli commands', () => {
     expect(output).toContain('Template variables applied:')
   })
 
+  it('copies github workflow templates with the setup alias', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-setup-alias-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@scope/pkg',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'scope/pkg', docs: 'docs/' },
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['setup'])
+    const workflowsDir = join(root, '.github', 'workflows')
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(existsSync(workflowsDir)).toBe(true)
+    expect(output).toContain('Copied workflow:')
+    expect(output).toContain('Template variables applied:')
+  })
+
   it('copies github workflow templates to the workspace root', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-setup-gha-mono-'))
     tempDirs.push(root)

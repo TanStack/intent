@@ -102,7 +102,7 @@ Run these commands to prepare your package for skill publishing:
 npx @tanstack/intent@latest edit-package-json
 
 # Copy CI workflow templates (validate + stale checks)
-npx @tanstack/intent@latest setup-github-actions
+npx @tanstack/intent@latest setup
 ```
 
 **What these do:**
@@ -112,7 +112,7 @@ npx @tanstack/intent@latest setup-github-actions
   - `files` array entries for `skills/`
   - For single packages: also adds `!skills/_artifacts` to exclude artifacts from npm
   - For monorepos: skips the artifacts exclusion (artifacts live at repo root)
-- `setup-github-actions` copies workflow templates to `.github/workflows/` for automated validation and staleness checking
+- `setup` copies workflow templates to `.github/workflows/` for automated validation and staleness checking
 
 ### 5. Ship skills with your package
 
@@ -135,7 +135,7 @@ Consumers who install your library automatically get the skills. They discover l
 
 ### 6. Set up CI workflows
 
-After running `setup-github-actions`, you'll have three workflows in `.github/workflows/`:
+After running `setup`, you'll have two workflows in `.github/workflows/`:
 
 **validate-skills.yml** (runs on PRs touching `skills/`)
 - Validates SKILL.md frontmatter and structure
@@ -143,14 +143,9 @@ After running `setup-github-actions`, you'll have three workflows in `.github/wo
 - Runs automatically on every pull request that modifies skills
 
 **check-skills.yml** (runs on release or manual trigger)
-- Automatically detects stale skills after you publish a new release
-- Opens a review PR with an agent-friendly prompt
+- Automatically detects stale skills and coverage gaps after you publish a new release
+- Opens one grouped review PR with an agent-friendly prompt
 - Requires you to copy the prompt into Claude Code, Cursor, or your agent to update skills
-
-**notify-intent.yml** (runs on docs/source changes to main)
-- Sends a webhook to TanStack/intent when your docs or source change
-- Enables cross-library skill staleness tracking
-- Requires a fine-grained GitHub token (`INTENT_NOTIFY_TOKEN`) secret
 
 ### 7. Update stale skills
 
@@ -162,11 +157,25 @@ Manually check which skills need updates with:
 npx @tanstack/intent@latest stale
 ```
 
-When run from a package, this checks that package's shipped skills. When run from a monorepo root, it checks the workspace packages that ship skills.
+When run from a package, this checks that package's shipped skills. When run from a monorepo root, it checks workspace packages with skills and flags public workspace packages missing skill or `_artifacts` coverage.
 
 This detects:
 - **Version drift** — skill targets an older library version than currently installed
 - **New sources** — sources declared in frontmatter that weren't tracked before
+- **Artifact drift** — `_artifacts` entries that no longer match generated skills
+- **Missing package coverage** — public workspace packages not represented by generated skills or artifact coverage
+
+If a public workspace package is intentionally out of scope for skills, record that decision in repo-root `_artifacts`:
+
+```yaml
+coverage:
+  ignored_packages:
+    - '@tanstack/internal-tooling'
+    - name: packages/devtools-fixture
+      reason: test fixture only
+```
+
+Private workspace packages are skipped automatically.
 
 **To update stale skills:**
 1. Review the PR opened by `check-skills.yml`

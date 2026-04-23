@@ -55,7 +55,7 @@
           "to": "cli/intent-validate"
         },
         {
-          "label": "intent setup-github-actions",
+          "label": "intent setup",
           "to": "cli/intent-setup"
         },
         {
