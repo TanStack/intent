@@ -83,6 +83,7 @@ export async function resolveStaleTargets(
         await checkStaleness(
           context.packageRoot,
           readPackageName(context.packageRoot),
+          context.workspaceRoot ?? context.packageRoot,
         ),
       ],
     }
@@ -105,7 +106,11 @@ export async function resolveStaleTargets(
       return {
         reports: await Promise.all(
           packageDirs.map((packageDir) =>
-            checkStaleness(packageDir, readPackageName(packageDir)),
+            checkStaleness(
+              packageDir,
+              readPackageName(packageDir),
+              workspaceRoot,
+            ),
           ),
         ),
       }

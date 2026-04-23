@@ -46,6 +46,12 @@ function writeSyncState(dir: string, state: Record<string, unknown>): void {
   writeFileSync(join(skillsDir, 'sync-state.json'), JSON.stringify(state))
 }
 
+function writeArtifact(rootDir: string, fileName: string, content: string): void {
+  const artifactsDir = join(rootDir, '_artifacts')
+  mkdirSync(artifactsDir, { recursive: true })
+  writeFileSync(join(artifactsDir, fileName), content)
+}
+
 function requireFirstSkill(report: Awaited<ReturnType<typeof checkStaleness>>) {
   const skill = report.skills[0]
   expect(skill).toBeDefined()
@@ -352,5 +358,176 @@ describe('checkStaleness', () => {
     // Local package.json should take precedence
     expect(report.currentVersion).toBe('3.0.0')
     expect(report.versionDrift).toBe('major')
+  })
+
+  it('does not flag matching artifact skill metadata', async () => {
+    writeSkill(tmpDir, 'core', {
+      name: 'core',
+      description: 'Core',
+      library_version: '1.2.3',
+      sources: ['docs/core.md'],
+    })
+    writeArtifact(
+      tmpDir,
+      'skill_tree.yaml',
+      `
+library:
+  name: '@example/lib'
+  version: '1.2.3'
+skills:
+  - name: 'Core'
+    slug: 'core'
+    path: 'skills/core/SKILL.md'
+    package: '@example/lib'
+    sources:
+      - 'docs/core.md'
+`,
+    )
+    mockFetchNotOk()
+
+    const report = await checkStaleness(tmpDir, '@example/lib')
+
+    expect(report.signals).toEqual([])
+  })
+
+  it('flags artifact skills whose generated SKILL.md is missing', async () => {
+    writeArtifact(
+      tmpDir,
+      'skill_tree.yaml',
+      `
+library:
+  name: '@example/lib'
+  version: '1.2.3'
+skills:
+  - name: 'Missing'
+    slug: 'missing'
+    path: 'skills/missing/SKILL.md'
+    package: '@example/lib'
+`,
+    )
+    mockFetchNotOk()
+
+    const report = await checkStaleness(tmpDir, '@example/lib')
+
+    expect(report.signals).toEqual([
+      expect.objectContaining({
+        type: 'artifact-skill-missing',
+        subject: 'missing',
+        needsReview: true,
+      }),
+    ])
+  })
+
+  it('flags artifact sources that differ from SKILL.md frontmatter', async () => {
+    writeSkill(tmpDir, 'core', {
+      name: 'core',
+      description: 'Core',
+      sources: ['docs/current.md'],
+    })
+    writeArtifact(
+      tmpDir,
+      'skill_tree.yaml',
+      `
+library:
+  name: '@example/lib'
+skills:
+  - name: 'Core'
+    slug: 'core'
+    path: 'skills/core/SKILL.md'
+    package: '@example/lib'
+    sources:
+      - 'docs/artifact.md'
+`,
+    )
+    mockFetchNotOk()
+
+    const report = await checkStaleness(tmpDir, '@example/lib')
+
+    expect(report.signals).toEqual([
+      expect.objectContaining({
+        type: 'artifact-source-drift',
+        skill: 'core',
+        needsReview: true,
+      }),
+    ])
+  })
+
+  it('flags artifact library version drift against matching SKILL.md frontmatter', async () => {
+    writeSkill(tmpDir, 'core', {
+      name: 'core',
+      description: 'Core',
+      library_version: '1.0.0',
+    })
+    writeArtifact(
+      tmpDir,
+      'skill_tree.yaml',
+      `
+library:
+  name: '@example/lib'
+  version: '1.2.0'
+skills:
+  - name: 'Core'
+    slug: 'core'
+    path: 'skills/core/SKILL.md'
+    package: '@example/lib'
+`,
+    )
+    mockFetchNotOk()
+
+    const report = await checkStaleness(tmpDir, '@example/lib')
+
+    expect(report.signals).toEqual([
+      expect.objectContaining({
+        type: 'artifact-library-version-drift',
+        skill: 'core',
+        needsReview: true,
+      }),
+    ])
+  })
+
+  it('flags artifact parse warnings as review signals', async () => {
+    writeArtifact(tmpDir, 'skill_tree.yaml', 'skills:\n  - name: [broken\n')
+    mockFetchNotOk()
+
+    const report = await checkStaleness(tmpDir, '@example/lib')
+
+    expect(report.signals).toEqual([
+      expect.objectContaining({
+        type: 'artifact-parse-warning',
+        needsReview: true,
+      }),
+    ])
+  })
+
+  it('uses the workspace artifact root for package-scoped artifact paths', async () => {
+    const packageDir = join(tmpDir, 'packages', 'router')
+    writeSkill(packageDir, 'routing', {
+      name: 'routing',
+      description: 'Routing',
+      library_version: '1.0.0',
+    })
+    writeArtifact(
+      tmpDir,
+      'skill_tree.yaml',
+      `
+library:
+  name: '@tanstack/router'
+  version: '1.0.0'
+skills:
+  - name: 'Routing'
+    slug: 'routing'
+    path: 'packages/router/skills/routing/SKILL.md'
+    package: 'packages/router'
+`,
+    )
+    mockFetchNotOk()
+
+    const report = await checkStaleness(
+      packageDir,
+      '@tanstack/router',
+      tmpDir,
+    )
+
+    expect(report.signals).toEqual([])
   })
 })
