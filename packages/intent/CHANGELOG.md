@@ -1,5 +1,11 @@
 # @tanstack/intent
 
+## 0.0.36
+
+### Patch Changes
+
+- Rewrite relative Markdown links in `intent load` output so referenced skill files resolve from the loaded skill location. This applies to normal output and JSON `content`, while `--path` remains unchanged. ([`c4bcade`](https://github.com/TanStack/intent/commit/c4bcade7b03009cc54974fa921a0895538d920cb))
+
 ## 0.0.35
 
 ### Patch Changes
