@@ -159,4 +159,40 @@ describe('Yarn PnP', () => {
       ]),
     )
   }, 60_000)
+
+  it('discovers workspace dependency skills from a PnP monorepo root', () => {
+    const { root, cwd } = scaffoldProject({
+      pm: 'yarn',
+      structure: 'monorepo-root',
+      dependency: '@test-intent/skills-leaf',
+      registryUrl: registry.url,
+      pnp: true,
+    })
+    tempDirs.push(root)
+
+    expect(cwd).toBe(root)
+    expect(existsSync(join(root, 'node_modules'))).toBe(false)
+    expect(
+      existsSync(join(root, '.pnp.cjs')) || existsSync(join(root, '.pnp.js')),
+    ).toBe(true)
+
+    const result = runScanner(cwd)
+
+    if (result.exitCode !== 0) {
+      throw new Error(
+        `intent list failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+      )
+    }
+    expect(result.parsed.packageManager).toBe('yarn')
+    expect(result.parsed.packages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: '@test-intent/skills-leaf',
+          skills: expect.arrayContaining([
+            expect.objectContaining({ name: 'core' }),
+          ]),
+        }),
+      ]),
+    )
+  }, 60_000)
 })
