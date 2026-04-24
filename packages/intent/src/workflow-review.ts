@@ -63,6 +63,18 @@ export function createFailedStaleReviewItem(library: string): StaleReviewItem {
   }
 }
 
+export function createWorkflowAdvisoryReviewItems(
+  library: string,
+  advisories: Array<string>,
+): Array<StaleReviewItem> {
+  return advisories.map((advisory) => ({
+    type: 'workflow-advisory',
+    library,
+    subject: 'check-skills.yml',
+    reasons: [advisory],
+  }))
+}
+
 export function buildStaleReviewBody(items: Array<StaleReviewItem>): string {
   const grouped = new Map<string, number>()
 

@@ -416,7 +416,7 @@ export function scanForIntents(
   const projectRoot = root ?? process.cwd()
   const scanScope = getScanScope(options)
   const packageManager = detectPackageManager(projectRoot)
-  const pnpApi = loadPnpApi(projectRoot)
+  const pnpApi = scanScope === 'global' ? null : loadPnpApi(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')
   const explicitGlobalNodeModules =
     process.env.INTENT_GLOBAL_NODE_MODULES?.trim() || null

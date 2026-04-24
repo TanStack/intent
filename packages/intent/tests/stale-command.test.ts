@@ -113,6 +113,9 @@ describe('runStaleCommand', () => {
               ],
             },
           ],
+          workflowAdvisories: [
+            'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
+          ],
         }),
       )
     } finally {
@@ -137,6 +140,12 @@ describe('runStaleCommand', () => {
     )
     expect(readFileSync(join(root, 'github-summary'), 'utf8')).toContain(
       'workspace package is not represented',
+    )
+    expect(readFileSync(join(root, 'pr-body.md'), 'utf8')).toContain(
+      'workflow-advisory',
+    )
+    expect(readFileSync(join(root, 'pr-body.md'), 'utf8')).toContain(
+      'Intent workflow update available',
     )
   })
 

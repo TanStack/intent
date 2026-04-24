@@ -84,13 +84,18 @@ async function runGithubReview(
   const {
     collectStaleReviewItems,
     createFailedStaleReviewItem,
+    createWorkflowAdvisoryReviewItems,
     writeStaleReviewWorkflowFiles,
   } = await import('../workflow-review.js')
   const packageLabel = options.packageLabel ?? 'workspace'
 
   try {
-    const { reports } = await resolveStaleTargets(targetDir)
-    const items = collectStaleReviewItems(reports)
+    const { reports, workflowAdvisories = [] } =
+      await resolveStaleTargets(targetDir)
+    const items = [
+      ...collectStaleReviewItems(reports),
+      ...createWorkflowAdvisoryReviewItems(packageLabel, workflowAdvisories),
+    ]
     writeStaleReviewWorkflowFiles(items)
     if (items.length === 0) {
       console.log('No stale skills or coverage gaps found.')

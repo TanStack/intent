@@ -743,6 +743,7 @@ describe('cli commands', () => {
       skillName: 'fetching',
       description: 'Local fetching skill',
     })
+    writeFileSync(join(root, '.pnp.cjs'), 'module.exports = {}\n')
 
     const globalPkgDir = join(globalRoot, '@tanstack', 'query')
     writeJson(join(globalPkgDir, 'package.json'), {

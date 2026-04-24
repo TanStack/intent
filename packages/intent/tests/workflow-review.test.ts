@@ -6,6 +6,7 @@ import {
   buildStaleReviewBody,
   collectStaleReviewItems,
   createFailedStaleReviewItem,
+  createWorkflowAdvisoryReviewItems,
   writeStaleReviewWorkflowFiles,
 } from '../src/workflow-review.js'
 import type { StalenessReport } from '../src/types.js'
@@ -148,6 +149,23 @@ describe('workflow review helpers', () => {
     })
     expect(body).toContain('| `stale-check-failed` | 1 |')
     expect(body).toContain('Review the workflow logs before updating skills.')
+  })
+
+  it('builds generated workflow advisory review items', () => {
+    const items = createWorkflowAdvisoryReviewItems('@tanstack/router', [
+      'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
+    ])
+
+    expect(items).toEqual([
+      {
+        type: 'workflow-advisory',
+        library: '@tanstack/router',
+        subject: 'check-skills.yml',
+        reasons: [
+          'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
+        ],
+      },
+    ])
   })
 
   it('writes GitHub review files and outputs for review items', () => {
