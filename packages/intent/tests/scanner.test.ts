@@ -669,6 +669,89 @@ describe('scanForIntents', () => {
     expect(result.packages[0]!.name).toBe('skills-pkg')
   })
 
+  it('prefers project node_modules over stale PnP state', () => {
+    const missingPkgJson = join(
+      root,
+      '.yarn',
+      'cache',
+      'bun-wrapper.zip',
+      'node_modules',
+      'bun-wrapper',
+      'package.json',
+    )
+
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      dependencies: { 'bun-wrapper': '1.0.0' },
+    })
+    writeFileSync(
+      join(root, '.pnp.cjs'),
+      [
+        "const Module = require('node:module')",
+        `const missingPkgJson = ${JSON.stringify(missingPkgJson)}`,
+        'module.exports = {',
+        '  setup() {',
+        '    const originalResolve = Module._resolveFilename',
+        '    Module._resolveFilename = function(request, parent, isMain, options) {',
+        "      if (request === 'bun-wrapper/package.json') return missingPkgJson",
+        '      return originalResolve.call(this, request, parent, isMain, options)',
+        '    }',
+        '  },',
+        '  getDependencyTreeRoots() { return [] },',
+        '  getPackageInformation() { return null },',
+        '}',
+        '',
+      ].join('\n'),
+    )
+
+    const wrapperDir = createDir(
+      root,
+      'node_modules',
+      '.bun',
+      'bun-wrapper@1.0.0',
+      'node_modules',
+      'bun-wrapper',
+    )
+    writeJson(join(wrapperDir, 'package.json'), {
+      name: 'bun-wrapper',
+      version: '1.0.0',
+      dependencies: { 'bun-skills-pkg': '1.0.0' },
+    })
+
+    const skillsPkgDir = createDir(
+      root,
+      'node_modules',
+      '.bun',
+      'bun-skills-pkg@1.0.0',
+      'node_modules',
+      'bun-skills-pkg',
+    )
+    writeJson(join(skillsPkgDir, 'package.json'), {
+      name: 'bun-skills-pkg',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'test/skills', docs: 'https://example.com' },
+    })
+    writeSkillMd(createDir(skillsPkgDir, 'skills', 'core'), {
+      name: 'core',
+      description: 'Core skill',
+    })
+
+    createDir(root, 'node_modules')
+    symlinkSync(wrapperDir, join(root, 'node_modules', 'bun-wrapper'))
+    createDir(wrapperDir, 'node_modules')
+    symlinkSync(
+      skillsPkgDir,
+      join(wrapperDir, 'node_modules', 'bun-skills-pkg'),
+    )
+
+    const result = scanForIntents(root)
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('bun-skills-pkg')
+    expect(result.warnings).toEqual([])
+  })
+
   it('discovers skills using package.json workspaces', () => {
     writeJson(join(root, 'package.json'), {
       name: 'monorepo',
