@@ -73,9 +73,11 @@ function createCli(): CAC {
     .option('--github-summary', 'Write a GitHub Actions step summary')
     .example('validate')
     .example('validate packages/query/skills')
-    .action(async (dir: string | undefined, options: ValidateCommandOptions) => {
-      await runValidateCommand(dir, options)
-    })
+    .action(
+      async (dir: string | undefined, options: ValidateCommandOptions) => {
+        await runValidateCommand(dir, options)
+      },
+    )
 
   cli
     .command(
@@ -121,9 +123,11 @@ function createCli(): CAC {
     .example('stale')
     .example('stale packages/query')
     .example('stale --json')
-    .action(async (targetDir: string | undefined, options: StaleCommandOptions) => {
-      await runStaleCommand(targetDir, options, resolveStaleTargets)
-    })
+    .action(
+      async (targetDir: string | undefined, options: StaleCommandOptions) => {
+        await runStaleCommand(targetDir, options, resolveStaleTargets)
+      },
+    )
 
   cli
     .command(

@@ -144,7 +144,8 @@ function collectAgentSkillSpecWarnings({
   ) {
     warnings.push({
       file: rel,
-      message: 'Agent Skills spec warning: license should be a non-empty string',
+      message:
+        'Agent Skills spec warning: license should be a non-empty string',
     })
   }
 
