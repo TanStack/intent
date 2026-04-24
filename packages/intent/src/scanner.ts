@@ -416,7 +416,6 @@ export function scanForIntents(
   const projectRoot = root ?? process.cwd()
   const scanScope = getScanScope(options)
   const packageManager = detectPackageManager(projectRoot)
-  const pnpApi = scanScope === 'global' ? null : loadPnpApi(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')
   const explicitGlobalNodeModules =
     process.env.INTENT_GLOBAL_NODE_MODULES?.trim() || null
@@ -450,6 +449,15 @@ export function scanForIntents(
     string,
     Map<string, { version: string; packageRoot: string }>
   >()
+  let pnpApi: PnpApi | null | undefined
+
+  function getPnpApi(): PnpApi | null {
+    if (scanScope === 'global') return null
+    if (pnpApi === undefined) {
+      pnpApi = loadPnpApi(projectRoot)
+    }
+    return pnpApi
+  }
 
   function rememberVariant(pkg: IntentPackage): void {
     let variants = packageVariants.get(pkg.name)
@@ -515,10 +523,7 @@ export function scanForIntents(
       warnings,
     })
 
-  function scanPnpPackages(): void {
-    if (!pnpApi) return
-
-    const api = pnpApi
+  function scanPnpPackages(api: PnpApi): void {
     const visited = new Set<string>()
     const workspaceRoot = findWorkspaceRoot(projectRoot)
     const projectLocator = api.findPackageLocator?.(
@@ -556,9 +561,12 @@ export function scanForIntents(
   }
 
   function scanLocalPackages(): void {
-    if (pnpApi && !nodeModules.local.exists) {
-      scanPnpPackages()
-      return
+    if (!nodeModules.local.exists) {
+      const api = getPnpApi()
+      if (api) {
+        scanPnpPackages(api)
+        return
+      }
     }
 
     assertLocalNodeModulesSupported(projectRoot)

@@ -30,7 +30,7 @@ Intent provides tooling for two workflows:
 npx @tanstack/intent@latest list
 ```
 
-Scans the current project's `node_modules` and workspace dependencies for intent-enabled packages.
+Scans the current project's installed dependencies for intent-enabled packages, including `node_modules`, workspace dependencies, and Yarn PnP projects without `node_modules`.
 Global package scanning is explicit; pass `--global` to include global packages or `--global-only` to ignore local packages.
 When both local and global packages are scanned, local packages take precedence.
 

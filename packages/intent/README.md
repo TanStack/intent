@@ -104,7 +104,7 @@ npx @tanstack/intent@latest setup
 | Node.js + pnpm | Supported   | Use `pnpm dlx @tanstack/intent@latest <command>`   |
 | Node.js + Bun  | Supported   | Use `bunx @tanstack/intent@latest <command>`       |
 | Deno           | Best-effort | Requires `npm:` interop and `node_modules` support |
-| Yarn PnP       | Unsupported | `@tanstack/intent` scans `node_modules`            |
+| Yarn PnP       | Supported   | Uses Yarn's PnP API when `node_modules` is absent  |
 
 ## Monorepos
 

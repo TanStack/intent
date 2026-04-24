@@ -96,10 +96,10 @@ When both local and global packages are scanned, local packages take precedence.
 
 `packages` are ordered using `intent.requires` when possible.
 When the same package exists both locally and globally and global scanning is enabled, `intent list` prefers the local package.
+When project `node_modules` exists, `intent list` scans it. In Yarn PnP projects without `node_modules`, `intent list` uses Yarn's PnP API.
 
 ## Common errors
 
 - Scanner failures are printed as errors
 - Unsupported environments:
-  - Yarn PnP without `node_modules`
   - Deno projects without `node_modules`
