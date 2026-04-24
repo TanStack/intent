@@ -44,6 +44,7 @@ npx @tanstack/intent@latest setup
 ## Notes
 
 - `setup` skips existing files
+- To adopt updated workflow templates, delete or move the old generated workflow files first, then rerun `setup`
 - In monorepos, run `setup` from either the repo root or a package directory; Intent writes workflows to the workspace root
 
 ## Related

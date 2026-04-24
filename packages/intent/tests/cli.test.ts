@@ -1156,6 +1156,131 @@ describe('cli commands', () => {
     expect(output).not.toContain('@tanstack/intent is not in devDependencies')
   })
 
+  it('validates nested pnpm workspace package skills from the repo root', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-validate-nested-pnpm-'),
+    )
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+    })
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - packages/typescript/*\n',
+    )
+
+    for (const packageName of ['ai', 'ai-code-mode']) {
+      const packageDir = join(root, 'packages', 'typescript', packageName)
+      writeJson(join(packageDir, 'package.json'), {
+        name: `@tanstack/${packageName}`,
+        devDependencies: { '@tanstack/intent': '^0.0.18' },
+        keywords: ['tanstack-intent'],
+        files: ['skills'],
+      })
+      writeSkillMd(join(packageDir, 'skills', 'core'), {
+        name: 'core',
+        description: `${packageName} skill`,
+      })
+    }
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('✅ Validated 2 skill files — all passed')
+    expect(output).not.toContain('@tanstack/intent is not in devDependencies')
+    expect(output).not.toContain('Missing "tanstack-intent" in keywords array')
+  })
+
+  it('validates nested package.json workspace package skills from the repo root', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-validate-nested-yarn-'),
+    )
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/typescript/*'],
+    })
+
+    for (const packageName of ['ai', 'ai-code-mode']) {
+      const packageDir = join(root, 'packages', 'typescript', packageName)
+      writeJson(join(packageDir, 'package.json'), {
+        name: `@tanstack/${packageName}`,
+        devDependencies: { '@tanstack/intent': '^0.0.18' },
+        keywords: ['tanstack-intent'],
+        files: ['skills'],
+      })
+      writeSkillMd(join(packageDir, 'skills', 'core'), {
+        name: 'core',
+        description: `${packageName} skill`,
+      })
+    }
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('✅ Validated 2 skill files — all passed')
+    expect(output).not.toContain('@tanstack/intent is not in devDependencies')
+    expect(output).not.toContain('Missing "tanstack-intent" in keywords array')
+  })
+
+  it('validates only the explicit skills directory when one is passed', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-validate-explicit-nested-'),
+    )
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/typescript/*'],
+    })
+    writeJson(join(root, 'packages', 'typescript', 'ai', 'package.json'), {
+      name: '@tanstack/ai',
+      devDependencies: { '@tanstack/intent': '^0.0.18' },
+      keywords: ['tanstack-intent'],
+      files: ['skills'],
+    })
+    writeJson(
+      join(root, 'packages', 'typescript', 'ai-code-mode', 'package.json'),
+      {
+        name: '@tanstack/ai-code-mode',
+        devDependencies: { '@tanstack/intent': '^0.0.18' },
+        keywords: ['tanstack-intent'],
+        files: ['skills'],
+      },
+    )
+    writeSkillMd(join(root, 'packages', 'typescript', 'ai', 'skills', 'core'), {
+      name: 'core',
+      description: 'AI skill',
+    })
+    writeSkillMd(
+      join(root, 'packages', 'typescript', 'ai-code-mode', 'skills', 'bad'),
+      {
+        name: 'not-bad',
+        description: 'Invalid skill outside the explicit target',
+      },
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main([
+      'validate',
+      'packages/typescript/ai/skills',
+    ])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('✅ Validated 1 skill files — all passed')
+    expect(output).not.toContain('not-bad')
+  })
+
   it('validates pnpm workspace package skills from repo root without false packaging warnings', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-pnpm-'))
     tempDirs.push(root)
@@ -1191,17 +1316,18 @@ describe('cli commands', () => {
     )
   })
 
-  it('fails cleanly when validate is run without a skills directory', async () => {
+  it('skips cleanly when validate is run without a skills directory', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-missing-skills-'))
     tempDirs.push(root)
     process.chdir(root)
 
     const exitCode = await main(['validate'])
 
-    expect(exitCode).toBe(1)
-    expect(errorSpy).toHaveBeenCalledWith(
-      `Skills directory not found: ${join(root, 'skills')}`,
+    expect(exitCode).toBe(0)
+    expect(logSpy).toHaveBeenCalledWith(
+      'No skills/ directory found — skipping validation.',
     )
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 
   it('fails cleanly for unsupported yarn pnp projects', async () => {

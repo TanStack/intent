@@ -16,6 +16,8 @@ import {
 } from '../src/setup.js'
 import type { EditPackageJsonResult, MonorepoResult } from '../src/setup.js'
 
+const repoRoot = join(import.meta.dirname, '..', '..', '..')
+
 let root: string
 let metaDir: string
 
@@ -287,6 +289,25 @@ describe('runSetupGithubActions', () => {
     expect(validateContent).toContain(
       'validate: npx @tanstack/intent@latest validate',
     )
+  })
+
+  it('ships a validate workflow that discovers nested workspace skills directories', () => {
+    const validateContent = readFileSync(
+      join(
+        repoRoot,
+        'packages',
+        'intent',
+        'meta',
+        'templates',
+        'workflows',
+        'validate-skills.yml',
+      ),
+      'utf8',
+    )
+
+    expect(validateContent).toContain('-type d -name skills -print')
+    expect(validateContent).toContain('intent validate "$dir"')
+    expect(validateContent).not.toContain('packages/*/skills')
   })
 
   it('copies templates with defaults when no package.json', () => {

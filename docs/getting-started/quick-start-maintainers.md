@@ -114,6 +114,8 @@ npx @tanstack/intent@latest setup
   - For monorepos: skips the artifacts exclusion (artifacts live at repo root)
 - `setup` copies workflow templates to `.github/workflows/` for automated validation and staleness checking
 
+`setup` does not overwrite existing workflow files. To pick up newer generated workflows, delete or move the old generated files in `.github/workflows/`, then rerun `npx @tanstack/intent@latest setup`.
+
 ### 5. Ship skills with your package
 
 Skills ship inside your npm package. When you publish:

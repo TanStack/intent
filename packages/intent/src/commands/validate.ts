@@ -6,6 +6,7 @@ import {
   type ProjectContext,
   resolveProjectContext,
 } from '../core/project-context.js'
+import { findWorkspacePackages } from '../workspace-patterns.js'
 
 interface ValidationError {
   file: string
@@ -83,140 +84,191 @@ export async function runValidateCommand(dir?: string): Promise<void> {
     import('yaml'),
     import('../utils.js'),
   ])
-  const targetDir = dir ?? 'skills'
   const context = resolveProjectContext({
     cwd: process.cwd(),
-    targetPath: targetDir,
+    targetPath: dir,
   })
-  const skillsDir = context.targetSkillsDir ?? resolve(process.cwd(), targetDir)
+  const explicitDir = dir !== undefined
+  const skillsDirs = explicitDir
+    ? [context.targetSkillsDir ?? resolve(process.cwd(), dir)]
+    : collectDefaultSkillsDirs(context, findSkillFiles)
 
-  if (!existsSync(skillsDir)) {
-    fail(`Skills directory not found: ${skillsDir}`)
+  if (explicitDir && !existsSync(skillsDirs[0]!)) {
+    fail(`Skills directory not found: ${skillsDirs[0]}`)
   }
 
   const errors: Array<ValidationError> = []
-  const skillFiles = findSkillFiles(skillsDir)
+  const warnings: Array<string> = []
+  let validatedCount = 0
 
-  if (skillFiles.length === 0) {
+  if (explicitDir && findSkillFiles(skillsDirs[0]!).length === 0) {
     fail('No SKILL.md files found')
   }
 
-  for (const filePath of skillFiles) {
-    const rel = relative(process.cwd(), filePath)
-    const content = readFileSync(filePath, 'utf8')
-    const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)/)
-
-    if (!match) {
-      errors.push({ file: rel, message: 'Missing or invalid frontmatter' })
-      continue
-    }
-
-    if (!match[1]) {
-      errors.push({ file: rel, message: 'Missing YAML frontmatter' })
-      continue
-    }
-
-    let fm: Record<string, unknown>
-    try {
-      fm = parseYaml(match[1]) as Record<string, unknown>
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
-      errors.push({ file: rel, message: `Invalid YAML frontmatter: ${detail}` })
-      continue
-    }
-
-    if (!fm.name) {
-      errors.push({ file: rel, message: 'Missing required field: name' })
-    }
-    if (!fm.description) {
-      errors.push({ file: rel, message: 'Missing required field: description' })
-    }
-
-    if (typeof fm.name === 'string') {
-      const expectedPath = relative(skillsDir, filePath)
-        .replace(/[/\\]SKILL\.md$/, '')
-        .split(sep)
-        .join('/')
-      if (fm.name !== expectedPath) {
-        errors.push({
-          file: rel,
-          message: `name "${fm.name}" does not match directory path "${expectedPath}"`,
-        })
-      }
-    }
-
-    if (typeof fm.description === 'string' && fm.description.length > 1024) {
-      errors.push({
-        file: rel,
-        message: `Description exceeds 1024 character limit (${fm.description.length} chars)`,
-      })
-    }
-
-    if (fm.type === 'framework' && !Array.isArray(fm.requires)) {
-      errors.push({
-        file: rel,
-        message: 'Framework skills must have a "requires" field',
-      })
-    }
-
-    const lineCount = content.split(/\r?\n/).length
-    if (lineCount > 500) {
-      errors.push({
-        file: rel,
-        message: `Exceeds 500 line limit (${lineCount} lines). Rewrite for conciseness: move API tables to references/, trim verbose examples, and remove content an agent already knows. Do not simply raise the limit.`,
-      })
-    }
+  if (skillsDirs.length === 0) {
+    console.log('No skills/ directory found — skipping validation.')
+    return
   }
 
-  // In monorepos, _artifacts lives at the workspace root, not under each package's skills/ dir.
-  const artifactsDir = join(skillsDir, '_artifacts')
-  if (!context.isMonorepo && existsSync(artifactsDir)) {
-    const requiredArtifacts = [
-      'domain_map.yaml',
-      'skill_spec.md',
-      'skill_tree.yaml',
-    ]
+  for (const skillsDir of skillsDirs) {
+    const skillFiles = findSkillFiles(skillsDir)
+    const validateContext = resolveProjectContext({
+      cwd: process.cwd(),
+      targetPath: skillsDir,
+    })
 
-    for (const fileName of requiredArtifacts) {
-      const artifactPath = join(artifactsDir, fileName)
-      if (!existsSync(artifactPath)) {
+    for (const filePath of skillFiles) {
+      const rel = relative(process.cwd(), filePath)
+      const content = readFileSync(filePath, 'utf8')
+      const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)/)
+
+      if (!match) {
+        errors.push({ file: rel, message: 'Missing or invalid frontmatter' })
+        continue
+      }
+
+      if (!match[1]) {
+        errors.push({ file: rel, message: 'Missing YAML frontmatter' })
+        continue
+      }
+
+      let fm: Record<string, unknown>
+      try {
+        fm = parseYaml(match[1]) as Record<string, unknown>
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err)
         errors.push({
-          file: relative(process.cwd(), artifactPath),
-          message: 'Missing required artifact',
+          file: rel,
+          message: `Invalid YAML frontmatter: ${detail}`,
         })
         continue
       }
 
-      const content = readFileSync(artifactPath, 'utf8')
-      if (content.trim().length === 0) {
+      if (!fm.name) {
+        errors.push({ file: rel, message: 'Missing required field: name' })
+      }
+      if (!fm.description) {
         errors.push({
-          file: relative(process.cwd(), artifactPath),
-          message: 'Artifact file is empty',
+          file: rel,
+          message: 'Missing required field: description',
         })
-        continue
       }
 
-      if (fileName.endsWith('.yaml')) {
-        try {
-          parseYaml(content)
-        } catch (err) {
-          const detail = err instanceof Error ? err.message : String(err)
+      if (typeof fm.name === 'string') {
+        const expectedPath = relative(skillsDir, filePath)
+          .replace(/[/\\]SKILL\.md$/, '')
+          .split(sep)
+          .join('/')
+        if (fm.name !== expectedPath) {
           errors.push({
-            file: relative(process.cwd(), artifactPath),
-            message: `Invalid YAML in artifact file: ${detail}`,
+            file: rel,
+            message: `name "${fm.name}" does not match directory path "${expectedPath}"`,
           })
         }
       }
-    }
-  }
 
-  const warnings = collectPackagingWarnings(context)
+      if (typeof fm.description === 'string' && fm.description.length > 1024) {
+        errors.push({
+          file: rel,
+          message: `Description exceeds 1024 character limit (${fm.description.length} chars)`,
+        })
+      }
+
+      if (fm.type === 'framework' && !Array.isArray(fm.requires)) {
+        errors.push({
+          file: rel,
+          message: 'Framework skills must have a "requires" field',
+        })
+      }
+
+      const lineCount = content.split(/\r?\n/).length
+      if (lineCount > 500) {
+        errors.push({
+          file: rel,
+          message: `Exceeds 500 line limit (${lineCount} lines). Rewrite for conciseness: move API tables to references/, trim verbose examples, and remove content an agent already knows. Do not simply raise the limit.`,
+        })
+      }
+    }
+
+    // In monorepos, _artifacts lives at the workspace root, not under each package's skills/ dir.
+    const artifactsDir = join(skillsDir, '_artifacts')
+    if (!validateContext.isMonorepo && existsSync(artifactsDir)) {
+      const requiredArtifacts = [
+        'domain_map.yaml',
+        'skill_spec.md',
+        'skill_tree.yaml',
+      ]
+
+      for (const fileName of requiredArtifacts) {
+        const artifactPath = join(artifactsDir, fileName)
+        if (!existsSync(artifactPath)) {
+          errors.push({
+            file: relative(process.cwd(), artifactPath),
+            message: 'Missing required artifact',
+          })
+          continue
+        }
+
+        const content = readFileSync(artifactPath, 'utf8')
+        if (content.trim().length === 0) {
+          errors.push({
+            file: relative(process.cwd(), artifactPath),
+            message: 'Artifact file is empty',
+          })
+          continue
+        }
+
+        if (fileName.endsWith('.yaml')) {
+          try {
+            parseYaml(content)
+          } catch (err) {
+            const detail = err instanceof Error ? err.message : String(err)
+            errors.push({
+              file: relative(process.cwd(), artifactPath),
+              message: `Invalid YAML in artifact file: ${detail}`,
+            })
+          }
+        }
+      }
+    }
+
+    validatedCount += skillFiles.length
+    warnings.push(...collectPackagingWarnings(validateContext))
+  }
 
   if (errors.length > 0) {
     fail(buildValidationFailure(errors, warnings))
   }
 
-  console.log(`✅ Validated ${skillFiles.length} skill files — all passed`)
+  console.log(`✅ Validated ${validatedCount} skill files — all passed`)
   if (warnings.length > 0) console.log()
   printWarnings(warnings)
+}
+
+function collectDefaultSkillsDirs(
+  context: ProjectContext,
+  findSkillFiles: (dir: string) => Array<string>,
+): Array<string> {
+  const skillsDirs: Array<string> = []
+  const addSkillsDir = (skillsDir: string): void => {
+    if (existsSync(skillsDir) && findSkillFiles(skillsDir).length > 0) {
+      skillsDirs.push(skillsDir)
+    }
+  }
+
+  if (context.workspaceRoot && context.cwd === context.workspaceRoot) {
+    addSkillsDir(join(context.workspaceRoot, 'skills'))
+    for (const packageDir of findWorkspacePackages(context.workspaceRoot)) {
+      addSkillsDir(join(packageDir, 'skills'))
+    }
+    return [...new Set(skillsDirs)].sort((a, b) => a.localeCompare(b))
+  }
+
+  const skillsDir =
+    context.targetSkillsDir ??
+    (context.packageRoot
+      ? join(context.packageRoot, 'skills')
+      : resolve(context.cwd, 'skills'))
+  addSkillsDir(skillsDir)
+  return skillsDirs
 }

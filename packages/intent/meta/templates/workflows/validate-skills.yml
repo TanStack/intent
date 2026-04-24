@@ -1,6 +1,6 @@
 # validate-skills.yml — Drop this into your library repo's .github/workflows/
 #
-# Validates skill files on PRs that touch the skills/ directory.
+# Validates skill files on PRs that touch any skills/ directory.
 # Ensures frontmatter is correct, names match paths, and files stay under
 # the 500-line limit.
 
@@ -30,23 +30,24 @@ jobs:
 
       - name: Find and validate skills
         run: |
-          # Find all directories containing SKILL.md files
-          SKILLS_DIR=""
-          if [ -d "skills" ]; then
-            SKILLS_DIR="skills"
-          elif [ -d "packages" ]; then
-            # Monorepo — find skills/ under packages
-            for dir in packages/*/skills; do
-              if [ -d "$dir" ]; then
-                echo "Validating $dir..."
-                intent validate "$dir"
-              fi
-            done
-            exit 0
-          fi
+          found_file="$(mktemp)"
 
-          if [ -n "$SKILLS_DIR" ]; then
-            intent validate "$SKILLS_DIR"
-          else
+          find . \
+            \( -path './.git' -o -path './node_modules' \) -prune -o \
+            -type d -name skills -print |
+          while IFS= read -r dir; do
+            if ! find "$dir" -name SKILL.md -print -quit | grep -q .; then
+              continue
+            fi
+
+            dir="${dir#./}"
+            echo "Validating $dir..."
+            intent validate "$dir"
+            echo "1" > "$found_file"
+          done
+
+          if [ ! -s "$found_file" ]; then
             echo "No skills/ directory found — skipping validation."
           fi
+
+          rm -f "$found_file"
