@@ -22,6 +22,8 @@ import type { CAC } from 'cac'
 import type { InstallCommandOptions } from './commands/install.js'
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
+import type { StaleCommandOptions } from './commands/stale.js'
+import type { ValidateCommandOptions } from './commands/validate.js'
 
 function createCli(): CAC {
   const cli = cac('intent')
@@ -67,11 +69,12 @@ function createCli(): CAC {
 
   cli
     .command('validate [dir]', 'Validate skill files')
-    .usage('validate [dir]')
+    .usage('validate [dir] [--github-summary]')
+    .option('--github-summary', 'Write a GitHub Actions step summary')
     .example('validate')
     .example('validate packages/query/skills')
-    .action(async (dir?: string) => {
-      await runValidateCommand(dir)
+    .action(async (dir: string | undefined, options: ValidateCommandOptions) => {
+      await runValidateCommand(dir, options)
     })
 
   cli
@@ -111,16 +114,16 @@ function createCli(): CAC {
       'stale [dir]',
       'Check skills for staleness in the current package or workspace',
     )
-    .usage('stale [dir] [--json]')
+    .usage('stale [dir] [--json] [--github-review]')
     .option('--json', 'Output JSON')
+    .option('--github-review', 'Write GitHub Actions review PR files')
+    .option('--package-label <label>', 'Fallback package label for review PRs')
     .example('stale')
     .example('stale packages/query')
     .example('stale --json')
-    .action(
-      async (targetDir: string | undefined, options: { json?: boolean }) => {
-        await runStaleCommand(targetDir, options, resolveStaleTargets)
-      },
-    )
+    .action(async (targetDir: string | undefined, options: StaleCommandOptions) => {
+      await runStaleCommand(targetDir, options, resolveStaleTargets)
+    })
 
   cli
     .command(

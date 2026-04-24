@@ -1,3 +1,4 @@
+import { appendFileSync, writeFileSync } from 'node:fs'
 import type { StalenessReport } from './types.js'
 
 export interface StaleReviewItem {
@@ -79,6 +80,14 @@ export function buildStaleReviewBody(items: Array<StaleReviewItem>): string {
     return `| \`${item.type}\` | ${subject} | \`${item.library}\` | ${reasons} |`
   })
 
+  const reasonBullets = items.map((item) => {
+    const subject = item.subject ? `\`${item.subject}\`` : '`unknown`'
+    const reasons = item.reasons?.length
+      ? item.reasons.join('; ')
+      : 'Intent did not emit a detailed reason for this signal.'
+    return `- \`${item.type}\` for ${subject}: ${reasons}`
+  })
+
   const prompt = [
     'You are helping maintain Intent skills for this repository.',
     '',
@@ -131,6 +140,10 @@ export function buildStaleReviewBody(items: Array<StaleReviewItem>): string {
     '| --- | ---: |',
     ...signalRows,
     '',
+    '### Why This PR Opened',
+    '',
+    ...reasonBullets,
+    '',
     '### Review Items',
     '',
     '| Signal | Subject | Library | Reason |',
@@ -147,4 +160,45 @@ export function buildStaleReviewBody(items: Array<StaleReviewItem>): string {
     '',
     'This PR is a review reminder only. It does not update skills automatically.',
   ].join('\n')
+}
+
+export interface WriteStaleReviewWorkflowFilesOptions {
+  outputPath?: string
+  summaryPath?: string
+  reviewItemsPath?: string
+  prBodyPath?: string
+}
+
+export function writeStaleReviewWorkflowFiles(
+  items: Array<StaleReviewItem>,
+  options: WriteStaleReviewWorkflowFilesOptions = {},
+): void {
+  const outputPath = options.outputPath ?? process.env.GITHUB_OUTPUT
+  const summaryPath = options.summaryPath ?? process.env.GITHUB_STEP_SUMMARY
+  const reviewItemsPath = options.reviewItemsPath ?? 'review-items.json'
+  const prBodyPath = options.prBodyPath ?? 'pr-body.md'
+  const hasReview = items.length > 0
+
+  writeFileSync(reviewItemsPath, JSON.stringify(items, null, 2) + '\n')
+
+  if (outputPath) {
+    appendFileSync(outputPath, `has_review=${hasReview ? 'true' : 'false'}\n`)
+  }
+
+  const summary = hasReview
+    ? buildStaleReviewBody(items) + '\n'
+    : [
+        '### Intent skill review',
+        '',
+        'No stale skills or coverage gaps found.',
+        '',
+      ].join('\n')
+
+  if (hasReview) {
+    writeFileSync(prBodyPath, summary)
+  }
+
+  if (summaryPath) {
+    appendFileSync(summaryPath, summary)
+  }
 }

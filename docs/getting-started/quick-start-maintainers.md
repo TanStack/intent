@@ -101,7 +101,7 @@ Run these commands to prepare your package for skill publishing:
 # Update package.json with required fields
 npx @tanstack/intent@latest edit-package-json
 
-# Copy CI workflow templates (validate + stale checks)
+# Copy the CI workflow template
 npx @tanstack/intent@latest setup
 ```
 
@@ -112,9 +112,11 @@ npx @tanstack/intent@latest setup
   - `files` array entries for `skills/`
   - For single packages: also adds `!skills/_artifacts` to exclude artifacts from npm
   - For monorepos: skips the artifacts exclusion (artifacts live at repo root)
-- `setup` copies workflow templates to `.github/workflows/` for automated validation and staleness checking
+- `setup` copies `check-skills.yml` to `.github/workflows/` for automated validation and staleness checking
 
 `setup` does not overwrite existing workflow files. To pick up newer generated workflows, delete or move the old generated files in `.github/workflows/`, then rerun `npx @tanstack/intent@latest setup`.
+
+If your repo already has an older generated `validate-skills.yml`, remove it after adopting the current `check-skills.yml`; PR validation now runs from `check-skills.yml`.
 
 ### 5. Ship skills with your package
 
@@ -135,18 +137,16 @@ Consumers who install your library automatically get the skills. They discover l
 
 ## Ongoing Maintenance (Manual or Agent-Assisted)
 
-### 6. Set up CI workflows
+### 6. Set up the CI workflow
 
-After running `setup`, you'll have two workflows in `.github/workflows/`:
+After running `setup`, you'll have `check-skills.yml` in `.github/workflows/`:
 
-**validate-skills.yml** (runs on PRs touching `skills/`)
+**check-skills.yml** (runs on PRs touching skills/artifacts, release, or manual trigger)
 - Validates SKILL.md frontmatter and structure
 - Ensures files stay under 500 lines
-- Runs automatically on every pull request that modifies skills
-
-**check-skills.yml** (runs on release or manual trigger)
 - Automatically detects stale skills and coverage gaps after you publish a new release
 - Opens one grouped review PR with an agent-friendly prompt
+- Includes the reason each skill or package was flagged
 - Requires you to copy the prompt into Claude Code, Cursor, or your agent to update skills
 
 ### 7. Update stale skills

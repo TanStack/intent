@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
-import { fail } from '../cli-error.js'
+import { fail, isCliFailure } from '../cli-error.js'
 import { printWarnings } from '../cli-support.js'
 import {
   type ProjectContext,
@@ -11,6 +11,10 @@ import { findWorkspacePackages } from '../workspace-patterns.js'
 interface ValidationError {
   file: string
   message: string
+}
+
+export interface ValidateCommandOptions {
+  githubSummary?: boolean
 }
 
 function buildValidationFailure(
@@ -79,7 +83,28 @@ function collectPackagingWarnings(context: ProjectContext): Array<string> {
   return warnings
 }
 
-export async function runValidateCommand(dir?: string): Promise<void> {
+export async function runValidateCommand(
+  dir?: string,
+  options: ValidateCommandOptions = {},
+): Promise<void> {
+  if (!options.githubSummary) {
+    await runValidateCommandInternal(dir)
+    return
+  }
+
+  try {
+    await runValidateCommandInternal(dir)
+    writeGithubValidationSummary({ ok: true })
+  } catch (err) {
+    writeGithubValidationSummary({
+      ok: false,
+      message: validationErrorMessage(err),
+    })
+    throw err
+  }
+}
+
+async function runValidateCommandInternal(dir?: string): Promise<void> {
   const [{ parse: parseYaml }, { findSkillFiles }] = await Promise.all([
     import('yaml'),
     import('../utils.js'),
@@ -243,6 +268,52 @@ export async function runValidateCommand(dir?: string): Promise<void> {
   console.log(`✅ Validated ${validatedCount} skill files — all passed`)
   if (warnings.length > 0) console.log()
   printWarnings(warnings)
+}
+
+function validationErrorMessage(err: unknown): string {
+  if (isCliFailure(err)) return err.message
+  if (err instanceof Error) return err.message
+  return String(err)
+}
+
+function writeGithubValidationSummary({
+  message,
+  ok,
+}: {
+  message?: string
+  ok: boolean
+}): void {
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY
+  if (!summaryPath) return
+
+  const lines = ['### Intent skill validation', '']
+  if (ok) {
+    lines.push('Skill validation passed.', '')
+  } else {
+    lines.push(
+      'Skill validation failed.',
+      '',
+      'Why this failed:',
+      '',
+      'Intent validates SKILL.md frontmatter, skill names, required fields, size limits, framework requirements, and artifact files.',
+      'The command output below contains the exact file-level reasons to fix.',
+      '',
+      'Run locally:',
+      '',
+      '```bash',
+      'npx @tanstack/intent@latest validate',
+      '```',
+      '',
+      'Command output:',
+      '',
+      '```text',
+      message ?? 'Unknown validation error.',
+      '```',
+      '',
+    )
+  }
+
+  appendFileSync(summaryPath, lines.join('\n'))
 }
 
 function collectDefaultSkillsDirs(

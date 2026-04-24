@@ -1330,6 +1330,37 @@ describe('cli commands', () => {
     expect(errorSpy).not.toHaveBeenCalled()
   })
 
+  it('writes a GitHub summary when validation fails', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-summary-'))
+    tempDirs.push(root)
+    const previousSummary = process.env.GITHUB_STEP_SUMMARY
+    const summaryPath = join(root, 'summary.md')
+    writeSkillMd(join(root, 'skills', 'db-core'), {
+      name: 'wrong-name',
+      description: 'Core database concepts',
+    })
+    process.chdir(root)
+    process.env.GITHUB_STEP_SUMMARY = summaryPath
+
+    try {
+      const exitCode = await main(['validate', '--github-summary'])
+      const summary = readFileSync(summaryPath, 'utf8')
+
+      expect(exitCode).toBe(1)
+      expect(summary).toContain('Skill validation failed.')
+      expect(summary).toContain('Why this failed:')
+      expect(summary).toContain(
+        'name "wrong-name" does not match directory path "db-core"',
+      )
+    } finally {
+      if (previousSummary === undefined) {
+        delete process.env.GITHUB_STEP_SUMMARY
+      } else {
+        process.env.GITHUB_STEP_SUMMARY = previousSummary
+      }
+    }
+  })
+
   it('fails cleanly for unsupported yarn pnp projects', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-pnp-'))
     tempDirs.push(root)
