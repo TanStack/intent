@@ -991,11 +991,7 @@ describe('cli commands', () => {
 
     process.chdir(root)
 
-    const exitCode = await main([
-      'load',
-      '@tanstack/query#fetching',
-      '--json',
-    ])
+    const exitCode = await main(['load', '@tanstack/query#fetching', '--json'])
     const output = logSpy.mock.calls.at(-1)?.[0]
     const parsed = JSON.parse(String(output)) as { content: string }
 

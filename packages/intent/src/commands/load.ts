@@ -205,7 +205,9 @@ function rewriteMarkdownDestination({
 
   const relativeToCwd = relative(context.cwd, resolvedDestinationPath)
   const rewrittenPath =
-    relativeToCwd && !relativeToCwd.startsWith('..') && !isAbsolute(relativeToCwd)
+    relativeToCwd &&
+    !relativeToCwd.startsWith('..') &&
+    !isAbsolute(relativeToCwd)
       ? relativeToCwd
       : resolvedDestinationPath
 
