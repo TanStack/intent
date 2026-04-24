@@ -100,26 +100,33 @@ function loadPnpApi(root: string): PnpApi | null {
   const pnpPath = findPnpFile(root)
   if (!pnpPath) return null
 
-  const moduleApi = requireFromHere('node:module') as {
-    findPnpApi?: (lookupSource: string) => PnpApi | null
-  }
-  const foundApi = moduleApi.findPnpApi?.(root)
-  if (foundApi) return foundApi
+  try {
+    const moduleApi = requireFromHere('node:module') as {
+      findPnpApi?: (lookupSource: string) => PnpApi | null
+    }
+    const foundApi = moduleApi.findPnpApi?.(root)
+    if (foundApi) return foundApi
 
-  const pnpModule = requireFromHere(pnpPath) as PnpApi
-  if (typeof pnpModule.setup === 'function') {
-    pnpModule.setup()
-  }
+    const pnpModule = requireFromHere(pnpPath) as PnpApi
+    if (typeof pnpModule.setup === 'function') {
+      pnpModule.setup()
+    }
 
-  if (
-    typeof pnpModule.getDependencyTreeRoots === 'function' &&
-    typeof pnpModule.getPackageInformation === 'function'
-  ) {
-    return pnpModule
-  }
+    if (
+      typeof pnpModule.getDependencyTreeRoots === 'function' &&
+      typeof pnpModule.getPackageInformation === 'function'
+    ) {
+      return pnpModule
+    }
 
-  const projectRequire = createRequire(join(dirname(pnpPath), 'package.json'))
-  return projectRequire('pnpapi') as PnpApi
+    const projectRequire = createRequire(join(dirname(pnpPath), 'package.json'))
+    return projectRequire('pnpapi') as PnpApi
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(
+      `Yarn PnP project detected, but Intent could not load Yarn's PnP API from ${pnpPath}: ${msg}`,
+    )
+  }
 }
 
 function getPnpLocatorKey(locator: PnpPackageLocator): string {

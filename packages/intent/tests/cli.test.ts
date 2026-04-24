@@ -1127,6 +1127,46 @@ describe('cli commands', () => {
     )
   })
 
+  it('keeps nested Intent skill names valid without Agent Skills spec warnings', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-nested-'))
+    tempDirs.push(root)
+
+    writeSkillMd(join(root, 'skills', 'core', 'setup'), {
+      name: 'core/setup',
+      description: 'Core setup concepts',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('✅ Validated 1 skill files — all passed')
+    expect(output).not.toContain('Agent Skills spec warning')
+  })
+
+  it('warns but does not fail for Agent Skills spec-incompatible names', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-spec-'))
+    tempDirs.push(root)
+
+    writeSkillMd(join(root, 'skills', 'PDF-Processing'), {
+      name: 'PDF-Processing',
+      description: 'PDF processing concepts',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('✅ Validated 1 skill files — all passed')
+    expect(output).toContain(
+      'Agent Skills spec warning: each name segment should use lowercase letters, numbers, and single hyphens only',
+    )
+  })
+
   it('validates package skills from repo root without root packaging warnings', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-mono-'))
     tempDirs.push(root)
@@ -1361,7 +1401,7 @@ describe('cli commands', () => {
     }
   })
 
-  it('fails cleanly for unsupported yarn pnp projects', async () => {
+  it('fails cleanly when the Yarn PnP API cannot be loaded', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-pnp-'))
     tempDirs.push(root)
     writeJson(join(root, 'package.json'), { name: 'app', private: true })
@@ -1372,7 +1412,9 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledWith(
-      'Installed-package scanning in Yarn PnP projects without node_modules is not yet supported. `intent validate` can still validate workspace skills; for list/load/install, add `nodeLinker: node-modules` to .yarnrc.yml or use --global-only.',
+      expect.stringContaining(
+        'Yarn PnP project detected, but Intent could not load Yarn',
+      ),
     )
   })
 

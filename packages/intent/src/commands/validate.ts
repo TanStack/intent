@@ -1,5 +1,5 @@
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
-import { join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { fail, isCliFailure } from '../cli-error.js'
 import { printWarnings } from '../cli-support.js'
 import {
@@ -13,9 +13,16 @@ interface ValidationError {
   message: string
 }
 
+interface ValidationWarning {
+  file: string
+  message: string
+}
+
 export interface ValidateCommandOptions {
   githubSummary?: boolean
 }
+
+const agentSkillNamePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 function buildValidationFailure(
   errors: Array<ValidationError>,
@@ -78,6 +85,116 @@ function collectPackagingWarnings(context: ProjectContext): Array<string> {
         '"!skills/_artifacts" is not in the "files" array — artifacts will be published unnecessarily',
       )
     }
+  }
+
+  return warnings
+}
+
+function formatWarning({ file, message }: ValidationWarning): string {
+  return `${file}: ${message}`
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function collectAgentSkillSpecWarnings({
+  filePath,
+  fm,
+  rel,
+}: {
+  filePath: string
+  fm: Record<string, unknown>
+  rel: string
+}): Array<ValidationWarning> {
+  const warnings: Array<ValidationWarning> = []
+
+  if (typeof fm.name === 'string') {
+    if (fm.name.length > 64) {
+      warnings.push({
+        file: rel,
+        message: `Agent Skills spec warning: name exceeds 64 characters (${fm.name.length} chars)`,
+      })
+    }
+
+    for (const segment of fm.name.split('/')) {
+      if (!agentSkillNamePattern.test(segment)) {
+        warnings.push({
+          file: rel,
+          message:
+            'Agent Skills spec warning: each name segment should use lowercase letters, numbers, and single hyphens only',
+        })
+        break
+      }
+    }
+
+    const parentDir = basename(dirname(filePath))
+    if (!fm.name.includes('/') && fm.name !== parentDir) {
+      warnings.push({
+        file: rel,
+        message:
+          'Agent Skills spec warning: name should match the parent directory name',
+      })
+    }
+  }
+
+  if (
+    fm.license !== undefined &&
+    (typeof fm.license !== 'string' || fm.license.trim().length === 0)
+  ) {
+    warnings.push({
+      file: rel,
+      message: 'Agent Skills spec warning: license should be a non-empty string',
+    })
+  }
+
+  if (fm.compatibility !== undefined) {
+    if (
+      typeof fm.compatibility !== 'string' ||
+      fm.compatibility.trim().length === 0
+    ) {
+      warnings.push({
+        file: rel,
+        message:
+          'Agent Skills spec warning: compatibility should be a non-empty string',
+      })
+    } else if (fm.compatibility.length > 500) {
+      warnings.push({
+        file: rel,
+        message: `Agent Skills spec warning: compatibility exceeds 500 characters (${fm.compatibility.length} chars)`,
+      })
+    }
+  }
+
+  if (fm.metadata !== undefined) {
+    if (!isRecord(fm.metadata)) {
+      warnings.push({
+        file: rel,
+        message: 'Agent Skills spec warning: metadata should be a mapping',
+      })
+    } else {
+      const hasNonStringValue = Object.values(fm.metadata).some(
+        (value) => typeof value !== 'string',
+      )
+      if (hasNonStringValue) {
+        warnings.push({
+          file: rel,
+          message:
+            'Agent Skills spec warning: metadata values should be strings',
+        })
+      }
+    }
+  }
+
+  if (
+    fm['allowed-tools'] !== undefined &&
+    typeof fm['allowed-tools'] !== 'string'
+  ) {
+    warnings.push({
+      file: rel,
+      message:
+        'Agent Skills spec warning: allowed-tools should be a space-separated string',
+    })
   }
 
   return warnings
@@ -205,6 +322,12 @@ async function runValidateCommandInternal(dir?: string): Promise<void> {
           message: 'Framework skills must have a "requires" field',
         })
       }
+
+      warnings.push(
+        ...collectAgentSkillSpecWarnings({ filePath, fm, rel }).map(
+          formatWarning,
+        ),
+      )
 
       const lineCount = content.split(/\r?\n/).length
       if (lineCount > 500) {
