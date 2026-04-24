@@ -1310,10 +1310,7 @@ describe('cli commands', () => {
 
     process.chdir(root)
 
-    const exitCode = await main([
-      'validate',
-      'packages/typescript/ai/skills',
-    ])
+    const exitCode = await main(['validate', 'packages/typescript/ai/skills'])
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
