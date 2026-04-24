@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
-import { join, relative, sep } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import {
   createDependencyWalker,
   createPackageRegistrar,
@@ -27,13 +28,48 @@ import type {
 
 type PackageManager = ScanResult['packageManager']
 
-function detectPackageManager(root: string): PackageManager {
-  // Check for unsupported environments first
-  if (existsSync(join(root, '.pnp.cjs')) || existsSync(join(root, '.pnp.js'))) {
-    throw new Error(
-      'Yarn PnP is not yet supported. Add `nodeLinker: node-modules` to your .yarnrc.yml to use intent.',
-    )
+interface PnpPackageLocator {
+  name: string | null
+  reference: string | null
+}
+
+interface PnpPackageInformation {
+  packageLocation: string
+  packageDependencies: Map<string, null | string | [string, string]>
+}
+
+interface PnpApi {
+  getDependencyTreeRoots?: () => Array<PnpPackageLocator>
+  getPackageInformation: (
+    locator: PnpPackageLocator,
+  ) => PnpPackageInformation | null
+  findPackageLocator?: (location: string) => PnpPackageLocator | null
+  setup?: () => void
+  topLevel?: PnpPackageLocator
+}
+
+const requireFromHere = createRequire(import.meta.url)
+
+function findPnpFile(start: string): string | null {
+  let dir = resolve(start)
+
+  while (true) {
+    for (const fileName of ['.pnp.cjs', '.pnp.js']) {
+      const pnpPath = join(dir, fileName)
+      if (existsSync(pnpPath)) return pnpPath
+    }
+
+    const next = dirname(dir)
+    if (next === dir) return null
+    dir = next
   }
+}
+
+function isYarnPnpProject(root: string): boolean {
+  return findPnpFile(root) !== null
+}
+
+function assertLocalNodeModulesSupported(root: string): void {
   if (
     existsSync(join(root, 'deno.json')) &&
     !existsSync(join(root, 'node_modules'))
@@ -42,12 +78,15 @@ function detectPackageManager(root: string): PackageManager {
       'Deno without node_modules is not yet supported. Add `"nodeModulesDir": "auto"` to your deno.json to use intent.',
     )
   }
+}
 
+function detectPackageManager(root: string): PackageManager {
   const dirsToCheck = [root]
   const wsRoot = findWorkspaceRoot(root)
   if (wsRoot && wsRoot !== root) dirsToCheck.push(wsRoot)
 
   for (const dir of dirsToCheck) {
+    if (isYarnPnpProject(dir)) return 'yarn'
     if (existsSync(join(dir, 'pnpm-lock.yaml'))) return 'pnpm'
     if (existsSync(join(dir, 'bun.lockb')) || existsSync(join(dir, 'bun.lock')))
       return 'bun'
@@ -55,6 +94,47 @@ function detectPackageManager(root: string): PackageManager {
     if (existsSync(join(dir, 'package-lock.json'))) return 'npm'
   }
   return 'unknown'
+}
+
+function loadPnpApi(root: string): PnpApi | null {
+  const pnpPath = findPnpFile(root)
+  if (!pnpPath) return null
+
+  const moduleApi = requireFromHere('node:module') as {
+    findPnpApi?: (lookupSource: string) => PnpApi | null
+  }
+  const foundApi = moduleApi.findPnpApi?.(root)
+  if (foundApi) return foundApi
+
+  const pnpModule = requireFromHere(pnpPath) as PnpApi
+  if (typeof pnpModule.setup === 'function') {
+    pnpModule.setup()
+  }
+
+  if (
+    typeof pnpModule.getDependencyTreeRoots === 'function' &&
+    typeof pnpModule.getPackageInformation === 'function'
+  ) {
+    return pnpModule
+  }
+
+  const projectRequire = createRequire(join(dirname(pnpPath), 'package.json'))
+  return projectRequire('pnpapi') as PnpApi
+}
+
+function getPnpLocatorKey(locator: PnpPackageLocator): string {
+  return `${locator.name ?? '<top>'}@${locator.reference ?? '<top>'}`
+}
+
+function getPnpDependencyLocator(
+  dependencyName: string,
+  target: null | string | [string, string],
+): PnpPackageLocator | null {
+  if (target === null) return null
+  if (Array.isArray(target)) {
+    return { name: target[0], reference: target[1] }
+  }
+  return { name: dependencyName, reference: target }
 }
 
 // ---------------------------------------------------------------------------
@@ -329,6 +409,7 @@ export function scanForIntents(
   const projectRoot = root ?? process.cwd()
   const scanScope = getScanScope(options)
   const packageManager = detectPackageManager(projectRoot)
+  const pnpApi = loadPnpApi(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')
   const explicitGlobalNodeModules =
     process.env.INTENT_GLOBAL_NODE_MODULES?.trim() || null
@@ -427,7 +508,53 @@ export function scanForIntents(
       warnings,
     })
 
+  function scanPnpPackages(): void {
+    if (!pnpApi) return
+
+    const api = pnpApi
+    const visited = new Set<string>()
+    const workspaceRoot = findWorkspaceRoot(projectRoot)
+    const projectLocator = api.findPackageLocator?.(
+      projectRoot.endsWith(sep) ? projectRoot : `${projectRoot}${sep}`,
+    )
+    const roots =
+      workspaceRoot && workspaceRoot !== projectRoot && projectLocator
+        ? [projectLocator]
+        : (api.getDependencyTreeRoots?.() ??
+          (api.topLevel ? [api.topLevel] : []))
+
+    function visit(locator: PnpPackageLocator): void {
+      const key = getPnpLocatorKey(locator)
+      if (visited.has(key)) return
+      visited.add(key)
+
+      const info = api.getPackageInformation(locator)
+      if (!info) return
+
+      const packageRoot = info.packageLocation.replace(/[\\/]$/, '')
+      tryRegister(packageRoot, locator.name ?? 'unknown')
+
+      for (const [dependencyName, target] of info.packageDependencies) {
+        const dependencyLocator = getPnpDependencyLocator(
+          dependencyName,
+          target,
+        )
+        if (dependencyLocator) visit(dependencyLocator)
+      }
+    }
+
+    for (const locator of roots) {
+      visit(locator)
+    }
+  }
+
   function scanLocalPackages(): void {
+    if (pnpApi && !nodeModules.local.exists) {
+      scanPnpPackages()
+      return
+    }
+
+    assertLocalNodeModulesSupported(projectRoot)
     scanTarget(nodeModules.local)
     walkWorkspacePackages()
     walkKnownPackages()

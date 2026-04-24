@@ -162,6 +162,7 @@ export function scaffoldProject(opts: {
   structure: ProjectStructure
   dependency: string
   registryUrl: string
+  pnp?: boolean
 }): ScaffoldResult {
   const root = mkdtempSync(join(realTmpdir, `intent-integ-${opts.pm}-`))
 
@@ -178,9 +179,10 @@ export function scaffoldProject(opts: {
     writeJson(join(root, 'package.json'), {
       name: 'test-project',
       private: true,
+      ...(opts.pnp ? { installConfig: { pnp: true } } : {}),
       dependencies: { [opts.dependency]: '1.0.0' },
     })
-    install(root, opts.pm, opts.registryUrl)
+    install(root, opts.pm, opts.registryUrl, opts)
     return { root, cwd: root }
   }
 
@@ -189,6 +191,7 @@ export function scaffoldProject(opts: {
     name: 'test-monorepo',
     private: true,
     ...(opts.pm !== 'pnpm' ? { workspaces: ['packages/*'] } : {}),
+    ...(opts.pnp ? { installConfig: { pnp: true } } : {}),
   })
   if (opts.pm === 'pnpm') {
     writeFileSync(
@@ -196,7 +199,7 @@ export function scaffoldProject(opts: {
       'packages:\n  - packages/*\n',
     )
   }
-  if (opts.pm === 'yarn') {
+  if (opts.pm === 'yarn' && !opts.pnp) {
     writeFileSync(join(root, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
   }
 
@@ -208,7 +211,7 @@ export function scaffoldProject(opts: {
     dependencies: { [opts.dependency]: '1.0.0' },
   })
 
-  install(root, opts.pm, opts.registryUrl)
+  install(root, opts.pm, opts.registryUrl, opts)
 
   return {
     root,
@@ -216,8 +219,19 @@ export function scaffoldProject(opts: {
   }
 }
 
-function install(dir: string, pm: PackageManager, registryUrl: string): void {
-  const env = { ...process.env, npm_config_registry: registryUrl }
+function install(
+  dir: string,
+  pm: PackageManager,
+  registryUrl: string,
+  opts: { pnp?: boolean } = {},
+): void {
+  const yarnCache = join(dir, '.yarn-cache')
+  mkdirSync(yarnCache, { recursive: true })
+  const env = {
+    ...process.env,
+    npm_config_registry: registryUrl,
+    YARN_CACHE_FOLDER: yarnCache,
+  }
   const reg = `--registry=${registryUrl}`
 
   switch (pm) {
@@ -228,7 +242,11 @@ function install(dir: string, pm: PackageManager, registryUrl: string): void {
       runInstallCommand(`pnpm install ${reg} --no-frozen-lockfile`, dir, env)
       break
     case 'yarn':
-      runInstallCommand(`yarn install ${reg}`, dir, env)
+      runInstallCommand(
+        `yarn install ${reg}${opts.pnp ? ' --enable-pnp' : ''} --cache-folder ${yarnCache}`,
+        dir,
+        env,
+      )
       break
     case 'bun':
       runInstallCommand(`bun install ${reg}`, dir, env)

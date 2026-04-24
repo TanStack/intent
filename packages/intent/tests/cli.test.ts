@@ -1372,7 +1372,7 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledWith(
-      'Yarn PnP is not yet supported. Add `nodeLinker: node-modules` to your .yarnrc.yml to use intent.',
+      'Installed-package scanning in Yarn PnP projects without node_modules is not yet supported. `intent validate` can still validate workspace skills; for list/load/install, add `nodeLinker: node-modules` to .yarnrc.yml or use --global-only.',
     )
   })
 

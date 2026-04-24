@@ -805,11 +805,6 @@ describe('package manager detection', () => {
     expect(result.packageManager).toBe('unknown')
   })
 
-  it('throws for Yarn PnP', () => {
-    writeFileSync(join(root, '.pnp.cjs'), '')
-    expect(() => scanForIntents(root)).toThrow('Yarn PnP')
-  })
-
   it('throws for Deno without node_modules', () => {
     writeFileSync(join(root, 'deno.json'), '{}')
     expect(() => scanForIntents(root)).toThrow('Deno without node_modules')
