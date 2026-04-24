@@ -849,6 +849,65 @@ describe('cli commands', () => {
     expect(output).toContain('Skill content here.')
   })
 
+  it('rewrites relative markdown destinations when loading a skill', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-links-'))
+    tempDirs.push(root)
+    const pkgDir = join(root, 'node_modules', '@tanstack', 'query')
+    const skillDir = join(pkgDir, 'skills', 'fetching')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: fetching',
+        'description: Query data fetching patterns',
+        '---',
+        '',
+        '- [Reference](references/topic.md)',
+        '- ![Diagram](assets/diagram.png)',
+        '- [Parent](../shared.md#setup)',
+        '- [External](https://example.com/reference.md)',
+        '- [Mail](mailto:test@example.com)',
+        '- [Anchor](#setup)',
+        '- [Absolute](/tmp/reference.md)',
+        '- [Escapes](../../../outside.md)',
+        '- `inline [Code](references/code.md)`',
+        '```md',
+        '[Fenced](references/fenced.md)',
+        '```',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['load', '@tanstack/query#fetching'])
+    const output = stdoutWriteSpy.mock.calls.flat().join('')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain(
+      '[Reference](node_modules/@tanstack/query/skills/fetching/references/topic.md)',
+    )
+    expect(output).toContain(
+      '![Diagram](node_modules/@tanstack/query/skills/fetching/assets/diagram.png)',
+    )
+    expect(output).toContain(
+      '[Parent](node_modules/@tanstack/query/skills/shared.md#setup)',
+    )
+    expect(output).toContain('[External](https://example.com/reference.md)')
+    expect(output).toContain('[Mail](mailto:test@example.com)')
+    expect(output).toContain('[Anchor](#setup)')
+    expect(output).toContain('[Absolute](/tmp/reference.md)')
+    expect(output).toContain('[Escapes](../../../outside.md)')
+    expect(output).toContain('`inline [Code](references/code.md)`')
+    expect(output).toContain('[Fenced](references/fenced.md)')
+  })
+
   it('loads a local skill use to a path with --path', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-path-'))
     tempDirs.push(root)
@@ -904,6 +963,42 @@ describe('cli commands', () => {
       version: '5.0.0',
       warnings: [],
     })
+  })
+
+  it('rewrites relative markdown destinations in json load content', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-json-links-'))
+    tempDirs.push(root)
+    const pkgDir = join(root, 'node_modules', '@tanstack', 'query')
+    const skillDir = join(pkgDir, 'skills', 'fetching')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: fetching',
+        'description: Query data fetching patterns',
+        '---',
+        '',
+        '[Reference](references/topic.md)',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['load', '@tanstack/query#fetching', '--json'])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const parsed = JSON.parse(String(output)) as { content: string }
+
+    expect(exitCode).toBe(0)
+    expect(parsed.content).toContain(
+      '[Reference](node_modules/@tanstack/query/skills/fetching/references/topic.md)',
+    )
   })
 
   it('loads global fallback path when requested', async () => {
