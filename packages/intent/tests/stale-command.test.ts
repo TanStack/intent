@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -72,6 +78,121 @@ describe('runStaleCommand', () => {
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(output).toBe('[]')
+  })
+
+  it('writes GitHub review files for stale review signals', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-stale-github-review-'))
+    tempDirs.push(root)
+    const originalCwd = process.cwd()
+    const previousOutput = process.env.GITHUB_OUTPUT
+    const previousSummary = process.env.GITHUB_STEP_SUMMARY
+    process.chdir(root)
+    process.env.GITHUB_OUTPUT = join(root, 'github-output')
+    process.env.GITHUB_STEP_SUMMARY = join(root, 'github-summary')
+
+    try {
+      await runStaleCommand(
+        undefined,
+        { githubReview: true, packageLabel: '@tanstack/router' },
+        async () => ({
+          reports: [
+            {
+              library: '@tanstack/router',
+              currentVersion: null,
+              skillVersion: null,
+              versionDrift: null,
+              skills: [],
+              signals: [
+                {
+                  type: 'missing-package-coverage',
+                  library: '@tanstack/react-start-rsc',
+                  packageName: '@tanstack/react-start-rsc',
+                  reasons: ['workspace package is not represented'],
+                  needsReview: true,
+                },
+              ],
+            },
+          ],
+          workflowAdvisories: [
+            'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
+          ],
+        }),
+      )
+    } finally {
+      process.chdir(originalCwd)
+      if (previousOutput === undefined) {
+        delete process.env.GITHUB_OUTPUT
+      } else {
+        process.env.GITHUB_OUTPUT = previousOutput
+      }
+      if (previousSummary === undefined) {
+        delete process.env.GITHUB_STEP_SUMMARY
+      } else {
+        process.env.GITHUB_STEP_SUMMARY = previousSummary
+      }
+    }
+
+    expect(readFileSync(join(root, 'github-output'), 'utf8')).toContain(
+      'has_review=true',
+    )
+    expect(readFileSync(join(root, 'pr-body.md'), 'utf8')).toContain(
+      'Why This PR Opened',
+    )
+    expect(readFileSync(join(root, 'github-summary'), 'utf8')).toContain(
+      'workspace package is not represented',
+    )
+    expect(readFileSync(join(root, 'pr-body.md'), 'utf8')).toContain(
+      'workflow-advisory',
+    )
+    expect(readFileSync(join(root, 'pr-body.md'), 'utf8')).toContain(
+      'Intent workflow update available',
+    )
+  })
+
+  it('turns GitHub review stale check failures into review items', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-stale-github-failed-'))
+    tempDirs.push(root)
+    const originalCwd = process.cwd()
+    const previousOutput = process.env.GITHUB_OUTPUT
+    const previousSummary = process.env.GITHUB_STEP_SUMMARY
+    process.chdir(root)
+    process.env.GITHUB_OUTPUT = join(root, 'github-output')
+    process.env.GITHUB_STEP_SUMMARY = join(root, 'github-summary')
+
+    try {
+      await runStaleCommand(
+        undefined,
+        { githubReview: true, packageLabel: '@tanstack/router' },
+        async () => {
+          throw new Error('boom')
+        },
+      )
+    } finally {
+      process.chdir(originalCwd)
+      if (previousOutput === undefined) {
+        delete process.env.GITHUB_OUTPUT
+      } else {
+        process.env.GITHUB_OUTPUT = previousOutput
+      }
+      if (previousSummary === undefined) {
+        delete process.env.GITHUB_STEP_SUMMARY
+      } else {
+        process.env.GITHUB_STEP_SUMMARY = previousSummary
+      }
+    }
+
+    const items = JSON.parse(
+      readFileSync(join(root, 'review-items.json'), 'utf8'),
+    )
+    expect(items).toEqual([
+      expect.objectContaining({
+        type: 'stale-check-failed',
+        library: '@tanstack/router',
+      }),
+    ])
+    expect(readFileSync(join(root, 'github-output'), 'utf8')).toContain(
+      'has_review=true',
+    )
   })
 })
 

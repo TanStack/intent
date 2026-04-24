@@ -24,7 +24,7 @@ npx @tanstack/intent@latest setup
   - Ensures `files` includes required publish entries
   - Preserves existing indentation
 - `setup`
-  - Copies templates from `@tanstack/intent/meta/templates/workflows` to `.github/workflows`
+  - Copies the `check-skills.yml` workflow template from `@tanstack/intent/meta/templates/workflows` to `.github/workflows`
   - Applies variable substitution (`PACKAGE_NAME`, `PACKAGE_LABEL`, `PAYLOAD_PACKAGE`, `REPO`, `DOCS_PATH`, `SRC_PATH`, `WATCH_PATHS`)
   - Detects the workspace root in monorepos and writes repo-level workflows there
   - Skips files that already exist at destination
@@ -44,6 +44,9 @@ npx @tanstack/intent@latest setup
 ## Notes
 
 - `setup` skips existing files
+- `check-skills.yml` validates skills on PRs and opens review PRs from release/manual runs
+- To adopt updated workflow templates, delete or move the old generated workflow files first, then rerun `setup`
+- If your repo has an older generated `validate-skills.yml`, remove it after adopting the current `check-skills.yml`; PR validation now lives in `check-skills.yml`
 - In monorepos, run `setup` from either the repo root or a package directory; Intent writes workflows to the workspace root
 
 ## Related

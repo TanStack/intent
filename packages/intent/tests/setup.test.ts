@@ -16,6 +16,8 @@ import {
 } from '../src/setup.js'
 import type { EditPackageJsonResult, MonorepoResult } from '../src/setup.js'
 
+const repoRoot = join(import.meta.dirname, '..', '..', '..')
+
 let root: string
 let metaDir: string
 
@@ -38,21 +40,14 @@ beforeEach(() => {
     join(metaDir, 'templates', 'workflows', 'check-skills.yml'),
     [
       'label: {{PACKAGE_LABEL}}',
-      '# intent-workflow-version: 2',
+      '# intent-workflow-version: 3',
       'install: npm install -g @tanstack/intent',
-      'signals: report.signals',
+      'validate: intent validate --github-summary',
+      'review: intent stale --github-review --package-label "{{PACKAGE_LABEL}}"',
       'has_review=true',
-      'No stale skills or coverage gaps found.',
       'gh pr list --head "$BRANCH"',
       'gh pr edit "$PR_URL" --body-file pr-body.md',
-      'Review intent skills',
-      'Ask the maintainer before editing skills or artifacts.',
-      'Do not auto-generate skills.',
     ].join('\n'),
-  )
-  writeFileSync(
-    join(metaDir, 'templates', 'workflows', 'validate-skills.yml'),
-    'validate: npx @tanstack/intent@latest validate',
   )
 })
 
@@ -253,7 +248,7 @@ describe('runSetupGithubActions', () => {
     })
 
     const result = runSetupGithubActions(root, metaDir)
-    expect(result.workflows).toHaveLength(2)
+    expect(result.workflows).toHaveLength(1)
     expect(result.skipped).toHaveLength(0)
 
     expect(
@@ -265,33 +260,47 @@ describe('runSetupGithubActions', () => {
       'utf8',
     )
     expect(checkContent).toContain('label: @tanstack/query')
-    expect(checkContent).toContain('# intent-workflow-version: 2')
+    expect(checkContent).toContain('# intent-workflow-version: 3')
     expect(checkContent).toContain('install: npm install -g @tanstack/intent')
-    expect(checkContent).toContain('signals: report.signals')
+    expect(checkContent).toContain('validate: intent validate --github-summary')
+    expect(checkContent).toContain(
+      'review: intent stale --github-review --package-label "@tanstack/query"',
+    )
     expect(checkContent).toContain('has_review=true')
-    expect(checkContent).toContain('No stale skills or coverage gaps found.')
     expect(checkContent).toContain('gh pr list --head "$BRANCH"')
     expect(checkContent).toContain(
       'gh pr edit "$PR_URL" --body-file pr-body.md',
     )
-    expect(checkContent).toContain('Review intent skills')
-    expect(checkContent).toContain(
-      'Ask the maintainer before editing skills or artifacts.',
-    )
-    expect(checkContent).toContain('Do not auto-generate skills.')
+  })
 
-    const validateContent = readFileSync(
-      join(root, '.github', 'workflows', 'validate-skills.yml'),
+  it('ships one workflow that validates skills through the CLI', () => {
+    const checkContent = readFileSync(
+      join(
+        repoRoot,
+        'packages',
+        'intent',
+        'meta',
+        'templates',
+        'workflows',
+        'check-skills.yml',
+      ),
       'utf8',
     )
-    expect(validateContent).toContain(
-      'validate: npx @tanstack/intent@latest validate',
+
+    expect(checkContent).toContain('pull_request:')
+    expect(checkContent).toContain('intent validate --github-summary')
+    expect(checkContent).toContain(
+      'intent stale --github-review --package-label "{{PACKAGE_LABEL}}"',
     )
+    expect(checkContent).not.toContain('-type d -name skills -print')
+    expect(checkContent).not.toContain('packages/*/skills')
+    expect(checkContent).not.toContain('JSON.parse')
+    expect(checkContent).not.toContain('node <<')
   })
 
   it('copies templates with defaults when no package.json', () => {
     const result = runSetupGithubActions(root, metaDir)
-    expect(result.workflows).toHaveLength(2)
+    expect(result.workflows).toHaveLength(1)
 
     expect(
       existsSync(join(root, '.github', 'workflows', 'notify-intent.yml')),
@@ -301,14 +310,14 @@ describe('runSetupGithubActions', () => {
     ).toBe(true)
     expect(
       existsSync(join(root, '.github', 'workflows', 'validate-skills.yml')),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('skips existing workflow files', () => {
     runSetupGithubActions(root, metaDir)
     const result = runSetupGithubActions(root, metaDir)
     expect(result.workflows).toHaveLength(0)
-    expect(result.skipped).toHaveLength(2)
+    expect(result.skipped).toHaveLength(1)
   })
 
   it('handles missing templates directory gracefully', () => {
@@ -357,9 +366,9 @@ describe('runSetupGithubActions', () => {
     expect(result.workflows).toEqual(
       expect.arrayContaining([
         join(monoRoot, '.github', 'workflows', 'check-skills.yml'),
-        join(monoRoot, '.github', 'workflows', 'validate-skills.yml'),
       ]),
     )
+    expect(result.workflows).toHaveLength(1)
     expect(
       existsSync(join(monoRoot, 'packages', 'router', '.github', 'workflows')),
     ).toBe(false)
@@ -374,8 +383,9 @@ describe('runSetupGithubActions', () => {
     )
     expect(checkContent).toContain('label: @tanstack/router')
     expect(checkContent).toContain('npm install -g @tanstack/intent')
-    expect(checkContent).toContain('signals: report.signals')
-    expect(checkContent).toContain('No stale skills or coverage gaps found.')
+    expect(checkContent).toContain(
+      'intent stale --github-review --package-label "@tanstack/router"',
+    )
 
     rmSync(monoRoot, { recursive: true, force: true })
   })
@@ -426,9 +436,9 @@ describe('runSetupGithubActions', () => {
     expect(result.workflows).toEqual(
       expect.arrayContaining([
         join(monoRoot, '.github', 'workflows', 'check-skills.yml'),
-        join(monoRoot, '.github', 'workflows', 'validate-skills.yml'),
       ]),
     )
+    expect(result.workflows).toHaveLength(1)
     expect(
       existsSync(join(monoRoot, 'packages', 'router', '.github', 'workflows')),
     ).toBe(false)

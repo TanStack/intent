@@ -1,13 +1,24 @@
 import type { StalenessReport } from '../types.js'
 
+export interface StaleCommandOptions {
+  json?: boolean
+  githubReview?: boolean
+  packageLabel?: string
+}
+
 export async function runStaleCommand(
   targetDir: string | undefined,
-  options: { json?: boolean },
+  options: StaleCommandOptions,
   resolveStaleTargets: (targetDir?: string) => Promise<{
     reports: Array<StalenessReport>
     workflowAdvisories?: Array<string>
   }>,
 ): Promise<void> {
+  if (options.githubReview) {
+    await runGithubReview(targetDir, options, resolveStaleTargets)
+    return
+  }
+
   const { reports, workflowAdvisories = [] } =
     await resolveStaleTargets(targetDir)
 
@@ -59,5 +70,43 @@ export async function runStaleCommand(
     }
 
     console.log()
+  }
+}
+
+async function runGithubReview(
+  targetDir: string | undefined,
+  options: StaleCommandOptions,
+  resolveStaleTargets: (targetDir?: string) => Promise<{
+    reports: Array<StalenessReport>
+    workflowAdvisories?: Array<string>
+  }>,
+): Promise<void> {
+  const {
+    collectStaleReviewItems,
+    createFailedStaleReviewItem,
+    createWorkflowAdvisoryReviewItems,
+    writeStaleReviewWorkflowFiles,
+  } = await import('../workflow-review.js')
+  const packageLabel = options.packageLabel ?? 'workspace'
+
+  try {
+    const { reports, workflowAdvisories = [] } =
+      await resolveStaleTargets(targetDir)
+    const items = [
+      ...collectStaleReviewItems(reports),
+      ...createWorkflowAdvisoryReviewItems(packageLabel, workflowAdvisories),
+    ]
+    writeStaleReviewWorkflowFiles(items)
+    if (items.length === 0) {
+      console.log('No stale skills or coverage gaps found.')
+    } else {
+      console.log(`Wrote ${items.length} intent skill review item(s).`)
+    }
+  } catch (err) {
+    const item = createFailedStaleReviewItem(packageLabel)
+    writeStaleReviewWorkflowFiles([item])
+    const message = err instanceof Error ? err.message : String(err)
+    console.log(`Intent stale check failed: ${message}`)
+    console.log('Wrote a review PR body so maintainers can inspect the logs.')
   }
 }
