@@ -1,24 +1,21 @@
 import {
+  coreOptionsFromGlobalFlags,
   printWarnings,
-  scanOptionsFromGlobalFlags,
   type GlobalScanFlags,
 } from '../cli-support.js'
+import { listIntentSkills } from '../core.js'
+import type {
+  IntentPackageSummary,
+  IntentSkillList,
+  IntentSkillSummary,
+} from '../core.js'
 import type { ScanOptions, ScanResult } from '../types.js'
 
 export interface ListCommandOptions extends GlobalScanFlags {
   json?: boolean
 }
 
-function formatScanCoverage(result: ScanResult): string {
-  const coverage: Array<string> = []
-
-  if (result.nodeModules.local.scanned) coverage.push('project node_modules')
-  if (result.nodeModules.global.scanned) coverage.push('global node_modules')
-
-  return coverage.join(', ')
-}
-
-function printVersionConflicts(result: ScanResult): void {
+function printVersionConflicts(result: IntentSkillList): void {
   if (result.conflicts.length === 0) return
 
   console.log('\nVersion conflicts:\n')
@@ -37,11 +34,23 @@ function printVersionConflicts(result: ScanResult): void {
   }
 }
 
+function getPackageSkills(
+  pkg: IntentPackageSummary,
+  result: IntentSkillList,
+): Array<IntentSkillSummary> {
+  return result.skills.filter(
+    (skill) =>
+      skill.packageName === pkg.name &&
+      skill.packageVersion === pkg.version &&
+      skill.packageSource === pkg.source,
+  )
+}
+
 export async function runListCommand(
   options: ListCommandOptions,
-  scanIntentsOrFail: (options?: ScanOptions) => Promise<ScanResult>,
+  _scanIntentsOrFail?: (options?: ScanOptions) => Promise<ScanResult>,
 ): Promise<void> {
-  const result = await scanIntentsOrFail(scanOptionsFromGlobalFlags(options))
+  const result = listIntentSkills(coreOptionsFromGlobalFlags(options))
 
   if (options.json) {
     console.log(JSON.stringify(result, null, 2))
@@ -51,11 +60,8 @@ export async function runListCommand(
   const { computeSkillNameWidth, printSkillTree, printTable } =
     await import('../display.js')
 
-  const scanCoverage = formatScanCoverage(result)
-
   if (result.packages.length === 0) {
     console.log('No intent-enabled packages found.')
-    if (scanCoverage) console.log(`Scanned: ${scanCoverage}`)
     if (result.warnings.length > 0) {
       console.log()
       printWarnings(result.warnings)
@@ -63,40 +69,41 @@ export async function runListCommand(
     return
   }
 
-  const totalSkills = result.packages.reduce(
-    (sum, pkg) => sum + pkg.skills.length,
-    0,
-  )
   console.log(
-    `\n${result.packages.length} intent-enabled packages, ${totalSkills} skills (${result.packageManager})\n`,
+    `\n${result.packages.length} intent-enabled packages, ${result.skills.length} skills\n`,
   )
-  if (scanCoverage) {
-    console.log(
-      `Scanned: ${scanCoverage}${result.nodeModules.global.scanned ? ' (local packages take precedence)' : ''}\n`,
-    )
-  }
 
   const rows = result.packages.map((pkg) => [
     pkg.name,
     pkg.source,
     pkg.version,
-    String(pkg.skills.length),
-    pkg.intent.requires?.join(', ') || '–',
+    String(pkg.skillCount),
   ])
-  printTable(['PACKAGE', 'SOURCE', 'VERSION', 'SKILLS', 'REQUIRES'], rows)
+  printTable(['PACKAGE', 'SOURCE', 'VERSION', 'SKILLS'], rows)
 
   printVersionConflicts(result)
 
-  const allSkills = result.packages.map((pkg) => pkg.skills)
-  const nameWidth = computeSkillNameWidth(allSkills)
-  const showTypes = result.packages.some((pkg) =>
-    pkg.skills.some((skill) => skill.type),
+  const allSkills = result.packages.map((pkg) =>
+    getPackageSkills(pkg, result).map((skill) => ({
+      name: skill.skillName,
+      description: skill.description,
+      type: skill.type,
+    })),
   )
+  const nameWidth = computeSkillNameWidth(allSkills)
+  const showTypes = result.skills.some((skill) => skill.type)
 
   console.log(`\nSkills:\n`)
   for (const pkg of result.packages) {
     console.log(`  ${pkg.name}`)
-    printSkillTree(pkg.skills, { nameWidth, packageName: pkg.name, showTypes })
+    printSkillTree(
+      getPackageSkills(pkg, result).map((skill) => ({
+        name: skill.skillName,
+        description: skill.description,
+        type: skill.type,
+      })),
+      { nameWidth, packageName: pkg.name, showTypes },
+    )
     console.log()
   }
 

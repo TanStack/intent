@@ -549,9 +549,10 @@ describe('cli commands', () => {
       packages: Array<{
         name: string
         version: string
-        packageRoot: string
         source: 'local' | 'global'
+        skillCount: number
       }>
+      skills: Array<{ use: string; packageName: string; skillName: string }>
       conflicts: Array<{ packageName: string }>
       warnings: Array<string>
     }
@@ -561,9 +562,16 @@ describe('cli commands', () => {
     expect(parsed.packages[0]).toMatchObject({
       name: '@tanstack/db',
       version: '0.5.2',
-      packageRoot: pkgDir,
       source: 'local',
+      skillCount: 1,
     })
+    expect(parsed.skills).toEqual([
+      expect.objectContaining({
+        use: '@tanstack/db#db-core',
+        packageName: '@tanstack/db',
+        skillName: 'db-core',
+      }),
+    ])
     expect(parsed.conflicts).toEqual([])
     expect(parsed.warnings).toEqual([])
   })
@@ -592,12 +600,10 @@ describe('cli commands', () => {
     const exitCode = await main(['list', '--json'])
     const output = logSpy.mock.calls.at(-1)?.[0]
     const parsed = JSON.parse(String(output)) as {
-      nodeModules: { global: { scanned: boolean } }
       packages: Array<{ name: string }>
     }
 
     expect(exitCode).toBe(0)
-    expect(parsed.nodeModules.global.scanned).toBe(false)
     expect(parsed.packages).toEqual([])
   })
 
@@ -628,9 +634,15 @@ describe('cli commands', () => {
       packages: Array<{
         name: string
         version: string
-        packageRoot: string
         source: 'local' | 'global'
-        skills: Array<{ path: string }>
+        skillCount: number
+      }>
+      skills: Array<{
+        packageName: string
+        packageSource: 'local' | 'global'
+        packageVersion: string
+        skillName: string
+        use: string
       }>
     }
 
@@ -639,12 +651,16 @@ describe('cli commands', () => {
     expect(parsed.packages[0]).toMatchObject({
       name: '@tanstack/query',
       version: '5.0.0',
-      packageRoot: globalPkgDir,
       source: 'global',
+      skillCount: 1,
     })
-    expect(parsed.packages[0]!.skills[0]!.path).toBe(
-      join(globalPkgDir, 'skills', 'fetching', 'SKILL.md'),
-    )
+    expect(parsed.skills[0]).toMatchObject({
+      packageName: '@tanstack/query',
+      packageSource: 'global',
+      packageVersion: '5.0.0',
+      skillName: 'fetching',
+      use: '@tanstack/query#fetching',
+    })
   })
 
   it('does not print absolute global skill paths in global list output', async () => {
@@ -673,9 +689,6 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Global fetching skill')
-    expect(output).toContain(
-      'Lookup: Runtime lookup only: run `npx @tanstack/intent@latest load @tanstack/query#fetching --path`, and load its reported path for this session. Do not copy the resolved path into this file.',
-    )
     expect(output).not.toContain(globalPkgDir)
   })
 
@@ -762,25 +775,21 @@ describe('cli commands', () => {
     const exitCode = await main(['list', '--global-only', '--json'])
     const output = logSpy.mock.calls.at(-1)?.[0]
     const parsed = JSON.parse(String(output)) as {
-      nodeModules: {
-        global: { scanned: boolean }
-        local: { scanned: boolean }
-      }
       packages: Array<{
         name: string
         source: 'local' | 'global'
         version: string
+        skillCount: number
       }>
     }
 
     expect(exitCode).toBe(0)
-    expect(parsed.nodeModules.local.scanned).toBe(false)
-    expect(parsed.nodeModules.global.scanned).toBe(true)
     expect(parsed.packages).toHaveLength(1)
     expect(parsed.packages[0]).toMatchObject({
       name: '@tanstack/query',
       source: 'global',
       version: '4.0.0',
+      skillCount: 1,
     })
   })
 

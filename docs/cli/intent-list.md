@@ -21,43 +21,38 @@ npx @tanstack/intent@latest list [--json] [--global] [--global-only]
 - Includes global packages only when `--global` or `--global-only` is passed
 - Includes warnings from discovery
 - If no packages are discovered, prints `No intent-enabled packages found.`
-- Summary line with package count, skill count, and detected package manager
-- Package table columns: `PACKAGE`, `SOURCE`, `VERSION`, `SKILLS`, `REQUIRES`
+- Summary line with package count and skill count
+- Package table columns: `PACKAGE`, `SOURCE`, `VERSION`, `SKILLS`
 - Skill tree grouped by package
 - Optional warnings section (`⚠ ...` per warning)
 
-`REQUIRES` uses `intent.requires` values joined by a comma and space; empty values render as `–`.
 `SOURCE` is a lightweight indicator showing whether the selected package came from local discovery or explicit global scanning.
 When both local and global packages are scanned, local packages take precedence.
 
 ## JSON output
 
-`--json` prints the `ScanResult` object:
+`--json` prints an adapter-friendly skill list:
 
 ```json
 {
-  "packageManager": "npm | pnpm | yarn | bun | unknown",
+  "skills": [
+    {
+      "use": "@tanstack/query#fetching",
+      "packageName": "@tanstack/query",
+      "packageVersion": "5.0.0",
+      "packageSource": "local",
+      "skillName": "fetching",
+      "description": "Query data fetching patterns",
+      "type": "skill (optional)",
+      "framework": "react (optional)"
+    }
+  ],
   "packages": [
     {
-      "name": "string",
-      "version": "string",
-      "source": "local | global",
-      "packageRoot": "string",
-      "intent": {
-        "version": 1,
-        "repo": "string",
-        "docs": "string",
-        "requires": ["string"]
-      },
-      "skills": [
-        {
-          "name": "string",
-          "path": "string",
-          "description": "string",
-          "type": "string (optional)",
-          "framework": "string (optional)"
-        }
-      ]
+      "name": "@tanstack/query",
+      "version": "5.0.0",
+      "source": "local",
+      "skillCount": 1
     }
   ],
   "warnings": ["string"],
@@ -75,28 +70,12 @@ When both local and global packages are scanned, local packages take precedence.
         }
       ]
     }
-  ],
-  "nodeModules": {
-    "local": {
-      "path": "string | null",
-      "detected": true,
-      "exists": true,
-      "scanned": true
-    },
-    "global": {
-      "path": "string | null",
-      "detected": true,
-      "exists": true,
-      "scanned": false,
-      "source": "string (optional)"
-    }
-  }
+  ]
 }
 ```
 
-`packages` are ordered using `intent.requires` when possible.
 When the same package exists both locally and globally and global scanning is enabled, `intent list` prefers the local package.
-When project `node_modules` exists, `intent list` scans it. In Yarn PnP projects without `node_modules`, `intent list` uses Yarn's PnP API.
+When project `node_modules` exists, `intent list` scans it. In Yarn PnP projects without usable `node_modules`, `intent list` uses Yarn's PnP API.
 
 ## Common errors
 

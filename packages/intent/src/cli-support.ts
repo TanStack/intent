@@ -3,6 +3,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fail } from './cli-error.js'
 import { resolveProjectContext } from './core/project-context.js'
+import type { IntentCoreOptions } from './core.js'
 import type { ScanOptions, ScanResult, StalenessReport } from './types.js'
 
 export { printWarnings } from './cli-output.js'
@@ -72,6 +73,19 @@ export function scanOptionsFromGlobalFlags(
   }
 
   return { scope: 'local' }
+}
+
+export function coreOptionsFromGlobalFlags(
+  options: GlobalScanFlags,
+): IntentCoreOptions {
+  if (options.global && options.globalOnly) {
+    fail('Use either --global or --global-only, not both.')
+  }
+
+  return {
+    global: options.global,
+    globalOnly: options.globalOnly,
+  }
 }
 
 export async function resolveStaleTargets(
