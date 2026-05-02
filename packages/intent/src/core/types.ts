@@ -34,8 +34,7 @@ export interface IntentSkillList {
   debug?: IntentSkillListDebug
 }
 
-export interface LoadedIntentSkill {
-  content: string
+export interface ResolvedIntentSkill {
   path: string
   packageRoot: string
   packageName: string
@@ -45,6 +44,10 @@ export interface LoadedIntentSkill {
   warnings: Array<string>
   conflict: VersionConflict | null
   debug?: LoadedIntentSkillDebug
+}
+
+export interface LoadedIntentSkill extends ResolvedIntentSkill {
+  content: string
 }
 
 export interface IntentSkillListDebug {

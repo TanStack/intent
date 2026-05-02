@@ -1006,6 +1006,28 @@ describe('cli commands', () => {
     expect(output).toBe('node_modules/@tanstack/query/skills/fetching/SKILL.md')
   })
 
+  it('prints a skill path without reading skill content', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-path-only-'))
+    tempDirs.push(root)
+    const pkgDir = join(root, 'node_modules', '@tanstack', 'query')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    mkdirSync(join(pkgDir, 'skills', 'fetching', 'SKILL.md'), {
+      recursive: true,
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['load', '@tanstack/query#fetching', '--path'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toBe('node_modules/@tanstack/query/skills/fetching/SKILL.md')
+  })
+
   it('prints load debug details to stderr without changing path stdout', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-debug-'))
     tempDirs.push(root)

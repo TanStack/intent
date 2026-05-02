@@ -6,7 +6,10 @@ import { resolveWorkspacePackages } from '../workspace-patterns.js'
 import { getDeps, resolveDepDir } from '../utils.js'
 import { warningMentionsPackage } from './excludes.js'
 import { readPackageJson } from './package-json.js'
-import { resolveProjectContext } from './project-context.js'
+import {
+  resolveProjectContext,
+  type ProjectContext,
+} from './project-context.js'
 import type { SkillUse } from '../skill-use.js'
 import type { IntentCoreOptions } from './types.js'
 
@@ -16,8 +19,9 @@ interface WorkspacePackageInfo {
   packageJson: Record<string, unknown>
 }
 
-function readWorkspacePackageInfos(cwd: string): Array<WorkspacePackageInfo> {
-  const context = resolveProjectContext({ cwd })
+function readWorkspacePackageInfos(
+  context: ProjectContext,
+): Array<WorkspacePackageInfo> {
   const dirs = new Set<string>()
 
   if (context.packageRoot) {
@@ -96,14 +100,22 @@ function workspacePackageDeclaresDependency(
   return getDeps(packageJson).includes(packageName)
 }
 
-function getLoadFastPathCandidateDirs(
-  packageName: string,
-): Array<string> {
+function getLoadFastPathCandidateDirs(packageName: string): Array<string> {
   const cwd = process.cwd()
   const context = resolveProjectContext({ cwd })
-  const workspacePackages = readWorkspacePackageInfos(cwd)
   const candidates: Array<string> = []
   const seen = new Set<string>()
+
+  if (!context.workspaceRoot) {
+    addCandidateDir(
+      candidates,
+      seen,
+      resolveDependencyPackageDir(packageName, context.packageRoot ?? cwd),
+    )
+    return candidates
+  }
+
+  const workspacePackages = readWorkspacePackageInfos(context)
 
   for (const pkg of workspacePackages) {
     if (pkg.name === packageName) {

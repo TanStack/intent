@@ -22,6 +22,7 @@ import type {
   IntentSkillSummary,
   LoadedIntentSkillDebug,
   LoadedIntentSkill,
+  ResolvedIntentSkill,
 } from './core/types.js'
 
 export type {
@@ -33,6 +34,7 @@ export type {
   IntentSkillSummary,
   LoadedIntentSkillDebug,
   LoadedIntentSkill,
+  ResolvedIntentSkill,
 } from './core/types.js'
 
 export class IntentCoreError extends Error {
@@ -158,11 +160,11 @@ function isPathInsidePackageRoot(path: string, packageRoot: string): boolean {
   )
 }
 
-function loadResolvedIntentSkill(
+function toResolvedIntentSkill(
   use: string,
   resolved: ResolveSkillResult,
   debug?: LoadedIntentSkillDebug,
-): LoadedIntentSkill {
+): ResolvedIntentSkill {
   const resolvedPath = resolveFromCwd(resolved.path)
 
   if (!isPathInsidePackageRoot(resolved.path, resolved.packageRoot)) {
@@ -179,15 +181,7 @@ function loadResolvedIntentSkill(
     )
   }
 
-  const content = rewriteLoadedSkillMarkdownDestinations({
-    content: readFileSync(resolvedPath, 'utf8'),
-    cwd: process.cwd(),
-    packageRoot: resolved.packageRoot,
-    skillFilePath: resolvedPath,
-  })
-
-  const result: LoadedIntentSkill = {
-    content,
+  const result: ResolvedIntentSkill = {
     path: resolved.path,
     packageRoot: resolved.packageRoot,
     packageName: resolved.packageName,
@@ -230,10 +224,10 @@ function createLoadedSkillDebug({
   }
 }
 
-export function loadIntentSkill(
+export function resolveIntentSkill(
   use: string,
   options: IntentCoreOptions = {},
-): LoadedIntentSkill {
+): ResolvedIntentSkill {
   return withCwd(options.cwd, () => {
     let parsedUse: ReturnType<typeof parseSkillUse>
     try {
@@ -258,7 +252,7 @@ export function loadIntentSkill(
     const scope = getScanScope(scanOptions)
     const fastPathResolved = resolveSkillUseFastPath(parsedUse, options)
     if (fastPathResolved) {
-      return loadResolvedIntentSkill(
+      return toResolvedIntentSkill(
         use,
         fastPathResolved,
         options.debug
@@ -283,7 +277,7 @@ export function loadIntentSkill(
       throw err
     }
 
-    return loadResolvedIntentSkill(
+    return toResolvedIntentSkill(
       use,
       resolved,
       options.debug
@@ -295,5 +289,27 @@ export function loadIntentSkill(
           })
         : undefined,
     )
+  })
+}
+
+export function loadIntentSkill(
+  use: string,
+  options: IntentCoreOptions = {},
+): LoadedIntentSkill {
+  const resolved = resolveIntentSkill(use, options)
+
+  return withCwd(options.cwd, () => {
+    const resolvedPath = resolveFromCwd(resolved.path)
+    const content = rewriteLoadedSkillMarkdownDestinations({
+      content: readFileSync(resolvedPath, 'utf8'),
+      cwd: process.cwd(),
+      packageRoot: resolved.packageRoot,
+      skillFilePath: resolvedPath,
+    })
+
+    return {
+      ...resolved,
+      content,
+    }
   })
 }

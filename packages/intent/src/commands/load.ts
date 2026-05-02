@@ -1,7 +1,12 @@
 import { fail } from '../cli-error.js'
 import { coreOptionsFromGlobalFlags, printDebugInfo } from '../cli-support.js'
-import { IntentCoreError, loadIntentSkill } from '../core.js'
+import {
+  IntentCoreError,
+  loadIntentSkill,
+  resolveIntentSkill,
+} from '../core.js'
 import type { GlobalScanFlags } from '../cli-support.js'
+import type { LoadedIntentSkill, ResolvedIntentSkill } from '../core.js'
 import type { ScanOptions, ScanResult } from '../types.js'
 
 export interface LoadCommandOptions extends GlobalScanFlags {
@@ -9,7 +14,7 @@ export interface LoadCommandOptions extends GlobalScanFlags {
   path?: boolean
 }
 
-function printLoadDebug(loaded: ReturnType<typeof loadIntentSkill>): void {
+function printLoadDebug(loaded: LoadedIntentSkill | ResolvedIntentSkill): void {
   if (!loaded.debug) return
 
   printDebugInfo('intent load', [
@@ -39,9 +44,30 @@ export async function runLoadCommand(
     fail('Use either --json or --path, not both.')
   }
 
-  let loaded: ReturnType<typeof loadIntentSkill>
+  const coreOptions = coreOptionsFromGlobalFlags(options)
+
+  if (options.path) {
+    let resolved: ResolvedIntentSkill
+    try {
+      resolved = resolveIntentSkill(use, coreOptions)
+    } catch (err) {
+      if (err instanceof IntentCoreError) {
+        fail(err.message)
+      }
+      throw err
+    }
+    printLoadDebug(resolved)
+
+    console.log(resolved.path)
+    for (const warning of resolved.warnings) {
+      console.error(`Warning: ${warning}`)
+    }
+    return
+  }
+
+  let loaded: LoadedIntentSkill
   try {
-    loaded = loadIntentSkill(use, coreOptionsFromGlobalFlags(options))
+    loaded = loadIntentSkill(use, coreOptions)
   } catch (err) {
     if (err instanceof IntentCoreError) {
       fail(err.message)
@@ -49,14 +75,6 @@ export async function runLoadCommand(
     throw err
   }
   printLoadDebug(loaded)
-
-  if (options.path) {
-    console.log(loaded.path)
-    for (const warning of loaded.warnings) {
-      console.error(`Warning: ${warning}`)
-    }
-    return
-  }
 
   if (options.json) {
     console.log(

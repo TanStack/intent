@@ -13,6 +13,7 @@ import {
   IntentCoreError,
   listIntentSkills,
   loadIntentSkill,
+  resolveIntentSkill,
 } from '../src/core.js'
 
 const realTmpdir = realpathSync(tmpdir())
@@ -217,6 +218,44 @@ describe('listIntentSkills', () => {
 })
 
 describe('loadIntentSkill', () => {
+  it('resolves skill metadata without loading content', () => {
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    const result = resolveIntentSkill('@tanstack/query#fetching', {
+      cwd: root,
+      debug: true,
+    })
+
+    expect(result).toEqual({
+      path: 'node_modules/@tanstack/query/skills/fetching/SKILL.md',
+      packageRoot: join(root, 'node_modules', '@tanstack', 'query'),
+      packageName: '@tanstack/query',
+      skillName: 'fetching',
+      version: '5.0.0',
+      source: 'local',
+      warnings: [],
+      conflict: null,
+      debug: {
+        cwd: root,
+        scope: 'local',
+        resolution: 'fast-path',
+        excludes: [],
+        packageName: '@tanstack/query',
+        skillName: 'fetching',
+        version: '5.0.0',
+        source: 'local',
+        path: 'node_modules/@tanstack/query/skills/fetching/SKILL.md',
+        warningCount: 0,
+      },
+    })
+    expect('content' in result).toBe(false)
+  })
+
   it('loads skill content with package metadata', () => {
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',
