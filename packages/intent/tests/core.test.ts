@@ -267,6 +267,40 @@ describe('loadIntentSkill', () => {
     )
   })
 
+  it('loads a package-prefixed workspace skill by short name', () => {
+    const appDir = join(root, 'packages', 'app')
+    const routerDir = join(root, 'packages', 'router-core')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-monorepo',
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(appDir, 'package.json'), {
+      name: '@test/app',
+    })
+    writeJson(join(routerDir, 'package.json'), {
+      name: '@tanstack/router-core',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'TanStack/router', docs: 'docs/' },
+    })
+    writeSkillMd({
+      dir: join(routerDir, 'skills', 'router-core', 'auth-and-guards'),
+      frontmatter: {
+        name: 'router-core/auth-and-guards',
+        description: 'Router auth and guards',
+      },
+    })
+
+    const result = loadIntentSkill('@tanstack/router-core#auth-and-guards', {
+      cwd: appDir,
+    })
+
+    expect(result.skillName).toBe('router-core/auth-and-guards')
+    expect(result.path).toBe(
+      join(routerDir, 'skills', 'router-core', 'auth-and-guards', 'SKILL.md'),
+    )
+  })
+
   it('loads a dependency declared by a workspace package without a root link', () => {
     const appDir = join(root, 'packages', 'app')
     const storeDir = join(root, '.store', '@tanstack', 'query')

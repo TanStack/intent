@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { resolveProjectContext } from './core/project-context.js'
 import {
   ResolveSkillUseError,
+  resolveSkillEntry,
   resolveSkillUse,
   type ResolveSkillResult,
 } from './resolver.js'
@@ -342,9 +343,11 @@ function resolveSkillUseFastPath(
     const pkg = scanned.package
     if (!pkg || pkg.name !== parsedUse.packageName) continue
 
-    const skill = pkg.skills.find(
-      (candidate) => candidate.name === parsedUse.skillName,
-    )
+    const skill = resolveSkillEntry(
+      pkg.name,
+      parsedUse.skillName,
+      pkg.skills,
+    ).skill
     if (!skill) continue
 
     return {

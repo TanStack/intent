@@ -111,6 +111,54 @@ describe('resolveSkillUse', () => {
     )
   })
 
+  it('resolves an unambiguous package-prefixed skill by short name', () => {
+    const pkg = intentPackage({
+      name: '@tanstack/router-core',
+      skills: [
+        skill(
+          'router-core/auth-and-guards',
+          'node_modules/@tanstack/router-core/skills/router-core/auth-and-guards/SKILL.md',
+        ),
+      ],
+    })
+
+    const result = resolveSkillUse(
+      '@tanstack/router-core#auth-and-guards',
+      scanResult([pkg]),
+    )
+
+    expect(result.skillName).toBe('router-core/auth-and-guards')
+    expect(result.path).toBe(
+      'node_modules/@tanstack/router-core/skills/router-core/auth-and-guards/SKILL.md',
+    )
+  })
+
+  it('prefers an exact skill over a short-name alias', () => {
+    const pkg = intentPackage({
+      name: '@tanstack/router-core',
+      skills: [
+        skill(
+          'auth-and-guards',
+          'node_modules/@tanstack/router-core/skills/auth-and-guards/SKILL.md',
+        ),
+        skill(
+          'router-core/auth-and-guards',
+          'node_modules/@tanstack/router-core/skills/router-core/auth-and-guards/SKILL.md',
+        ),
+      ],
+    })
+
+    const result = resolveSkillUse(
+      '@tanstack/router-core#auth-and-guards',
+      scanResult([pkg]),
+    )
+
+    expect(result.skillName).toBe('auth-and-guards')
+    expect(result.path).toBe(
+      'node_modules/@tanstack/router-core/skills/auth-and-guards/SKILL.md',
+    )
+  })
+
   it('returns pnpm-internal paths reported by the scanner', () => {
     const pnpmPath =
       'node_modules/.pnpm/@tanstack+query@5.0.0/node_modules/@tanstack/query/skills/core/SKILL.md'
@@ -259,5 +307,24 @@ describe('resolveSkillUse', () => {
         scanResult([intentPackage({ name: '@tanstack/query' })]),
       )
     }).toThrow('skill "mutations" was not found')
+  })
+
+  it('suggests canonical skill uses when a short name misses', () => {
+    const pkg = intentPackage({
+      name: '@tanstack/router-core',
+      skills: [
+        skill('router-core/auth-and-guards'),
+        skill('router-core/setup-guards'),
+      ],
+    })
+
+    expect(() => {
+      resolveSkillUse(
+        '@tanstack/router-core#guards',
+        scanResult([pkg]),
+      )
+    }).toThrow(
+      'Did you mean @tanstack/router-core#router-core/auth-and-guards or @tanstack/router-core#router-core/setup-guards?',
+    )
   })
 })

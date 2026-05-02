@@ -24,6 +24,7 @@ npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--exclude 
 - Includes global packages only when `--global` or `--global-only` is passed
 - Fails before scanning when the target package matches package.json `intent.exclude` or `--exclude`
 - Prefers local packages when `--global` is used and the same package exists locally and globally
+- Accepts an unambiguous short skill name when a package-prefixed skill exists
 - Prints raw `SKILL.md` content by default
 - Prints the scanner-reported path when `--path` is passed
 
@@ -34,6 +35,7 @@ Examples:
 ```bash
 npx @tanstack/intent@latest load @tanstack/query#fetching
 npx @tanstack/intent@latest load @tanstack/query#core/fetching
+npx @tanstack/intent@latest load @tanstack/router-core#auth-and-guards
 npx @tanstack/intent@latest load some-lib#core --path
 ```
 
@@ -61,6 +63,7 @@ npx @tanstack/intent@latest load some-lib#core --path
 - Empty skill: `Invalid skill use "@tanstack/query#": skill is required.`
 - Missing package: `Cannot resolve skill use "...": package "..." was not found.`
 - Missing skill: `Cannot resolve skill use "...": skill "..." was not found in package "...".`
+- Skill suggestion: `Did you mean @tanstack/router-core#router-core/auth-and-guards?`
 - Excluded package: `Cannot load skill use "...": package "..." is excluded by Intent configuration.`
 
 ## Related
