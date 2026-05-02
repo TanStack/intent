@@ -14,12 +14,13 @@ import {
 } from './resolver.js'
 import { formatSkillUse, parseSkillUse } from './skill-use.js'
 import { scanForIntents } from './scanner.js'
-import type { ScanOptions } from './types.js'
+import type { ScanOptions, ScanScope } from './types.js'
 import type {
   IntentCoreErrorCode,
   IntentCoreOptions,
   IntentSkillList,
   IntentSkillSummary,
+  LoadedIntentSkillDebug,
   LoadedIntentSkill,
 } from './core/types.js'
 
@@ -27,8 +28,10 @@ export type {
   IntentCoreErrorCode,
   IntentCoreOptions,
   IntentPackageSummary,
+  IntentSkillListDebug,
   IntentSkillList,
   IntentSkillSummary,
+  LoadedIntentSkillDebug,
   LoadedIntentSkill,
 } from './core/types.js'
 
@@ -61,6 +64,10 @@ function toScanOptions(options: IntentCoreOptions): ScanOptions {
   return { scope: 'local' }
 }
 
+function getScanScope(options: ScanOptions): ScanScope {
+  return options.scope ?? (options.includeGlobal ? 'local-and-global' : 'local')
+}
+
 function withCwd<T>(cwd: string | undefined, callback: () => T): T {
   if (!cwd) return callback()
 
@@ -77,7 +84,8 @@ export function listIntentSkills(
   options: IntentCoreOptions = {},
 ): IntentSkillList {
   return withCwd(options.cwd, () => {
-    const scanResult = scanForIntents(undefined, toScanOptions(options))
+    const scanOptions = toScanOptions(options)
+    const scanResult = scanForIntents(undefined, scanOptions)
     const excludePatterns = getEffectiveExcludePatterns(options)
     const excludedPackages = scanResult.packages
       .filter((pkg) => isPackageExcluded(pkg.name, excludePatterns))
@@ -100,7 +108,7 @@ export function listIntentSkills(
       }),
     )
 
-    return {
+    const result: IntentSkillList = {
       skills,
       packages: packages.map((pkg) => ({
         name: pkg.name,
@@ -118,6 +126,20 @@ export function listIntentSkills(
         (conflict) => !isPackageExcluded(conflict.packageName, excludePatterns),
       ),
     }
+
+    if (options.debug) {
+      result.debug = {
+        cwd: process.cwd(),
+        scope: getScanScope(scanOptions),
+        excludes: excludePatterns,
+        packageCount: result.packages.length,
+        skillCount: result.skills.length,
+        warningCount: result.warnings.length,
+        conflictCount: result.conflicts.length,
+      }
+    }
+
+    return result
   })
 }
 
@@ -139,6 +161,7 @@ function isPathInsidePackageRoot(path: string, packageRoot: string): boolean {
 function loadResolvedIntentSkill(
   use: string,
   resolved: ResolveSkillResult,
+  debug?: LoadedIntentSkillDebug,
 ): LoadedIntentSkill {
   const resolvedPath = resolveFromCwd(resolved.path)
 
@@ -163,7 +186,7 @@ function loadResolvedIntentSkill(
     skillFilePath: resolvedPath,
   })
 
-  return {
+  const result: LoadedIntentSkill = {
     content,
     path: resolved.path,
     packageRoot: resolved.packageRoot,
@@ -173,6 +196,37 @@ function loadResolvedIntentSkill(
     source: resolved.source,
     warnings: resolved.warnings,
     conflict: resolved.conflict,
+  }
+
+  if (debug) {
+    result.debug = debug
+  }
+
+  return result
+}
+
+function createLoadedSkillDebug({
+  excludes,
+  resolution,
+  resolved,
+  scope,
+}: {
+  excludes: Array<string>
+  resolution: LoadedIntentSkillDebug['resolution']
+  resolved: ResolveSkillResult
+  scope: ScanScope
+}): LoadedIntentSkillDebug {
+  return {
+    cwd: process.cwd(),
+    scope,
+    resolution,
+    excludes,
+    packageName: resolved.packageName,
+    skillName: resolved.skillName,
+    version: resolved.version,
+    source: resolved.source,
+    path: resolved.path,
+    warningCount: resolved.warnings.length,
   }
 }
 
@@ -191,12 +245,9 @@ export function loadIntentSkill(
       )
     }
 
-    if (
-      isPackageExcluded(
-        parsedUse.packageName,
-        getEffectiveExcludePatterns(options),
-      )
-    ) {
+    const excludePatterns = getEffectiveExcludePatterns(options)
+
+    if (isPackageExcluded(parsedUse.packageName, excludePatterns)) {
       throw new IntentCoreError(
         'package-excluded',
         `Cannot load skill use "${use}": package "${parsedUse.packageName}" is excluded by Intent configuration.`,
@@ -204,9 +255,21 @@ export function loadIntentSkill(
     }
 
     const scanOptions = toScanOptions(options)
+    const scope = getScanScope(scanOptions)
     const fastPathResolved = resolveSkillUseFastPath(parsedUse, options)
     if (fastPathResolved) {
-      return loadResolvedIntentSkill(use, fastPathResolved)
+      return loadResolvedIntentSkill(
+        use,
+        fastPathResolved,
+        options.debug
+          ? createLoadedSkillDebug({
+              excludes: excludePatterns,
+              resolution: 'fast-path',
+              resolved: fastPathResolved,
+              scope,
+            })
+          : undefined,
+      )
     }
 
     const scanResult = scanForIntents(undefined, scanOptions)
@@ -220,6 +283,17 @@ export function loadIntentSkill(
       throw err
     }
 
-    return loadResolvedIntentSkill(use, resolved)
+    return loadResolvedIntentSkill(
+      use,
+      resolved,
+      options.debug
+        ? createLoadedSkillDebug({
+            excludes: excludePatterns,
+            resolution: 'full-scan',
+            resolved,
+            scope,
+          })
+        : undefined,
+    )
   })
 }

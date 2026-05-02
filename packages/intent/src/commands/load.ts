@@ -1,5 +1,5 @@
 import { fail } from '../cli-error.js'
-import { coreOptionsFromGlobalFlags } from '../cli-support.js'
+import { coreOptionsFromGlobalFlags, printDebugInfo } from '../cli-support.js'
 import { IntentCoreError, loadIntentSkill } from '../core.js'
 import type { GlobalScanFlags } from '../cli-support.js'
 import type { ScanOptions, ScanResult } from '../types.js'
@@ -7,6 +7,23 @@ import type { ScanOptions, ScanResult } from '../types.js'
 export interface LoadCommandOptions extends GlobalScanFlags {
   json?: boolean
   path?: boolean
+}
+
+function printLoadDebug(loaded: ReturnType<typeof loadIntentSkill>): void {
+  if (!loaded.debug) return
+
+  printDebugInfo('intent load', [
+    ['cwd', loaded.debug.cwd],
+    ['scope', loaded.debug.scope],
+    ['resolution', loaded.debug.resolution],
+    ['excludes', loaded.debug.excludes],
+    ['package', loaded.debug.packageName],
+    ['version', loaded.debug.version],
+    ['source', loaded.debug.source],
+    ['skill', loaded.debug.skillName],
+    ['path', loaded.debug.path],
+    ['warnings', loaded.debug.warningCount],
+  ])
 }
 
 export async function runLoadCommand(
@@ -31,6 +48,7 @@ export async function runLoadCommand(
     }
     throw err
   }
+  printLoadDebug(loaded)
 
   if (options.path) {
     console.log(loaded.path)

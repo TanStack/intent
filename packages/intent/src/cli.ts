@@ -34,8 +34,11 @@ function createCli(): CAC {
       'list',
       'Discover intent-enabled packages from the project or workspace',
     )
-    .usage('list [--json] [--exclude <pattern>] [--global] [--global-only]')
+    .usage(
+      'list [--json] [--debug] [--exclude <pattern>] [--global] [--global-only]',
+    )
     .option('--json', 'Output JSON')
+    .option('--debug', 'Print discovery debug details to stderr')
     .option('--exclude <pattern>', 'Exclude package name glob')
     .option('--global', 'Include global packages after project packages')
     .option('--global-only', 'List global packages only')
@@ -49,10 +52,11 @@ function createCli(): CAC {
   cli
     .command('load [use]', 'Load a compact skill use and print its SKILL.md')
     .usage(
-      'load <use> [--path] [--json] [--exclude <pattern>] [--global] [--global-only]',
+      'load <use> [--path] [--json] [--debug] [--exclude <pattern>] [--global] [--global-only]',
     )
     .option('--path', 'Print the resolved skill path instead of file content')
     .option('--json', 'Output JSON')
+    .option('--debug', 'Print resolution debug details to stderr')
     .option('--exclude <pattern>', 'Exclude package name glob')
     .option('--global', 'Load from project packages, then global packages')
     .option('--global-only', 'Load from global packages only')

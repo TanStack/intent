@@ -9,6 +9,7 @@ import type { ScanOptions, ScanResult, StalenessReport } from './types.js'
 export { printWarnings } from './cli-output.js'
 
 export interface GlobalScanFlags {
+  debug?: boolean
   exclude?: string | Array<string>
   global?: boolean
   globalOnly?: boolean
@@ -84,6 +85,7 @@ export function coreOptionsFromGlobalFlags(
   }
 
   return {
+    debug: options.debug,
     exclude: Array.isArray(options.exclude)
       ? options.exclude
       : options.exclude
@@ -91,6 +93,24 @@ export function coreOptionsFromGlobalFlags(
         : undefined,
     global: options.global,
     globalOnly: options.globalOnly,
+  }
+}
+
+function formatDebugValue(value: string | number | Array<string>): string {
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.join(', ') : '(none)'
+  }
+
+  return String(value)
+}
+
+export function printDebugInfo(
+  title: string,
+  fields: Array<[label: string, value: string | number | Array<string>]>,
+): void {
+  console.error(`Debug: ${title}`)
+  for (const [label, value] of fields) {
+    console.error(`  ${label}: ${formatDebugValue(value)}`)
   }
 }
 

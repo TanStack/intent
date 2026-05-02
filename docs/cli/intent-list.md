@@ -6,12 +6,13 @@ id: intent-list
 `intent list` discovers skill-enabled packages and prints available skills.
 
 ```bash
-npx @tanstack/intent@latest list [--json] [--exclude <pattern>] [--global] [--global-only]
+npx @tanstack/intent@latest list [--json] [--debug] [--exclude <pattern>] [--global] [--global-only]
 ```
 
 ## Options
 
 - `--json`: print JSON instead of text output
+- `--debug`: print discovery debug details to stderr
 - `--exclude <pattern>`: exclude package names matching a simple glob; can be passed more than once
 - `--global`: include global packages after project packages
 - `--global-only`: list global packages only
@@ -22,6 +23,7 @@ npx @tanstack/intent@latest list [--json] [--exclude <pattern>] [--global] [--gl
 - Includes global packages only when `--global` or `--global-only` is passed
 - Includes warnings from discovery
 - Excludes packages matched by package.json `intent.exclude` or `--exclude`
+- Prints debug details to stderr when `--debug` is passed
 - If no packages are discovered, prints `No intent-enabled packages found.`
 - Summary line with package count and skill count
 - Package table columns: `PACKAGE`, `SOURCE`, `VERSION`, `SKILLS`

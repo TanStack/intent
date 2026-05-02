@@ -129,6 +129,31 @@ describe('listIntentSkills', () => {
     })
   })
 
+  it('includes debug metadata when requested', () => {
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    const result = listIntentSkills({
+      cwd: root,
+      debug: true,
+      exclude: ['@tanstack/devtools'],
+    })
+
+    expect(result.debug).toEqual({
+      cwd: root,
+      scope: 'local',
+      excludes: ['@tanstack/devtools'],
+      packageCount: 1,
+      skillCount: 1,
+      warningCount: 0,
+      conflictCount: 0,
+    })
+  })
+
   it('hides packages matched by configured exclude globs', () => {
     writeJson(join(root, 'package.json'), {
       name: 'test-app',
@@ -212,6 +237,33 @@ describe('loadIntentSkill', () => {
       source: 'local',
       warnings: [],
       conflict: null,
+    })
+  })
+
+  it('includes load debug metadata when requested', () => {
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    const result = loadIntentSkill('@tanstack/query#fetching', {
+      cwd: root,
+      debug: true,
+    })
+
+    expect(result.debug).toEqual({
+      cwd: root,
+      scope: 'local',
+      resolution: 'fast-path',
+      excludes: [],
+      packageName: '@tanstack/query',
+      skillName: 'fetching',
+      version: '5.0.0',
+      source: 'local',
+      path: 'node_modules/@tanstack/query/skills/fetching/SKILL.md',
+      warningCount: 0,
     })
   })
 

@@ -6,13 +6,14 @@ id: intent-load
 `intent load` loads a compact skill identity from the current install and prints the matching `SKILL.md` content.
 
 ```bash
-npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--exclude <pattern>] [--global] [--global-only]
+npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--exclude <pattern>] [--global] [--global-only]
 ```
 
 ## Options
 
 - `--path`: print the resolved skill path instead of the file content
 - `--json`: print structured JSON with metadata and content
+- `--debug`: print resolution debug details to stderr
 - `--exclude <pattern>`: exclude package names matching a simple glob; can be passed more than once
 - `--global`: load from project packages first, then global packages
 - `--global-only`: load from global packages only
@@ -27,6 +28,7 @@ npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--exclude 
 - Accepts an unambiguous short skill name when a package-prefixed skill exists
 - Prints raw `SKILL.md` content by default
 - Prints the scanner-reported path when `--path` is passed
+- Prints debug details to stderr when `--debug` is passed
 
 The package can be scoped or unscoped. The skill can include slash-separated sub-skill names.
 

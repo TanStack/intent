@@ -1,7 +1,8 @@
-import type { IntentPackage, VersionConflict } from '../types.js'
+import type { IntentPackage, ScanScope, VersionConflict } from '../types.js'
 
 export interface IntentCoreOptions {
   cwd?: string
+  debug?: boolean
   global?: boolean
   globalOnly?: boolean
   exclude?: Array<string>
@@ -30,6 +31,7 @@ export interface IntentSkillList {
   packages: Array<IntentPackageSummary>
   warnings: Array<string>
   conflicts: Array<VersionConflict>
+  debug?: IntentSkillListDebug
 }
 
 export interface LoadedIntentSkill {
@@ -42,6 +44,30 @@ export interface LoadedIntentSkill {
   source: IntentPackage['source']
   warnings: Array<string>
   conflict: VersionConflict | null
+  debug?: LoadedIntentSkillDebug
+}
+
+export interface IntentSkillListDebug {
+  cwd: string
+  scope: ScanScope
+  excludes: Array<string>
+  packageCount: number
+  skillCount: number
+  warningCount: number
+  conflictCount: number
+}
+
+export interface LoadedIntentSkillDebug {
+  cwd: string
+  scope: ScanScope
+  resolution: 'fast-path' | 'full-scan'
+  excludes: Array<string>
+  packageName: string
+  skillName: string
+  version: string
+  source: IntentPackage['source']
+  path: string
+  warningCount: number
 }
 
 export type IntentCoreErrorCode =

@@ -1,5 +1,6 @@
 import {
   coreOptionsFromGlobalFlags,
+  printDebugInfo,
   printWarnings,
   type GlobalScanFlags,
 } from '../cli-support.js'
@@ -13,6 +14,20 @@ import type { ScanOptions, ScanResult } from '../types.js'
 
 export interface ListCommandOptions extends GlobalScanFlags {
   json?: boolean
+}
+
+function printListDebug(result: IntentSkillList): void {
+  if (!result.debug) return
+
+  printDebugInfo('intent list', [
+    ['cwd', result.debug.cwd],
+    ['scope', result.debug.scope],
+    ['excludes', result.debug.excludes],
+    ['packages', result.debug.packageCount],
+    ['skills', result.debug.skillCount],
+    ['warnings', result.debug.warningCount],
+    ['conflicts', result.debug.conflictCount],
+  ])
 }
 
 function printVersionConflicts(result: IntentSkillList): void {
@@ -51,9 +66,11 @@ export async function runListCommand(
   _scanIntentsOrFail?: (options?: ScanOptions) => Promise<ScanResult>,
 ): Promise<void> {
   const result = listIntentSkills(coreOptionsFromGlobalFlags(options))
+  printListDebug(result)
 
   if (options.json) {
-    console.log(JSON.stringify(result, null, 2))
+    const { debug: _debug, ...jsonResult } = result
+    console.log(JSON.stringify(jsonResult, null, 2))
     return
   }
 
