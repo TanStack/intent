@@ -597,9 +597,7 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(parsed.debug).toBeUndefined()
-    expect(parsed.packages.map((pkg) => pkg.name)).toEqual([
-      '@tanstack/query',
-    ])
+    expect(parsed.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
     expect(debugOutput).toContain('Debug: intent list')
     expect(debugOutput).toContain(`cwd: ${root}`)
     expect(debugOutput).toContain('scope: local')
@@ -855,9 +853,7 @@ describe('cli commands', () => {
     }
 
     expect(exitCode).toBe(0)
-    expect(parsed.packages.map((pkg) => pkg.name)).toEqual([
-      '@tanstack/query',
-    ])
+    expect(parsed.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
     expect(parsed.skills.map((skill) => skill.use)).toEqual([
       '@tanstack/query#fetching',
     ])

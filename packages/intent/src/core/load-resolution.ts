@@ -96,9 +96,7 @@ function workspacePackageDeclaresDependency(
   return getDeps(packageJson).includes(packageName)
 }
 
-function getLoadFastPathCandidateDirs(
-  packageName: string,
-): Array<string> {
+function getLoadFastPathCandidateDirs(packageName: string): Array<string> {
   const cwd = process.cwd()
   const context = resolveProjectContext({ cwd })
   const workspacePackages = readWorkspacePackageInfos(cwd)

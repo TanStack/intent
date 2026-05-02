@@ -847,13 +847,13 @@ describe('scanForIntents', () => {
     expect(result.nodeModules.local.scanned).toBe(true)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/react-start')
-    expect(result.packages[0]!.skills.map((skill) => skill.name).sort()).toEqual(
-      [
-        'lifecycle/migrate-from-nextjs',
-        'react-start',
-        'react-start/server-components',
-      ],
-    )
+    expect(
+      result.packages[0]!.skills.map((skill) => skill.name).sort(),
+    ).toEqual([
+      'lifecycle/migrate-from-nextjs',
+      'react-start',
+      'react-start/server-components',
+    ])
     expect(result.warnings).toEqual([])
   })
 
