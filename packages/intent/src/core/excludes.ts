@@ -3,7 +3,7 @@ import { resolveProjectContext } from './project-context.js'
 import { readPackageJson } from './package-json.js'
 import type { IntentCoreOptions } from './types.js'
 
-export function normalizeExcludePatterns(value: unknown): Array<string> {
+function normalizeExcludePatterns(value: unknown): Array<string> {
   if (!Array.isArray(value)) return []
 
   return value

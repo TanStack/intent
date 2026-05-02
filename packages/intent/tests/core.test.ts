@@ -109,6 +109,7 @@ describe('listIntentSkills', () => {
         {
           use: '@tanstack/query#fetching',
           packageName: '@tanstack/query',
+          packageRoot: join(root, 'node_modules', '@tanstack', 'query'),
           packageVersion: '5.0.0',
           packageSource: 'local',
           skillName: 'fetching',
@@ -122,6 +123,7 @@ describe('listIntentSkills', () => {
           name: '@tanstack/query',
           version: '5.0.0',
           source: 'local',
+          packageRoot: join(root, 'node_modules', '@tanstack', 'query'),
           skillCount: 1,
         },
       ],
@@ -277,6 +279,32 @@ describe('loadIntentSkill', () => {
     })
   })
 
+  it('rejects a skill symlink that escapes the package root', () => {
+    const pkgDir = join(root, 'node_modules', '@tanstack', 'query')
+    const skillDir = join(pkgDir, 'skills', 'fetching')
+    const outsideDir = join(root, 'outside')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    mkdirSync(skillDir, { recursive: true })
+    writeSkillMd({
+      dir: outsideDir,
+      frontmatter: {
+        name: 'fetching',
+        description: 'Escaped skill',
+      },
+    })
+    symlinkSync(join(outsideDir, 'SKILL.md'), join(skillDir, 'SKILL.md'))
+
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow(
+      'Resolved skill path for "@tanstack/query#fetching" is outside package root: node_modules/@tanstack/query/skills/fetching/SKILL.md',
+    )
+  })
+
   it('includes load debug metadata when requested', () => {
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',
@@ -302,6 +330,23 @@ describe('loadIntentSkill', () => {
       path: 'node_modules/@tanstack/query/skills/fetching/SKILL.md',
       warningCount: 0,
     })
+  })
+
+  it('uses the full scan in Yarn PnP projects with visible node_modules', () => {
+    writeFileSync(join(root, '.pnp.cjs'), 'module.exports = {}\n')
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    const result = loadIntentSkill('@tanstack/query#fetching', {
+      cwd: root,
+      debug: true,
+    })
+
+    expect(result.debug?.resolution).toBe('full-scan')
   })
 
   it('rejects conflicting scan options before the fast path', () => {

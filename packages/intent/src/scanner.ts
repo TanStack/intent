@@ -570,13 +570,13 @@ export function scanForIntents(
     }
 
     assertLocalNodeModulesSupported(projectRoot)
-    const packageCountBeforeNodeModules = packages.length
-    scanTarget(nodeModules.local)
     walkWorkspacePackages()
+    const packageCountBeforeDependencyDiscovery = packages.length
+    scanTarget(nodeModules.local)
     walkKnownPackages()
     walkProjectDeps()
 
-    if (packages.length === packageCountBeforeNodeModules) {
+    if (packages.length === packageCountBeforeDependencyDiscovery) {
       const api = getPnpApi()
       if (api) {
         scanPnpPackages(api)

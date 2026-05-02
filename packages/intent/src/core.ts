@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
 import {
   getEffectiveExcludePatterns,
@@ -100,6 +100,7 @@ export function listIntentSkills(
         return {
           use: formatSkillUse(pkg.name, skill.name),
           packageName: pkg.name,
+          packageRoot: pkg.packageRoot,
           packageVersion: pkg.version,
           packageSource: pkg.source,
           skillName: skill.name,
@@ -116,6 +117,7 @@ export function listIntentSkills(
         name: pkg.name,
         version: pkg.version,
         source: pkg.source,
+        packageRoot: pkg.packageRoot,
         skillCount: pkg.skills.length,
       })),
       warnings: scanResult.warnings.filter(
@@ -165,16 +167,25 @@ function toResolvedIntentSkill(
   resolved: ResolveSkillResult,
   debug?: LoadedIntentSkillDebug,
 ): ResolvedIntentSkill {
-  const resolvedPath = resolveFromCwd(resolved.path)
+  let realResolvedPath: string
+  try {
+    realResolvedPath = realpathSync(resolveFromCwd(resolved.path))
+  } catch {
+    throw new IntentCoreError(
+      'skill-file-not-found',
+      `Resolved skill file was not found: ${resolved.path}`,
+    )
+  }
+  const realPackageRoot = realpathSync(resolveFromCwd(resolved.packageRoot))
 
-  if (!isPathInsidePackageRoot(resolved.path, resolved.packageRoot)) {
+  if (!isPathInsidePackageRoot(realResolvedPath, realPackageRoot)) {
     throw new IntentCoreError(
       'skill-path-outside-package',
       `Resolved skill path for "${use}" is outside package root: ${resolved.path}`,
     )
   }
 
-  if (!existsSync(resolvedPath)) {
+  if (!existsSync(realResolvedPath)) {
     throw new IntentCoreError(
       'skill-file-not-found',
       `Resolved skill file was not found: ${resolved.path}`,
@@ -299,11 +310,12 @@ export function loadIntentSkill(
   const resolved = resolveIntentSkill(use, options)
 
   return withCwd(options.cwd, () => {
-    const resolvedPath = resolveFromCwd(resolved.path)
+    const resolvedPath = realpathSync(resolveFromCwd(resolved.path))
+    const packageRoot = realpathSync(resolveFromCwd(resolved.packageRoot))
     const content = rewriteLoadedSkillMarkdownDestinations({
       content: readFileSync(resolvedPath, 'utf8'),
       cwd: process.cwd(),
-      packageRoot: resolved.packageRoot,
+      packageRoot,
       skillFilePath: resolvedPath,
     })
 

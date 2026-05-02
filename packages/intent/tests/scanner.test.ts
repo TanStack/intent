@@ -857,6 +857,111 @@ describe('scanForIntents', () => {
     expect(result.warnings).toEqual([])
   })
 
+  it('falls back to Yarn PnP when workspace discovery finds packages first', () => {
+    const reactStartDir = createDir(
+      root,
+      '.yarn',
+      '__virtual__',
+      '@tanstack-react-start-virtual',
+      '0',
+      'cache',
+      '@tanstack-react-start-npm-1.167.52.zip',
+      'node_modules',
+      '@tanstack',
+      'react-start',
+    )
+    const appDir = createDir(root, 'packages', 'app')
+    const workspaceSkillDir = createDir(
+      appDir,
+      'node_modules',
+      'workspace-skill-pkg',
+    )
+
+    writeJson(join(root, 'package.json'), {
+      name: 'tanstack-intent-pnp-monorepo',
+      version: '0.0.0',
+      private: true,
+      packageManager: 'yarn@4.12.0',
+      workspaces: ['packages/*'],
+      dependencies: {
+        '@tanstack/react-start': '1.167.52',
+      },
+    })
+    writeJson(join(appDir, 'package.json'), {
+      name: '@test/app',
+      version: '0.0.0',
+      dependencies: {
+        'workspace-skill-pkg': '1.0.0',
+      },
+    })
+    writeJson(join(workspaceSkillDir, 'package.json'), {
+      name: 'workspace-skill-pkg',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'test/workspace', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(workspaceSkillDir, 'skills', 'core'), {
+      name: 'core',
+      description: 'Workspace skill',
+    })
+    writeFileSync(join(root, '.yarnrc.yml'), 'nodeLinker: pnp\n')
+    writeJson(join(reactStartDir, 'package.json'), {
+      name: '@tanstack/react-start',
+      version: '1.167.52',
+      repository: {
+        type: 'git',
+        url: 'git+https://github.com/TanStack/router.git',
+        directory: 'packages/react-start',
+      },
+      homepage: 'https://tanstack.com/start',
+    })
+    writeSkillMd(createDir(reactStartDir, 'skills', 'react-start'), {
+      name: 'react-start',
+      description: 'React Start skill',
+    })
+
+    writeFileSync(
+      join(root, '.pnp.cjs'),
+      [
+        `const projectRoot = ${JSON.stringify(`${root}/`)}`,
+        `const reactStartRoot = ${JSON.stringify(`${reactStartDir}/`)}`,
+        "const rootLocator = { name: 'tanstack-intent-pnp-monorepo', reference: 'workspace:.' }",
+        "const reactStartLocator = { name: '@tanstack/react-start', reference: 'virtual:test#npm:1.167.52' }",
+        'module.exports = {',
+        '  getDependencyTreeRoots() { return [rootLocator] },',
+        '  findPackageLocator(location) {',
+        '    if (location.startsWith(projectRoot)) return rootLocator',
+        '    if (location.startsWith(reactStartRoot)) return reactStartLocator',
+        '    return null',
+        '  },',
+        '  getPackageInformation(locator) {',
+        "    if (locator.name === 'tanstack-intent-pnp-monorepo') {",
+        '      return {',
+        '        packageLocation: projectRoot,',
+        "        packageDependencies: new Map([['@tanstack/react-start', 'virtual:test#npm:1.167.52']]),",
+        '      }',
+        '    }',
+        "    if (locator.name === '@tanstack/react-start') {",
+        '      return {',
+        '        packageLocation: reactStartRoot,',
+        '        packageDependencies: new Map(),',
+        '      }',
+        '    }',
+        '    return null',
+        '  },',
+        '}',
+        '',
+      ].join('\n'),
+    )
+    createDir(root, 'node_modules')
+
+    const result = scanForIntents(root)
+
+    expect(result.packages.map((pkg) => pkg.name).sort()).toEqual([
+      '@tanstack/react-start',
+      'workspace-skill-pkg',
+    ])
+  })
+
   it('discovers skills using package.json workspaces', () => {
     writeJson(join(root, 'package.json'), {
       name: 'monorepo',

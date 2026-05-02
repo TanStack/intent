@@ -100,6 +100,19 @@ function workspacePackageDeclaresDependency(
   return getDeps(packageJson).includes(packageName)
 }
 
+function hasYarnPnpFile(dir: string | null): boolean {
+  return (
+    dir !== null &&
+    (existsSync(join(dir, '.pnp.cjs')) || existsSync(join(dir, '.pnp.js')))
+  )
+}
+
+function shouldSkipFastPathForYarnPnp(): boolean {
+  const cwd = process.cwd()
+  const context = resolveProjectContext({ cwd })
+  return hasYarnPnpFile(cwd) || hasYarnPnpFile(context.workspaceRoot)
+}
+
 function getLoadFastPathCandidateDirs(packageName: string): Array<string> {
   const cwd = process.cwd()
   const context = resolveProjectContext({ cwd })
@@ -160,6 +173,7 @@ export function resolveSkillUseFastPath(
   options: IntentCoreOptions,
 ): ResolveSkillResult | null {
   if (options.globalOnly) return null
+  if (shouldSkipFastPathForYarnPnp()) return null
 
   for (const packageRoot of getLoadFastPathCandidateDirs(
     parsedUse.packageName,

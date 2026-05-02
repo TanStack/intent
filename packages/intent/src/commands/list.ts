@@ -53,12 +53,7 @@ function getPackageSkills(
   pkg: IntentPackageSummary,
   result: IntentSkillList,
 ): Array<IntentSkillSummary> {
-  return result.skills.filter(
-    (skill) =>
-      skill.packageName === pkg.name &&
-      skill.packageVersion === pkg.version &&
-      skill.packageSource === pkg.source,
-  )
+  return result.skills.filter((skill) => skill.packageRoot === pkg.packageRoot)
 }
 
 export async function runListCommand(

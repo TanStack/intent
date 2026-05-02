@@ -11,6 +11,7 @@ export interface IntentCoreOptions {
 export interface IntentSkillSummary {
   use: string
   packageName: string
+  packageRoot: string
   packageVersion: string
   packageSource: IntentPackage['source']
   skillName: string
@@ -23,6 +24,7 @@ export interface IntentPackageSummary {
   name: string
   version: string
   source: IntentPackage['source']
+  packageRoot: string
   skillCount: number
 }
 
