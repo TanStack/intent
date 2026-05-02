@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { resolveProjectContext } from './core/project-context.js'
 import { ResolveSkillUseError, resolveSkillUse } from './resolver.js'
 import { formatSkillUse, parseSkillUse } from './skill-use.js'
 import { scanForIntents } from './scanner.js'
@@ -10,6 +11,7 @@ export interface IntentCoreOptions {
   cwd?: string
   global?: boolean
   globalOnly?: boolean
+  exclude?: Array<string>
 }
 
 export interface IntentSkillSummary {
@@ -54,6 +56,7 @@ export class IntentCoreError extends Error {
     | 'invalid-options'
     | 'invalid-skill-use'
     | 'package-not-found'
+    | 'package-excluded'
     | 'skill-not-found'
     | 'skill-path-outside-package'
     | 'skill-file-not-found'
@@ -63,6 +66,15 @@ export class IntentCoreError extends Error {
     this.name = 'IntentCoreError'
     this.code = code
   }
+}
+
+function normalizeExcludePatterns(value: unknown): Array<string> {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .filter((pattern): pattern is string => typeof pattern === 'string')
+    .map((pattern) => pattern.trim())
+    .filter(Boolean)
 }
 
 function toScanOptions(options: IntentCoreOptions): ScanOptions {
@@ -96,12 +108,99 @@ function withCwd<T>(cwd: string | undefined, callback: () => T): T {
   }
 }
 
+function isWithinOrEqual(path: string, parentDir: string): boolean {
+  const rel = relative(parentDir, path)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
+function readPackageJson(dir: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >
+  } catch {
+    return null
+  }
+}
+
+function readPackageExcludes(dir: string): Array<string> {
+  const pkg = readPackageJson(dir)
+  const intent = pkg?.intent
+  if (!intent || typeof intent !== 'object') return []
+
+  return normalizeExcludePatterns((intent as Record<string, unknown>).exclude)
+}
+
+function getConfigExcludePatterns(cwd: string): Array<string> {
+  const context = resolveProjectContext({ cwd })
+  const root = context.workspaceRoot ?? context.packageRoot ?? cwd
+  const dirs: Array<string> = []
+  let dir = cwd
+
+  while (isWithinOrEqual(dir, root)) {
+    dirs.push(dir)
+    if (dir === root) break
+
+    const next = dirname(dir)
+    if (next === dir) break
+    dir = next
+  }
+
+  return dirs.reverse().flatMap(readPackageExcludes)
+}
+
+function getEffectiveExcludePatterns(
+  options: IntentCoreOptions,
+): Array<string> {
+  return [
+    ...getConfigExcludePatterns(process.cwd()),
+    ...normalizeExcludePatterns(options.exclude),
+  ]
+}
+
+function globToRegExp(pattern: string): RegExp {
+  const source = pattern
+    .split('*')
+    .map((part) => part.replace(/[\\^$+?.()|[\]{}]/g, '\\$&'))
+    .join('.*')
+  return new RegExp(`^${source}$`)
+}
+
+function matchesPackageGlob(packageName: string, pattern: string): boolean {
+  return pattern.includes('*')
+    ? globToRegExp(pattern).test(packageName)
+    : packageName === pattern
+}
+
+function isPackageExcluded(
+  packageName: string,
+  patterns: Array<string>,
+): boolean {
+  return patterns.some((pattern) => matchesPackageGlob(packageName, pattern))
+}
+
+function warningMentionsPackage(warning: string, packageName: string): boolean {
+  const idx = warning.indexOf(packageName)
+  if (idx === -1) return false
+
+  const after = warning[idx + packageName.length]
+  return after === undefined || /[^a-zA-Z0-9_-]/.test(after)
+}
+
 export function listIntentSkills(
   options: IntentCoreOptions = {},
 ): IntentSkillList {
   return withCwd(options.cwd, () => {
     const scanResult = scanForIntents(undefined, toScanOptions(options))
-    const skills = scanResult.packages.flatMap((pkg) =>
+    const excludePatterns = getEffectiveExcludePatterns(options)
+    const excludedPackages = scanResult.packages
+      .filter((pkg) => isPackageExcluded(pkg.name, excludePatterns))
+      .map((pkg) => pkg.name)
+    const packages = scanResult.packages.filter(
+      (pkg) => !isPackageExcluded(pkg.name, excludePatterns),
+    )
+    const skills = packages.flatMap((pkg) =>
       pkg.skills.map((skill): IntentSkillSummary => {
         return {
           use: formatSkillUse(pkg.name, skill.name),
@@ -118,14 +217,21 @@ export function listIntentSkills(
 
     return {
       skills,
-      packages: scanResult.packages.map((pkg) => ({
+      packages: packages.map((pkg) => ({
         name: pkg.name,
         version: pkg.version,
         source: pkg.source,
         skillCount: pkg.skills.length,
       })),
-      warnings: scanResult.warnings,
-      conflicts: scanResult.conflicts,
+      warnings: scanResult.warnings.filter(
+        (warning) =>
+          !excludedPackages.some((packageName) =>
+            warningMentionsPackage(warning, packageName),
+          ),
+      ),
+      conflicts: scanResult.conflicts.filter(
+        (conflict) => !isPackageExcluded(conflict.packageName, excludePatterns),
+      ),
     }
   })
 }
@@ -460,12 +566,25 @@ export function loadIntentSkill(
   options: IntentCoreOptions = {},
 ): LoadedIntentSkill {
   return withCwd(options.cwd, () => {
+    let parsedUse: ReturnType<typeof parseSkillUse>
     try {
-      parseSkillUse(use)
+      parsedUse = parseSkillUse(use)
     } catch (err) {
       throw new IntentCoreError(
         'invalid-skill-use',
         err instanceof Error ? err.message : String(err),
+      )
+    }
+
+    if (
+      isPackageExcluded(
+        parsedUse.packageName,
+        getEffectiveExcludePatterns(options),
+      )
+    ) {
+      throw new IntentCoreError(
+        'package-excluded',
+        `Cannot load skill use "${use}": package "${parsedUse.packageName}" is excluded by Intent configuration.`,
       )
     }
 

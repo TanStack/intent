@@ -6,13 +6,14 @@ id: intent-load
 `intent load` loads a compact skill identity from the current install and prints the matching `SKILL.md` content.
 
 ```bash
-npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--global] [--global-only]
+npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--exclude <pattern>] [--global] [--global-only]
 ```
 
 ## Options
 
 - `--path`: print the resolved skill path instead of the file content
 - `--json`: print structured JSON with metadata and content
+- `--exclude <pattern>`: exclude package names matching a simple glob; can be passed more than once
 - `--global`: load from project packages first, then global packages
 - `--global-only`: load from global packages only
 
@@ -21,6 +22,7 @@ npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--global] 
 - Validates `<package>#<skill>` before scanning
 - Scans project-local packages by default
 - Includes global packages only when `--global` or `--global-only` is passed
+- Fails before scanning when the target package matches package.json `intent.exclude` or `--exclude`
 - Prefers local packages when `--global` is used and the same package exists locally and globally
 - Prints raw `SKILL.md` content by default
 - Prints the scanner-reported path when `--path` is passed
@@ -59,6 +61,7 @@ npx @tanstack/intent@latest load some-lib#core --path
 - Empty skill: `Invalid skill use "@tanstack/query#": skill is required.`
 - Missing package: `Cannot resolve skill use "...": package "..." was not found.`
 - Missing skill: `Cannot resolve skill use "...": skill "..." was not found in package "...".`
+- Excluded package: `Cannot load skill use "...": package "..." is excluded by Intent configuration.`
 
 ## Related
 

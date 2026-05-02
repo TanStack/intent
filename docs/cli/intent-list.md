@@ -6,12 +6,13 @@ id: intent-list
 `intent list` discovers skill-enabled packages and prints available skills.
 
 ```bash
-npx @tanstack/intent@latest list [--json] [--global] [--global-only]
+npx @tanstack/intent@latest list [--json] [--exclude <pattern>] [--global] [--global-only]
 ```
 
 ## Options
 
 - `--json`: print JSON instead of text output
+- `--exclude <pattern>`: exclude package names matching a simple glob; can be passed more than once
 - `--global`: include global packages after project packages
 - `--global-only`: list global packages only
 
@@ -20,6 +21,7 @@ npx @tanstack/intent@latest list [--json] [--global] [--global-only]
 - Scans project and workspace dependencies for intent-enabled packages and skills
 - Includes global packages only when `--global` or `--global-only` is passed
 - Includes warnings from discovery
+- Excludes packages matched by package.json `intent.exclude` or `--exclude`
 - If no packages are discovered, prints `No intent-enabled packages found.`
 - Summary line with package count and skill count
 - Package table columns: `PACKAGE`, `SOURCE`, `VERSION`, `SKILLS`
@@ -76,6 +78,21 @@ When both local and global packages are scanned, local packages take precedence.
 
 When the same package exists both locally and globally and global scanning is enabled, `intent list` prefers the local package.
 When project `node_modules` exists, `intent list` scans it. In Yarn PnP projects without usable `node_modules`, `intent list` uses Yarn's PnP API.
+
+## Excludes
+
+Package excludes are hard filters for packages that should not be used in a repo.
+Intent reads `intent.exclude` arrays from package.json files while walking from the workspace or project root to the current working directory, then appends any `--exclude` flags.
+
+```json
+{
+  "intent": {
+    "exclude": ["@tanstack/*devtools*"]
+  }
+}
+```
+
+Exclude patterns match full package names. In v1, only exact names and `*` wildcards are supported.
 
 ## Common errors
 

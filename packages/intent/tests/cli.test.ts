@@ -793,6 +793,45 @@ describe('cli commands', () => {
     })
   })
 
+  it('excludes packages from list output with --exclude', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-exclude-'))
+    tempDirs.push(root)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/devtools',
+      version: '1.0.0',
+      skillName: 'panel',
+      description: 'Devtools panel skill',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main([
+      'list',
+      '--json',
+      '--exclude',
+      '@tanstack/*devtools*',
+    ])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const parsed = JSON.parse(String(output)) as {
+      packages: Array<{ name: string }>
+      skills: Array<{ use: string }>
+    }
+
+    expect(exitCode).toBe(0)
+    expect(parsed.packages.map((pkg) => pkg.name)).toEqual([
+      '@tanstack/query',
+    ])
+    expect(parsed.skills.map((skill) => skill.use)).toEqual([
+      '@tanstack/query#fetching',
+    ])
+  })
+
   it('rejects --global and --global-only together on list', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-mutual-excl-list-'))
     tempDirs.push(root)
@@ -1151,6 +1190,30 @@ describe('cli commands', () => {
     expect(exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledWith(
       'Cannot resolve skill use "@tanstack/query#mutations": skill "mutations" was not found in package "@tanstack/query". Available skills: fetching.',
+    )
+  })
+
+  it('fails clearly when loading an excluded package', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-exclude-'))
+    tempDirs.push(root)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/devtools',
+      version: '1.0.0',
+      skillName: 'panel',
+      description: 'Devtools panel skill',
+    })
+    process.chdir(root)
+
+    const exitCode = await main([
+      'load',
+      '@tanstack/devtools#panel',
+      '--exclude',
+      '@tanstack/*devtools*',
+    ])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Cannot load skill use "@tanstack/devtools#panel": package "@tanstack/devtools" is excluded by Intent configuration.',
     )
   })
 

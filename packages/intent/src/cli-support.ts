@@ -9,6 +9,7 @@ import type { ScanOptions, ScanResult, StalenessReport } from './types.js'
 export { printWarnings } from './cli-output.js'
 
 export interface GlobalScanFlags {
+  exclude?: string | Array<string>
   global?: boolean
   globalOnly?: boolean
 }
@@ -83,6 +84,11 @@ export function coreOptionsFromGlobalFlags(
   }
 
   return {
+    exclude: Array.isArray(options.exclude)
+      ? options.exclude
+      : options.exclude
+        ? [options.exclude]
+        : undefined,
     global: options.global,
     globalOnly: options.globalOnly,
   }

@@ -127,6 +127,67 @@ describe('listIntentSkills', () => {
       conflicts: [],
     })
   })
+
+  it('hides packages matched by configured exclude globs', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { exclude: ['@tanstack/*devtools*'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/devtools',
+      version: '1.0.0',
+      skillName: 'panel',
+      description: 'Devtools panel skill',
+    })
+
+    const result = listIntentSkills({ cwd: root })
+
+    expect(result.packages.map((pkg) => pkg.name)).toEqual([
+      '@tanstack/query',
+    ])
+    expect(result.skills.map((skill) => skill.use)).toEqual([
+      '@tanstack/query#fetching',
+    ])
+  })
+
+  it('merges root, package, and option excludes', () => {
+    const appDir = join(root, 'packages', 'app')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-monorepo',
+      private: true,
+      intent: { exclude: ['@scope/root-only'] },
+    })
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - packages/*\n',
+    )
+    writeJson(join(appDir, 'package.json'), {
+      name: '@scope/app',
+      intent: { exclude: ['@scope/app-only'] },
+    })
+
+    for (const packageName of [
+      '@scope/root-only',
+      '@scope/app-only',
+      '@scope/option-only',
+    ]) {
+      expect(() =>
+        loadIntentSkill(`${packageName}#core`, {
+          cwd: appDir,
+          exclude: ['@scope/option-only'],
+        }),
+      ).toThrow(
+        `Cannot load skill use "${packageName}#core": package "${packageName}" is excluded by Intent configuration.`,
+      )
+    }
+  })
 })
 
 describe('loadIntentSkill', () => {
@@ -212,6 +273,30 @@ describe('loadIntentSkill', () => {
       loadIntentSkill('@tanstack/query#mutations', { cwd: root }),
     ).toThrow(
       'Cannot resolve skill use "@tanstack/query#mutations": skill "mutations" was not found in package "@tanstack/query".',
+    )
+  })
+
+  it('fails clearly when the package is excluded', () => {
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/devtools',
+      version: '1.0.0',
+      skillName: 'panel',
+      description: 'Devtools panel skill',
+    })
+
+    expect(() =>
+      loadIntentSkill('@tanstack/devtools#panel', {
+        cwd: root,
+        exclude: ['@tanstack/*devtools*'],
+      }),
+    ).toThrow(IntentCoreError)
+    expect(() =>
+      loadIntentSkill('@tanstack/devtools#panel', {
+        cwd: root,
+        exclude: ['@tanstack/*devtools*'],
+      }),
+    ).toThrow(
+      'Cannot load skill use "@tanstack/devtools#panel": package "@tanstack/devtools" is excluded by Intent configuration.',
     )
   })
 })
