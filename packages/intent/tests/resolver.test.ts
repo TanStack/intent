@@ -319,10 +319,7 @@ describe('resolveSkillUse', () => {
     })
 
     expect(() => {
-      resolveSkillUse(
-        '@tanstack/router-core#guards',
-        scanResult([pkg]),
-      )
+      resolveSkillUse('@tanstack/router-core#guards', scanResult([pkg]))
     }).toThrow(
       'Did you mean @tanstack/router-core#router-core/auth-and-guards or @tanstack/router-core#router-core/setup-guards?',
     )

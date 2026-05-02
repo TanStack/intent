@@ -176,9 +176,7 @@ describe('listIntentSkills', () => {
 
     const result = listIntentSkills({ cwd: root })
 
-    expect(result.packages.map((pkg) => pkg.name)).toEqual([
-      '@tanstack/query',
-    ])
+    expect(result.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
     expect(result.skills.map((skill) => skill.use)).toEqual([
       '@tanstack/query#fetching',
     ])
