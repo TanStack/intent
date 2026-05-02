@@ -1,10 +1,15 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { resolveProjectContext } from './core/project-context.js'
-import { ResolveSkillUseError, resolveSkillUse } from './resolver.js'
+import {
+  ResolveSkillUseError,
+  resolveSkillUse,
+  type ResolveSkillResult,
+} from './resolver.js'
 import { formatSkillUse, parseSkillUse } from './skill-use.js'
-import { scanForIntents } from './scanner.js'
-import { toPosixPath } from './utils.js'
+import { scanForIntents, scanIntentPackageAtRoot } from './scanner.js'
+import { resolveWorkspacePackages } from './workspace-patterns.js'
+import { getDeps, resolveDepDir, toPosixPath } from './utils.js'
 import type { IntentPackage, ScanOptions, VersionConflict } from './types.js'
 
 export interface IntentCoreOptions {
@@ -186,6 +191,177 @@ function warningMentionsPackage(warning: string, packageName: string): boolean {
 
   const after = warning[idx + packageName.length]
   return after === undefined || /[^a-zA-Z0-9_-]/.test(after)
+}
+
+interface WorkspacePackageInfo {
+  dir: string
+  name: string | null
+  packageJson: Record<string, unknown>
+}
+
+function readWorkspacePackageInfos(cwd: string): Array<WorkspacePackageInfo> {
+  const context = resolveProjectContext({ cwd })
+  const dirs = new Set<string>()
+
+  if (context.packageRoot) {
+    dirs.add(context.packageRoot)
+  }
+
+  if (context.workspaceRoot) {
+    dirs.add(context.workspaceRoot)
+
+    for (const dir of resolveWorkspacePackages(
+      context.workspaceRoot,
+      context.workspacePatterns,
+    )) {
+      dirs.add(dir)
+    }
+  }
+
+  return [...dirs].flatMap((dir) => {
+    const packageJson = readPackageJson(dir)
+    if (!packageJson) return []
+
+    return [
+      {
+        dir,
+        name: typeof packageJson.name === 'string' ? packageJson.name : null,
+        packageJson,
+      },
+    ]
+  })
+}
+
+function addCandidateDir(
+  candidates: Array<string>,
+  seen: Set<string>,
+  dir: string | null,
+): void {
+  if (!dir) return
+
+  const key = resolve(dir)
+  if (seen.has(key)) return
+
+  seen.add(key)
+  candidates.push(dir)
+}
+
+function findVisibleDependencyDir(
+  packageName: string,
+  fromDir: string,
+): string | null {
+  let dir = fromDir
+
+  while (true) {
+    const candidate = join(dir, 'node_modules', packageName)
+    if (existsSync(join(candidate, 'package.json'))) return candidate
+
+    const next = dirname(dir)
+    if (next === dir) return null
+    dir = next
+  }
+}
+
+function resolveDependencyPackageDir(
+  packageName: string,
+  fromDir: string,
+): string | null {
+  return (
+    findVisibleDependencyDir(packageName, fromDir) ??
+    resolveDepDir(packageName, fromDir)
+  )
+}
+
+function workspacePackageDeclaresDependency(
+  packageJson: Record<string, unknown>,
+  packageName: string,
+): boolean {
+  return getDeps(packageJson).includes(packageName)
+}
+
+function getLoadFastPathCandidateDirs(
+  packageName: string,
+): Array<string> {
+  const cwd = process.cwd()
+  const context = resolveProjectContext({ cwd })
+  const workspacePackages = readWorkspacePackageInfos(cwd)
+  const candidates: Array<string> = []
+  const seen = new Set<string>()
+
+  for (const pkg of workspacePackages) {
+    if (pkg.name === packageName) {
+      addCandidateDir(candidates, seen, pkg.dir)
+    }
+  }
+
+  addCandidateDir(
+    candidates,
+    seen,
+    resolveDependencyPackageDir(
+      packageName,
+      context.packageRoot ?? context.workspaceRoot ?? cwd,
+    ),
+  )
+
+  if (context.workspaceRoot && context.workspaceRoot !== context.packageRoot) {
+    addCandidateDir(
+      candidates,
+      seen,
+      resolveDependencyPackageDir(packageName, context.workspaceRoot),
+    )
+  }
+
+  for (const pkg of workspacePackages) {
+    if (!workspacePackageDeclaresDependency(pkg.packageJson, packageName)) {
+      continue
+    }
+
+    addCandidateDir(
+      candidates,
+      seen,
+      resolveDependencyPackageDir(packageName, pkg.dir),
+    )
+  }
+
+  return candidates
+}
+
+function resolveSkillUseFastPath(
+  parsedUse: ReturnType<typeof parseSkillUse>,
+  options: IntentCoreOptions,
+): ResolveSkillResult | null {
+  if (options.globalOnly) return null
+
+  for (const packageRoot of getLoadFastPathCandidateDirs(
+    parsedUse.packageName,
+  )) {
+    const scanned = scanIntentPackageAtRoot(packageRoot, {
+      fallbackName: parsedUse.packageName,
+      projectRoot: process.cwd(),
+    })
+    const pkg = scanned.package
+    if (!pkg || pkg.name !== parsedUse.packageName) continue
+
+    const skill = pkg.skills.find(
+      (candidate) => candidate.name === parsedUse.skillName,
+    )
+    if (!skill) continue
+
+    return {
+      packageName: pkg.name,
+      skillName: skill.name,
+      path: skill.path,
+      source: pkg.source,
+      version: pkg.version,
+      packageRoot: pkg.packageRoot,
+      warnings: scanned.warnings.filter((warning) =>
+        warningMentionsPackage(warning, pkg.name),
+      ),
+      conflict: null,
+    }
+  }
+
+  return null
 }
 
 export function listIntentSkills(
@@ -561,6 +737,46 @@ function rewriteLoadedSkillMarkdownDestinations({
   return output
 }
 
+function loadResolvedIntentSkill(
+  use: string,
+  resolved: ResolveSkillResult,
+): LoadedIntentSkill {
+  const resolvedPath = resolveFromCwd(resolved.path)
+
+  if (!isPathInsidePackageRoot(resolved.path, resolved.packageRoot)) {
+    throw new IntentCoreError(
+      'skill-path-outside-package',
+      `Resolved skill path for "${use}" is outside package root: ${resolved.path}`,
+    )
+  }
+
+  if (!existsSync(resolvedPath)) {
+    throw new IntentCoreError(
+      'skill-file-not-found',
+      `Resolved skill file was not found: ${resolved.path}`,
+    )
+  }
+
+  const content = rewriteLoadedSkillMarkdownDestinations({
+    content: readFileSync(resolvedPath, 'utf8'),
+    cwd: process.cwd(),
+    packageRoot: resolved.packageRoot,
+    skillFilePath: resolvedPath,
+  })
+
+  return {
+    content,
+    path: resolved.path,
+    packageRoot: resolved.packageRoot,
+    packageName: resolved.packageName,
+    skillName: resolved.skillName,
+    version: resolved.version,
+    source: resolved.source,
+    warnings: resolved.warnings,
+    conflict: resolved.conflict,
+  }
+}
+
 export function loadIntentSkill(
   use: string,
   options: IntentCoreOptions = {},
@@ -588,7 +804,13 @@ export function loadIntentSkill(
       )
     }
 
-    const scanResult = scanForIntents(undefined, toScanOptions(options))
+    const scanOptions = toScanOptions(options)
+    const fastPathResolved = resolveSkillUseFastPath(parsedUse, options)
+    if (fastPathResolved) {
+      return loadResolvedIntentSkill(use, fastPathResolved)
+    }
+
+    const scanResult = scanForIntents(undefined, scanOptions)
     let resolved: ReturnType<typeof resolveSkillUse>
     try {
       resolved = resolveSkillUse(use, scanResult)
@@ -598,39 +820,7 @@ export function loadIntentSkill(
       }
       throw err
     }
-    const resolvedPath = resolveFromCwd(resolved.path)
 
-    if (!isPathInsidePackageRoot(resolved.path, resolved.packageRoot)) {
-      throw new IntentCoreError(
-        'skill-path-outside-package',
-        `Resolved skill path for "${use}" is outside package root: ${resolved.path}`,
-      )
-    }
-
-    if (!existsSync(resolvedPath)) {
-      throw new IntentCoreError(
-        'skill-file-not-found',
-        `Resolved skill file was not found: ${resolved.path}`,
-      )
-    }
-
-    const content = rewriteLoadedSkillMarkdownDestinations({
-      content: readFileSync(resolvedPath, 'utf8'),
-      cwd: process.cwd(),
-      packageRoot: resolved.packageRoot,
-      skillFilePath: resolvedPath,
-    })
-
-    return {
-      content,
-      path: resolved.path,
-      packageRoot: resolved.packageRoot,
-      packageName: resolved.packageName,
-      skillName: resolved.skillName,
-      version: resolved.version,
-      source: resolved.source,
-      warnings: resolved.warnings,
-      conflict: resolved.conflict,
-    }
+    return loadResolvedIntentSkill(use, resolved)
   })
 }

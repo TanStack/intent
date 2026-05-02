@@ -628,3 +628,67 @@ export function scanForIntents(
 
   return { packageManager, packages: sorted, warnings, conflicts, nodeModules }
 }
+
+export interface ScanIntentPackageAtRootOptions {
+  fallbackName?: string
+  projectRoot?: string
+  source?: IntentPackage['source']
+}
+
+export interface ScanIntentPackageAtRootResult {
+  package: IntentPackage | null
+  warnings: Array<string>
+}
+
+export function scanIntentPackageAtRoot(
+  packageRoot: string,
+  options: ScanIntentPackageAtRootOptions = {},
+): ScanIntentPackageAtRootResult {
+  const projectRoot = options.projectRoot ?? packageRoot
+  const packages: Array<IntentPackage> = []
+  const warnings: Array<string> = []
+  const packageIndexes = new Map<string, number>()
+  const packageJsonCache = new Map<string, Record<string, unknown> | null>()
+
+  function readPkgJson(dirPath: string): Record<string, unknown> | null {
+    if (packageJsonCache.has(dirPath)) {
+      return packageJsonCache.get(dirPath) ?? null
+    }
+
+    try {
+      const pkgJson = JSON.parse(
+        readFileSync(join(dirPath, 'package.json'), 'utf8'),
+      ) as Record<string, unknown>
+      packageJsonCache.set(dirPath, pkgJson)
+      return pkgJson
+    } catch {
+      packageJsonCache.set(dirPath, null)
+      return null
+    }
+  }
+
+  const { tryRegister } = createPackageRegistrar({
+    comparePackageVersions,
+    deriveIntentConfig,
+    discoverSkills,
+    getPackageDepth,
+    packageIndexes,
+    packages,
+    projectRoot,
+    readPkgJson,
+    rememberVariant() {},
+    validateIntentField,
+    warnings,
+  })
+
+  tryRegister(
+    packageRoot,
+    options.fallbackName ?? 'unknown',
+    options.source ?? 'local',
+  )
+
+  return {
+    package: packages[0] ?? null,
+    warnings,
+  }
+}

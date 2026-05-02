@@ -3,6 +3,7 @@ import {
   mkdtempSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -212,6 +213,96 @@ describe('loadIntentSkill', () => {
       warnings: [],
       conflict: null,
     })
+  })
+
+  it('rejects conflicting scan options before the fast path', () => {
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', {
+        cwd: root,
+        global: true,
+        globalOnly: true,
+      }),
+    ).toThrow('Use either global or globalOnly, not both.')
+  })
+
+  it('loads a matching workspace package without node_modules', () => {
+    const appDir = join(root, 'packages', 'app')
+    const routerDir = join(root, 'packages', 'router-core')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-monorepo',
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(appDir, 'package.json'), {
+      name: '@test/app',
+    })
+    writeJson(join(routerDir, 'package.json'), {
+      name: '@tanstack/router-core',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'TanStack/router', docs: 'docs/' },
+    })
+    writeSkillMd({
+      dir: join(routerDir, 'skills', 'router-core', 'auth-and-guards'),
+      frontmatter: {
+        name: 'router-core/auth-and-guards',
+        description: 'Router auth and guards',
+      },
+    })
+
+    const result = loadIntentSkill(
+      '@tanstack/router-core#router-core/auth-and-guards',
+      { cwd: appDir },
+    )
+
+    expect(result.packageRoot).toBe(routerDir)
+    expect(result.path).toBe(
+      join(routerDir, 'skills', 'router-core', 'auth-and-guards', 'SKILL.md'),
+    )
+  })
+
+  it('loads a dependency declared by a workspace package without a root link', () => {
+    const appDir = join(root, 'packages', 'app')
+    const storeDir = join(root, '.store', '@tanstack', 'query')
+    const linkDir = join(appDir, 'node_modules', '@tanstack', 'query')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-monorepo',
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(appDir, 'package.json'), {
+      name: '@test/app',
+      dependencies: {
+        '@tanstack/query': '1.0.0',
+      },
+    })
+    writeJson(join(storeDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd({
+      dir: join(storeDir, 'skills', 'fetching'),
+      frontmatter: {
+        name: 'fetching',
+        description: 'Query fetching',
+      },
+    })
+    mkdirSync(dirname(linkDir), { recursive: true })
+    symlinkSync(storeDir, linkDir, 'dir')
+
+    const result = loadIntentSkill('@tanstack/query#fetching', { cwd: root })
+
+    expect(result.packageRoot).toBe(linkDir)
+    expect(result.path).toBe(
+      'packages/app/node_modules/@tanstack/query/skills/fetching/SKILL.md',
+    )
   })
 
   it('rewrites relative markdown destinations in loaded content', () => {
