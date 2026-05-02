@@ -570,10 +570,18 @@ export function scanForIntents(
     }
 
     assertLocalNodeModulesSupported(projectRoot)
+    const packageCountBeforeNodeModules = packages.length
     scanTarget(nodeModules.local)
     walkWorkspacePackages()
     walkKnownPackages()
     walkProjectDeps()
+
+    if (packages.length === packageCountBeforeNodeModules) {
+      const api = getPnpApi()
+      if (api) {
+        scanPnpPackages(api)
+      }
+    }
   }
 
   function scanGlobalPackages(): void {

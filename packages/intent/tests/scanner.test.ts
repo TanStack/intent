@@ -752,6 +752,111 @@ describe('scanForIntents', () => {
     expect(result.warnings).toEqual([])
   })
 
+  it('falls back to Yarn PnP when stale node_modules has no intent packages', () => {
+    const reactStartDir = createDir(
+      root,
+      '.yarn',
+      '__virtual__',
+      '@tanstack-react-start-virtual',
+      '0',
+      'cache',
+      '@tanstack-react-start-npm-1.167.52.zip',
+      'node_modules',
+      '@tanstack',
+      'react-start',
+    )
+
+    writeJson(join(root, 'package.json'), {
+      name: 'tanstack-intent-pnp-repro',
+      version: '0.0.0',
+      private: true,
+      packageManager: 'yarn@4.12.0',
+      dependencies: {
+        '@tanstack/react-start': '1.167.52',
+      },
+    })
+    writeFileSync(join(root, '.yarnrc.yml'), 'nodeLinker: pnp\n')
+    writeJson(join(reactStartDir, 'package.json'), {
+      name: '@tanstack/react-start',
+      version: '1.167.52',
+      repository: {
+        type: 'git',
+        url: 'git+https://github.com/TanStack/router.git',
+        directory: 'packages/react-start',
+      },
+      homepage: 'https://tanstack.com/start',
+    })
+    writeSkillMd(createDir(reactStartDir, 'skills', 'react-start'), {
+      name: 'react-start',
+      description: 'React Start skill',
+    })
+    writeSkillMd(
+      createDir(reactStartDir, 'skills', 'lifecycle', 'migrate-from-nextjs'),
+      {
+        name: 'lifecycle/migrate-from-nextjs',
+        description: 'Migration skill',
+      },
+    )
+    writeSkillMd(
+      createDir(reactStartDir, 'skills', 'react-start', 'server-components'),
+      {
+        name: 'react-start/server-components',
+        description: 'Server components skill',
+      },
+    )
+
+    writeFileSync(
+      join(root, '.pnp.cjs'),
+      [
+        `const projectRoot = ${JSON.stringify(`${root}/`)}`,
+        `const reactStartRoot = ${JSON.stringify(`${reactStartDir}/`)}`,
+        "const rootLocator = { name: 'tanstack-intent-pnp-repro', reference: 'workspace:.' }",
+        "const reactStartLocator = { name: '@tanstack/react-start', reference: 'virtual:test#npm:1.167.52' }",
+        'module.exports = {',
+        '  getDependencyTreeRoots() { return [rootLocator] },',
+        '  findPackageLocator(location) {',
+        '    if (location.startsWith(projectRoot)) return rootLocator',
+        '    if (location.startsWith(reactStartRoot)) return reactStartLocator',
+        '    return null',
+        '  },',
+        '  getPackageInformation(locator) {',
+        "    if (locator.name === 'tanstack-intent-pnp-repro') {",
+        '      return {',
+        '        packageLocation: projectRoot,',
+        "        packageDependencies: new Map([['@tanstack/react-start', 'virtual:test#npm:1.167.52']]),",
+        '      }',
+        '    }',
+        "    if (locator.name === '@tanstack/react-start') {",
+        '      return {',
+        '        packageLocation: reactStartRoot,',
+        '        packageDependencies: new Map(),',
+        '      }',
+        '    }',
+        '    return null',
+        '  },',
+        '}',
+        '',
+      ].join('\n'),
+    )
+    createDir(root, 'node_modules')
+
+    const result = scanForIntents(root)
+
+    expect(result.packageManager).toBe('yarn')
+    expect(result.nodeModules.local.exists).toBe(true)
+    expect(result.nodeModules.local.scanned).toBe(true)
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('@tanstack/react-start')
+    expect(result.packages[0]!.skills.map((skill) => skill.name).sort()).toEqual(
+      [
+        'lifecycle/migrate-from-nextjs',
+        'react-start',
+        'react-start/server-components',
+      ],
+    )
+    expect(result.warnings).toEqual([])
+  })
+
   it('discovers skills using package.json workspaces', () => {
     writeJson(join(root, 'package.json'), {
       name: 'monorepo',
