@@ -9,7 +9,7 @@ import {
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { scanForIntents } from '../src/scanner.js'
+import { scanForIntents, scanIntentPackageAtRoot } from '../src/scanner.js'
 
 // ── Helpers ──
 
@@ -1060,6 +1060,70 @@ describe('scanForIntents', () => {
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.version).toBe('5.0.0')
     expect(result.packages[0]!.packageRoot).toBe(validDir)
+  })
+})
+
+describe('scanIntentPackageAtRoot', () => {
+  it('can scan only the hinted skill path', () => {
+    const pkgDir = createDir(root, 'node_modules', '@tanstack', 'query')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: {
+        version: 1,
+        repo: 'TanStack/query',
+        docs: 'docs/',
+      },
+    })
+    writeSkillMd(createDir(pkgDir, 'skills', 'query', 'core'), {
+      name: 'query/core',
+      description: 'Core query skill',
+    })
+    writeSkillMd(createDir(pkgDir, 'skills', 'query', 'cache'), {
+      name: 'query/cache',
+      description: 'Cache query skill',
+    })
+
+    const result = scanIntentPackageAtRoot(pkgDir, {
+      fallbackName: '@tanstack/query',
+      projectRoot: root,
+      skillNameHint: 'query/cache',
+    })
+
+    expect(result.package?.skills).toEqual([
+      {
+        name: 'query/cache',
+        path: 'node_modules/@tanstack/query/skills/query/cache/SKILL.md',
+        description: 'Cache query skill',
+        type: undefined,
+        framework: undefined,
+      },
+    ])
+  })
+
+  it('falls back when the hinted path has a different canonical skill name', () => {
+    const pkgDir = createDir(root, 'node_modules', '@tanstack', 'query')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: {
+        version: 1,
+        repo: 'TanStack/query',
+        docs: 'docs/',
+      },
+    })
+    writeSkillMd(createDir(pkgDir, 'skills', 'cache'), {
+      name: 'query/cache',
+      description: 'Cache query skill',
+    })
+
+    const result = scanIntentPackageAtRoot(pkgDir, {
+      fallbackName: '@tanstack/query',
+      projectRoot: root,
+      skillNameHint: 'cache',
+    })
+
+    expect(result.package?.skills).toEqual([])
   })
 })
 

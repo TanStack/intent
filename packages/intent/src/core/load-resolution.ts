@@ -107,15 +107,16 @@ function hasYarnPnpFile(dir: string | null): boolean {
   )
 }
 
-function shouldSkipFastPathForYarnPnp(): boolean {
+function shouldSkipFastPathForYarnPnp(context: ProjectContext): boolean {
   const cwd = process.cwd()
-  const context = resolveProjectContext({ cwd })
   return hasYarnPnpFile(cwd) || hasYarnPnpFile(context.workspaceRoot)
 }
 
-function getLoadFastPathCandidateDirs(packageName: string): Array<string> {
+function getLoadFastPathCandidateDirs(
+  packageName: string,
+  context: ProjectContext,
+): Array<string> {
   const cwd = process.cwd()
-  const context = resolveProjectContext({ cwd })
   const candidates: Array<string> = []
   const seen = new Set<string>()
 
@@ -168,41 +169,64 @@ function getLoadFastPathCandidateDirs(packageName: string): Array<string> {
   return candidates
 }
 
+function resolveScannedPackageSkill(
+  scanned: ReturnType<typeof scanIntentPackageAtRoot>,
+  parsedUse: SkillUse,
+): ResolveSkillResult | null {
+  const pkg = scanned.package
+  if (!pkg || pkg.name !== parsedUse.packageName) return null
+
+  const skill = resolveSkillEntry(
+    pkg.name,
+    parsedUse.skillName,
+    pkg.skills,
+  ).skill
+  if (!skill) return null
+
+  return {
+    packageName: pkg.name,
+    skillName: skill.name,
+    path: skill.path,
+    source: pkg.source,
+    version: pkg.version,
+    packageRoot: pkg.packageRoot,
+    warnings: scanned.warnings.filter((warning) =>
+      warningMentionsPackage(warning, pkg.name),
+    ),
+    conflict: null,
+  }
+}
+
 export function resolveSkillUseFastPath(
   parsedUse: SkillUse,
   options: IntentCoreOptions,
+  context = resolveProjectContext({ cwd: process.cwd() }),
 ): ResolveSkillResult | null {
   if (options.globalOnly) return null
-  if (shouldSkipFastPathForYarnPnp()) return null
+  if (shouldSkipFastPathForYarnPnp(context)) return null
 
   for (const packageRoot of getLoadFastPathCandidateDirs(
     parsedUse.packageName,
+    context,
   )) {
     const scanned = scanIntentPackageAtRoot(packageRoot, {
       fallbackName: parsedUse.packageName,
       projectRoot: process.cwd(),
+      skillNameHint: parsedUse.skillName,
     })
-    const pkg = scanned.package
-    if (!pkg || pkg.name !== parsedUse.packageName) continue
+    const directResolved = resolveScannedPackageSkill(scanned, parsedUse)
+    if (directResolved) return directResolved
 
-    const skill = resolveSkillEntry(
-      pkg.name,
-      parsedUse.skillName,
-      pkg.skills,
-    ).skill
-    if (!skill) continue
-
-    return {
-      packageName: pkg.name,
-      skillName: skill.name,
-      path: skill.path,
-      source: pkg.source,
-      version: pkg.version,
-      packageRoot: pkg.packageRoot,
-      warnings: scanned.warnings.filter((warning) =>
-        warningMentionsPackage(warning, pkg.name),
-      ),
-      conflict: null,
+    if (scanned.package?.name === parsedUse.packageName) {
+      const fallbackScanned = scanIntentPackageAtRoot(packageRoot, {
+        fallbackName: parsedUse.packageName,
+        projectRoot: process.cwd(),
+      })
+      const fallbackResolved = resolveScannedPackageSkill(
+        fallbackScanned,
+        parsedUse,
+      )
+      if (fallbackResolved) return fallbackResolved
     }
   }
 

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
 import {
   getEffectiveExcludePatterns,
@@ -7,6 +7,7 @@ import {
 } from './core/excludes.js'
 import { rewriteLoadedSkillMarkdownDestinations } from './core/markdown.js'
 import { resolveSkillUseFastPath } from './core/load-resolution.js'
+import { resolveProjectContext } from './core/project-context.js'
 import {
   ResolveSkillUseError,
   resolveSkillUse,
@@ -151,11 +152,11 @@ function resolveFromCwd(path: string): string {
   return resolve(process.cwd(), path)
 }
 
-function isPathInsidePackageRoot(path: string, packageRoot: string): boolean {
-  const relativePath = relative(
-    resolveFromCwd(packageRoot),
-    resolveFromCwd(path),
-  )
+function isResolvedPathInsidePackageRoot(
+  path: string,
+  packageRoot: string,
+): boolean {
+  const relativePath = relative(packageRoot, path)
   return (
     relativePath === '' ||
     (!relativePath.startsWith('..') && !isAbsolute(relativePath))
@@ -169,26 +170,21 @@ function toResolvedIntentSkill(
 ): ResolvedIntentSkill {
   let realResolvedPath: string
   try {
-    realResolvedPath = realpathSync(resolveFromCwd(resolved.path))
+    realResolvedPath = realpathSync.native(resolveFromCwd(resolved.path))
   } catch {
     throw new IntentCoreError(
       'skill-file-not-found',
       `Resolved skill file was not found: ${resolved.path}`,
     )
   }
-  const realPackageRoot = realpathSync(resolveFromCwd(resolved.packageRoot))
+  const realPackageRoot = realpathSync.native(
+    resolveFromCwd(resolved.packageRoot),
+  )
 
-  if (!isPathInsidePackageRoot(realResolvedPath, realPackageRoot)) {
+  if (!isResolvedPathInsidePackageRoot(realResolvedPath, realPackageRoot)) {
     throw new IntentCoreError(
       'skill-path-outside-package',
       `Resolved skill path for "${use}" is outside package root: ${resolved.path}`,
-    )
-  }
-
-  if (!existsSync(realResolvedPath)) {
-    throw new IntentCoreError(
-      'skill-file-not-found',
-      `Resolved skill file was not found: ${resolved.path}`,
     )
   }
 
@@ -250,7 +246,8 @@ export function resolveIntentSkill(
       )
     }
 
-    const excludePatterns = getEffectiveExcludePatterns(options)
+    const projectContext = resolveProjectContext({ cwd: process.cwd() })
+    const excludePatterns = getEffectiveExcludePatterns(options, projectContext)
 
     if (isPackageExcluded(parsedUse.packageName, excludePatterns)) {
       throw new IntentCoreError(
@@ -261,7 +258,11 @@ export function resolveIntentSkill(
 
     const scanOptions = toScanOptions(options)
     const scope = getScanScope(scanOptions)
-    const fastPathResolved = resolveSkillUseFastPath(parsedUse, options)
+    const fastPathResolved = resolveSkillUseFastPath(
+      parsedUse,
+      options,
+      projectContext,
+    )
     if (fastPathResolved) {
       return toResolvedIntentSkill(
         use,

@@ -1,5 +1,8 @@
 import { dirname, isAbsolute, relative } from 'node:path'
-import { resolveProjectContext } from './project-context.js'
+import {
+  resolveProjectContext,
+  type ProjectContext,
+} from './project-context.js'
 import { readPackageJson } from './package-json.js'
 import type { IntentCoreOptions } from './types.js'
 
@@ -25,8 +28,10 @@ function readPackageExcludes(dir: string): Array<string> {
   return normalizeExcludePatterns((intent as Record<string, unknown>).exclude)
 }
 
-function getConfigExcludePatterns(cwd: string): Array<string> {
-  const context = resolveProjectContext({ cwd })
+function getConfigExcludePatterns(
+  cwd: string,
+  context = resolveProjectContext({ cwd }),
+): Array<string> {
   const root = context.workspaceRoot ?? context.packageRoot ?? cwd
   const dirs: Array<string> = []
   let dir = cwd
@@ -45,9 +50,10 @@ function getConfigExcludePatterns(cwd: string): Array<string> {
 
 export function getEffectiveExcludePatterns(
   options: IntentCoreOptions,
+  context?: ProjectContext,
 ): Array<string> {
   return [
-    ...getConfigExcludePatterns(process.cwd()),
+    ...getConfigExcludePatterns(process.cwd(), context),
     ...normalizeExcludePatterns(options.exclude),
   ]
 }

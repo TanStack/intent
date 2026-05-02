@@ -49,11 +49,28 @@ function printVersionConflicts(result: IntentSkillList): void {
   }
 }
 
+function groupSkillsByPackageRoot(
+  skills: Array<IntentSkillSummary>,
+): Map<string, Array<IntentSkillSummary>> {
+  const grouped = new Map<string, Array<IntentSkillSummary>>()
+
+  for (const skill of skills) {
+    const packageSkills = grouped.get(skill.packageRoot)
+    if (packageSkills) {
+      packageSkills.push(skill)
+    } else {
+      grouped.set(skill.packageRoot, [skill])
+    }
+  }
+
+  return grouped
+}
+
 function getPackageSkills(
   pkg: IntentPackageSummary,
-  result: IntentSkillList,
+  skillsByPackageRoot: Map<string, Array<IntentSkillSummary>>,
 ): Array<IntentSkillSummary> {
-  return result.skills.filter((skill) => skill.packageRoot === pkg.packageRoot)
+  return skillsByPackageRoot.get(pkg.packageRoot) ?? []
 }
 
 export async function runListCommand(
@@ -95,8 +112,9 @@ export async function runListCommand(
 
   printVersionConflicts(result)
 
+  const skillsByPackageRoot = groupSkillsByPackageRoot(result.skills)
   const allSkills = result.packages.map((pkg) =>
-    getPackageSkills(pkg, result).map((skill) => ({
+    getPackageSkills(pkg, skillsByPackageRoot).map((skill) => ({
       name: skill.skillName,
       description: skill.description,
       type: skill.type,
@@ -109,7 +127,7 @@ export async function runListCommand(
   for (const pkg of result.packages) {
     console.log(`  ${pkg.name}`)
     printSkillTree(
-      getPackageSkills(pkg, result).map((skill) => ({
+      getPackageSkills(pkg, skillsByPackageRoot).map((skill) => ({
         name: skill.skillName,
         description: skill.description,
         type: skill.type,

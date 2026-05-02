@@ -223,6 +223,39 @@ function deriveIntentConfig(
 // Skill discovery within a package
 // ---------------------------------------------------------------------------
 
+function readSkillEntry(
+  skillsDir: string,
+  childDir: string,
+  skillFile: string,
+): SkillEntry {
+  const fm = parseFrontmatter(skillFile)
+  const relName = toPosixPath(relative(skillsDir, childDir))
+  const desc =
+    typeof fm?.description === 'string'
+      ? fm.description.replace(/\s+/g, ' ').trim()
+      : ''
+
+  return {
+    name: typeof fm?.name === 'string' ? fm.name : relName,
+    path: skillFile,
+    description: desc,
+    type: typeof fm?.type === 'string' ? fm.type : undefined,
+    framework: typeof fm?.framework === 'string' ? fm.framework : undefined,
+  }
+}
+
+function discoverSkillByNameHint(
+  skillsDir: string,
+  skillNameHint: string,
+): Array<SkillEntry> {
+  const childDir = join(skillsDir, ...skillNameHint.split('/'))
+  const skillFile = join(childDir, 'SKILL.md')
+  if (!existsSync(skillFile)) return []
+
+  const skill = readSkillEntry(skillsDir, childDir, skillFile)
+  return skill.name === skillNameHint ? [skill] : []
+}
+
 function discoverSkills(
   skillsDir: string,
   _baseName: string,
@@ -241,20 +274,7 @@ function discoverSkills(
       const childDir = join(dir, entry.name)
       const skillFile = join(childDir, 'SKILL.md')
       if (existsSync(skillFile)) {
-        const fm = parseFrontmatter(skillFile)
-        const relName = toPosixPath(relative(skillsDir, childDir))
-        const desc =
-          typeof fm?.description === 'string'
-            ? fm.description.replace(/\s+/g, ' ').trim()
-            : ''
-        skills.push({
-          name: typeof fm?.name === 'string' ? fm.name : relName,
-          path: skillFile,
-          description: desc,
-          type: typeof fm?.type === 'string' ? fm.type : undefined,
-          framework:
-            typeof fm?.framework === 'string' ? fm.framework : undefined,
-        })
+        skills.push(readSkillEntry(skillsDir, childDir, skillFile))
       }
       // Always recurse into subdirectories so skills nested under
       // intermediate grouping directories (dirs without SKILL.md) are found.
@@ -633,6 +653,7 @@ export interface ScanIntentPackageAtRootOptions {
   fallbackName?: string
   projectRoot?: string
   source?: IntentPackage['source']
+  skillNameHint?: string
 }
 
 export interface ScanIntentPackageAtRootResult {
@@ -670,7 +691,10 @@ export function scanIntentPackageAtRoot(
   const { tryRegister } = createPackageRegistrar({
     comparePackageVersions,
     deriveIntentConfig,
-    discoverSkills,
+    discoverSkills: options.skillNameHint
+      ? (skillsDir) =>
+          discoverSkillByNameHint(skillsDir, options.skillNameHint!)
+      : discoverSkills,
     getPackageDepth,
     packageIndexes,
     packages,
