@@ -111,6 +111,13 @@ type WorkspacePatternSource = {
   getPatterns: (config: unknown) => Array<string> | null
 }
 
+export type WorkspaceInfo = {
+  root: string
+  patterns: Array<string>
+  packageDirs: Array<string>
+  packageDirsWithSkills: Array<string>
+}
+
 const workspacePatternSources: Array<WorkspacePatternSource> = [
   {
     fileName: 'pnpm-workspace.yaml',
@@ -153,7 +160,22 @@ const workspacePatternSources: Array<WorkspacePatternSource> = [
   },
 ]
 
+const workspacePatternsCache = new Map<string, Array<string> | null>()
+const workspaceRootCache = new Map<string, string | null>()
+const workspacePackageDirsCache = new Map<string, Array<string> | null>()
+const workspaceInfoCache = new Map<string, WorkspaceInfo | null>()
+
 export function readWorkspacePatterns(root: string): Array<string> | null {
+  if (workspacePatternsCache.has(root)) {
+    return workspacePatternsCache.get(root) ?? null
+  }
+
+  const patterns = readWorkspacePatternsUncached(root)
+  workspacePatternsCache.set(root, patterns)
+  return patterns
+}
+
+function readWorkspacePatternsUncached(root: string): Array<string> | null {
   for (const source of workspacePatternSources) {
     const path = join(root, source.fileName)
 
@@ -172,6 +194,49 @@ export function readWorkspacePatterns(root: string): Array<string> | null {
   }
 
   return null
+}
+
+function readWorkspacePackageDirs(root: string): Array<string> | null {
+  if (workspacePackageDirsCache.has(root)) {
+    return workspacePackageDirsCache.get(root) ?? null
+  }
+
+  const patterns = readWorkspacePatterns(root)
+  if (!patterns) {
+    workspacePackageDirsCache.set(root, null)
+    return null
+  }
+
+  const packageDirs = resolveWorkspacePackages(root, patterns)
+  workspacePackageDirsCache.set(root, packageDirs)
+  return packageDirs
+}
+
+export function getWorkspaceInfo(root: string): WorkspaceInfo | null {
+  if (workspaceInfoCache.has(root)) {
+    return workspaceInfoCache.get(root) ?? null
+  }
+
+  const patterns = readWorkspacePatterns(root)
+  if (!patterns) {
+    workspaceInfoCache.set(root, null)
+    return null
+  }
+
+  const packageDirs = readWorkspacePackageDirs(root) ?? []
+  const packageDirsWithSkills = packageDirs.filter((dir) => {
+    const skillsDir = join(dir, 'skills')
+    return existsSync(skillsDir) && findSkillFiles(skillsDir).length > 0
+  })
+  const info = {
+    root,
+    patterns,
+    packageDirs,
+    packageDirsWithSkills,
+  }
+
+  workspaceInfoCache.set(root, info)
+  return info
 }
 
 export function resolveWorkspacePackages(
@@ -258,31 +323,41 @@ function readChildDirectories(dir: string): Array<string> {
 
 export function findWorkspaceRoot(start: string): string | null {
   let dir = start
+  const visited: Array<string> = []
 
   while (true) {
+    const cached = workspaceRootCache.get(dir)
+    if (cached !== undefined) {
+      for (const visitedDir of visited) {
+        workspaceRootCache.set(visitedDir, cached)
+      }
+      return cached
+    }
+
+    visited.push(dir)
+
     if (readWorkspacePatterns(dir)) {
+      for (const visitedDir of visited) {
+        workspaceRootCache.set(visitedDir, dir)
+      }
       return dir
     }
 
     const next = dirname(dir)
-    if (next === dir) return null
+    if (next === dir) {
+      for (const visitedDir of visited) {
+        workspaceRootCache.set(visitedDir, null)
+      }
+      return null
+    }
     dir = next
   }
 }
 
 export function findPackagesWithSkills(root: string): Array<string> {
-  const patterns = readWorkspacePatterns(root)
-  if (!patterns) return []
-
-  return resolveWorkspacePackages(root, patterns).filter((dir) => {
-    const skillsDir = join(dir, 'skills')
-    return existsSync(skillsDir) && findSkillFiles(skillsDir).length > 0
-  })
+  return getWorkspaceInfo(root)?.packageDirsWithSkills ?? []
 }
 
 export function findWorkspacePackages(root: string): Array<string> {
-  const patterns = readWorkspacePatterns(root)
-  if (!patterns) return []
-
-  return resolveWorkspacePackages(root, patterns)
+  return readWorkspacePackageDirs(root) ?? []
 }
