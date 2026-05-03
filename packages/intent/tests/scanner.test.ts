@@ -333,7 +333,11 @@ describe('scanForIntents', () => {
       description: 'Declared skill',
     })
 
-    const undeclaredDir = createDir(root, 'node_modules', 'undeclared-skill-pkg')
+    const undeclaredDir = createDir(
+      root,
+      'node_modules',
+      'undeclared-skill-pkg',
+    )
     writeJson(join(undeclaredDir, 'package.json'), {
       name: 'undeclared-skill-pkg',
       version: '1.0.0',
