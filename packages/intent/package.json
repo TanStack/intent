@@ -33,9 +33,11 @@
   "dependencies": {
     "cac": "^6.7.14",
     "jsonc-parser": "^3.3.1",
+    "semver": "^7.7.4",
     "yaml": "2.8.3"
   },
   "devDependencies": {
+    "@types/semver": "^7.7.1",
     "@verdaccio/node-api": "6.0.0-6-next.76",
     "tsdown": "^0.19.0",
     "verdaccio": "^6.3.2"

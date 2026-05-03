@@ -1071,6 +1071,69 @@ describe('scanForIntents', () => {
     expect(result.packages[0]!.version).toBe('5.0.0')
     expect(result.packages[0]!.packageRoot).toBe(validDir)
   })
+
+  it('uses semver coercion when comparing messy package versions', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      dependencies: {
+        'consumer-a': '1.0.0',
+        'consumer-b': '1.0.0',
+      },
+    })
+
+    const consumerADir = createDir(root, 'node_modules', 'consumer-a')
+    const consumerBDir = createDir(root, 'node_modules', 'consumer-b')
+
+    writeJson(join(consumerADir, 'package.json'), {
+      name: 'consumer-a',
+      version: '1.0.0',
+      dependencies: { '@tanstack/query': 'release-5.0.1' },
+    })
+    writeJson(join(consumerBDir, 'package.json'), {
+      name: 'consumer-b',
+      version: '1.0.0',
+      dependencies: { '@tanstack/query': '5.0.0' },
+    })
+
+    const messyDir = createDir(
+      consumerADir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    const validDir = createDir(
+      consumerBDir,
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+
+    writeJson(join(messyDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: 'release-5.0.1',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeJson(join(validDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(messyDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Messy version query skill',
+    })
+    writeSkillMd(createDir(validDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Valid version query skill',
+    })
+
+    const result = scanForIntents(root)
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.version).toBe('release-5.0.1')
+    expect(result.packages[0]!.packageRoot).toBe(messyDir)
+  })
 })
 
 describe('scanIntentPackageAtRoot', () => {

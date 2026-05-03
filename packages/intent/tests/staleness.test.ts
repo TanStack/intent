@@ -106,9 +106,14 @@ describe('checkStaleness', () => {
     expect(report.signals).toEqual([])
   })
 
-  it('defaults library to "unknown" when no name provided', async () => {
+  it('uses package.json name when no package name is provided', async () => {
+    writeFileSync(
+      join(tmpDir, 'package.json'),
+      JSON.stringify({ name: '@example/from-package-json' }),
+    )
+
     const report = await checkStaleness(tmpDir)
-    expect(report.library).toBe('unknown')
+    expect(report.library).toBe('@example/from-package-json')
   })
 
   it('detects skills from SKILL.md files', async () => {
@@ -174,6 +179,30 @@ describe('checkStaleness', () => {
     const report = await checkStaleness(tmpDir, '@example/lib')
     expect(report.versionDrift).toBe('patch')
   })
+
+  it.each([
+    ['1.0.0', '2.0.0', 'major'],
+    ['1.0.0', '1.1.0', 'minor'],
+    ['1.0.0', '1.0.1', 'patch'],
+    ['1.0.0-beta.1', '1.0.0', 'patch'],
+    ['1.0.0+build.1', '1.0.0+build.2', null],
+    ['2.0.0', '1.0.0', null],
+  ] as const)(
+    'classifies semver drift from %s to %s as %s',
+    async (skillVersion, currentVersion, drift) => {
+      writeSkill(tmpDir, 'core', {
+        name: 'core',
+        description: 'Core',
+        library_version: skillVersion,
+      })
+
+      mockFetchVersion(currentVersion)
+
+      const report = await checkStaleness(tmpDir, '@example/lib')
+      expect(report.versionDrift).toBe(drift)
+      expect(requireFirstSkill(report).needsReview).toBe(drift !== null)
+    },
+  )
 
   it('reports no drift when versions match', async () => {
     writeSkill(tmpDir, 'core', {

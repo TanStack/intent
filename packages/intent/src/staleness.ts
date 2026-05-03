@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
+import semver from 'semver'
 import { readIntentArtifacts } from './artifact-coverage.js'
-import { findSkillFiles, parseFrontmatter } from './utils.js'
+import { findSkillFiles, parseFrontmatter, toPosixPath } from './utils.js'
 import type {
   IntentArtifactSet,
   IntentArtifactSkill,
@@ -26,19 +27,48 @@ function classifyVersionDrift(
   oldVer: string,
   newVer: string,
 ): 'major' | 'minor' | 'patch' | null {
-  if (oldVer === newVer) return null
-  const oldParts = oldVer
-    .replace(/[^0-9.]/g, '')
-    .split('.')
-    .map(Number)
-  const newParts = newVer
-    .replace(/[^0-9.]/g, '')
-    .split('.')
-    .map(Number)
-  if ((newParts[0] ?? 0) > (oldParts[0] ?? 0)) return 'major'
-  if ((newParts[1] ?? 0) > (oldParts[1] ?? 0)) return 'minor'
-  if ((newParts[2] ?? 0) > (oldParts[2] ?? 0)) return 'patch'
-  return null
+  const oldVersion = normalizeVersion(oldVer)
+  const newVersion = normalizeVersion(newVer)
+
+  if (!oldVersion || !newVersion) return null
+  if (semver.eq(oldVersion, newVersion)) return null
+  if (!semver.gt(newVersion, oldVersion)) return null
+
+  const oldParsed = semver.parse(oldVersion)
+  const newParsed = semver.parse(newVersion)
+  if (
+    oldParsed &&
+    newParsed &&
+    oldParsed.major === newParsed.major &&
+    oldParsed.minor === newParsed.minor &&
+    oldParsed.patch === newParsed.patch &&
+    oldParsed.prerelease.length > 0
+  ) {
+    return 'patch'
+  }
+
+  const drift = semver.diff(oldVersion, newVersion)
+  switch (drift) {
+    case 'major':
+    case 'premajor':
+      return 'major'
+    case 'minor':
+    case 'preminor':
+      return 'minor'
+    case 'patch':
+    case 'prepatch':
+    case 'prerelease':
+      return 'patch'
+    default:
+      return null
+  }
+}
+
+function normalizeVersion(version: string): string | null {
+  const validVersion = semver.valid(version)
+  if (validVersion) return validVersion
+
+  return semver.coerce(version)?.version ?? null
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +186,14 @@ function readPackageJson(packageDir: string): Record<string, unknown> | null {
 // ---------------------------------------------------------------------------
 
 function normalizeFilePath(path: string): string {
-  return resolve(path).split(sep).join('/')
+  return toPosixPath(resolve(path))
+}
+
+function getRelativePackageDir(
+  artifactRoot: string,
+  packageDir: string,
+): string {
+  return toPosixPath(relative(artifactRoot, packageDir))
 }
 
 function normalizeList(values: Array<string> | undefined): Array<string> {
@@ -181,7 +218,7 @@ function artifactPackageMatches(
   packageName: string,
   artifactRoot: string,
 ): boolean {
-  const relPackageDir = relative(artifactRoot, packageDir).split(sep).join('/')
+  const relPackageDir = getRelativePackageDir(artifactRoot, packageDir)
   if (!relPackageDir) return true
 
   if (artifact.packages.includes(packageName)) return true
@@ -352,7 +389,7 @@ function artifactCoversPackage(
   packageName: string,
   artifactRoot: string,
 ): boolean {
-  const relPackageDir = relative(artifactRoot, packageDir).split(sep).join('/')
+  const relPackageDir = getRelativePackageDir(artifactRoot, packageDir)
   return (
     artifact.packages.includes(packageName) ||
     artifact.packages.includes(relPackageDir) ||
@@ -368,7 +405,7 @@ function artifactIgnoresPackage(
   packageName: string,
   artifactRoot: string,
 ): boolean {
-  const relPackageDir = relative(artifactRoot, packageDir).split(sep).join('/')
+  const relPackageDir = getRelativePackageDir(artifactRoot, packageDir)
   return artifacts.ignoredPackages.some(
     (ignored) =>
       ignored.packageName === packageName ||
@@ -416,7 +453,7 @@ export function buildWorkspaceCoverageSignals({
       ],
       needsReview: true,
       packageName,
-      packageRoot: relative(artifactRoot, packageDir).split(sep).join('/'),
+      packageRoot: getRelativePackageDir(artifactRoot, packageDir),
     })
   }
 
@@ -433,16 +470,14 @@ export async function checkStaleness(
   artifactRoot = packageDir,
 ): Promise<StalenessReport> {
   const skillsDir = join(packageDir, 'skills')
-  const library = packageName ?? 'unknown'
+  const library = packageName ?? readPackageName(packageDir)
 
   // Find all skills
   const skillFiles = findSkillFiles(skillsDir)
   const skillMetas: Array<SkillMeta> = skillFiles.map((filePath) => {
     const fm = parseFrontmatter(filePath)
-    const relName = relative(skillsDir, filePath)
+    const relName = toPosixPath(relative(skillsDir, filePath))
       .replace(/[/\\]SKILL\.md$/, '')
-      .split(sep)
-      .join('/')
     return {
       name: typeof fm?.name === 'string' ? fm.name : relName,
       relName,
@@ -482,7 +517,7 @@ export async function checkStaleness(
     if (
       currentVersion &&
       skill.libraryVersion &&
-      skill.libraryVersion !== currentVersion
+      classifyVersionDrift(skill.libraryVersion, currentVersion) !== null
     ) {
       reasons.push(
         `version drift (${skill.libraryVersion} → ${currentVersion})`,
