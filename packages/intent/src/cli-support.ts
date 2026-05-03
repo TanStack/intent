@@ -149,9 +149,8 @@ export async function resolveStaleTargets(
     }
   }
 
-  const { findWorkspaceRoot, getWorkspaceInfo } = await import(
-    './workspace-patterns.js'
-  )
+  const { findWorkspaceRoot, getWorkspaceInfo } =
+    await import('./workspace-patterns.js')
   const workspaceRoot = findWorkspaceRoot(resolvedRoot)
   const workspaceInfo = workspaceRoot ? getWorkspaceInfo(workspaceRoot) : null
   if (workspaceInfo) {
