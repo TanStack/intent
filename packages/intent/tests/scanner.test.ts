@@ -6,7 +6,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { scanForIntents, scanIntentPackageAtRoot } from '../src/scanner.js'
@@ -813,8 +813,8 @@ describe('scanForIntents', () => {
     writeFileSync(
       join(root, '.pnp.cjs'),
       [
-        `const projectRoot = ${JSON.stringify(`${root}/`)}`,
-        `const reactStartRoot = ${JSON.stringify(`${reactStartDir}/`)}`,
+        `const projectRoot = ${JSON.stringify(`${root}${sep}`)}`,
+        `const reactStartRoot = ${JSON.stringify(`${reactStartDir}${sep}`)}`,
         "const rootLocator = { name: 'tanstack-intent-pnp-repro', reference: 'workspace:.' }",
         "const reactStartLocator = { name: '@tanstack/react-start', reference: 'virtual:test#npm:1.167.52' }",
         'module.exports = {',
@@ -932,8 +932,8 @@ describe('scanForIntents', () => {
     writeFileSync(
       join(root, '.pnp.cjs'),
       [
-        `const projectRoot = ${JSON.stringify(`${root}/`)}`,
-        `const reactStartRoot = ${JSON.stringify(`${reactStartDir}/`)}`,
+        `const projectRoot = ${JSON.stringify(`${root}${sep}`)}`,
+        `const reactStartRoot = ${JSON.stringify(`${reactStartDir}${sep}`)}`,
         "const rootLocator = { name: 'tanstack-intent-pnp-monorepo', reference: 'workspace:.' }",
         "const reactStartLocator = { name: '@tanstack/react-start', reference: 'virtual:test#npm:1.167.52' }",
         'module.exports = {',
@@ -1167,6 +1167,32 @@ describe('scanIntentPackageAtRoot', () => {
       fallbackName: '@tanstack/query',
       projectRoot: root,
       skillNameHint: 'cache',
+    })
+
+    expect(result.package?.skills).toEqual([])
+  })
+
+  it('does not follow hinted skill paths outside the skills directory', () => {
+    const pkgDir = createDir(root, 'node_modules', '@tanstack', 'query')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: {
+        version: 1,
+        repo: 'TanStack/query',
+        docs: 'docs/',
+      },
+    })
+    createDir(pkgDir, 'skills')
+    writeSkillMd(createDir(pkgDir, 'outside'), {
+      name: '../outside',
+      description: 'Escaped skill',
+    })
+
+    const result = scanIntentPackageAtRoot(pkgDir, {
+      fallbackName: '@tanstack/query',
+      projectRoot: root,
+      skillNameHint: '../outside',
     })
 
     expect(result.package?.skills).toEqual([])

@@ -288,6 +288,21 @@ describe('loadIntentSkill', () => {
     })
   })
 
+  it('does not change process cwd when loading from an explicit cwd', () => {
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    const cwdBeforeLoad = process.cwd()
+
+    loadIntentSkill('@tanstack/query#fetching', { cwd: root })
+
+    expect(process.cwd()).toBe(cwdBeforeLoad)
+  })
+
   it('rejects a skill symlink that escapes the package root', () => {
     const pkgDir = join(root, 'node_modules', '@tanstack', 'query')
     const skillDir = join(pkgDir, 'skills', 'fetching')
@@ -542,6 +557,42 @@ describe('loadIntentSkill', () => {
     ).toThrow(
       'Cannot resolve skill use "@tanstack/query#mutations": skill "mutations" was not found in package "@tanstack/query".',
     )
+  })
+
+  it('preserves structured suggested skills on core resolution errors', () => {
+    const pkgDir = join(root, 'node_modules', '@tanstack', 'router-core')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/router-core',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'TanStack/router', docs: 'docs/' },
+    })
+    writeSkillMd({
+      dir: join(pkgDir, 'skills', 'router-core', 'auth-and-guards'),
+      frontmatter: {
+        name: 'router-core/auth-and-guards',
+        description: 'Router auth and guards',
+      },
+    })
+    writeSkillMd({
+      dir: join(pkgDir, 'skills', 'router-core', 'setup-guards'),
+      frontmatter: {
+        name: 'router-core/setup-guards',
+        description: 'Router setup guards',
+      },
+    })
+
+    let error: unknown
+    try {
+      loadIntentSkill('@tanstack/router-core#guards', { cwd: root })
+    } catch (err) {
+      error = err
+    }
+
+    expect(error).toBeInstanceOf(IntentCoreError)
+    expect((error as IntentCoreError).suggestedSkills).toEqual([
+      'router-core/auth-and-guards',
+      'router-core/setup-guards',
+    ])
   })
 
   it('fails clearly when the package is excluded', () => {

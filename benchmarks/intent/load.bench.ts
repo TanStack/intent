@@ -128,7 +128,12 @@ function writeQueryCacheContent(packageRoot: string): void {
 function getFixture(): LoadFixture {
   if (!fixture) {
     consoleSilencer.silence()
-    fixture = createFixture()
+    try {
+      fixture = createFixture()
+    } catch (err) {
+      consoleSilencer.restore()
+      throw err
+    }
   }
 
   return fixture

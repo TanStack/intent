@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
   createDependencyWalker,
   createPackageRegistrar,
@@ -254,8 +254,10 @@ function discoverSkillByNameHint(
   const skillNameHints = getSkillNameHints(packageName, skillNameHint)
 
   for (const hint of skillNameHints) {
-    const childDir = join(skillsDir, ...hint.split('/'))
-    const skillFile = join(childDir, 'SKILL.md')
+    const resolvedHint = resolveSkillNameHintPath(skillsDir, hint)
+    if (!resolvedHint) continue
+
+    const { childDir, skillFile } = resolvedHint
     if (!existsSync(skillFile)) continue
 
     const skill = readSkillEntry(skillsDir, childDir, skillFile)
@@ -297,6 +299,37 @@ function discoverSkills(skillsDir: string): Array<SkillEntry> {
 
 function getPackageShortName(packageName: string): string {
   return packageName.split('/').pop() ?? packageName
+}
+
+function isWithinOrEqual(path: string, parentDir: string): boolean {
+  const rel = relative(parentDir, path)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
+function resolveSkillNameHintPath(
+  skillsDir: string,
+  hint: string,
+): { childDir: string; skillFile: string } | null {
+  if (hint.startsWith('/') || hint.startsWith('\\')) return null
+
+  const parts = hint.split('/')
+  if (
+    parts.some(
+      (part) =>
+        part === '' || part === '.' || part === '..' || part.includes('\\'),
+    )
+  ) {
+    return null
+  }
+
+  const resolvedSkillsDir = resolve(skillsDir)
+  const childDir = resolve(resolvedSkillsDir, ...parts)
+  if (!isWithinOrEqual(childDir, resolvedSkillsDir)) return null
+
+  return {
+    childDir,
+    skillFile: join(childDir, 'SKILL.md'),
+  }
 }
 
 function getSkillNameHints(

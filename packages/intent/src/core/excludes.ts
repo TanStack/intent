@@ -7,7 +7,7 @@ import { readPackageJson } from './package-json.js'
 import type { IntentCoreOptions } from './types.js'
 
 const MAX_EXCLUDE_PATTERN_LENGTH = 200
-const PACKAGE_NAME_BOUNDARY = /[^a-zA-Z0-9_-]/
+const PACKAGE_NAME_BOUNDARY = /[^a-zA-Z0-9_.-]/
 
 export interface ExcludeMatcher {
   pattern: string

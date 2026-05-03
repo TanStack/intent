@@ -295,6 +295,22 @@ describe('resolveSkillUse', () => {
     expect(result.warnings).toEqual([validSecondWarning])
   })
 
+  it('does not treat dots as package name boundaries in warnings', () => {
+    const warning =
+      'Found 2 installed variants of foo.bar.baz across 2 versions.'
+    const validSecondWarning =
+      'Found 2 installed variants of foo.bar across 2 versions.'
+
+    const result = resolveSkillUse(
+      'foo.bar#core',
+      scanResult([intentPackage({ name: 'foo.bar' })], {
+        warnings: [warning, validSecondWarning],
+      }),
+    )
+
+    expect(result.warnings).toEqual([validSecondWarning])
+  })
+
   it('fails clearly when the package is missing', () => {
     expect(() => {
       resolveSkillUse(

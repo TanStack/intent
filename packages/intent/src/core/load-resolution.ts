@@ -107,16 +107,18 @@ function hasYarnPnpFile(dir: string | null): boolean {
   )
 }
 
-function shouldSkipFastPathForYarnPnp(context: ProjectContext): boolean {
-  const cwd = process.cwd()
+function shouldSkipFastPathForYarnPnp(
+  context: ProjectContext,
+  cwd: string,
+): boolean {
   return hasYarnPnpFile(cwd) || hasYarnPnpFile(context.workspaceRoot)
 }
 
-function getLoadFastPathCandidateDirs(
+function getDirectLoadFastPathCandidateDirs(
   packageName: string,
   context: ProjectContext,
+  cwd: string,
 ): Array<string> {
-  const cwd = process.cwd()
   const candidates: Array<string> = []
   const seen = new Set<string>()
 
@@ -127,14 +129,6 @@ function getLoadFastPathCandidateDirs(
       resolveDependencyPackageDir(packageName, context.packageRoot ?? cwd),
     )
     return candidates
-  }
-
-  const workspacePackages = readWorkspacePackageInfos(context)
-
-  for (const pkg of workspacePackages) {
-    if (pkg.name === packageName) {
-      addCandidateDir(candidates, seen, pkg.dir)
-    }
   }
 
   addCandidateDir(
@@ -152,6 +146,23 @@ function getLoadFastPathCandidateDirs(
       seen,
       resolveDependencyPackageDir(packageName, context.workspaceRoot),
     )
+  }
+
+  return candidates
+}
+
+function getWorkspaceLoadFastPathCandidateDirs(
+  packageName: string,
+  context: ProjectContext,
+): Array<string> {
+  const candidates: Array<string> = []
+  const seen = new Set<string>()
+  const workspacePackages = readWorkspacePackageInfos(context)
+
+  for (const pkg of workspacePackages) {
+    if (pkg.name === packageName) {
+      addCandidateDir(candidates, seen, pkg.dir)
+    }
   }
 
   for (const pkg of workspacePackages) {
@@ -197,21 +208,15 @@ function resolveScannedPackageSkill(
   }
 }
 
-export function resolveSkillUseFastPath(
+function resolveFromPackageRoots(
+  packageRoots: Array<string>,
   parsedUse: SkillUse,
-  options: IntentCoreOptions,
-  context = resolveProjectContext({ cwd: process.cwd() }),
+  cwd: string,
 ): ResolveSkillResult | null {
-  if (options.globalOnly) return null
-  if (shouldSkipFastPathForYarnPnp(context)) return null
-
-  for (const packageRoot of getLoadFastPathCandidateDirs(
-    parsedUse.packageName,
-    context,
-  )) {
+  for (const packageRoot of packageRoots) {
     const scanned = scanIntentPackageAtRoot(packageRoot, {
       fallbackName: parsedUse.packageName,
-      projectRoot: process.cwd(),
+      projectRoot: cwd,
       skillNameHint: parsedUse.skillName,
     })
     const directResolved = resolveScannedPackageSkill(scanned, parsedUse)
@@ -220,7 +225,7 @@ export function resolveSkillUseFastPath(
     if (scanned.package?.name === parsedUse.packageName) {
       const fallbackScanned = scanIntentPackageAtRoot(packageRoot, {
         fallbackName: parsedUse.packageName,
-        projectRoot: process.cwd(),
+        projectRoot: cwd,
       })
       const fallbackResolved = resolveScannedPackageSkill(
         fallbackScanned,
@@ -231,4 +236,31 @@ export function resolveSkillUseFastPath(
   }
 
   return null
+}
+
+export function resolveSkillUseFastPath(
+  parsedUse: SkillUse,
+  options: IntentCoreOptions,
+  context = resolveProjectContext({ cwd: process.cwd() }),
+  cwd = context.cwd,
+): ResolveSkillResult | null {
+  if (options.globalOnly) return null
+  if (shouldSkipFastPathForYarnPnp(context, cwd)) return null
+
+  const directResolved = resolveFromPackageRoots(
+    getDirectLoadFastPathCandidateDirs(parsedUse.packageName, context, cwd),
+    parsedUse,
+    cwd,
+  )
+  if (directResolved) return directResolved
+
+  if (!context.workspaceRoot) {
+    return null
+  }
+
+  return resolveFromPackageRoots(
+    getWorkspaceLoadFastPathCandidateDirs(parsedUse.packageName, context),
+    parsedUse,
+    cwd,
+  )
 }
