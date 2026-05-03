@@ -154,6 +154,10 @@ describe('listIntentSkills', () => {
       skillCount: 1,
       warningCount: 0,
       conflictCount: 0,
+      scan: expect.objectContaining({
+        packageJsonReadCount: expect.any(Number),
+        packageJsonCacheHits: expect.any(Number),
+      }),
     })
   })
 
@@ -260,6 +264,10 @@ describe('loadIntentSkill', () => {
         source: 'local',
         path: 'node_modules/@tanstack/query/skills/fetching/SKILL.md',
         warningCount: 0,
+        scan: expect.objectContaining({
+          packageJsonReadCount: expect.any(Number),
+          packageJsonCacheHits: expect.any(Number),
+        }),
       },
     })
     expect('content' in result).toBe(false)
@@ -353,6 +361,10 @@ describe('loadIntentSkill', () => {
       source: 'local',
       path: 'node_modules/@tanstack/query/skills/fetching/SKILL.md',
       warningCount: 0,
+      scan: expect.objectContaining({
+        packageJsonReadCount: expect.any(Number),
+        packageJsonCacheHits: expect.any(Number),
+      }),
     })
   })
 

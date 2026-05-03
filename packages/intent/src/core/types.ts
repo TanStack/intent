@@ -1,4 +1,9 @@
-import type { IntentPackage, ScanScope, VersionConflict } from '../types.js'
+import type {
+  IntentPackage,
+  ScanScope,
+  ScanStats,
+  VersionConflict,
+} from '../types.js'
 
 export interface IntentCoreOptions {
   cwd?: string
@@ -60,6 +65,7 @@ export interface IntentSkillListDebug {
   skillCount: number
   warningCount: number
   conflictCount: number
+  scan: IntentScanDebugStats
 }
 
 export interface LoadedIntentSkillDebug {
@@ -73,7 +79,10 @@ export interface LoadedIntentSkillDebug {
   source: IntentPackage['source']
   path: string
   warningCount: number
+  scan: IntentScanDebugStats
 }
+
+export interface IntentScanDebugStats extends ScanStats {}
 
 export type IntentCoreErrorCode =
   | 'invalid-options'

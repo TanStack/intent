@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import semver from 'semver'
@@ -11,6 +11,7 @@ import {
   parseFrontmatter,
   toPosixPath,
 } from './utils.js'
+import { createIntentFsCache, type IntentFsCache } from './fs-cache.js'
 import { findWorkspaceRoot } from './workspace-patterns.js'
 import type {
   InstalledVariant,
@@ -28,6 +29,9 @@ import type {
 // ---------------------------------------------------------------------------
 
 type PackageManager = ScanResult['packageManager']
+type ScanOptionsWithFsCache = ScanOptions & {
+  fsCache?: IntentFsCache
+}
 
 interface PnpPackageLocator {
   name: string | null
@@ -271,31 +275,17 @@ function discoverSkillByNameHint(
   return skills
 }
 
-function discoverSkills(skillsDir: string): Array<SkillEntry> {
-  const skills: Array<SkillEntry> = []
-
-  function walk(dir: string): void {
-    let entries: Array<Dirent<string>>
-    try {
-      entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
-    } catch {
-      return
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue
-      const childDir = join(dir, entry.name)
-      const skillFile = join(childDir, 'SKILL.md')
-      if (existsSync(skillFile)) {
-        skills.push(readSkillEntry(skillsDir, childDir, skillFile))
-      }
-      // Always recurse into subdirectories so skills nested under
-      // intermediate grouping directories (dirs without SKILL.md) are found.
-      walk(childDir)
-    }
-  }
-
-  walk(skillsDir)
-  return skills
+function discoverSkills(
+  skillsDir: string,
+  fsCache: IntentFsCache,
+): Array<SkillEntry> {
+  return fsCache
+    .findSkillFiles(skillsDir)
+    .flatMap((skillFile): Array<SkillEntry> => {
+      const childDir = dirname(skillFile)
+      if (childDir === skillsDir) return []
+      return [readSkillEntry(skillsDir, childDir, skillFile)]
+    })
 }
 
 function getPackageShortName(packageName: string): string {
@@ -442,6 +432,8 @@ export function scanForIntents(
 ): ScanResult {
   const projectRoot = root ?? process.cwd()
   const scanScope = getScanScope(options)
+  const fsCache =
+    (options as ScanOptionsWithFsCache).fsCache ?? createIntentFsCache()
   const packageManager = detectPackageManager(projectRoot)
   const nodeModulesDir = join(projectRoot, 'node_modules')
   const explicitGlobalNodeModules =
@@ -471,7 +463,6 @@ export function scanForIntents(
   }
   // Track registered package names to avoid duplicates across phases
   const packageIndexes = new Map<string, number>()
-  const packageJsonCache = new Map<string, Record<string, unknown> | null>()
   const packageVariants = new Map<
     string,
     Map<string, { version: string; packageRoot: string }>
@@ -484,6 +475,10 @@ export function scanForIntents(
       pnpApi = loadPnpApi(projectRoot)
     }
     return pnpApi
+  }
+
+  function getStats(): ScanResult['stats'] {
+    return fsCache.getStats()
   }
 
   function rememberVariant(pkg: IntentPackage): void {
@@ -511,26 +506,13 @@ export function scanForIntents(
   }
 
   function readPkgJson(dirPath: string): Record<string, unknown> | null {
-    if (packageJsonCache.has(dirPath)) {
-      return packageJsonCache.get(dirPath) ?? null
-    }
-
-    try {
-      const pkgJson = JSON.parse(
-        readFileSync(join(dirPath, 'package.json'), 'utf8'),
-      ) as Record<string, unknown>
-      packageJsonCache.set(dirPath, pkgJson)
-      return pkgJson
-    } catch {
-      packageJsonCache.set(dirPath, null)
-      return null
-    }
+    return fsCache.readPackageJson(dirPath)
   }
 
   const { scanTarget, tryRegister } = createPackageRegistrar({
     comparePackageVersions,
     deriveIntentConfig,
-    discoverSkills,
+    discoverSkills: (skillsDir) => discoverSkills(skillsDir, fsCache),
     getPackageDepth,
     packageIndexes,
     packages,
@@ -543,6 +525,7 @@ export function scanForIntents(
 
   const { walkKnownPackages, walkProjectDeps, walkWorkspacePackages } =
     createDependencyWalker({
+      fsCache,
       packages,
       projectRoot,
       readPkgJson,
@@ -632,7 +615,14 @@ export function scanForIntents(
   }
 
   if (!nodeModules.local.exists && !nodeModules.global.exists) {
-    return { packageManager, packages, warnings, conflicts, nodeModules }
+    return {
+      packageManager,
+      packages,
+      warnings,
+      conflicts,
+      nodeModules,
+      stats: getStats(),
+    }
   }
 
   for (const pkg of packages) {
@@ -653,11 +643,19 @@ export function scanForIntents(
   // Sort by dependency order
   const sorted = topoSort(packages)
 
-  return { packageManager, packages: sorted, warnings, conflicts, nodeModules }
+  return {
+    packageManager,
+    packages: sorted,
+    warnings,
+    conflicts,
+    nodeModules,
+    stats: getStats(),
+  }
 }
 
 export interface ScanIntentPackageAtRootOptions {
   fallbackName?: string
+  fsCache?: IntentFsCache
   projectRoot?: string
   source?: IntentPackage['source']
   skillNameHint?: string
@@ -676,23 +674,10 @@ export function scanIntentPackageAtRoot(
   const packages: Array<IntentPackage> = []
   const warnings: Array<string> = []
   const packageIndexes = new Map<string, number>()
-  const packageJsonCache = new Map<string, Record<string, unknown> | null>()
+  const fsCache = options.fsCache ?? createIntentFsCache()
 
   function readPkgJson(dirPath: string): Record<string, unknown> | null {
-    if (packageJsonCache.has(dirPath)) {
-      return packageJsonCache.get(dirPath) ?? null
-    }
-
-    try {
-      const pkgJson = JSON.parse(
-        readFileSync(join(dirPath, 'package.json'), 'utf8'),
-      ) as Record<string, unknown>
-      packageJsonCache.set(dirPath, pkgJson)
-      return pkgJson
-    } catch {
-      packageJsonCache.set(dirPath, null)
-      return null
-    }
+    return fsCache.readPackageJson(dirPath)
   }
 
   const { tryRegister } = createPackageRegistrar({
@@ -705,7 +690,7 @@ export function scanIntentPackageAtRoot(
             packageName,
             options.skillNameHint!,
           )
-      : discoverSkills,
+      : (skillsDir) => discoverSkills(skillsDir, fsCache),
     getPackageDepth,
     packageIndexes,
     packages,

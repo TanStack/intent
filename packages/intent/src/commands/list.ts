@@ -27,6 +27,8 @@ function printListDebug(result: IntentSkillList): void {
     ['skills', result.debug.skillCount],
     ['warnings', result.debug.warningCount],
     ['conflicts', result.debug.conflictCount],
+    ['packageJsonReadCount', result.debug.scan.packageJsonReadCount],
+    ['packageJsonCacheHits', result.debug.scan.packageJsonCacheHits],
   ])
 }
 

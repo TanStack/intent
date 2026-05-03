@@ -28,6 +28,8 @@ function printLoadDebug(loaded: LoadedIntentSkill | ResolvedIntentSkill): void {
     ['skill', loaded.debug.skillName],
     ['path', loaded.debug.path],
     ['warnings', loaded.debug.warningCount],
+    ['packageJsonReadCount', loaded.debug.scan.packageJsonReadCount],
+    ['packageJsonCacheHits', loaded.debug.scan.packageJsonCacheHits],
   ])
 }
 

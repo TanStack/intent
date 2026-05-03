@@ -22,6 +22,7 @@ export interface ScanResult {
     local: NodeModulesScanTarget
     global: NodeModulesScanTarget
   }
+  stats?: ScanStats
 }
 
 export type ScanScope = 'local' | 'local-and-global' | 'global'
@@ -29,6 +30,11 @@ export type ScanScope = 'local' | 'local-and-global' | 'global'
 export interface ScanOptions {
   includeGlobal?: boolean
   scope?: ScanScope
+}
+
+export interface ScanStats {
+  packageJsonReadCount: number
+  packageJsonCacheHits: number
 }
 
 export interface NodeModulesScanTarget {

@@ -6,6 +6,7 @@ import {
   isPackageExcluded,
   warningMentionsPackage,
 } from './core/excludes.js'
+import { createIntentFsCache, type IntentFsCache } from './fs-cache.js'
 import { rewriteLoadedSkillMarkdownDestinations } from './core/markdown.js'
 import { resolveSkillUseFastPath } from './core/load-resolution.js'
 import { resolveProjectContext } from './core/project-context.js'
@@ -80,6 +81,13 @@ function getScanScope(options: ScanOptions): ScanScope {
   return options.scope ?? (options.includeGlobal ? 'local-and-global' : 'local')
 }
 
+function withFsCache(
+  options: ScanOptions,
+  fsCache: IntentFsCache,
+): ScanOptions & { fsCache: IntentFsCache } {
+  return { ...options, fsCache }
+}
+
 function resolveCoreCwd(options: IntentCoreOptions): string {
   return resolve(process.cwd(), options.cwd ?? process.cwd())
 }
@@ -89,8 +97,9 @@ export function listIntentSkills(
 ): IntentSkillList {
   const cwd = resolveCoreCwd(options)
   const scanOptions = toScanOptions(options)
+  const fsCache = createIntentFsCache()
   const projectContext = resolveProjectContext({ cwd })
-  const scanResult = scanForIntents(cwd, scanOptions)
+  const scanResult = scanForIntents(cwd, withFsCache(scanOptions, fsCache))
   const excludePatterns = getEffectiveExcludePatterns(options, projectContext)
   const excludeMatchers = compileExcludePatterns(excludePatterns)
   const excludedPackages = scanResult.packages
@@ -144,6 +153,7 @@ export function listIntentSkills(
       skillCount: result.skills.length,
       warningCount: result.warnings.length,
       conflictCount: result.conflicts.length,
+      scan: scanResult.stats ?? fsCache.getStats(),
     }
   }
 
@@ -220,12 +230,14 @@ function toResolvedIntentSkill(
 function createLoadedSkillDebug({
   cwd,
   excludes,
+  scan,
   resolution,
   resolved,
   scope,
 }: {
   cwd: string
   excludes: Array<string>
+  scan: LoadedIntentSkillDebug['scan']
   resolution: LoadedIntentSkillDebug['resolution']
   resolved: ResolveSkillResult
   scope: ScanScope
@@ -241,6 +253,7 @@ function createLoadedSkillDebug({
     source: resolved.source,
     path: resolved.path,
     warningCount: resolved.warnings.length,
+    scan,
   }
 }
 
@@ -263,6 +276,7 @@ function resolveIntentSkillInCwd(
     )
   }
 
+  const fsCache = createIntentFsCache()
   const projectContext = resolveProjectContext({ cwd })
   const excludePatterns = getEffectiveExcludePatterns(options, projectContext)
   const excludeMatchers = compileExcludePatterns(excludePatterns)
@@ -281,6 +295,7 @@ function resolveIntentSkillInCwd(
     options,
     projectContext,
     cwd,
+    fsCache,
   )
   if (fastPathResolved) {
     return toResolvedIntentSkill(
@@ -293,13 +308,14 @@ function resolveIntentSkillInCwd(
             excludes: excludePatterns,
             resolution: 'fast-path',
             resolved: fastPathResolved,
+            scan: fsCache.getStats(),
             scope,
           })
         : undefined,
     )
   }
 
-  const scanResult = scanForIntents(cwd, scanOptions)
+  const scanResult = scanForIntents(cwd, withFsCache(scanOptions, fsCache))
   let resolved: ReturnType<typeof resolveSkillUse>
   try {
     resolved = resolveSkillUse(use, scanResult)
@@ -322,6 +338,7 @@ function resolveIntentSkillInCwd(
           excludes: excludePatterns,
           resolution: 'full-scan',
           resolved,
+          scan: scanResult.stats ?? fsCache.getStats(),
           scope,
         })
       : undefined,

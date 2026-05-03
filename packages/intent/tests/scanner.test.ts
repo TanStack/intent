@@ -119,6 +119,33 @@ describe('scanForIntents', () => {
     expect(result.packages[0]!.skills[0]!.description).toBe(
       'Core database concepts',
     )
+    expect(result.stats).toEqual(
+      expect.objectContaining({
+        packageJsonReadCount: expect.any(Number),
+        packageJsonCacheHits: expect.any(Number),
+      }),
+    )
+    expect(result.stats!.packageJsonReadCount).toBeGreaterThan(0)
+  })
+
+  it('does not throw when skills exists but is not a directory', () => {
+    const pkgDir = createDir(root, 'node_modules', '@tanstack', 'db')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/db',
+      version: '0.5.2',
+      intent: {
+        version: 1,
+        repo: 'TanStack/db',
+        docs: 'docs/',
+      },
+    })
+    writeFileSync(join(pkgDir, 'skills'), 'not a directory')
+
+    const result = scanForIntents(root)
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('@tanstack/db')
+    expect(result.packages[0]!.skills).toEqual([])
   })
 
   it('discovers packages through symlinks (pnpm layout)', () => {

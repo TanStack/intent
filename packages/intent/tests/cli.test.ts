@@ -603,6 +603,8 @@ describe('cli commands', () => {
     expect(debugOutput).toContain('scope: local')
     expect(debugOutput).toContain('packages: 1')
     expect(debugOutput).toContain('skills: 1')
+    expect(debugOutput).toContain('packageJsonReadCount:')
+    expect(debugOutput).toContain('packageJsonCacheHits:')
   })
 
   it('ignores configured global intent packages in list json output by default', async () => {
@@ -1054,6 +1056,8 @@ describe('cli commands', () => {
     expect(debugOutput).toContain('resolution: fast-path')
     expect(debugOutput).toContain('package: @tanstack/query')
     expect(debugOutput).toContain('skill: fetching')
+    expect(debugOutput).toContain('packageJsonReadCount:')
+    expect(debugOutput).toContain('packageJsonCacheHits:')
   })
 
   it('loads a skill use as json', async () => {

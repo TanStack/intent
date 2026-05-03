@@ -1,11 +1,11 @@
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { createIntentFsCache, type IntentFsCache } from '../fs-cache.js'
 import { resolveSkillEntry, type ResolveSkillResult } from '../resolver.js'
 import { scanIntentPackageAtRoot } from '../scanner.js'
-import { resolveWorkspacePackages } from '../workspace-patterns.js'
+import { findWorkspacePackages } from '../workspace-patterns.js'
 import { getDeps, resolveDepDir } from '../utils.js'
 import { warningMentionsPackage } from './excludes.js'
-import { readPackageJson } from './package-json.js'
 import {
   resolveProjectContext,
   type ProjectContext,
@@ -21,6 +21,7 @@ interface WorkspacePackageInfo {
 
 function readWorkspacePackageInfos(
   context: ProjectContext,
+  fsCache: IntentFsCache,
 ): Array<WorkspacePackageInfo> {
   const dirs = new Set<string>()
 
@@ -31,16 +32,13 @@ function readWorkspacePackageInfos(
   if (context.workspaceRoot) {
     dirs.add(context.workspaceRoot)
 
-    for (const dir of resolveWorkspacePackages(
-      context.workspaceRoot,
-      context.workspacePatterns,
-    )) {
+    for (const dir of findWorkspacePackages(context.workspaceRoot)) {
       dirs.add(dir)
     }
   }
 
   return [...dirs].flatMap((dir) => {
-    const packageJson = readPackageJson(dir)
+    const packageJson = fsCache.readPackageJson(dir)
     if (!packageJson) return []
 
     return [
@@ -154,10 +152,11 @@ function getDirectLoadFastPathCandidateDirs(
 function getWorkspaceLoadFastPathCandidateDirs(
   packageName: string,
   context: ProjectContext,
+  fsCache: IntentFsCache,
 ): Array<string> {
   const candidates: Array<string> = []
   const seen = new Set<string>()
-  const workspacePackages = readWorkspacePackageInfos(context)
+  const workspacePackages = readWorkspacePackageInfos(context, fsCache)
 
   for (const pkg of workspacePackages) {
     if (pkg.name === packageName) {
@@ -212,10 +211,12 @@ function resolveFromPackageRoots(
   packageRoots: Array<string>,
   parsedUse: SkillUse,
   cwd: string,
+  fsCache: IntentFsCache,
 ): ResolveSkillResult | null {
   for (const packageRoot of packageRoots) {
     const scanned = scanIntentPackageAtRoot(packageRoot, {
       fallbackName: parsedUse.packageName,
+      fsCache,
       projectRoot: cwd,
       skillNameHint: parsedUse.skillName,
     })
@@ -225,6 +226,7 @@ function resolveFromPackageRoots(
     if (scanned.package?.name === parsedUse.packageName) {
       const fallbackScanned = scanIntentPackageAtRoot(packageRoot, {
         fallbackName: parsedUse.packageName,
+        fsCache,
         projectRoot: cwd,
       })
       const fallbackResolved = resolveScannedPackageSkill(
@@ -243,6 +245,7 @@ export function resolveSkillUseFastPath(
   options: IntentCoreOptions,
   context = resolveProjectContext({ cwd: process.cwd() }),
   cwd = context.cwd,
+  fsCache = createIntentFsCache(),
 ): ResolveSkillResult | null {
   if (options.globalOnly) return null
   if (shouldSkipFastPathForYarnPnp(context, cwd)) return null
@@ -251,6 +254,7 @@ export function resolveSkillUseFastPath(
     getDirectLoadFastPathCandidateDirs(parsedUse.packageName, context, cwd),
     parsedUse,
     cwd,
+    fsCache,
   )
   if (directResolved) return directResolved
 
@@ -259,8 +263,13 @@ export function resolveSkillUseFastPath(
   }
 
   return resolveFromPackageRoots(
-    getWorkspaceLoadFastPathCandidateDirs(parsedUse.packageName, context),
+    getWorkspaceLoadFastPathCandidateDirs(
+      parsedUse.packageName,
+      context,
+      fsCache,
+    ),
     parsedUse,
     cwd,
+    fsCache,
   )
 }

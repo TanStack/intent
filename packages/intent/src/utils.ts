@@ -17,7 +17,15 @@ export function toPosixPath(p: string): string {
 export function findSkillFiles(dir: string): Array<string> {
   const files: Array<string> = []
   if (!existsSync(dir)) return files
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+
+  let entries: Array<Dirent<string>>
+  try {
+    entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
+  } catch {
+    return files
+  }
+
+  for (const entry of entries) {
     const fullPath = join(dir, entry.name)
     if (entry.isDirectory()) {
       files.push(...findSkillFiles(fullPath))
