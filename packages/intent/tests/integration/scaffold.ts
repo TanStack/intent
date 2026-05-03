@@ -1,4 +1,4 @@
-import { execSync, execFileSync, spawn } from 'node:child_process'
+import { execFileSync, execSync, spawn } from 'node:child_process'
 import {
   mkdirSync,
   mkdtempSync,
@@ -344,6 +344,58 @@ export function runScanner(
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     return { stdout, stderr: '', exitCode: 0, parsed: JSON.parse(stdout) }
+  } catch (err: any) {
+    return {
+      stdout: err.stdout ?? '',
+      stderr: err.stderr ?? '',
+      exitCode: err.status ?? 1,
+      parsed: null,
+    }
+  } finally {
+    if (linkDir) {
+      rmSync(linkDir, { recursive: true, force: true })
+    }
+  }
+}
+
+export interface RunLoadOptions {
+  method?: 'direct' | 'symlink'
+  path?: boolean
+  json?: boolean
+}
+
+export function runLoad(
+  cwd: string,
+  use: string,
+  options: RunLoadOptions = {},
+): CliResult {
+  const method = options.method ?? 'direct'
+  let binPath = cliPath
+  let linkDir: string | undefined
+
+  if (method === 'symlink') {
+    linkDir = mkdtempSync(join(realTmpdir, 'intent-link-'))
+    const linkPath = join(linkDir, 'intent-cli.mjs')
+    symlinkSync(cliPath, linkPath)
+    binPath = linkPath
+  }
+
+  const args: Array<string> = [binPath, 'load', use]
+  if (options.path) args.push('--path')
+  if (options.json) args.push('--json')
+
+  try {
+    const stdout = execFileSync('node', args, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    return {
+      stdout,
+      stderr: '',
+      exitCode: 0,
+      parsed: options.json ? JSON.parse(stdout) : null,
+    }
   } catch (err: any) {
     return {
       stdout: err.stdout ?? '',
