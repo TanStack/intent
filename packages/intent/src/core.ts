@@ -1,6 +1,7 @@
 import { readFileSync, realpathSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
 import {
+  compileExcludePatterns,
   getEffectiveExcludePatterns,
   isPackageExcluded,
   warningMentionsPackage,
@@ -88,13 +89,15 @@ export function listIntentSkills(
 ): IntentSkillList {
   return withCwd(options.cwd, () => {
     const scanOptions = toScanOptions(options)
+    const projectContext = resolveProjectContext({ cwd: process.cwd() })
     const scanResult = scanForIntents(undefined, scanOptions)
-    const excludePatterns = getEffectiveExcludePatterns(options)
+    const excludePatterns = getEffectiveExcludePatterns(options, projectContext)
+    const excludeMatchers = compileExcludePatterns(excludePatterns)
     const excludedPackages = scanResult.packages
-      .filter((pkg) => isPackageExcluded(pkg.name, excludePatterns))
+      .filter((pkg) => isPackageExcluded(pkg.name, excludeMatchers))
       .map((pkg) => pkg.name)
     const packages = scanResult.packages.filter(
-      (pkg) => !isPackageExcluded(pkg.name, excludePatterns),
+      (pkg) => !isPackageExcluded(pkg.name, excludeMatchers),
     )
     const skills = packages.flatMap((pkg) =>
       pkg.skills.map((skill): IntentSkillSummary => {
@@ -128,7 +131,7 @@ export function listIntentSkills(
           ),
       ),
       conflicts: scanResult.conflicts.filter(
-        (conflict) => !isPackageExcluded(conflict.packageName, excludePatterns),
+        (conflict) => !isPackageExcluded(conflict.packageName, excludeMatchers),
       ),
     }
 
@@ -167,7 +170,11 @@ function toResolvedIntentSkill(
   use: string,
   resolved: ResolveSkillResult,
   debug?: LoadedIntentSkillDebug,
-): ResolvedIntentSkill {
+): {
+  realPackageRoot: string
+  realResolvedPath: string
+  result: ResolvedIntentSkill
+} {
   let realResolvedPath: string
   try {
     realResolvedPath = realpathSync.native(resolveFromCwd(resolved.path))
@@ -203,7 +210,11 @@ function toResolvedIntentSkill(
     result.debug = debug
   }
 
-  return result
+  return {
+    realPackageRoot,
+    realResolvedPath,
+    result,
+  }
 }
 
 function createLoadedSkillDebug({
@@ -231,76 +242,88 @@ function createLoadedSkillDebug({
   }
 }
 
+function resolveIntentSkillInCurrentCwd(
+  use: string,
+  options: IntentCoreOptions = {},
+): {
+  realPackageRoot: string
+  realResolvedPath: string
+  result: ResolvedIntentSkill
+} {
+  let parsedUse: ReturnType<typeof parseSkillUse>
+  try {
+    parsedUse = parseSkillUse(use)
+  } catch (err) {
+    throw new IntentCoreError(
+      'invalid-skill-use',
+      err instanceof Error ? err.message : String(err),
+    )
+  }
+
+  const projectContext = resolveProjectContext({ cwd: process.cwd() })
+  const excludePatterns = getEffectiveExcludePatterns(options, projectContext)
+  const excludeMatchers = compileExcludePatterns(excludePatterns)
+
+  if (isPackageExcluded(parsedUse.packageName, excludeMatchers)) {
+    throw new IntentCoreError(
+      'package-excluded',
+      `Cannot load skill use "${use}": package "${parsedUse.packageName}" is excluded by Intent configuration.`,
+    )
+  }
+
+  const scanOptions = toScanOptions(options)
+  const scope = getScanScope(scanOptions)
+  const fastPathResolved = resolveSkillUseFastPath(
+    parsedUse,
+    options,
+    projectContext,
+  )
+  if (fastPathResolved) {
+    return toResolvedIntentSkill(
+      use,
+      fastPathResolved,
+      options.debug
+        ? createLoadedSkillDebug({
+            excludes: excludePatterns,
+            resolution: 'fast-path',
+            resolved: fastPathResolved,
+            scope,
+          })
+        : undefined,
+    )
+  }
+
+  const scanResult = scanForIntents(undefined, scanOptions)
+  let resolved: ReturnType<typeof resolveSkillUse>
+  try {
+    resolved = resolveSkillUse(use, scanResult)
+  } catch (err) {
+    if (err instanceof ResolveSkillUseError) {
+      throw new IntentCoreError(err.code, err.message)
+    }
+    throw err
+  }
+
+  return toResolvedIntentSkill(
+    use,
+    resolved,
+    options.debug
+      ? createLoadedSkillDebug({
+          excludes: excludePatterns,
+          resolution: 'full-scan',
+          resolved,
+          scope,
+        })
+      : undefined,
+  )
+}
+
 export function resolveIntentSkill(
   use: string,
   options: IntentCoreOptions = {},
 ): ResolvedIntentSkill {
   return withCwd(options.cwd, () => {
-    let parsedUse: ReturnType<typeof parseSkillUse>
-    try {
-      parsedUse = parseSkillUse(use)
-    } catch (err) {
-      throw new IntentCoreError(
-        'invalid-skill-use',
-        err instanceof Error ? err.message : String(err),
-      )
-    }
-
-    const projectContext = resolveProjectContext({ cwd: process.cwd() })
-    const excludePatterns = getEffectiveExcludePatterns(options, projectContext)
-
-    if (isPackageExcluded(parsedUse.packageName, excludePatterns)) {
-      throw new IntentCoreError(
-        'package-excluded',
-        `Cannot load skill use "${use}": package "${parsedUse.packageName}" is excluded by Intent configuration.`,
-      )
-    }
-
-    const scanOptions = toScanOptions(options)
-    const scope = getScanScope(scanOptions)
-    const fastPathResolved = resolveSkillUseFastPath(
-      parsedUse,
-      options,
-      projectContext,
-    )
-    if (fastPathResolved) {
-      return toResolvedIntentSkill(
-        use,
-        fastPathResolved,
-        options.debug
-          ? createLoadedSkillDebug({
-              excludes: excludePatterns,
-              resolution: 'fast-path',
-              resolved: fastPathResolved,
-              scope,
-            })
-          : undefined,
-      )
-    }
-
-    const scanResult = scanForIntents(undefined, scanOptions)
-    let resolved: ReturnType<typeof resolveSkillUse>
-    try {
-      resolved = resolveSkillUse(use, scanResult)
-    } catch (err) {
-      if (err instanceof ResolveSkillUseError) {
-        throw new IntentCoreError(err.code, err.message)
-      }
-      throw err
-    }
-
-    return toResolvedIntentSkill(
-      use,
-      resolved,
-      options.debug
-        ? createLoadedSkillDebug({
-            excludes: excludePatterns,
-            resolution: 'full-scan',
-            resolved,
-            scope,
-          })
-        : undefined,
-    )
+    return resolveIntentSkillInCurrentCwd(use, options).result
   })
 }
 
@@ -308,20 +331,17 @@ export function loadIntentSkill(
   use: string,
   options: IntentCoreOptions = {},
 ): LoadedIntentSkill {
-  const resolved = resolveIntentSkill(use, options)
-
   return withCwd(options.cwd, () => {
-    const resolvedPath = realpathSync(resolveFromCwd(resolved.path))
-    const packageRoot = realpathSync(resolveFromCwd(resolved.packageRoot))
+    const resolved = resolveIntentSkillInCurrentCwd(use, options)
     const content = rewriteLoadedSkillMarkdownDestinations({
-      content: readFileSync(resolvedPath, 'utf8'),
+      content: readFileSync(resolved.realResolvedPath, 'utf8'),
       cwd: process.cwd(),
-      packageRoot,
-      skillFilePath: resolvedPath,
+      packageRoot: resolved.realPackageRoot,
+      skillFilePath: resolved.realResolvedPath,
     })
 
     return {
-      ...resolved,
+      ...resolved.result,
       content,
     }
   })

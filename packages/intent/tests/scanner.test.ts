@@ -779,6 +779,11 @@ describe('scanForIntents', () => {
     writeJson(join(reactStartDir, 'package.json'), {
       name: '@tanstack/react-start',
       version: '1.167.52',
+      intent: {
+        version: 1,
+        repo: 'TanStack/router',
+        docs: 'https://tanstack.com/start',
+      },
       repository: {
         type: 'git',
         url: 'git+https://github.com/TanStack/router.git',
@@ -907,6 +912,11 @@ describe('scanForIntents', () => {
     writeJson(join(reactStartDir, 'package.json'), {
       name: '@tanstack/react-start',
       version: '1.167.52',
+      intent: {
+        version: 1,
+        repo: 'TanStack/router',
+        docs: 'https://tanstack.com/start',
+      },
       repository: {
         type: 'git',
         url: 'git+https://github.com/TanStack/router.git',
@@ -1095,6 +1105,42 @@ describe('scanIntentPackageAtRoot', () => {
         name: 'query/cache',
         path: 'node_modules/@tanstack/query/skills/query/cache/SKILL.md',
         description: 'Cache query skill',
+        type: undefined,
+        framework: undefined,
+      },
+    ])
+  })
+
+  it('can scan a package-prefixed hinted skill path from a short name', () => {
+    const pkgDir = createDir(root, 'node_modules', '@tanstack', 'router-core')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/router-core',
+      version: '1.0.0',
+      intent: {
+        version: 1,
+        repo: 'TanStack/router',
+        docs: 'docs/',
+      },
+    })
+    writeSkillMd(
+      createDir(pkgDir, 'skills', 'router-core', 'auth-and-guards'),
+      {
+        name: 'router-core/auth-and-guards',
+        description: 'Router auth and guards',
+      },
+    )
+
+    const result = scanIntentPackageAtRoot(pkgDir, {
+      fallbackName: '@tanstack/router-core',
+      projectRoot: root,
+      skillNameHint: 'auth-and-guards',
+    })
+
+    expect(result.package?.skills).toEqual([
+      {
+        name: 'router-core/auth-and-guards',
+        path: 'node_modules/@tanstack/router-core/skills/router-core/auth-and-guards/SKILL.md',
+        description: 'Router auth and guards',
         type: undefined,
         framework: undefined,
       },

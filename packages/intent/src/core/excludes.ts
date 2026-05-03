@@ -1,10 +1,18 @@
-import { dirname, isAbsolute, relative } from 'node:path'
+import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import {
   resolveProjectContext,
   type ProjectContext,
 } from './project-context.js'
 import { readPackageJson } from './package-json.js'
 import type { IntentCoreOptions } from './types.js'
+
+const MAX_EXCLUDE_PATTERN_LENGTH = 200
+const PACKAGE_NAME_BOUNDARY = /[^a-zA-Z0-9_-]/
+
+export interface ExcludeMatcher {
+  pattern: string
+  matches: (packageName: string) => boolean
+}
 
 function normalizeExcludePatterns(value: unknown): Array<string> {
   if (!Array.isArray(value)) return []
@@ -49,43 +57,81 @@ function getConfigExcludePatterns(
 }
 
 export function getEffectiveExcludePatterns(
-  options: IntentCoreOptions,
+  options: IntentCoreOptions = {},
   context?: ProjectContext,
 ): Array<string> {
+  const cwd =
+    context?.cwd ?? resolve(process.cwd(), options.cwd ?? process.cwd())
   return [
-    ...getConfigExcludePatterns(process.cwd(), context),
+    ...getConfigExcludePatterns(cwd, context),
     ...normalizeExcludePatterns(options.exclude),
   ]
 }
 
+function normalizeGlobPattern(pattern: string): string {
+  if (pattern.length > MAX_EXCLUDE_PATTERN_LENGTH) {
+    throw new Error(
+      `Intent exclude pattern is too long: ${pattern.length} characters. Maximum is ${MAX_EXCLUDE_PATTERN_LENGTH}.`,
+    )
+  }
+
+  return pattern.replace(/\*+/g, '*')
+}
+
 function globToRegExp(pattern: string): RegExp {
-  const source = pattern
+  const source = normalizeGlobPattern(pattern)
     .split('*')
     .map((part) => part.replace(/[\\^$+?.()|[\]{}]/g, '\\$&'))
     .join('.*')
   return new RegExp(`^${source}$`)
 }
 
-function matchesPackageGlob(packageName: string, pattern: string): boolean {
-  return pattern.includes('*')
-    ? globToRegExp(pattern).test(packageName)
-    : packageName === pattern
+export function compileExcludePatterns(
+  patterns: Array<string>,
+): Array<ExcludeMatcher> {
+  return patterns.map((pattern) => {
+    if (!pattern.includes('*')) {
+      normalizeGlobPattern(pattern)
+      return {
+        pattern,
+        matches: (packageName) => packageName === pattern,
+      }
+    }
+
+    const regex = globToRegExp(pattern)
+    return {
+      pattern,
+      matches: (packageName) => regex.test(packageName),
+    }
+  })
 }
 
 export function isPackageExcluded(
   packageName: string,
-  patterns: Array<string>,
+  matchers: Array<ExcludeMatcher>,
 ): boolean {
-  return patterns.some((pattern) => matchesPackageGlob(packageName, pattern))
+  return matchers.some((matcher) => matcher.matches(packageName))
 }
 
 export function warningMentionsPackage(
   warning: string,
   packageName: string,
 ): boolean {
-  const idx = warning.indexOf(packageName)
-  if (idx === -1) return false
+  let fromIndex = 0
 
-  const after = warning[idx + packageName.length]
-  return after === undefined || /[^a-zA-Z0-9_-]/.test(after)
+  while (true) {
+    const idx = warning.indexOf(packageName, fromIndex)
+    if (idx === -1) return false
+
+    const before = warning[idx - 1]
+    const after = warning[idx + packageName.length]
+    if (
+      (before === undefined || PACKAGE_NAME_BOUNDARY.test(before)) &&
+      (after === undefined || PACKAGE_NAME_BOUNDARY.test(after))
+    ) {
+      return true
+    }
+
+    fromIndex = idx + packageName.length
+  }
 }

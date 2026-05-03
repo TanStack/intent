@@ -279,6 +279,22 @@ describe('resolveSkillUse', () => {
     expect(result.warnings).toEqual([])
   })
 
+  it('does not include warnings when the package name is only a suffix', () => {
+    const warning =
+      'Found 2 installed variants of prefix@tanstack/query across 2 versions.'
+    const validSecondWarning =
+      'Found 2 installed variants of @tanstack/query across 2 versions.'
+
+    const result = resolveSkillUse(
+      '@tanstack/query#core',
+      scanResult([intentPackage({ name: '@tanstack/query' })], {
+        warnings: [warning, validSecondWarning],
+      }),
+    )
+
+    expect(result.warnings).toEqual([validSecondWarning])
+  })
+
   it('fails clearly when the package is missing', () => {
     expect(() => {
       resolveSkillUse(

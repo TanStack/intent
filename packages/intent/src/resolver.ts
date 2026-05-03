@@ -1,3 +1,4 @@
+import { warningMentionsPackage } from './core/excludes.js'
 import { parseSkillUse } from './skill-use.js'
 import type {
   IntentPackage,
@@ -187,12 +188,9 @@ export function resolveSkillUse(
     source: pkg.source,
     version: pkg.version,
     packageRoot: pkg.packageRoot,
-    warnings: scanResult.warnings.filter((warning) => {
-      const idx = warning.indexOf(packageName)
-      if (idx === -1) return false
-      const after = warning[idx + packageName.length]
-      return after === undefined || /[^a-zA-Z0-9_-]/.test(after)
-    }),
+    warnings: scanResult.warnings.filter((warning) =>
+      warningMentionsPackage(warning, packageName),
+    ),
     conflict,
   }
 }

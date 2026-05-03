@@ -184,6 +184,15 @@ describe('listIntentSkills', () => {
     ])
   })
 
+  it('rejects overly long exclude patterns', () => {
+    expect(() =>
+      listIntentSkills({
+        cwd: root,
+        exclude: ['@tanstack/'.padEnd(201, 'x')],
+      }),
+    ).toThrow('Intent exclude pattern is too long')
+  })
+
   it('merges root, package, and option excludes', () => {
     const appDir = join(root, 'packages', 'app')
     writeJson(join(root, 'package.json'), {

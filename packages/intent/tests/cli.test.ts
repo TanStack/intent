@@ -1011,8 +1011,9 @@ describe('cli commands', () => {
       version: '5.0.0',
       intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
     })
-    mkdirSync(join(pkgDir, 'skills', 'fetching', 'SKILL.md'), {
-      recursive: true,
+    writeSkillMd(join(pkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query data fetching patterns',
     })
 
     process.chdir(root)

@@ -21,7 +21,7 @@ function isLocalToProject(dirPath: string, projectRoot: string): boolean {
 export interface CreatePackageRegistrarOptions {
   comparePackageVersions: (a: string, b: string) => number
   deriveIntentConfig: (pkgJson: PackageJson) => IntentConfig | null
-  discoverSkills: (skillsDir: string, baseName: string) => Array<SkillEntry>
+  discoverSkills: (skillsDir: string, packageName: string) => Array<SkillEntry>
   getPackageDepth: (packageRoot: string, projectRoot: string) => number
   packageIndexes: Map<string, number>
   packages: Array<IntentPackage>

@@ -246,20 +246,29 @@ function readSkillEntry(
 
 function discoverSkillByNameHint(
   skillsDir: string,
+  packageName: string,
   skillNameHint: string,
 ): Array<SkillEntry> {
-  const childDir = join(skillsDir, ...skillNameHint.split('/'))
-  const skillFile = join(childDir, 'SKILL.md')
-  if (!existsSync(skillFile)) return []
+  const skills: Array<SkillEntry> = []
+  const seen = new Set<string>()
+  const skillNameHints = getSkillNameHints(packageName, skillNameHint)
 
-  const skill = readSkillEntry(skillsDir, childDir, skillFile)
-  return skill.name === skillNameHint ? [skill] : []
+  for (const hint of skillNameHints) {
+    const childDir = join(skillsDir, ...hint.split('/'))
+    const skillFile = join(childDir, 'SKILL.md')
+    if (!existsSync(skillFile)) continue
+
+    const skill = readSkillEntry(skillsDir, childDir, skillFile)
+    if (skill.name !== hint || seen.has(skill.name)) continue
+
+    seen.add(skill.name)
+    skills.push(skill)
+  }
+
+  return skills
 }
 
-function discoverSkills(
-  skillsDir: string,
-  _baseName: string,
-): Array<SkillEntry> {
+function discoverSkills(skillsDir: string): Array<SkillEntry> {
   const skills: Array<SkillEntry> = []
 
   function walk(dir: string): void {
@@ -284,6 +293,22 @@ function discoverSkills(
 
   walk(skillsDir)
   return skills
+}
+
+function getPackageShortName(packageName: string): string {
+  return packageName.split('/').pop() ?? packageName
+}
+
+function getSkillNameHints(
+  packageName: string,
+  skillNameHint: string,
+): Array<string> {
+  const packageShortName = getPackageShortName(packageName)
+  if (skillNameHint.startsWith(`${packageShortName}/`)) {
+    return [skillNameHint]
+  }
+
+  return [skillNameHint, `${packageShortName}/${skillNameHint}`]
 }
 
 // ---------------------------------------------------------------------------
@@ -692,8 +717,12 @@ export function scanIntentPackageAtRoot(
     comparePackageVersions,
     deriveIntentConfig,
     discoverSkills: options.skillNameHint
-      ? (skillsDir) =>
-          discoverSkillByNameHint(skillsDir, options.skillNameHint!)
+      ? (skillsDir, packageName) =>
+          discoverSkillByNameHint(
+            skillsDir,
+            packageName,
+            options.skillNameHint!,
+          )
       : discoverSkills,
     getPackageDepth,
     packageIndexes,
