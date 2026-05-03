@@ -476,8 +476,10 @@ export async function checkStaleness(
   const skillFiles = findSkillFiles(skillsDir)
   const skillMetas: Array<SkillMeta> = skillFiles.map((filePath) => {
     const fm = parseFrontmatter(filePath)
-    const relName = toPosixPath(relative(skillsDir, filePath))
-      .replace(/[/\\]SKILL\.md$/, '')
+    const relName = toPosixPath(relative(skillsDir, filePath)).replace(
+      /[/\\]SKILL\.md$/,
+      '',
+    )
     return {
       name: typeof fm?.name === 'string' ? fm.name : relName,
       relName,
