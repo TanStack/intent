@@ -509,19 +509,20 @@ export function scanForIntents(
     return fsCache.readPackageJson(dirPath)
   }
 
-  const { scanTarget, tryRegister } = createPackageRegistrar({
-    comparePackageVersions,
-    deriveIntentConfig,
-    discoverSkills: (skillsDir) => discoverSkills(skillsDir, fsCache),
-    getPackageDepth,
-    packageIndexes,
-    packages,
-    projectRoot,
-    readPkgJson,
-    rememberVariant,
-    validateIntentField,
-    warnings,
-  })
+  const { scanNodeModulesDir, scanTarget, tryRegister } =
+    createPackageRegistrar({
+      comparePackageVersions,
+      deriveIntentConfig,
+      discoverSkills: (skillsDir) => discoverSkills(skillsDir, fsCache),
+      getPackageDepth,
+      packageIndexes,
+      packages,
+      projectRoot,
+      readPkgJson,
+      rememberVariant,
+      validateIntentField,
+      warnings,
+    })
 
   const { walkKnownPackages, walkProjectDeps, walkWorkspacePackages } =
     createDependencyWalker({
@@ -529,6 +530,7 @@ export function scanForIntents(
       packages,
       projectRoot,
       readPkgJson,
+      scanNodeModulesDir,
       tryRegister,
       warnings,
     })

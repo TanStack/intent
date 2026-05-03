@@ -1,6 +1,5 @@
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { listNodeModulesPackageDirs, resolveDepDir, getDeps } from '../utils.js'
+import { resolveDepDir, getDeps } from '../utils.js'
 import { findWorkspacePackages } from '../workspace-patterns.js'
 import type { IntentFsCache } from '../fs-cache.js'
 import type { IntentPackage } from '../types.js'
@@ -11,6 +10,7 @@ export interface CreateDependencyWalkerOptions {
   fsCache: IntentFsCache
   projectRoot: string
   readPkgJson: (dirPath: string) => PackageJson | null
+  scanNodeModulesDir: (nodeModulesDir: string) => void
   tryRegister: (dirPath: string, fallbackName: string) => boolean
   packages: Array<IntentPackage>
   warnings: Array<string>
@@ -102,12 +102,7 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
 
   function walkWorkspacePackages(): void {
     for (const wsDir of findWorkspacePackages(opts.projectRoot)) {
-      const wsNodeModules = join(wsDir, 'node_modules')
-      if (existsSync(wsNodeModules)) {
-        for (const dirPath of listNodeModulesPackageDirs(wsNodeModules)) {
-          opts.tryRegister(dirPath, 'unknown')
-        }
-      }
+      opts.scanNodeModulesDir(join(wsDir, 'node_modules'))
 
       const wsPkg = readPkgJsonWithWarning(wsDir, 'workspace')
       if (wsPkg) {

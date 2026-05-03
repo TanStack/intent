@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { join, sep } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { rewriteSkillLoadPaths } from '../skill-paths.js'
 import { listNodeModulesPackageDirs } from '../utils.js'
 import type {
@@ -18,6 +18,10 @@ function isLocalToProject(dirPath: string, projectRoot: string): boolean {
   )
 }
 
+function getFsIdentity(path: string): string {
+  return resolve(path)
+}
+
 export interface CreatePackageRegistrarOptions {
   comparePackageVersions: (a: string, b: string) => number
   deriveIntentConfig: (pkgJson: PackageJson) => IntentConfig | null
@@ -33,16 +37,38 @@ export interface CreatePackageRegistrarOptions {
 }
 
 export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
+  const attemptedPackageRoots = new Set<string>()
+  const scannedNodeModulesDirs = new Set<string>()
+
+  function shouldAttemptPackageRoot(dirPath: string): boolean {
+    const key = getFsIdentity(dirPath)
+    if (attemptedPackageRoots.has(key)) return false
+    attemptedPackageRoots.add(key)
+    return true
+  }
+
+  function scanNodeModulesDir(
+    nodeModulesDir: string,
+    source: IntentPackage['source'] = 'local',
+  ): void {
+    if (!existsSync(nodeModulesDir)) return
+
+    const key = getFsIdentity(nodeModulesDir)
+    if (scannedNodeModulesDirs.has(key)) return
+    scannedNodeModulesDirs.add(key)
+
+    for (const dirPath of listNodeModulesPackageDirs(nodeModulesDir)) {
+      tryRegister(dirPath, 'unknown', source)
+    }
+  }
+
   function scanTarget(
     target: NodeModulesScanTarget,
     source: IntentPackage['source'] = 'local',
   ): void {
     if (!target.path || !target.exists || target.scanned) return
     target.scanned = true
-
-    for (const dirPath of listNodeModulesPackageDirs(target.path)) {
-      tryRegister(dirPath, 'unknown', source)
-    }
+    scanNodeModulesDir(target.path, source)
   }
 
   function tryRegister(
@@ -50,6 +76,8 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     fallbackName: string,
     source: IntentPackage['source'] = 'local',
   ): boolean {
+    if (!shouldAttemptPackageRoot(dirPath)) return false
+
     const skillsDir = join(dirPath, 'skills')
     if (!existsSync(skillsDir)) return false
 
@@ -126,5 +154,5 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     return true
   }
 
-  return { scanTarget, tryRegister }
+  return { scanNodeModulesDir, scanTarget, tryRegister }
 }
