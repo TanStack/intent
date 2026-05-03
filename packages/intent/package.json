@@ -32,7 +32,8 @@
   ],
   "dependencies": {
     "cac": "^6.7.14",
-    "yaml": "^2.7.0"
+    "jsonc-parser": "^3.3.1",
+    "yaml": "2.8.3"
   },
   "devDependencies": {
     "@verdaccio/node-api": "6.0.0-6-next.76",

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import { parse as parseYaml } from 'yaml'
 import { findSkillFiles } from './utils.js'
 
@@ -13,174 +14,160 @@ function normalizeWorkspacePatterns(patterns: Array<string>): Array<string> {
   ].sort((a, b) => a.localeCompare(b))
 }
 
-function parseWorkspacePatterns(value: unknown): Array<string> | null {
-  if (!Array.isArray(value)) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function parseWorkspacePatternList(
+  value: unknown,
+  fieldName: string,
+): Array<string> | null {
+  if (value === undefined || value === null) {
     return null
   }
 
-  return normalizeWorkspacePatterns(
-    value.filter((pattern): pattern is string => typeof pattern === 'string'),
+  if (!Array.isArray(value)) {
+    throw new TypeError(`${fieldName} must be an array of strings`)
+  }
+
+  if (value.some((pattern) => typeof pattern !== 'string')) {
+    throw new TypeError(`${fieldName} must be an array of strings`)
+  }
+
+  return normalizeWorkspacePatterns(value)
+}
+
+function parseWorkspacePatternField(
+  value: unknown,
+  fieldName: string,
+  nestedKey: string,
+): Array<string> | null {
+  if (value === undefined || value === null) {
+    return null
+  }
+
+  if (Array.isArray(value)) {
+    return parseWorkspacePatternList(value, fieldName)
+  }
+
+  if (isRecord(value)) {
+    return parseWorkspacePatternList(
+      value[nestedKey],
+      `${fieldName}.${nestedKey}`,
+    )
+  }
+
+  throw new TypeError(
+    `${fieldName} must be an array of strings or an object with ${nestedKey}`,
   )
 }
 
-function hasPackageJson(dir: string): boolean {
-  return existsSync(join(dir, 'package.json'))
+function hasWorkspaceManifest(dir: string): boolean {
+  return (
+    existsSync(join(dir, 'package.json')) ||
+    existsSync(join(dir, 'deno.json')) ||
+    existsSync(join(dir, 'deno.jsonc'))
+  )
 }
 
-function stripJsonCommentsAndTrailingCommas(source: string): string {
-  let result = ''
-  let inString = false
-  let escaped = false
+function readYamlFile(path: string): unknown {
+  return parseYaml(readFileSync(path, 'utf8'))
+}
 
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index]!
-    const next = source[index + 1]
+function readJsonFile(path: string): unknown {
+  return JSON.parse(readFileSync(path, 'utf8'))
+}
 
-    if (inString) {
-      result += char
-      if (escaped) {
-        escaped = false
-      } else if (char === '\\') {
-        escaped = true
-      } else if (char === '"') {
-        inString = false
-      }
-      continue
-    }
+function readJsoncFile(path: string): unknown {
+  const errors: Array<ParseError> = []
+  const value = parseJsonc(readFileSync(path, 'utf8'), errors, {
+    allowTrailingComma: true,
+  })
 
-    if (char === '"') {
-      inString = true
-      result += char
-      continue
-    }
-
-    if (char === '/' && next === '/') {
-      while (index < source.length && source[index] !== '\n') {
-        index += 1
-      }
-      if (index < source.length) {
-        result += source[index]!
-      }
-      continue
-    }
-
-    if (char === '/' && next === '*') {
-      const commentStart = index
-      index += 2
-      while (
-        index < source.length &&
-        !(source[index] === '*' && source[index + 1] === '/')
-      ) {
-        index += 1
-      }
-      if (index >= source.length) {
-        throw new SyntaxError(
-          `Unterminated block comment starting at position ${commentStart}`,
+  if (errors.length > 0) {
+    throw new SyntaxError(
+      errors
+        .map(
+          (error) =>
+            `JSONC parse error ${error.error} at offset ${error.offset}`,
         )
-      }
-      index += 1
-      continue
-    }
-
-    if (char === ',') {
-      let lookahead = index + 1
-      while (lookahead < source.length) {
-        const la = source[lookahead]!
-        if (/\s/.test(la)) {
-          lookahead += 1
-        } else if (la === '/' && source[lookahead + 1] === '/') {
-          lookahead += 2
-          while (lookahead < source.length && source[lookahead] !== '\n') {
-            lookahead += 1
-          }
-        } else if (la === '/' && source[lookahead + 1] === '*') {
-          lookahead += 2
-          while (
-            lookahead < source.length &&
-            !(source[lookahead] === '*' && source[lookahead + 1] === '/')
-          ) {
-            lookahead += 1
-          }
-          lookahead += 2
-        } else {
-          break
-        }
-      }
-      if (source[lookahead] === '}' || source[lookahead] === ']') {
-        continue
-      }
-    }
-
-    result += char
+        .join('; '),
+    )
   }
 
-  return result
+  return value
 }
 
-function readJsonFile(path: string, jsonc = false): unknown {
-  const source = readFileSync(path, 'utf8')
-  return JSON.parse(jsonc ? stripJsonCommentsAndTrailingCommas(source) : source)
+function warnConfigError(path: string, err: unknown): void {
+  const verb = err instanceof SyntaxError ? 'parse' : 'read'
+  console.error(
+    `Warning: failed to ${verb} ${path}: ${err instanceof Error ? err.message : err}`,
+  )
 }
+
+type WorkspacePatternSource = {
+  fileName: string
+  read: (path: string) => unknown
+  getPatterns: (config: unknown) => Array<string> | null
+}
+
+const workspacePatternSources: Array<WorkspacePatternSource> = [
+  {
+    fileName: 'pnpm-workspace.yaml',
+    read: readYamlFile,
+    getPatterns: (config) =>
+      parseWorkspacePatternList(
+        isRecord(config) ? config.packages : undefined,
+        'pnpm-workspace.yaml#packages',
+      ),
+  },
+  {
+    fileName: 'package.json',
+    read: readJsonFile,
+    getPatterns: (config) =>
+      parseWorkspacePatternField(
+        isRecord(config) ? config.workspaces : undefined,
+        'package.json#workspaces',
+        'packages',
+      ),
+  },
+  {
+    fileName: 'deno.json',
+    read: readJsoncFile,
+    getPatterns: (config) =>
+      parseWorkspacePatternField(
+        isRecord(config) ? config.workspace : undefined,
+        'deno.json#workspace',
+        'members',
+      ),
+  },
+  {
+    fileName: 'deno.jsonc',
+    read: readJsoncFile,
+    getPatterns: (config) =>
+      parseWorkspacePatternField(
+        isRecord(config) ? config.workspace : undefined,
+        'deno.jsonc#workspace',
+        'members',
+      ),
+  },
+]
 
 export function readWorkspacePatterns(root: string): Array<string> | null {
-  const pnpmWs = join(root, 'pnpm-workspace.yaml')
-  if (existsSync(pnpmWs)) {
-    try {
-      const config = parseYaml(readFileSync(pnpmWs, 'utf8')) as Record<
-        string,
-        unknown
-      >
-      const patterns = parseWorkspacePatterns(config.packages)
-      if (patterns) {
-        return patterns
-      }
-    } catch (err: unknown) {
-      const verb = err instanceof SyntaxError ? 'parse' : 'read'
-      console.error(
-        `Warning: failed to ${verb} ${pnpmWs}: ${err instanceof Error ? err.message : err}`,
-      )
-    }
-  }
+  for (const source of workspacePatternSources) {
+    const path = join(root, source.fileName)
 
-  const pkgPath = join(root, 'package.json')
-  if (existsSync(pkgPath)) {
-    try {
-      const pkg = readJsonFile(pkgPath) as Record<string, unknown>
-      const workspaces = pkg.workspaces as Record<string, unknown> | undefined
-      const patterns =
-        parseWorkspacePatterns(workspaces) ??
-        parseWorkspacePatterns(workspaces?.packages)
-      if (patterns) {
-        return patterns
-      }
-    } catch (err: unknown) {
-      const verb = err instanceof SyntaxError ? 'parse' : 'read'
-      console.error(
-        `Warning: failed to ${verb} ${pkgPath}: ${err instanceof Error ? err.message : err}`,
-      )
-    }
-  }
-
-  for (const denoConfigName of ['deno.json', 'deno.jsonc']) {
-    const denoConfigPath = join(root, denoConfigName)
-    if (!existsSync(denoConfigPath)) {
+    if (!existsSync(path)) {
       continue
     }
 
     try {
-      const denoConfig = readJsonFile(denoConfigPath, true) as Record<
-        string,
-        unknown
-      >
-      const patterns = parseWorkspacePatterns(denoConfig.workspace)
+      const patterns = source.getPatterns(source.read(path))
       if (patterns) {
         return patterns
       }
     } catch (err: unknown) {
-      const verb = err instanceof SyntaxError ? 'parse' : 'read'
-      console.error(
-        `Warning: failed to ${verb} ${denoConfigPath}: ${err instanceof Error ? err.message : err}`,
-      )
+      warnConfigError(path, err)
     }
   }
 
@@ -219,7 +206,7 @@ function resolveWorkspacePatternSegments(
   result: Set<string>,
 ): void {
   if (segments.length === 0) {
-    if (hasPackageJson(dir)) {
+    if (hasWorkspaceManifest(dir)) {
       result.add(dir)
     }
     return

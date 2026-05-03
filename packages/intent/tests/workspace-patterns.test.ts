@@ -36,6 +36,15 @@ function writePackage(root: string, ...parts: Array<string>): void {
   )
 }
 
+function writeDenoPackage(root: string, ...parts: Array<string>): void {
+  const dir = join(root, ...parts)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    join(dir, 'deno.json'),
+    JSON.stringify({ name: parts.join('/') }),
+  )
+}
+
 function writeDir(root: string, ...parts: Array<string>): void {
   mkdirSync(join(root, ...parts), { recursive: true })
 }
@@ -80,6 +89,32 @@ describe('readWorkspacePatterns', () => {
     ])
   })
 
+  it('reads workspace patterns from package.json object-form workspaces', () => {
+    const root = createRoot()
+
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        workspaces: {
+          packages: ['./packages/*/', 'apps\\*'],
+        },
+      }),
+    )
+
+    expect(readWorkspacePatterns(root)).toEqual(['apps/*', 'packages/*'])
+  })
+
+  it('reads workspace patterns from pnpm-workspace.yaml', () => {
+    const root = createRoot()
+
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      ['packages:', '  - ./packages/*/', '  - apps\\*'].join('\n'),
+    )
+
+    expect(readWorkspacePatterns(root)).toEqual(['apps/*', 'packages/*'])
+  })
+
   it('reads workspace patterns from deno.json', () => {
     const root = createRoot()
 
@@ -111,6 +146,21 @@ describe('readWorkspacePatterns', () => {
     expect(readWorkspacePatterns(root)).toEqual(['apps/*', 'packages/*'])
   })
 
+  it('reads workspace patterns from Deno object-form workspace members', () => {
+    const root = createRoot()
+
+    writeFileSync(
+      join(root, 'deno.json'),
+      JSON.stringify({
+        workspace: {
+          members: ['./packages/*/', 'apps\\*'],
+        },
+      }),
+    )
+
+    expect(readWorkspacePatterns(root)).toEqual(['apps/*', 'packages/*'])
+  })
+
   it('prefers package.json workspaces over Deno workspace config', () => {
     const root = createRoot()
 
@@ -124,6 +174,43 @@ describe('readWorkspacePatterns', () => {
     )
 
     expect(readWorkspacePatterns(root)).toEqual(['packages/*'])
+  })
+
+  it('falls back when a higher-priority config has no workspace field', () => {
+    const root = createRoot()
+
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'root' }))
+    writeFileSync(
+      join(root, 'deno.json'),
+      JSON.stringify({ workspace: ['packages/*'] }),
+    )
+
+    expect(readWorkspacePatterns(root)).toEqual(['packages/*'])
+  })
+
+  it('warns and falls back when package.json workspaces contains non-string entries', () => {
+    const root = createRoot()
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ workspaces: [123] }),
+    )
+    writeFileSync(
+      join(root, 'deno.json'),
+      JSON.stringify({ workspace: ['packages/*'] }),
+    )
+
+    expect(readWorkspacePatterns(root)).toEqual(['packages/*'])
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `Warning: failed to read ${join(root, 'package.json')}`,
+      ),
+    )
+
+    consoleErrorSpy.mockRestore()
   })
 
   it('warns and returns null for invalid Deno config', () => {
@@ -231,6 +318,19 @@ describe('resolveWorkspacePackages', () => {
     expect(
       resolveWorkspacePackages(root, ['packages/*', '!packages/excluded']),
     ).toEqual([join(root, 'packages', 'alpha')])
+  })
+
+  it('resolves Deno-only workspace members', () => {
+    const root = createRoot()
+
+    writeDenoPackage(root, 'packages', 'deno-lib')
+    writePackage(root, 'packages', 'node-lib')
+    writeDir(root, 'packages', 'not-a-package')
+
+    expect(resolveWorkspacePackages(root, ['packages/*'])).toEqual([
+      join(root, 'packages', 'deno-lib'),
+      join(root, 'packages', 'node-lib'),
+    ])
   })
 })
 
