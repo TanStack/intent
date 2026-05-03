@@ -194,11 +194,7 @@ describe('intent load', () => {
       const state = getFixture()
       await runInCwd(state.workspaceRoot, async () => {
         for (let index = 0; index < 10; index++) {
-          await state.runner.run([
-            'load',
-            '@bench/query#query/cache',
-            '--path',
-          ])
+          await state.runner.run(['load', '@bench/query#query/cache', '--path'])
         }
       })
     },
