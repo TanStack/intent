@@ -43,6 +43,7 @@ When both local and global packages are scanned, local packages take precedence.
     {
       "use": "@tanstack/query#fetching",
       "packageName": "@tanstack/query",
+      "packageRoot": "/path/to/project/node_modules/@tanstack/query",
       "packageVersion": "5.0.0",
       "packageSource": "local",
       "skillName": "fetching",
@@ -56,6 +57,7 @@ When both local and global packages are scanned, local packages take precedence.
       "name": "@tanstack/query",
       "version": "5.0.0",
       "source": "local",
+      "packageRoot": "/path/to/project/node_modules/@tanstack/query",
       "skillCount": 1
     }
   ],
