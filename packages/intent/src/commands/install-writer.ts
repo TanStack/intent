@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
+import { formatIntentCommand } from '../command-runner.js'
 import { formatSkillUse, parseSkillUse } from '../skill-use.js'
 import type { ScanResult, SkillEntry } from '../types.js'
 
@@ -240,7 +241,10 @@ export function buildIntentSkillsBlock(
 ): IntentSkillsBlockResult {
   const lines = [
     INTENT_SKILLS_START,
-    '# Skill mappings - load `use` with `npx @tanstack/intent@latest load <use>`.',
+    `# Skill mappings - load \`use\` with \`${formatIntentCommand(
+      scanResult.packageManager,
+      'load <use>',
+    )}\`.`,
     'skills:',
   ]
   let mappingCount = 0
@@ -268,15 +272,23 @@ export function buildIntentSkillsBlock(
   }
 }
 
-export function buildIntentSkillGuidanceBlock(): IntentSkillsBlockResult {
+export function buildIntentSkillGuidanceBlock(
+  packageManager: ScanResult['packageManager'] = 'unknown',
+): IntentSkillsBlockResult {
+  const listCommand = formatIntentCommand(packageManager, 'list')
+  const loadCommand = formatIntentCommand(
+    packageManager,
+    'load <package>#<skill>',
+  )
+
   return {
     block: `${[
       INTENT_SKILLS_START,
       '## Skill Loading',
       '',
       'Before substantial work:',
-      '- Skill check: run `npx @tanstack/intent@latest list`, or use skills already listed in context.',
-      '- Skill guidance: if one local skill clearly matches the task, run `npx @tanstack/intent@latest load <package>#<skill>` and follow the returned `SKILL.md`.',
+      `- Skill check: run \`${listCommand}\`, or use skills already listed in context.`,
+      `- Skill guidance: if one local skill clearly matches the task, run \`${loadCommand}\` and follow the returned \`SKILL.md\`.`,
       '- Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.',
       '- Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.',
       INTENT_SKILLS_END,

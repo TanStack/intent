@@ -289,6 +289,25 @@ describe('cli commands', () => {
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
+  it('prints package-manager-specific install guidance', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-package-runner-'),
+    )
+    tempDirs.push(root)
+    writeFileSync(join(root, 'pnpm-lock.yaml'), '')
+
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--dry-run'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('pnpm dlx @tanstack/intent@latest list')
+    expect(output).toContain(
+      'pnpm dlx @tanstack/intent@latest load <package>#<skill>',
+    )
+  })
+
   it('writes skill loading guidance even with no discovered skills', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-empty-'))
     const isolatedGlobalRoot = mkdtempSync(
@@ -608,6 +627,35 @@ describe('cli commands', () => {
       'Load: npx @tanstack/intent@latest load @tanstack/query#query/cache',
     )
   })
+
+  it.each([
+    ['pnpm-lock.yaml', 'pnpm dlx @tanstack/intent@latest'],
+    ['yarn.lock', 'yarn dlx @tanstack/intent@latest'],
+    ['bun.lock', 'bunx @tanstack/intent@latest'],
+  ])(
+    'prints %s load commands for human list output',
+    async (lockfile, runner) => {
+      const root = mkdtempSync(
+        join(realTmpdir, 'intent-cli-list-package-runner-'),
+      )
+      tempDirs.push(root)
+      writeFileSync(join(root, lockfile), '')
+      writeInstalledIntentPackage(root, {
+        name: '@tanstack/query',
+        version: '5.0.0',
+        skillName: 'fetching',
+        description: 'Query fetching skill',
+      })
+
+      process.chdir(root)
+
+      const exitCode = await main(['list'])
+      const output = logSpy.mock.calls.flat().join('\n')
+
+      expect(exitCode).toBe(0)
+      expect(output).toContain(`Load: ${runner} load @tanstack/query#fetching`)
+    },
+  )
 
   it('prints list debug details to stderr without changing json stdout', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-debug-'))

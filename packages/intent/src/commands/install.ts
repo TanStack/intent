@@ -1,5 +1,6 @@
 import { relative } from 'node:path'
 import { fail } from '../cli-error.js'
+import { detectIntentCommandPackageManager } from '../command-runner.js'
 import { printWarnings, scanOptionsFromGlobalFlags } from '../cli-support.js'
 import {
   buildIntentSkillGuidanceBlock,
@@ -193,7 +194,9 @@ export async function runInstallCommand(
   scanOptionsFromGlobalFlags(options)
 
   if (!options.map) {
-    const generated = buildIntentSkillGuidanceBlock()
+    const generated = buildIntentSkillGuidanceBlock(
+      detectIntentCommandPackageManager(),
+    )
 
     if (options.dryRun) {
       const targetPath = resolveIntentSkillsBlockTargetPath(process.cwd(), 1)

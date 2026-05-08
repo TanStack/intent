@@ -4,6 +4,7 @@ import {
   printWarnings,
   type GlobalScanFlags,
 } from '../cli-support.js'
+import { formatIntentCommand } from '../command-runner.js'
 import { listIntentSkills } from '../core.js'
 import type {
   IntentPackageSummary,
@@ -77,6 +78,7 @@ function getPackageSkills(
 
 function formatLoadCommand(
   skill: IntentSkillSummary,
+  result: IntentSkillList,
   options: ListCommandOptions,
 ): string {
   const scopeFlag = options.globalOnly
@@ -84,7 +86,10 @@ function formatLoadCommand(
     : options.global
       ? ' --global'
       : ''
-  return `npx @tanstack/intent@latest load ${skill.use}${scopeFlag}`
+  return formatIntentCommand(
+    result.packageManager,
+    `load ${skill.use}${scopeFlag}`,
+  )
 }
 
 export async function runListCommand(
@@ -95,7 +100,11 @@ export async function runListCommand(
   printListDebug(result)
 
   if (options.json) {
-    const { debug: _debug, ...jsonResult } = result
+    const {
+      debug: _debug,
+      packageManager: _packageManager,
+      ...jsonResult
+    } = result
     console.log(JSON.stringify(jsonResult, null, 2))
     return
   }
@@ -144,7 +153,7 @@ export async function runListCommand(
       getPackageSkills(pkg, skillsByPackageRoot).map((skill) => ({
         name: skill.skillName,
         description: skill.description,
-        loadCommand: formatLoadCommand(skill, options),
+        loadCommand: formatLoadCommand(skill, result, options),
         type: skill.type,
       })),
       { nameWidth, packageName: pkg.name, showTypes },

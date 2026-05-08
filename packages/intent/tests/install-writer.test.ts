@@ -76,7 +76,7 @@ function scanResult(packages: Array<IntentPackage>): ScanResult {
 }
 
 const exampleBlock = `<!-- intent-skills:start -->
-# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
+# Skill mappings - load \`use\` with \`pnpm dlx @tanstack/intent@latest load <use>\`.
 skills:
   - when: "Query data fetching"
     use: "@tanstack/query#fetching"
@@ -97,6 +97,15 @@ describe('install writer block builder', () => {
     expect(generated.block).toContain('Multiple matches:')
     expect(generated.block).not.toContain('install --map')
     expect(generated.block).not.toContain('--global')
+  })
+
+  it('builds package-manager-specific loading guidance', () => {
+    const generated = buildIntentSkillGuidanceBlock('pnpm')
+
+    expect(generated.block).toContain('pnpm dlx @tanstack/intent@latest list')
+    expect(generated.block).toContain(
+      'pnpm dlx @tanstack/intent@latest load <package>#<skill>',
+    )
   })
 
   it('builds a deterministic compact block', () => {
@@ -132,7 +141,7 @@ describe('install writer block builder', () => {
 
     expect(generated.mappingCount).toBe(3)
     expect(generated.block).toBe(`<!-- intent-skills:start -->
-# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
+# Skill mappings - load \`use\` with \`pnpm dlx @tanstack/intent@latest load <use>\`.
 skills:
   - when: "Query data fetching patterns"
     use: "@tanstack/query#fetching"
