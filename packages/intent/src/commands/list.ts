@@ -92,8 +92,11 @@ export async function runListCommand(
   printListDebug(result)
 
   if (options.json) {
-    const { debug: _debug, packageManager: _packageManager, ...jsonResult } =
-      result
+    const {
+      debug: _debug,
+      packageManager: _packageManager,
+      ...jsonResult
+    } = result
     console.log(JSON.stringify(jsonResult, null, 2))
     return
   }
