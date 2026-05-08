@@ -126,7 +126,8 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
       if (!opts.tryRegister(dirPath, 'unknown')) continue
 
       const pkgJson = opts.readPkgJson(dirPath)
-      const pkgName = typeof pkgJson?.name === 'string' ? pkgJson.name : 'unknown'
+      const pkgName =
+        typeof pkgJson?.name === 'string' ? pkgJson.name : 'unknown'
       walkDeps(dirPath, pkgName)
     }
   }
