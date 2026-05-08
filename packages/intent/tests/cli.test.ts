@@ -576,6 +576,39 @@ describe('cli commands', () => {
     expect(parsed.warnings).toEqual([])
   })
 
+  it('prints full load commands for every skill in human list output', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-load-commands-'))
+    tempDirs.push(root)
+    const pkgDir = join(root, 'node_modules', '@tanstack', 'query')
+
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(join(pkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query fetching skill',
+    })
+    writeSkillMd(join(pkgDir, 'skills', 'query', 'cache'), {
+      name: 'query/cache',
+      description: 'Query cache skill',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['list'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain(
+      'Load: npx @tanstack/intent@latest load @tanstack/query#fetching',
+    )
+    expect(output).toContain(
+      'Load: npx @tanstack/intent@latest load @tanstack/query#query/cache',
+    )
+  })
+
   it('prints list debug details to stderr without changing json stdout', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-debug-'))
     tempDirs.push(root)
@@ -720,6 +753,9 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Global fetching skill')
+    expect(output).toContain(
+      'Load: npx @tanstack/intent@latest load @tanstack/query#fetching --global',
+    )
     expect(output).not.toContain(globalPkgDir)
   })
 

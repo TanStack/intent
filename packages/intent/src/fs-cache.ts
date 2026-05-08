@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { findSkillFiles as findSkillFilesUncached } from './utils.js'
 
@@ -6,6 +6,9 @@ type PackageJsonReadResult = {
   packageJson: Record<string, unknown> | null
   error: unknown | null
 }
+
+const requireFromHere = createRequire(import.meta.url)
+const nodeFs = requireFromHere('node:fs') as typeof import('node:fs')
 
 export type IntentFsCacheStats = {
   packageJsonReadCount: number
@@ -20,7 +23,11 @@ export type IntentFsCache = {
 }
 
 function normalizeCacheKey(path: string): string {
-  return resolve(path)
+  try {
+    return nodeFs.realpathSync(path)
+  } catch {
+    return resolve(path)
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -46,7 +53,7 @@ export function createIntentFsCache(): IntentFsCache {
     stats.packageJsonReadCount += 1
     try {
       const parsed = JSON.parse(
-        readFileSync(join(dir, 'package.json'), 'utf8'),
+        nodeFs.readFileSync(join(dir, 'package.json'), 'utf8'),
       ) as unknown
       const result = {
         packageJson: isRecord(parsed) ? parsed : null,

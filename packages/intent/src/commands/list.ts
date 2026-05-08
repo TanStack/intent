@@ -75,6 +75,18 @@ function getPackageSkills(
   return skillsByPackageRoot.get(pkg.packageRoot) ?? []
 }
 
+function formatLoadCommand(
+  skill: IntentSkillSummary,
+  options: ListCommandOptions,
+): string {
+  const scopeFlag = options.globalOnly
+    ? ' --global-only'
+    : options.global
+      ? ' --global'
+      : ''
+  return `npx @tanstack/intent@latest load ${skill.use}${scopeFlag}`
+}
+
 export async function runListCommand(
   options: ListCommandOptions,
   _scanIntentsOrFail?: (options?: ScanOptions) => Promise<ScanResult>,
@@ -132,6 +144,7 @@ export async function runListCommand(
       getPackageSkills(pkg, skillsByPackageRoot).map((skill) => ({
         name: skill.skillName,
         description: skill.description,
+        loadCommand: formatLoadCommand(skill, options),
         type: skill.type,
       })),
       { nameWidth, packageName: pkg.name, showTypes },

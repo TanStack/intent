@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import semver from 'semver'
@@ -54,6 +53,7 @@ interface PnpApi {
 }
 
 const requireFromHere = createRequire(import.meta.url)
+const nodeFs = requireFromHere('node:fs') as typeof import('node:fs')
 
 function findPnpFile(start: string): string | null {
   let dir = resolve(start)
@@ -61,7 +61,7 @@ function findPnpFile(start: string): string | null {
   while (true) {
     for (const fileName of ['.pnp.cjs', '.pnp.js']) {
       const pnpPath = join(dir, fileName)
-      if (existsSync(pnpPath)) return pnpPath
+      if (nodeFs.existsSync(pnpPath)) return pnpPath
     }
 
     const next = dirname(dir)
@@ -76,8 +76,8 @@ function isYarnPnpProject(root: string): boolean {
 
 function assertLocalNodeModulesSupported(root: string): void {
   if (
-    existsSync(join(root, 'deno.json')) &&
-    !existsSync(join(root, 'node_modules'))
+    nodeFs.existsSync(join(root, 'deno.json')) &&
+    !nodeFs.existsSync(join(root, 'node_modules'))
   ) {
     throw new Error(
       'Deno without node_modules is not yet supported. Add `"nodeModulesDir": "auto"` to your deno.json to use intent.',
@@ -92,11 +92,14 @@ function detectPackageManager(root: string): PackageManager {
 
   for (const dir of dirsToCheck) {
     if (isYarnPnpProject(dir)) return 'yarn'
-    if (existsSync(join(dir, 'pnpm-lock.yaml'))) return 'pnpm'
-    if (existsSync(join(dir, 'bun.lockb')) || existsSync(join(dir, 'bun.lock')))
+    if (nodeFs.existsSync(join(dir, 'pnpm-lock.yaml'))) return 'pnpm'
+    if (
+      nodeFs.existsSync(join(dir, 'bun.lockb')) ||
+      nodeFs.existsSync(join(dir, 'bun.lock'))
+    )
       return 'bun'
-    if (existsSync(join(dir, 'yarn.lock'))) return 'yarn'
-    if (existsSync(join(dir, 'package-lock.json'))) return 'npm'
+    if (nodeFs.existsSync(join(dir, 'yarn.lock'))) return 'yarn'
+    if (nodeFs.existsSync(join(dir, 'package-lock.json'))) return 'npm'
   }
   return 'unknown'
 }
@@ -106,12 +109,6 @@ function loadPnpApi(root: string): PnpApi | null {
   if (!pnpPath) return null
 
   try {
-    const moduleApi = requireFromHere('node:module') as {
-      findPnpApi?: (lookupSource: string) => PnpApi | null
-    }
-    const foundApi = moduleApi.findPnpApi?.(root)
-    if (foundApi) return foundApi
-
     const pnpModule = requireFromHere(pnpPath) as PnpApi
     if (typeof pnpModule.setup === 'function') {
       pnpModule.setup()
@@ -127,6 +124,16 @@ function loadPnpApi(root: string): PnpApi | null {
     const projectRequire = createRequire(join(dirname(pnpPath), 'package.json'))
     return projectRequire('pnpapi') as PnpApi
   } catch (err) {
+    try {
+      const moduleApi = requireFromHere('node:module') as {
+        findPnpApi?: (lookupSource: string) => PnpApi | null
+      }
+      const foundApi = moduleApi.findPnpApi?.(root)
+      if (foundApi) return foundApi
+    } catch {
+      // Ignore and report the project PnP load error below.
+    }
+
     const msg = err instanceof Error ? err.message : String(err)
     throw new Error(
       `Yarn PnP project detected, but Intent could not load Yarn's PnP API from ${pnpPath}: ${msg}`,
@@ -263,7 +270,7 @@ function discoverSkillByNameHint(
     if (!resolvedHint) continue
 
     const { childDir, skillFile } = resolvedHint
-    if (!existsSync(skillFile)) continue
+    if (!nodeFs.existsSync(skillFile)) continue
 
     const skill = readSkillEntry(skillsDir, childDir, skillFile)
     if (skill.name !== hint || seen.has(skill.name)) continue
@@ -446,14 +453,14 @@ export function scanForIntents(
     local: {
       path: nodeModulesDir,
       detected: true,
-      exists: existsSync(nodeModulesDir),
+      exists: nodeFs.existsSync(nodeModulesDir),
       scanned: false,
     },
     global: {
       path: explicitGlobalNodeModules,
       detected: Boolean(explicitGlobalNodeModules),
       exists: explicitGlobalNodeModules
-        ? existsSync(explicitGlobalNodeModules)
+        ? nodeFs.existsSync(explicitGlobalNodeModules)
         : false,
       scanned: false,
       source: explicitGlobalNodeModules
@@ -500,7 +507,7 @@ export function scanForIntents(
       nodeModules.global.source = detected.source
       nodeModules.global.detected = Boolean(detected.path)
       nodeModules.global.exists = detected.path
-        ? existsSync(detected.path)
+        ? nodeFs.existsSync(detected.path)
         : false
     }
   }
@@ -524,16 +531,20 @@ export function scanForIntents(
       warnings,
     })
 
-  const { walkKnownPackages, walkProjectDeps, walkWorkspacePackages } =
-    createDependencyWalker({
-      fsCache,
-      packages,
-      projectRoot,
-      readPkgJson,
-      scanNodeModulesDir,
-      tryRegister,
-      warnings,
-    })
+  const {
+    scanNestedNodeModulesDir,
+    walkKnownPackages,
+    walkProjectDeps,
+    walkWorkspacePackages,
+  } = createDependencyWalker({
+    fsCache,
+    packages,
+    projectRoot,
+    readPkgJson,
+    scanNodeModulesDir,
+    tryRegister,
+    warnings,
+  })
 
   function scanPnpPackages(api: PnpApi): void {
     const visited = new Set<string>()
@@ -582,13 +593,24 @@ export function scanForIntents(
     }
 
     assertLocalNodeModulesSupported(projectRoot)
+    const packageCountBeforeLocalDiscovery = packages.length
     walkWorkspacePackages()
     const packageCountBeforeDependencyDiscovery = packages.length
     scanTarget(nodeModules.local)
     walkKnownPackages()
     walkProjectDeps()
+    const shouldTryPnpFallback =
+      packages.length === packageCountBeforeDependencyDiscovery
 
-    if (packages.length === packageCountBeforeDependencyDiscovery) {
+    if (
+      nodeModules.local.path &&
+      nodeModules.local.exists &&
+      packages.length === packageCountBeforeLocalDiscovery
+    ) {
+      scanNestedNodeModulesDir(nodeModules.local.path)
+    }
+
+    if (shouldTryPnpFallback) {
       const api = getPnpApi()
       if (api) {
         scanPnpPackages(api)

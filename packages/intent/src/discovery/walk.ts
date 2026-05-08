@@ -1,10 +1,17 @@
-import { join } from 'node:path'
-import { resolveDepDir, getDeps } from '../utils.js'
+import { createRequire } from 'node:module'
+import { join, resolve } from 'node:path'
+import {
+  resolveDepDir,
+  getDeps,
+  listNestedNodeModulesPackageDirs,
+} from '../utils.js'
 import { findWorkspacePackages } from '../workspace-patterns.js'
 import type { IntentFsCache } from '../fs-cache.js'
 import type { IntentPackage } from '../types.js'
 
 type PackageJson = Record<string, unknown>
+const requireFromHere = createRequire(import.meta.url)
+const nodeFs = requireFromHere('node:fs') as typeof import('node:fs')
 
 export interface CreateDependencyWalkerOptions {
   fsCache: IntentFsCache
@@ -20,14 +27,23 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   const walkVisited = new Set<string>()
   const depDirCache = new Map<string, Map<string, string | null>>()
 
+  function getFsIdentity(path: string): string {
+    try {
+      return nodeFs.realpathSync(path)
+    } catch {
+      return resolve(path)
+    }
+  }
+
   function resolveDepDirCached(
     depName: string,
     fromDir: string,
   ): string | null {
-    let byDepName = depDirCache.get(fromDir)
+    const fromKey = getFsIdentity(fromDir)
+    let byDepName = depDirCache.get(fromKey)
     if (!byDepName) {
       byDepName = new Map()
-      depDirCache.set(fromDir, byDepName)
+      depDirCache.set(fromKey, byDepName)
     }
 
     if (!byDepName.has(depName)) {
@@ -44,7 +60,7 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   ): void {
     for (const depName of getDeps(pkgJson, includeDevDeps)) {
       const depDir = resolveDepDirCached(depName, fromDir)
-      if (!depDir || walkVisited.has(depDir)) continue
+      if (!depDir || walkVisited.has(getFsIdentity(depDir))) continue
 
       opts.tryRegister(depDir, depName)
       walkDeps(depDir, depName)
@@ -52,8 +68,9 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   }
 
   function walkDeps(pkgDir: string, pkgName: string): void {
-    if (walkVisited.has(pkgDir)) return
-    walkVisited.add(pkgDir)
+    const pkgKey = getFsIdentity(pkgDir)
+    if (walkVisited.has(pkgKey)) return
+    walkVisited.add(pkgKey)
 
     const pkgJson = opts.readPkgJson(pkgDir)
     if (!pkgJson) {
@@ -111,7 +128,14 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
     }
   }
 
+  function scanNestedNodeModulesDir(nodeModulesDir: string): void {
+    for (const dirPath of listNestedNodeModulesPackageDirs(nodeModulesDir)) {
+      opts.tryRegister(dirPath, 'unknown')
+    }
+  }
+
   return {
+    scanNestedNodeModulesDir,
     walkKnownPackages,
     walkProjectDeps,
     walkWorkspacePackages,

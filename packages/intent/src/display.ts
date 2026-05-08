@@ -10,6 +10,7 @@ import {
 export interface SkillDisplay {
   name: string
   description: string
+  loadCommand?: string
   type?: string
   path?: string
 }
@@ -48,6 +49,9 @@ function printSkillLine(
     ? (skill.type ? `[${skill.type}]` : '').padEnd(14)
     : ''
   console.log(`${nameStr}${padding}${typeCol}${skill.description}`)
+  if (skill.loadCommand) {
+    console.log(`${' '.repeat(indent + 2)}Load: ${skill.loadCommand}`)
+  }
   if (skill.path) {
     const pathIndent = ' '.repeat(indent + 2)
     if (isStableLoadPath(skill.path)) {
@@ -69,6 +73,7 @@ export function printSkillTree(
 ): void {
   const roots: Array<string> = []
   const children = new Map<string, Array<SkillDisplay>>()
+  const printedSkills = new Set<string>()
 
   for (const skill of skills) {
     const slashIdx = skill.name.indexOf('/')
@@ -92,11 +97,18 @@ export function printSkillTree(
     if (!rootSkill) continue
 
     printSkillLine(rootName, rootSkill, 4, opts)
+    printedSkills.add(rootSkill.name)
 
     for (const sub of children.get(rootName) ?? []) {
       const childName = sub.name.slice(sub.name.indexOf('/') + 1)
       printSkillLine(childName, sub, 6, opts)
+      printedSkills.add(sub.name)
     }
+  }
+
+  for (const skill of skills) {
+    if (printedSkills.has(skill.name)) continue
+    printSkillLine(skill.name, skill, 4, opts)
   }
 }
 

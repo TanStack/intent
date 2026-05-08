@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join, resolve, sep } from 'node:path'
 import { rewriteSkillLoadPaths } from '../skill-paths.js'
 import { listNodeModulesPackageDirs } from '../utils.js'
@@ -10,6 +10,8 @@ import type {
 } from '../types.js'
 
 type PackageJson = Record<string, unknown>
+const requireFromHere = createRequire(import.meta.url)
+const nodeFs = requireFromHere('node:fs') as typeof import('node:fs')
 
 function isLocalToProject(dirPath: string, projectRoot: string): boolean {
   return (
@@ -19,7 +21,11 @@ function isLocalToProject(dirPath: string, projectRoot: string): boolean {
 }
 
 function getFsIdentity(path: string): string {
-  return resolve(path)
+  try {
+    return nodeFs.realpathSync(path)
+  } catch {
+    return resolve(path)
+  }
 }
 
 export interface CreatePackageRegistrarOptions {
@@ -51,7 +57,7 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     nodeModulesDir: string,
     source: IntentPackage['source'] = 'local',
   ): void {
-    if (!existsSync(nodeModulesDir)) return
+    if (!nodeFs.existsSync(nodeModulesDir)) return
 
     const key = getFsIdentity(nodeModulesDir)
     if (scannedNodeModulesDirs.has(key)) return
@@ -79,7 +85,7 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     if (!shouldAttemptPackageRoot(dirPath)) return false
 
     const skillsDir = join(dirPath, 'skills')
-    if (!existsSync(skillsDir)) return false
+    if (!nodeFs.existsSync(skillsDir)) return false
 
     const pkgJson = opts.readPkgJson(dirPath)
     if (!pkgJson) {
