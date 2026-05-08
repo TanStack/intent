@@ -690,9 +690,9 @@ export function scanIntentPackageAtRoot(
             options.skillNameHint!,
           )
       : (skillsDir) => discoverSkills(skillsDir, fsCache),
-      getPackageDepth,
-      getFsIdentity: fsCache.getFsIdentity,
-      packageIndexes,
+    getPackageDepth,
+    getFsIdentity: fsCache.getFsIdentity,
+    packageIndexes,
     packages,
     projectRoot,
     readPkgJson,
