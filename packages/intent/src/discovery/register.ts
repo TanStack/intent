@@ -1,7 +1,7 @@
-import { createRequire } from 'node:module'
-import { join, resolve, sep } from 'node:path'
+import { existsSync } from 'node:fs'
+import { join, sep } from 'node:path'
 import { rewriteSkillLoadPaths } from '../skill-paths.js'
-import { listNodeModulesPackageDirs } from '../utils.js'
+import { createFsIdentityCache, listNodeModulesPackageDirs } from '../utils.js'
 import type {
   IntentConfig,
   IntentPackage,
@@ -10,22 +10,12 @@ import type {
 } from '../types.js'
 
 type PackageJson = Record<string, unknown>
-const requireFromHere = createRequire(import.meta.url)
-const nodeFs = requireFromHere('node:fs') as typeof import('node:fs')
 
 function isLocalToProject(dirPath: string, projectRoot: string): boolean {
   return (
     dirPath.startsWith(projectRoot + sep) ||
     dirPath.startsWith(projectRoot + '/')
   )
-}
-
-function getFsIdentity(path: string): string {
-  try {
-    return nodeFs.realpathSync(path)
-  } catch {
-    return resolve(path)
-  }
 }
 
 export interface CreatePackageRegistrarOptions {
@@ -45,6 +35,7 @@ export interface CreatePackageRegistrarOptions {
 export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
   const attemptedPackageRoots = new Set<string>()
   const scannedNodeModulesDirs = new Set<string>()
+  const getFsIdentity = createFsIdentityCache()
 
   function shouldAttemptPackageRoot(dirPath: string): boolean {
     const key = getFsIdentity(dirPath)
@@ -57,7 +48,7 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     nodeModulesDir: string,
     source: IntentPackage['source'] = 'local',
   ): void {
-    if (!nodeFs.existsSync(nodeModulesDir)) return
+    if (!existsSync(nodeModulesDir)) return
 
     const key = getFsIdentity(nodeModulesDir)
     if (scannedNodeModulesDirs.has(key)) return
@@ -85,7 +76,7 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     if (!shouldAttemptPackageRoot(dirPath)) return false
 
     const skillsDir = join(dirPath, 'skills')
-    if (!nodeFs.existsSync(skillsDir)) return false
+    if (!existsSync(skillsDir)) return false
 
     const pkgJson = opts.readPkgJson(dirPath)
     if (!pkgJson) {

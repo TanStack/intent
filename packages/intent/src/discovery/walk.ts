@@ -1,17 +1,15 @@
-import { createRequire } from 'node:module'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import {
-  resolveDepDir,
+  createFsIdentityCache,
   getDeps,
   listNestedNodeModulesPackageDirs,
+  resolveDepDir,
 } from '../utils.js'
 import { findWorkspacePackages } from '../workspace-patterns.js'
 import type { IntentFsCache } from '../fs-cache.js'
 import type { IntentPackage } from '../types.js'
 
 type PackageJson = Record<string, unknown>
-const requireFromHere = createRequire(import.meta.url)
-const nodeFs = requireFromHere('node:fs') as typeof import('node:fs')
 
 export interface CreateDependencyWalkerOptions {
   fsCache: IntentFsCache
@@ -26,14 +24,7 @@ export interface CreateDependencyWalkerOptions {
 export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   const walkVisited = new Set<string>()
   const depDirCache = new Map<string, Map<string, string | null>>()
-
-  function getFsIdentity(path: string): string {
-    try {
-      return nodeFs.realpathSync(path)
-    } catch {
-      return resolve(path)
-    }
-  }
+  const getFsIdentity = createFsIdentityCache()
 
   function resolveDepDirCached(
     depName: string,
@@ -60,7 +51,7 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   ): void {
     for (const depName of getDeps(pkgJson, includeDevDeps)) {
       const depDir = resolveDepDirCached(depName, fromDir)
-      if (!depDir || walkVisited.has(getFsIdentity(depDir))) continue
+      if (!depDir) continue
 
       opts.tryRegister(depDir, depName)
       walkDeps(depDir, depName)

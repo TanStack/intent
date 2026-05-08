@@ -1272,7 +1272,7 @@ describe('scanForIntents', () => {
     expect(result.packages[0]!.name).toBe('@tanstack/db')
   })
 
-  it('falls back to bounded nested node_modules discovery', () => {
+  it('falls back to bounded nested node_modules discovery through symlinks', () => {
     writeJson(join(root, 'package.json'), {
       name: 'app',
       private: true,
@@ -1284,12 +1284,7 @@ describe('scanForIntents', () => {
       version: '1.0.0',
     })
 
-    const skillPkgDir = createDir(
-      wrapperDir,
-      'node_modules',
-      '@tanstack',
-      'query',
-    )
+    const skillPkgDir = createDir(root, 'store', '@tanstack', 'query')
     writeJson(join(skillPkgDir, 'package.json'), {
       name: '@tanstack/query',
       version: '5.0.0',
@@ -1299,6 +1294,13 @@ describe('scanForIntents', () => {
       name: 'fetching',
       description: 'Query fetching skill',
     })
+
+    createDir(wrapperDir, 'node_modules', '@tanstack')
+    symlinkSync(
+      skillPkgDir,
+      join(wrapperDir, 'node_modules', '@tanstack', 'query'),
+      'dir',
+    )
     symlinkSync(
       join(root, 'node_modules'),
       join(wrapperDir, 'node_modules', 'loop'),
@@ -1310,6 +1312,41 @@ describe('scanForIntents', () => {
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/query')
     expect(result.stats!.packageJsonReadCount).toBeLessThan(10)
+  })
+
+  it('does not crawl package source trees during nested node_modules discovery', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+    })
+
+    const wrapperDir = createDir(root, 'node_modules', 'wrapper')
+    writeJson(join(wrapperDir, 'package.json'), {
+      name: 'wrapper',
+      version: '1.0.0',
+    })
+
+    const sourcePackageDir = createDir(
+      wrapperDir,
+      'src',
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    writeJson(join(sourcePackageDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(sourcePackageDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query fetching skill',
+    })
+
+    const result = scanForIntents(root)
+
+    expect(result.packages).toEqual([])
+    expect(result.stats!.packageJsonReadCount).toBeLessThan(4)
   })
 
   it('dedupes recursive workspace symlink paths by real package identity', () => {

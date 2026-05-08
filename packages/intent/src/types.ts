@@ -14,7 +14,7 @@ export interface IntentConfig {
 // ---------------------------------------------------------------------------
 
 export interface ScanResult {
-  packageManager: 'npm' | 'pnpm' | 'yarn' | 'bun' | 'unknown'
+  packageManager: PackageManager
   packages: Array<IntentPackage>
   warnings: Array<string>
   conflicts: Array<VersionConflict>
@@ -24,6 +24,8 @@ export interface ScanResult {
   }
   stats?: ScanStats
 }
+
+export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'unknown'
 
 export type ScanScope = 'local' | 'local-and-global' | 'global'
 

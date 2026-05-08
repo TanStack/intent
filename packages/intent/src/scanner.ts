@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import semver from 'semver'
@@ -53,7 +54,6 @@ interface PnpApi {
 }
 
 const requireFromHere = createRequire(import.meta.url)
-const nodeFs = requireFromHere('node:fs') as typeof import('node:fs')
 
 function findPnpFile(start: string): string | null {
   let dir = resolve(start)
@@ -61,7 +61,7 @@ function findPnpFile(start: string): string | null {
   while (true) {
     for (const fileName of ['.pnp.cjs', '.pnp.js']) {
       const pnpPath = join(dir, fileName)
-      if (nodeFs.existsSync(pnpPath)) return pnpPath
+      if (existsSync(pnpPath)) return pnpPath
     }
 
     const next = dirname(dir)
@@ -76,8 +76,8 @@ function isYarnPnpProject(root: string): boolean {
 
 function assertLocalNodeModulesSupported(root: string): void {
   if (
-    nodeFs.existsSync(join(root, 'deno.json')) &&
-    !nodeFs.existsSync(join(root, 'node_modules'))
+    existsSync(join(root, 'deno.json')) &&
+    !existsSync(join(root, 'node_modules'))
   ) {
     throw new Error(
       'Deno without node_modules is not yet supported. Add `"nodeModulesDir": "auto"` to your deno.json to use intent.',
@@ -92,14 +92,11 @@ function detectPackageManager(root: string): PackageManager {
 
   for (const dir of dirsToCheck) {
     if (isYarnPnpProject(dir)) return 'yarn'
-    if (nodeFs.existsSync(join(dir, 'pnpm-lock.yaml'))) return 'pnpm'
-    if (
-      nodeFs.existsSync(join(dir, 'bun.lockb')) ||
-      nodeFs.existsSync(join(dir, 'bun.lock'))
-    )
+    if (existsSync(join(dir, 'pnpm-lock.yaml'))) return 'pnpm'
+    if (existsSync(join(dir, 'bun.lockb')) || existsSync(join(dir, 'bun.lock')))
       return 'bun'
-    if (nodeFs.existsSync(join(dir, 'yarn.lock'))) return 'yarn'
-    if (nodeFs.existsSync(join(dir, 'package-lock.json'))) return 'npm'
+    if (existsSync(join(dir, 'yarn.lock'))) return 'yarn'
+    if (existsSync(join(dir, 'package-lock.json'))) return 'npm'
   }
   return 'unknown'
 }
@@ -270,7 +267,7 @@ function discoverSkillByNameHint(
     if (!resolvedHint) continue
 
     const { childDir, skillFile } = resolvedHint
-    if (!nodeFs.existsSync(skillFile)) continue
+    if (!existsSync(skillFile)) continue
 
     const skill = readSkillEntry(skillsDir, childDir, skillFile)
     if (skill.name !== hint || seen.has(skill.name)) continue
@@ -453,14 +450,14 @@ export function scanForIntents(
     local: {
       path: nodeModulesDir,
       detected: true,
-      exists: nodeFs.existsSync(nodeModulesDir),
+      exists: existsSync(nodeModulesDir),
       scanned: false,
     },
     global: {
       path: explicitGlobalNodeModules,
       detected: Boolean(explicitGlobalNodeModules),
       exists: explicitGlobalNodeModules
-        ? nodeFs.existsSync(explicitGlobalNodeModules)
+        ? existsSync(explicitGlobalNodeModules)
         : false,
       scanned: false,
       source: explicitGlobalNodeModules
@@ -507,7 +504,7 @@ export function scanForIntents(
       nodeModules.global.source = detected.source
       nodeModules.global.detected = Boolean(detected.path)
       nodeModules.global.exists = detected.path
-        ? nodeFs.existsSync(detected.path)
+        ? existsSync(detected.path)
         : false
     }
   }

@@ -1,11 +1,14 @@
 import { execFileSync } from 'node:child_process'
-import type { Dirent } from 'node:fs'
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  type Dirent,
+} from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-
-const requireFromHere = createRequire(import.meta.url)
-const nodeFs = requireFromHere('node:fs') as typeof import('node:fs')
 
 /**
  * Convert a path to use forward slashes (for cross-platform consistency).
@@ -14,16 +17,36 @@ export function toPosixPath(p: string): string {
   return p.split(sep).join('/')
 }
 
+export function createFsIdentityCache(): (path: string) => string {
+  const cache = new Map<string, string>()
+
+  return (path: string): string => {
+    const resolved = resolve(path)
+    const cached = cache.get(resolved)
+    if (cached) return cached
+
+    let identity: string
+    try {
+      identity = realpathSync(resolved)
+    } catch {
+      identity = resolved
+    }
+
+    cache.set(resolved, identity)
+    return identity
+  }
+}
+
 /**
  * Recursively find all SKILL.md files under a directory.
  */
 export function findSkillFiles(dir: string): Array<string> {
   const files: Array<string> = []
-  if (!nodeFs.existsSync(dir)) return files
+  if (!existsSync(dir)) return files
 
   let entries: Array<Dirent<string>>
   try {
-    entries = nodeFs.readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
+    entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
   } catch {
     return files
   }
@@ -65,11 +88,11 @@ export function getDeps(
 export function listNodeModulesPackageDirs(
   nodeModulesDir: string,
 ): Array<string> {
-  if (!nodeFs.existsSync(nodeModulesDir)) return []
+  if (!existsSync(nodeModulesDir)) return []
 
   let topEntries: Array<Dirent<string>>
   try {
-    topEntries = nodeFs.readdirSync(nodeModulesDir, {
+    topEntries = readdirSync(nodeModulesDir, {
       withFileTypes: true,
       encoding: 'utf8',
     })
@@ -86,7 +109,7 @@ export function listNodeModulesPackageDirs(
     if (entry.name.startsWith('@')) {
       let scopedEntries: Array<Dirent<string>>
       try {
-        scopedEntries = nodeFs.readdirSync(dirPath, {
+        scopedEntries = readdirSync(dirPath, {
           withFileTypes: true,
           encoding: 'utf8',
         })
@@ -110,67 +133,48 @@ export function listNestedNodeModulesPackageDirs(
   nodeModulesDir: string,
 ): Array<string> {
   const packageDirs: Array<string> = []
-  const visitedDirs = new Set<string>()
-
-  function getDirIdentity(dir: string): string {
-    try {
-      return nodeFs.realpathSync(dir)
-    } catch {
-      return resolve(dir)
-    }
-  }
+  const getFsIdentity = createFsIdentityCache()
+  const visitedNodeModulesDirs = new Set<string>()
+  const visitedPackageDirs = new Set<string>()
 
   function readDir(dir: string): Array<Dirent<string>> {
     try {
-      return nodeFs.readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
+      return readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
     } catch {
       return []
     }
   }
 
-  function visitPackageDir(packageDir: string): void {
-    const key = getDirIdentity(packageDir)
-    if (visitedDirs.has(key)) return
-    visitedDirs.add(key)
+  function addPackageDir(packageDir: string): void {
+    const key = getFsIdentity(packageDir)
+    if (visitedPackageDirs.has(key)) return
+    visitedPackageDirs.add(key)
 
-    for (const entry of readDir(packageDir)) {
-      if (!entry.isDirectory() || entry.isSymbolicLink()) continue
-      const childDir = join(packageDir, entry.name)
-      if (entry.name === 'node_modules') {
-        scanNodeModulesDir(childDir)
-      } else {
-        visitPackageDir(childDir)
-      }
+    if (existsSync(join(packageDir, 'package.json'))) {
+      packageDirs.push(packageDir)
     }
+
+    scanNodeModulesDir(join(packageDir, 'node_modules'))
   }
 
   function scanNodeModulesDir(dir: string): void {
-    const key = getDirIdentity(dir)
-    if (visitedDirs.has(key)) return
-    visitedDirs.add(key)
+    const key = getFsIdentity(dir)
+    if (visitedNodeModulesDirs.has(key)) return
+    visitedNodeModulesDirs.add(key)
 
     for (const entry of readDir(dir)) {
-      if (entry.isSymbolicLink()) continue
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
       const dirPath = join(dir, entry.name)
 
       if (entry.name.startsWith('@')) {
-        if (!entry.isDirectory()) continue
         for (const scoped of readDir(dirPath)) {
-          if (scoped.isSymbolicLink() || !scoped.isDirectory()) continue
-          const packageDir = join(dirPath, scoped.name)
-          if (nodeFs.existsSync(join(packageDir, 'package.json'))) {
-            packageDirs.push(packageDir)
-          }
-          visitPackageDir(packageDir)
+          if (!scoped.isDirectory() && !scoped.isSymbolicLink()) continue
+          addPackageDir(join(dirPath, scoped.name))
         }
         continue
       }
 
-      if (!entry.isDirectory()) continue
-      if (nodeFs.existsSync(join(dirPath, 'package.json'))) {
-        packageDirs.push(dirPath)
-      }
-      visitPackageDir(dirPath)
+      if (!entry.name.startsWith('.')) addPackageDir(dirPath)
     }
   }
 
@@ -263,7 +267,7 @@ export function resolveDepDir(
   let dir = parentDir
   while (true) {
     const candidate = join(dir, 'node_modules', depName)
-    if (nodeFs.existsSync(join(candidate, 'package.json'))) return candidate
+    if (existsSync(join(candidate, 'package.json'))) return candidate
     const parent = dirname(dir)
     if (parent === dir) break
     dir = parent
@@ -280,7 +284,7 @@ export function parseFrontmatter(
 ): Record<string, unknown> | null {
   let content: string
   try {
-    content = nodeFs.readFileSync(filePath, 'utf8')
+    content = readFileSync(filePath, 'utf8')
   } catch {
     return null
   }

@@ -1,14 +1,14 @@
-import { createRequire } from 'node:module'
-import { join, resolve } from 'node:path'
-import { findSkillFiles as findSkillFilesUncached } from './utils.js'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import {
+  createFsIdentityCache,
+  findSkillFiles as findSkillFilesUncached,
+} from './utils.js'
 
 type PackageJsonReadResult = {
   packageJson: Record<string, unknown> | null
   error: unknown | null
 }
-
-const requireFromHere = createRequire(import.meta.url)
-const nodeFs = requireFromHere('node:fs') as typeof import('node:fs')
 
 export type IntentFsCacheStats = {
   packageJsonReadCount: number
@@ -22,14 +22,6 @@ export type IntentFsCache = {
   getStats: () => IntentFsCacheStats
 }
 
-function normalizeCacheKey(path: string): string {
-  try {
-    return nodeFs.realpathSync(path)
-  } catch {
-    return resolve(path)
-  }
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -37,13 +29,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function createIntentFsCache(): IntentFsCache {
   const packageJsonCache = new Map<string, PackageJsonReadResult>()
   const skillFilesCache = new Map<string, Array<string>>()
+  const getFsIdentity = createFsIdentityCache()
   const stats: IntentFsCacheStats = {
     packageJsonReadCount: 0,
     packageJsonCacheHits: 0,
   }
 
   function readPackageJsonResult(dir: string): PackageJsonReadResult {
-    const key = normalizeCacheKey(dir)
+    const key = getFsIdentity(dir)
     const cached = packageJsonCache.get(key)
     if (cached) {
       stats.packageJsonCacheHits += 1
@@ -53,7 +46,7 @@ export function createIntentFsCache(): IntentFsCache {
     stats.packageJsonReadCount += 1
     try {
       const parsed = JSON.parse(
-        nodeFs.readFileSync(join(dir, 'package.json'), 'utf8'),
+        readFileSync(join(dir, 'package.json'), 'utf8'),
       ) as unknown
       const result = {
         packageJson: isRecord(parsed) ? parsed : null,
@@ -73,7 +66,7 @@ export function createIntentFsCache(): IntentFsCache {
   }
 
   function findSkillFiles(dir: string): Array<string> {
-    const key = normalizeCacheKey(dir)
+    const key = getFsIdentity(dir)
     const cached = skillFilesCache.get(key)
     if (cached) {
       return [...cached]

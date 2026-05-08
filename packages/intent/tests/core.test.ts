@@ -105,6 +105,7 @@ describe('listIntentSkills', () => {
     const result = listIntentSkills({ cwd: root })
 
     expect(result).toEqual({
+      packageManager: 'unknown',
       skills: [
         {
           use: '@tanstack/query#fetching',

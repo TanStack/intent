@@ -4,10 +4,7 @@ import {
   printWarnings,
   type GlobalScanFlags,
 } from '../cli-support.js'
-import {
-  detectIntentCommandPackageManager,
-  formatIntentCommand,
-} from '../command-runner.js'
+import { formatIntentCommand } from '../command-runner.js'
 import { listIntentSkills } from '../core.js'
 import type {
   IntentPackageSummary,
@@ -95,7 +92,8 @@ export async function runListCommand(
   printListDebug(result)
 
   if (options.json) {
-    const { debug: _debug, ...jsonResult } = result
+    const { debug: _debug, packageManager: _packageManager, ...jsonResult } =
+      result
     console.log(JSON.stringify(jsonResult, null, 2))
     return
   }
@@ -141,7 +139,6 @@ export async function runListCommand(
     : options.global
       ? ' --global'
       : ''
-  const packageManager = detectIntentCommandPackageManager()
 
   console.log(`\nSkills:\n`)
   for (const pkg of result.packages) {
@@ -150,7 +147,7 @@ export async function runListCommand(
       getPackageSkills(pkg, skillsByPackageRoot).map((skill) => ({
         name: skill.skillName,
         description: skill.description,
-        loadCommand: formatLoadCommand(skill, packageManager, scopeFlag),
+        loadCommand: formatLoadCommand(skill, result.packageManager, scopeFlag),
         type: skill.type,
       })),
       { nameWidth, packageName: pkg.name, showTypes },
