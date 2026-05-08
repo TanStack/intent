@@ -26,6 +26,15 @@ Intent provides tooling for two workflows:
 
 ### Discovery and installation
 
+Examples use `npx` for npm projects. In pnpm, Yarn, or Bun projects, use the matching runner:
+
+| Tool | Pattern                                      |
+| ---- | -------------------------------------------- |
+| npm  | `npx @tanstack/intent@latest <command>`      |
+| pnpm | `pnpm dlx @tanstack/intent@latest <command>` |
+| Yarn | `yarn dlx @tanstack/intent@latest <command>` |
+| Bun  | `bunx @tanstack/intent@latest <command>`     |
+
 ```bash
 npx @tanstack/intent@latest list
 ```
