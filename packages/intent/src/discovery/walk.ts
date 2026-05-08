@@ -123,7 +123,11 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
       nodeModulesDir,
       opts.getFsIdentity,
     )) {
-      opts.tryRegister(dirPath, 'unknown')
+      if (!opts.tryRegister(dirPath, 'unknown')) continue
+
+      const pkgJson = opts.readPkgJson(dirPath)
+      const pkgName = typeof pkgJson?.name === 'string' ? pkgJson.name : 'unknown'
+      walkDeps(dirPath, pkgName)
     }
   }
 

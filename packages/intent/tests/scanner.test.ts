@@ -1288,11 +1288,29 @@ describe('scanForIntents', () => {
     writeJson(join(skillPkgDir, 'package.json'), {
       name: '@tanstack/query',
       version: '5.0.0',
+      dependencies: {
+        '@tanstack/store': '1.0.0',
+      },
       intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
     })
     writeSkillMd(createDir(skillPkgDir, 'skills', 'fetching'), {
       name: 'fetching',
       description: 'Query fetching skill',
+    })
+    const transitiveSkillPkgDir = createDir(
+      skillPkgDir,
+      'node_modules',
+      '@tanstack',
+      'store',
+    )
+    writeJson(join(transitiveSkillPkgDir, 'package.json'), {
+      name: '@tanstack/store',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'TanStack/store', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(transitiveSkillPkgDir, 'skills', 'store'), {
+      name: 'store',
+      description: 'Store skill',
     })
 
     createDir(wrapperDir, 'node_modules', '@tanstack')
@@ -1309,8 +1327,10 @@ describe('scanForIntents', () => {
 
     const result = scanForIntents(root)
 
-    expect(result.packages).toHaveLength(1)
-    expect(result.packages[0]!.name).toBe('@tanstack/query')
+    expect(result.packages.map((pkg) => pkg.name).sort()).toEqual([
+      '@tanstack/query',
+      '@tanstack/store',
+    ])
     expect(result.stats!.packageJsonReadCount).toBeLessThan(10)
   })
 
