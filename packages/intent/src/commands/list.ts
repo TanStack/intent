@@ -4,7 +4,10 @@ import {
   printWarnings,
   type GlobalScanFlags,
 } from '../cli-support.js'
-import { formatIntentCommand } from '../command-runner.js'
+import {
+  detectIntentCommandPackageManager,
+  formatIntentCommand,
+} from '../command-runner.js'
 import { listIntentSkills } from '../core.js'
 import type {
   IntentPackageSummary,
@@ -78,18 +81,10 @@ function getPackageSkills(
 
 function formatLoadCommand(
   skill: IntentSkillSummary,
-  result: IntentSkillList,
-  options: ListCommandOptions,
+  packageManager: ScanResult['packageManager'],
+  scopeFlag: string,
 ): string {
-  const scopeFlag = options.globalOnly
-    ? ' --global-only'
-    : options.global
-      ? ' --global'
-      : ''
-  return formatIntentCommand(
-    result.packageManager,
-    `load ${skill.use}${scopeFlag}`,
-  )
+  return formatIntentCommand(packageManager, `load ${skill.use}${scopeFlag}`)
 }
 
 export async function runListCommand(
@@ -100,11 +95,7 @@ export async function runListCommand(
   printListDebug(result)
 
   if (options.json) {
-    const {
-      debug: _debug,
-      packageManager: _packageManager,
-      ...jsonResult
-    } = result
+    const { debug: _debug, ...jsonResult } = result
     console.log(JSON.stringify(jsonResult, null, 2))
     return
   }
@@ -145,6 +136,12 @@ export async function runListCommand(
   )
   const nameWidth = computeSkillNameWidth(allSkills)
   const showTypes = result.skills.some((skill) => skill.type)
+  const scopeFlag = options.globalOnly
+    ? ' --global-only'
+    : options.global
+      ? ' --global'
+      : ''
+  const packageManager = detectIntentCommandPackageManager()
 
   console.log(`\nSkills:\n`)
   for (const pkg of result.packages) {
@@ -153,7 +150,7 @@ export async function runListCommand(
       getPackageSkills(pkg, skillsByPackageRoot).map((skill) => ({
         name: skill.skillName,
         description: skill.description,
-        loadCommand: formatLoadCommand(skill, result, options),
+        loadCommand: formatLoadCommand(skill, packageManager, scopeFlag),
         type: skill.type,
       })),
       { nameWidth, packageName: pkg.name, showTypes },

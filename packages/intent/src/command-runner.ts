@@ -4,25 +4,21 @@ import type { ScanResult } from './types.js'
 
 type PackageManager = ScanResult['packageManager']
 
+const runnerByPackageManager: Record<PackageManager, string> = {
+  bun: 'bunx @tanstack/intent@latest',
+  npm: 'npx @tanstack/intent@latest',
+  pnpm: 'pnpm dlx @tanstack/intent@latest',
+  unknown: 'npx @tanstack/intent@latest',
+  yarn: 'yarn dlx @tanstack/intent@latest',
+}
+
 export function formatIntentCommand(
   packageManager: PackageManager,
   args: string,
 ): string {
-  const command = (() => {
-    switch (packageManager) {
-      case 'pnpm':
-        return 'pnpm dlx @tanstack/intent@latest'
-      case 'yarn':
-        return 'yarn dlx @tanstack/intent@latest'
-      case 'bun':
-        return 'bunx @tanstack/intent@latest'
-      case 'npm':
-      case 'unknown':
-        return 'npx @tanstack/intent@latest'
-    }
-  })()
-
-  return args.trim() ? `${command} ${args}` : command
+  const command = runnerByPackageManager[packageManager]
+  const trimmedArgs = args.trim()
+  return trimmedArgs ? `${command} ${trimmedArgs}` : command
 }
 
 export function detectIntentCommandPackageManager(

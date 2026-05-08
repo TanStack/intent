@@ -191,7 +191,7 @@ export async function runInstallCommand(
     return
   }
 
-  scanOptionsFromGlobalFlags(options)
+  const scanOptions = scanOptionsFromGlobalFlags(options)
 
   if (!options.map) {
     const generated = buildIntentSkillGuidanceBlock(
@@ -237,9 +237,7 @@ export async function runInstallCommand(
     return
   }
 
-  const scanResult = await scanIntentsOrFail(
-    scanOptionsFromGlobalFlags(options),
-  )
+  const scanResult = await scanIntentsOrFail(scanOptions)
   const generated = buildIntentSkillsBlock(scanResult)
 
   if (options.dryRun) {

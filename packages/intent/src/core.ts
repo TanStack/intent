@@ -125,7 +125,6 @@ export function listIntentSkills(
   )
 
   const result: IntentSkillList = {
-    packageManager: scanResult.packageManager,
     skills,
     packages: packages.map((pkg) => ({
       name: pkg.name,

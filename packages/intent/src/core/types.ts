@@ -1,6 +1,5 @@
 import type {
   IntentPackage,
-  ScanResult,
   ScanScope,
   ScanStats,
   VersionConflict,
@@ -35,7 +34,6 @@ export interface IntentPackageSummary {
 }
 
 export interface IntentSkillList {
-  packageManager: ScanResult['packageManager']
   skills: Array<IntentSkillSummary>
   packages: Array<IntentPackageSummary>
   warnings: Array<string>
