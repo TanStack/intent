@@ -657,6 +657,44 @@ describe('cli commands', () => {
     },
   )
 
+  it('does not print warning noise for normal pnpm list output', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-pnpm-clean-'))
+    tempDirs.push(root)
+    writeFileSync(join(root, 'pnpm-lock.yaml'), '')
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      dependencies: {
+        wrapper: '1.0.0',
+      },
+    })
+
+    const wrapperDir = join(root, 'node_modules', 'wrapper')
+    writeJson(join(wrapperDir, 'package.json'), {
+      name: 'wrapper',
+      version: '1.0.0',
+      dependencies: {
+        '@tanstack/query': '5.0.0',
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query fetching skill',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['list'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('@tanstack/query')
+    expect(output).not.toContain('Warnings:')
+    expect(output).not.toContain('Could not read')
+  })
+
   it('prints list debug details to stderr without changing json stdout', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-debug-'))
     tempDirs.push(root)

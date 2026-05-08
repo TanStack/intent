@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import {
   existsSync,
+  lstatSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -27,7 +28,9 @@ export function createFsIdentityCache(): (path: string) => string {
 
     let identity: string
     try {
-      identity = realpathSync(resolved)
+      identity = lstatSync(resolved).isSymbolicLink()
+        ? realpathSync(resolved)
+        : resolved
     } catch {
       identity = resolved
     }
@@ -131,9 +134,9 @@ export function listNodeModulesPackageDirs(
 
 export function listNestedNodeModulesPackageDirs(
   nodeModulesDir: string,
+  getFsIdentity = createFsIdentityCache(),
 ): Array<string> {
   const packageDirs: Array<string> = []
-  const getFsIdentity = createFsIdentityCache()
   const visitedNodeModulesDirs = new Set<string>()
   const visitedPackageDirs = new Set<string>()
 

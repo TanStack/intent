@@ -1,6 +1,5 @@
 import { join } from 'node:path'
 import {
-  createFsIdentityCache,
   getDeps,
   listNestedNodeModulesPackageDirs,
   resolveDepDir,
@@ -15,6 +14,7 @@ export interface CreateDependencyWalkerOptions {
   fsCache: IntentFsCache
   projectRoot: string
   readPkgJson: (dirPath: string) => PackageJson | null
+  getFsIdentity: (path: string) => string
   scanNodeModulesDir: (nodeModulesDir: string) => void
   tryRegister: (dirPath: string, fallbackName: string) => boolean
   packages: Array<IntentPackage>
@@ -24,13 +24,12 @@ export interface CreateDependencyWalkerOptions {
 export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   const walkVisited = new Set<string>()
   const depDirCache = new Map<string, Map<string, string | null>>()
-  const getFsIdentity = createFsIdentityCache()
 
   function resolveDepDirCached(
     depName: string,
     fromDir: string,
   ): string | null {
-    const fromKey = getFsIdentity(fromDir)
+    const fromKey = opts.getFsIdentity(fromDir)
     let byDepName = depDirCache.get(fromKey)
     if (!byDepName) {
       byDepName = new Map()
@@ -59,7 +58,7 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   }
 
   function walkDeps(pkgDir: string, pkgName: string): void {
-    const pkgKey = getFsIdentity(pkgDir)
+    const pkgKey = opts.getFsIdentity(pkgDir)
     if (walkVisited.has(pkgKey)) return
     walkVisited.add(pkgKey)
 
@@ -120,7 +119,10 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   }
 
   function scanNestedNodeModulesDir(nodeModulesDir: string): void {
-    for (const dirPath of listNestedNodeModulesPackageDirs(nodeModulesDir)) {
+    for (const dirPath of listNestedNodeModulesPackageDirs(
+      nodeModulesDir,
+      opts.getFsIdentity,
+    )) {
       opts.tryRegister(dirPath, 'unknown')
     }
   }

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { rewriteSkillLoadPaths } from '../skill-paths.js'
-import { createFsIdentityCache, listNodeModulesPackageDirs } from '../utils.js'
+import { listNodeModulesPackageDirs } from '../utils.js'
 import type {
   IntentConfig,
   IntentPackage,
@@ -27,6 +27,7 @@ export interface CreatePackageRegistrarOptions {
   packages: Array<IntentPackage>
   projectRoot: string
   readPkgJson: (dirPath: string) => PackageJson | null
+  getFsIdentity: (path: string) => string
   rememberVariant: (pkg: IntentPackage) => void
   validateIntentField: (pkgName: string, intent: unknown) => IntentConfig | null
   warnings: Array<string>
@@ -35,10 +36,9 @@ export interface CreatePackageRegistrarOptions {
 export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
   const attemptedPackageRoots = new Set<string>()
   const scannedNodeModulesDirs = new Set<string>()
-  const getFsIdentity = createFsIdentityCache()
 
   function shouldAttemptPackageRoot(dirPath: string): boolean {
-    const key = getFsIdentity(dirPath)
+    const key = opts.getFsIdentity(dirPath)
     if (attemptedPackageRoots.has(key)) return false
     attemptedPackageRoots.add(key)
     return true
@@ -50,7 +50,7 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
   ): void {
     if (!existsSync(nodeModulesDir)) return
 
-    const key = getFsIdentity(nodeModulesDir)
+    const key = opts.getFsIdentity(nodeModulesDir)
     if (scannedNodeModulesDirs.has(key)) return
     scannedNodeModulesDirs.add(key)
 

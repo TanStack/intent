@@ -19,6 +19,7 @@ export type IntentFsCache = {
   readPackageJson: (dir: string) => Record<string, unknown> | null
   readPackageJsonResult: (dir: string) => PackageJsonReadResult
   findSkillFiles: (dir: string) => Array<string>
+  getFsIdentity: (path: string) => string
   getStats: () => IntentFsCacheStats
 }
 
@@ -81,6 +82,7 @@ export function createIntentFsCache(): IntentFsCache {
     readPackageJson,
     readPackageJsonResult,
     findSkillFiles,
+    getFsIdentity,
     getStats: () => ({ ...stats }),
   }
 }

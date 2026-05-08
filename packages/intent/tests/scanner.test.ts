@@ -1373,10 +1373,15 @@ describe('scanForIntents', () => {
     writeJson(join(bDir, 'package.json'), {
       name: 'b',
       version: '1.0.0',
+      intent: { version: 1, repo: 'example/b', docs: 'docs/' },
       exports: { '.': './index.js' },
       dependencies: { a: 'workspace:*' },
     })
     writeFileSync(join(bDir, 'index.js'), '')
+    writeSkillMd(createDir(bDir, 'skills', 'core'), {
+      name: 'core',
+      description: 'Core skill',
+    })
 
     createDir(root, 'node_modules')
     symlinkSync(aDir, join(root, 'node_modules', 'a'), 'dir')
@@ -1387,7 +1392,8 @@ describe('scanForIntents', () => {
 
     const result = scanForIntents(root)
 
-    expect(result.packages).toEqual([])
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('b')
     expect(result.stats!.packageJsonReadCount).toBeLessThan(10)
   })
 
