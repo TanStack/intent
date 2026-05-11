@@ -124,16 +124,14 @@ function searchSkills(args: SearchArgs): string {
     .filter((skill) => !query || includesQuery(skill, query))
     .filter((skill) => !packageName || skill.packageName === packageName)
 
-  const skills = matchingSkills
-    .slice(0, limit)
-    .map((skill) => ({
-      use: skill.use,
-      packageName: skill.packageName,
-      version: skill.packageVersion,
-      description: skill.description,
-      type: skill.type,
-      framework: skill.framework,
-    }))
+  const skills = matchingSkills.slice(0, limit).map((skill) => ({
+    use: skill.use,
+    packageName: skill.packageName,
+    version: skill.packageVersion,
+    description: skill.description,
+    type: skill.type,
+    framework: skill.framework,
+  }))
 
   return stringifyResponse(
     {
