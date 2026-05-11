@@ -6,6 +6,7 @@ import {
   listIntentSkills,
   loadIntentSkill,
   type IntentCoreOptions,
+  type IntentSkillList,
   type IntentSkillSummary,
 } from '@tanstack/intent/core'
 import { resolve } from 'node:path'
@@ -43,6 +44,8 @@ interface SearchArgs extends CommonArgs {
   limit?: number
 }
 
+const skillListCache = new Map<string, IntentSkillList>()
+
 function createCoreOptions(args: CommonArgs): IntentCoreOptions {
   return {
     cwd: args.root ? resolve(process.cwd(), args.root) : process.cwd(),
@@ -51,6 +54,36 @@ function createCoreOptions(args: CommonArgs): IntentCoreOptions {
     globalOnly: args.globalOnly,
     exclude: args.exclude,
   }
+}
+
+function createCacheKey(options: IntentCoreOptions): string {
+  return JSON.stringify({
+    cwd: options.cwd,
+    global: options.global ?? false,
+    globalOnly: options.globalOnly ?? false,
+    exclude: options.exclude ?? [],
+  })
+}
+
+function getIntentSkillList(args: CommonArgs): IntentSkillList {
+  const options = createCoreOptions(args)
+  if (args.debug) {
+    return listIntentSkills(options)
+  }
+
+  const cacheKey = createCacheKey(options)
+  const cached = skillListCache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
+  const result = listIntentSkills(options)
+  skillListCache.set(cacheKey, result)
+  return result
+}
+
+function stringifyResponse(value: unknown, debug?: boolean): string {
+  return JSON.stringify(value, null, debug ? 2 : undefined)
 }
 
 function textResult(text: string) {
@@ -84,8 +117,8 @@ function includesQuery(skill: IntentSkillSummary, query: string): boolean {
 }
 
 function searchSkills(args: SearchArgs): string {
-  const limit = Math.min(Math.max(args.limit ?? 10, 1), 25)
-  const result = listIntentSkills(createCoreOptions(args))
+  const limit = Math.min(Math.max(args.limit ?? 5, 1), 25)
+  const result = getIntentSkillList(args)
   const query = args.query?.trim()
   const packageName = args.packageName?.trim()
 
@@ -104,7 +137,7 @@ function searchSkills(args: SearchArgs): string {
       framework: skill.framework,
     }))
 
-  return JSON.stringify(
+  return stringifyResponse(
     {
       skills,
       totalMatches: matchingSkills.length,
@@ -112,8 +145,7 @@ function searchSkills(args: SearchArgs): string {
       conflictCount: result.conflicts.length,
       debug: args.debug ? result.debug : undefined,
     },
-    null,
-    2,
+    args.debug,
   )
 }
 
@@ -139,9 +171,9 @@ function loadSkill(args: CommonArgs & { use: string }): string {
 }
 
 function getStatus(args: CommonArgs): string {
-  const result = listIntentSkills(createCoreOptions(args))
+  const result = getIntentSkillList(args)
 
-  return JSON.stringify(
+  return stringifyResponse(
     {
       packageManager: result.packageManager,
       packageCount: result.packages.length,
@@ -150,8 +182,7 @@ function getStatus(args: CommonArgs): string {
       conflictCount: result.conflicts.length,
       debug: args.debug ? result.debug : undefined,
     },
-    null,
-    2,
+    args.debug,
   )
 }
 
@@ -169,7 +200,13 @@ server.registerTool(
     inputSchema: {
       query: z.string().optional().describe('Words from the current task.'),
       packageName: z.string().optional().describe('Exact package name filter.'),
-      limit: z.number().int().min(1).max(25).optional(),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(25)
+        .optional()
+        .describe('Maximum results. Defaults to 5.'),
       root: rootSchema,
       global: globalSchema,
       globalOnly: globalOnlySchema,
