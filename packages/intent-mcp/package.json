@@ -1,0 +1,28 @@
+{
+  "name": "@tanstack/intent-mcp",
+  "version": "0.0.1",
+  "description": "MCP server for TanStack Intent skill discovery and loading",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TanStack/intent"
+  },
+  "bin": {
+    "intent-mcp": "dist/index.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@tanstack/intent": "workspace:^"
+  },
+  "devDependencies": {
+    "tsdown": "^0.19.0"
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts",
+    "test:types": "tsc --noEmit"
+  }
+}
