@@ -22,6 +22,10 @@
           "to": "getting-started/quick-start-maintainers"
         },
         {
+          "label": "MCP Server Quick Start",
+          "to": "getting-started/mcp-server"
+        },
+        {
           "label": "Get Listed on the Registry",
           "to": "registry"
         }
