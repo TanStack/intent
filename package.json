@@ -27,6 +27,7 @@
     "generate-docs": "node scripts/generate-docs.ts",
     "test:docs": "node scripts/verify-links.ts",
     "test:eslint": "nx affected --target=test:eslint --exclude=examples/**",
+    "test:intent-mcp": "TMPDIR=/tmp vitest run --root packages/intent-mcp",
     "test:knip": "knip",
     "test:lib": "nx affected --targets=test:lib --exclude=examples/**",
     "test:lib:dev": "pnpm test:lib && nx watch --all -- pnpm test:lib",
