@@ -16,6 +16,7 @@ jobs:
   autofix:
     name: autofix
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -28,6 +29,6 @@ jobs:
       - name: Regenerate docs
         run: pnpm build:all && pnpm generate-docs
       - name: Apply fixes
-        uses: autofix-ci/action@635ffb0c9798bd160680f18fd73371e355b85f27
+        uses: autofix-ci/action@635ffb0c9798bd160680f18fd73371e355b85f27 # v1.3.2
         with:
           commit-message: 'ci: apply automated fixes'
