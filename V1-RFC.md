@@ -11,24 +11,26 @@
 
 ### What is `@tanstack/intent`?
 
-`@tanstack/intent` (`v0.0.41` at time of writing) is a CLI tool with two distinct audiences:
+**TanStack Intent's goal is to make library knowledge available to AI coding agents — versioned, distributed through npm, and discovered automatically from a project's installed dependencies.** Library authors write `SKILL.md` files that teach agents how to use their library correctly; consumers get those skills for free just by installing the library.
 
-- **Library maintainers** use it to author, validate, and publish [Agent Skills](https://agentskills.io) — structured markdown documents (`SKILL.md`) that teach AI coding agents how to use a library correctly. Skills are shipped inside the library's npm package under a `skills/` directory and versioned alongside the library's code.
-- **Consumers** (app developers) use it to discover which skills are available from their installed dependencies, and to surface those skills to their AI coding agent.
+`@tanstack/intent` (`v0.0.41` at time of writing) is the CLI that powers both sides of that contract:
+
+- **Library authors** use it to author, validate, and publish skills. Skills are shipped inside the library's npm package under a `skills/` directory and versioned alongside the library's code.
+- **Consumers** (app developers) use it to discover which skills are available from their installed dependencies and surface them to their AI coding agent.
 
 The package ships a single CLI binary (`intent`) with today's commands:
 
-| Command | Audience | What it does |
-|---|---|---|
-| `intent list` | Consumer | Walks `node_modules` and prints every discovered skill |
-| `intent load <use>` | Consumer / agent | Loads a specific `SKILL.md` and prints it to stdout (used by agent auto-loading) |
-| `intent install` | Consumer | Prints an agent setup snippet (edits to `.cursorrules`, GitHub Copilot instructions, etc.) |
-| `intent meta [name]` | Consumer | Lists or prints meta-skills (skills that describe Intent itself) |
-| `intent scaffold` | Maintainer | Scaffolds a new `skills/` directory with a starter `SKILL.md` |
-| `intent validate` | Maintainer | Validates all `SKILL.md` files in the current package against the schema |
-| `intent stale` | Maintainer | Checks whether skills are out-of-date with library version / source code |
-| `intent edit-package-json` | Maintainer | Adds the `intent` field and `tanstack-intent` keyword to `package.json` |
-| `intent setup-github-actions` | Maintainer | Writes a CI workflow that validates and checks staleness |
+| Command                       | Audience         | What it does                                                                               |
+| ----------------------------- | ---------------- | ------------------------------------------------------------------------------------------ |
+| `intent list`                 | Consumer         | Walks `node_modules` and prints every discovered skill                                     |
+| `intent load <use>`           | Consumer / agent | Loads a specific `SKILL.md` and prints it to stdout (used by agent auto-loading)           |
+| `intent install`              | Consumer         | Prints an agent setup snippet (edits to `.cursorrules`, GitHub Copilot instructions, etc.) |
+| `intent meta [name]`          | Consumer         | Lists or prints meta-skills (skills that describe Intent itself)                           |
+| `intent scaffold`             | Maintainer       | Scaffolds a new `skills/` directory with a starter `SKILL.md`                              |
+| `intent validate`             | Maintainer       | Validates all `SKILL.md` files in the current package against the schema                   |
+| `intent stale`                | Maintainer       | Checks whether skills are out-of-date with library version / source code                   |
+| `intent edit-package-json`    | Maintainer       | Adds the `intent` field and `tanstack-intent` keyword to `package.json`                    |
+| `intent setup-github-actions` | Maintainer       | Writes a CI workflow that validates and checks staleness                                   |
 
 There is also `intent-library` (a second bin entry), but it is an **abandoned** code path — see §4.
 
@@ -43,8 +45,8 @@ A library that ships skills adds this to its `package.json`:
     "version": 1,
     "repo": "TanStack/router",
     "docs": "https://tanstack.com/router",
-    "requires": ["@tanstack/query"]  // optional load-order hint
-  }
+    "requires": ["@tanstack/query"], // optional load-order hint
+  },
 }
 ```
 
@@ -91,6 +93,7 @@ When a consumer runs `intent list`, `scanner.ts` does the following:
 - **Secret pattern detection** — `feedback.ts` already contains `SECRET_PATTERNS` regex set used to warn when skill content looks like it contains a literal secret value. v1 (M3) moves this to a shared `secrets.ts` module.
 - **Workspace awareness** — `workspace-patterns.ts` already detects workspace roots and packages across npm, pnpm, yarn, and bun workspace layouts.
 - **Static-only discovery** — `scanner.ts` is already static: it uses `readFileSync` and `createRequire().resolve()` only, never `await import()`. v1 codifies this as a lint-enforced invariant.
+- **Exclude / blacklist** — `core/excludes.ts` already implements a subtractive filter. Consumers can suppress packages with `package.json#intent.exclude[]` (an array of package-name globs like `@scope/*` or `legacy-pkg`, merged from cwd up to the workspace root) and with the `--exclude <pattern>` CLI flag on `list`/`load`. v1 **must preserve this** (see §3) and extend it to skill-name granularity (see M1).
 
 ### What does NOT exist today (v1 adds these)
 
@@ -139,6 +142,7 @@ These were deliberately changed in earlier iterations. The v1 plan must not re-i
 | **Discovery is static. Scanner never imports user code.**                                                                                                | `scanner.ts` and `library-scanner.ts` use `readFileSync` + `createRequire().resolve(.../package.json)` only. No `await import(<userPkg>)`.                                                                                                                                | M1 codifies this with a code-comment invariant + ESLint `no-restricted-imports` rule scoped to `scanner.ts`, `manifest.ts`, `lockfile.ts`, and `mcp/`. Manifest generation in M3 must stay static. MCP server in M5 must not load library code (see D12). |
 | **Consumer-facing config lives in `package.json` (under `intent`), not in a separate config file.**                                                      | `scanner.ts:validateIntentField` reads `package.json#intent`. There is no `intent.config.json` in the repo.                                                                                                                                                               | Resolved: sources go in `package.json#intent.skills[]`. D2 closed.                                                                                                                                                                                        |
 | **`bin.intent-library` was a planned consumer path that was abandoned in favor of the keyword model.**                                                   | `intent-library` bin exists in `package.json`, plus `src/intent-library.ts` + `src/library-scanner.ts`. `scanLibrary(process.argv[1])` walks up from the bin's own script path — only meaningful inside a library's `node_modules`.                                       | Do **not** revive this in v1. See §4.                                                                                                                                                                                                                     |
+| **Consumers can already exclude/blacklist packages.** A subtractive filter exists independent of any allowlist.                                          | `core/excludes.ts`: `package.json#intent.exclude[]` (package-name globs, merged from cwd up to workspace root) + `--exclude <pattern>` flag on `list`/`load`. Glob support is `*`-only; exact names match exactly.                                                          | M1's allowlist (`intent.skills[]`) is **additive** (opt-in); `intent.exclude[]` stays **subtractive** and is applied *after* the allowlist. Removing exclude would be a regression. v1 also extends exclude to match skill names, not just package names (see M1). |
 
 ## 4. Cleanup item (blocks M1)
 
@@ -175,12 +179,13 @@ Each milestone is independently shippable. The first four are sequential; M5 and
   - Listed + found → included.
   - Listed + not found → warning ("declared in intent.skills but not installed"). In M2 frozen mode this becomes a hard fail.
   - Not listed + found (has `skills/` dir) → warning ("found skills in <pkg> but not in intent.skills — add it to opt in"). In M2 frozen mode this becomes a hard fail.
+- **Exclude / blacklist is preserved and extended (regression guard — see §3).** The existing `package.json#intent.exclude[]` + `--exclude <pattern>` filter stays. Semantics in the allowlist world:
+  - The allowlist (`intent.skills[]`) is **additive** (opt-in); `exclude[]` is **subtractive** and applied *after* the allowlist resolves. A source can be admitted by the allowlist and then have specific skills suppressed.
+  - v1 **extends exclude to skill-name granularity.** Today a pattern only matches a package name; v1 also matches a skill's `name` (e.g. `@scope/pkg`, `@scope/pkg#search-params`, or `*#experimental-*`), enabling exclusion of a single skill rather than a whole package. Backward compatible — bare package-name patterns keep working.
+  - Excluded sources/skills never reach the lockfile, the diff, or the MCP server. An excluded-but-installed package does **not** trigger the "unlisted source" warning (exclude is an explicit decision, not an oversight).
+  - **No dedicated `exclude` command in v1.** Excludes stay declarative — hand-edited in `package.json#intent.exclude[]` so they're reviewable in a PR like the allowlist. To keep that ergonomic, whenever `intent skills scan`/`diff` surfaces a discovered-but-unwanted source, it prints the exact line to paste (e.g. `to exclude: add "@scope/pkg#experimental-*" to intent.exclude[]`). The `--exclude <pattern>` flag still covers one-off runs. See §14.
 - Hard invariant: never `await import()` user package code. Add a code-comment invariant and an ESLint `no-restricted-syntax` rule prohibiting dynamic `import()` of computed paths inside `scanner.ts`, `lockfile.ts`, `manifest.ts`, and `mcp/`.
 - The `tanstack-intent` keyword is no longer required for consumer discovery. Still recommended for registry indexing.
-
-**Touches:** `scanner.ts`, `types.ts` (add `IntentProjectConfig.skills`), `commands/list.ts`, `eslint.config.js`, new tests in `tests/scanner.test.ts`. Removes (via §4 cleanup): `library-scanner.ts`, `intent-library.ts`, related tests.
-
-**Migration:** existing projects with no `intent.skills[]` keep seeing skills load (with a one-line "declare your sources" warning) until M2 flips the default to fail-closed in frozen mode. Interactive use stays warn-only.
 
 ### M2 — Lockfile + approve / diff / update + frozen mode
 
@@ -311,15 +316,25 @@ New file per skill package: `skills/intent.manifest.json` (ships with the packag
 
 **Tool surface (v1) — all implemented inside `@tanstack/intent`. No tool implementations are loaded from library packages.**
 
-Built-in read-only tools, always available when a lockfile exists:
+> **Tool-shape rationale.** A two-step `list_skills` → `get_skill` flow produces **worse** agent outcomes than a **single `get_skill(name)` tool whose description enumerates every approved skill** (name + one-line description). Putting the catalog directly in the tool description keeps it in the agent's context at decision time, instead of costing a discovery round-trip the agent often skips or fumbles. v1 adopts the single-tool shape as the default and demotes `list_skills` to a fallback for large catalogs (see D15).
 
-- `list_skills` — compact skill index (name, package, description, capabilities summary).
-- `get_skill(name)` — full `SKILL.md` body for one approved skill.
-- `search_skills(query)` — text search across approved skill index.
+**Primary tool (default):**
+
+- `get_skill(name)` — returns the full `SKILL.md` body for one approved skill. **Its description is generated at server start from the approved lockfile** and embeds the catalog: each approved skill's `name` + one-line description + capabilities summary. The agent picks a `name` directly from the description; no separate discovery call. The description is rebuilt whenever the lockfile is reloaded (start / SIGHUP).
+
+**Catalog-scaling fallback tools (used above a catalog-size threshold — see D15):**
+
+- `list_skills` — compact skill index (name, package, description, capabilities summary). Only registered when the embedded catalog would exceed the threshold, so small/medium projects never pay for the extra hop.
+- `search_skills(query)` — text search across the approved skill index. Same threshold gating; valuable for large monorepos where embedding the whole catalog in a description is impractical.
+
+**Verification tools (always available):**
+
 - `get_lock` — current `intent.lock` (lets an agent verify its view).
 - `get_diff` — current pending diff between lockfile and installed state.
 
-Skill-declared `mcpTools[]` (in manifest) is **metadata only** in v1. It describes tools the skill _says_ its library exposes elsewhere. Intent records these in the lockfile, requires explicit policy entries before treating them as approved, and surfaces them via `list_skills`, but does **not** wire runtime for them — that would require importing library code and breaks the static-discovery invariant.
+Skill-declared `mcpTools[]` (in manifest) is **metadata only** in v1. It describes tools the skill _says_ its library exposes elsewhere. Intent records these in the lockfile, requires explicit policy entries before treating them as approved, and surfaces them via the `get_skill` description / `list_skills`, but does **not** wire runtime for them — that would require importing library code and breaks the static-discovery invariant.
+
+`exclude[]` (M1) applies before the MCP catalog is built — excluded skills never appear in the `get_skill` description, `list_skills`, or `search_skills` results.
 
 Policy entries in `intent.lock`:
 
@@ -341,6 +356,9 @@ Policy entries in `intent.lock`:
 
 **Touches:** new `mcp/server.ts`, new `mcp/tools/*.ts`, new `commands/mcp-serve.ts`, types.
 
+> **Open question — D15 (P1, shapes M5):** MCP tool shape. The single-tool shape (`get_skill` with the catalog embedded in its description) outperforms the two-step `list_skills` → `get_skill` for small/medium catalogs. Confirm the default, and decide the **catalog-size threshold** at which Intent registers the `list_skills` / `search_skills` fallback tools instead of (or alongside) the embedded catalog. Sub-questions: is the threshold by skill count, by estimated description tokens, or both? Do fallback tools *replace* the embedded catalog above the threshold or *augment* it?
+> **Lean:** Single-tool default; register fallbacks above a token-based threshold (≈ embedded catalog > ~2–4k tokens), augmenting rather than replacing. Make the threshold configurable. **Vote:** `[ ] single-tool default + token-threshold fallback   [ ] always register all three   [ ] other ____` —
+>
 > **Open question — D11 (P1, shapes M5):** `intent mcp serve` from `npx` — support, or require devDep? **Lean:** Require devDep; `npx` per-invocation is too slow for MCP and breaks pinning. **Vote:** `[ ] A devDep-only   [ ] B allow npx` —
 >
 > **Open question — D12 (P1, shapes M3/M5):** Reserve the manifest shape for future skill-supplied MCP tool implementations (WASM/sandboxed workers), or keep `mcpTools[]` as pure metadata? **Lean:** Pure metadata, but design `mcpTools[]` to be forward-extensible. **Vote:** `[ ] A extensible metadata   [ ] B minimal metadata` —
@@ -495,12 +513,13 @@ How to vote: reply inline on a decision's vote line with your initials + choice.
 | D7     | Flat vs nested CLI verbs                             | Nested                    | No (shapes CLI, M2+) | P1       |
 | D11    | `intent mcp serve` via `npx` vs devDep-only          | devDep-only               | No (shapes M5)       | P1       |
 | D12    | `mcpTools[]` pure metadata vs reserve for impls      | Pure metadata, extensible | No (shapes M3/M5)    | P1       |
+| D15    | MCP tool shape: single-tool vs list+get; fallback threshold | Single-tool + token-threshold fallback | No (shapes M5) | P1 |
 | D9     | Per-skill (not per-package) approvals                | Out of v1                 | No                   | P2       |
 | D10    | Publish `@tanstack/intent-types`                     | Not v1                    | No                   | P2       |
 | D13    | Interactive `prompt`-level MCP policy                | Out of v1                 | No                   | P2       |
 | D14    | Rename `intent install`                              | Defer to follow-up        | No                   | P2       |
 
-Full context for each lives inline in the section it affects (D1 §4, D4 M2, D5 M3, D7/D14 §6, D9 §8, D10 §9, D11/D12/D13 M5).
+Full context for each lives inline in the section it affects (D1 §4, D4 M2, D5 M3, D7/D14 §6, D9 §8, D10 §9, D11/D12/D15 M5).
 
 ### Resolved (audit trail — already closed)
 
@@ -514,7 +533,7 @@ Full context for each lives inline in the section it affects (D1 §4, D4 M2, D5 
 ### Suggested decision flow
 
 1. **Decide D1 first** — it unblocks M1 and nothing else can start until it's settled.
-2. Sweep the **P1 design questions** (D4, D5, D7, D11, D12) — each pins one milestone's shape; cheap now, expensive after implementation starts.
+2. Sweep the **P1 design questions** (D4, D5, D7, D11, D12, D15) — each pins one milestone's shape; cheap now, expensive after implementation starts.
 3. Rubber-stamp the **P2 "out of v1" items** (D9, D10, D13, D14) — just need an explicit "yes, defer."
 4. Move every closed item into the Resolved table and update §13's status table.
 
@@ -526,4 +545,6 @@ Full context for each lives inline in the section it affects (D1 §4, D4 M2, D5 
 - Approval UI beyond a terminal prompt.
 - Cross-language MCP tool sandboxing.
 - Per-transitive-dependency approval. Consumers approve at the boundary they declared in `intent.skills[]`; transitive trust follows the dependency tree.
+- Skill sources outside the project root (e.g. `~/` personal skill collections). Intent's goal is library knowledge distribution through npm — skills travel with packages and are discovered from a project's dependency tree. `file:` sources must stay inside the project root.
+- A dedicated config-mutation command for excludes (`intent skills exclude …`). Excludes are low-frequency, set-once, and already trivial to edit as declarative JSON that reviews well in a PR. Adding a command means a second write target (alongside `intent.lock`), package.json merge/formatting edge cases, and pressure to ship a matching `add`/`remove` family. v1 instead keeps excludes hand-edited and makes `scan`/`diff` print the exact line to paste. Revisit as a fast-follow if demand appears.
 - Telemetry. Intent does not phone home in v1.
