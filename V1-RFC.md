@@ -135,14 +135,14 @@ That model works as long as the only skills in the world are from a small set of
 
 These were deliberately changed in earlier iterations. The v1 plan must not re-introduce them.
 
-| Past decision                                                                                                                                            | Evidence in repo                                                                                                                                                                                                                                                          | Implication for v1                                                                                                                                                                                                                                        |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Library packages do not ship bins.** Detection moved from `bin.intent` to `keywords: ["tanstack-intent"]`.                                             | `library-scanner.ts:isIntentPackage` comment: _"Legacy fallback: packages published before the keyword-based detection change may only have bin.intent. Keep this until a breaking release."_                                                                             | Don't propose any v1 feature that requires a library package to ship an executable (no per-library MCP server, no per-library `intent-library` bin, no per-library policy enforcer). Anything that needs runtime lives in `@tanstack/intent`.             |
-| **Consumer discovery today is over-permissive — `skills/` dir + derivable `intent` config is enough.** The keyword is _not_ a gate on the consumer side. | `scanner.ts:tryRegister` registers any installed package with a `skills/` directory and a `validateIntentField`-passable or `deriveIntentConfig`-derivable config. No keyword check. The keyword check exists only in the abandoned `library-scanner.ts:isIntentPackage`. | M1's explicit-sources list **replaces** today's permissive default. The keyword stays as a marker for registry indexing and as a sanity hint, but it does not authorize consumer trust. After M1, presence in `intent.skills[]` is the authorization.     |
-| **Discovery is static. Scanner never imports user code.**                                                                                                | `scanner.ts` and `library-scanner.ts` use `readFileSync` + `createRequire().resolve(.../package.json)` only. No `await import(<userPkg>)`.                                                                                                                                | M1 codifies this with a code-comment invariant + ESLint `no-restricted-imports` rule scoped to `scanner.ts`, `manifest.ts`, `lockfile.ts`, and `mcp/`. Manifest generation in M3 must stay static. MCP server in M5 must not load library code (see D12). |
-| **Consumer-facing config lives in `package.json` (under `intent`), not in a separate config file.**                                                      | `scanner.ts:validateIntentField` reads `package.json#intent`. There is no `intent.config.json` in the repo.                                                                                                                                                               | Resolved: sources go in `package.json#intent.skills[]`. D2 closed.                                                                                                                                                                                        |
-| **`bin.intent-library` was a planned consumer path that was abandoned in favor of the keyword model.**                                                   | `intent-library` bin exists in `package.json`, plus `src/intent-library.ts` + `src/library-scanner.ts`. `scanLibrary(process.argv[1])` walks up from the bin's own script path — only meaningful inside a library's `node_modules`.                                       | Do **not** revive this in v1. See §4.                                                                                                                                                                                                                     |
-| **Consumers can already exclude/blacklist packages.** A subtractive filter exists independent of any allowlist.                                          | `core/excludes.ts`: `package.json#intent.exclude[]` (package-name globs, merged from cwd up to workspace root) + `--exclude <pattern>` flag on `list`/`load`. Glob support is `*`-only; exact names match exactly.                                                          | M1's allowlist (`intent.skills[]`) is **additive** (opt-in); `intent.exclude[]` stays **subtractive** and is applied *after* the allowlist. Removing exclude would be a regression. v1 also extends exclude to match skill names, not just package names (see M1). |
+| Past decision                                                                                                                                            | Evidence in repo                                                                                                                                                                                                                                                          | Implication for v1                                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Library packages do not ship bins.** Detection moved from `bin.intent` to `keywords: ["tanstack-intent"]`.                                             | `library-scanner.ts:isIntentPackage` comment: _"Legacy fallback: packages published before the keyword-based detection change may only have bin.intent. Keep this until a breaking release."_                                                                             | Don't propose any v1 feature that requires a library package to ship an executable (no per-library MCP server, no per-library `intent-library` bin, no per-library policy enforcer). Anything that needs runtime lives in `@tanstack/intent`.                      |
+| **Consumer discovery today is over-permissive — `skills/` dir + derivable `intent` config is enough.** The keyword is _not_ a gate on the consumer side. | `scanner.ts:tryRegister` registers any installed package with a `skills/` directory and a `validateIntentField`-passable or `deriveIntentConfig`-derivable config. No keyword check. The keyword check exists only in the abandoned `library-scanner.ts:isIntentPackage`. | M1's explicit-sources list **replaces** today's permissive default. The keyword stays as a marker for registry indexing and as a sanity hint, but it does not authorize consumer trust. After M1, presence in `intent.skills[]` is the authorization.              |
+| **Discovery is static. Scanner never imports user code.**                                                                                                | `scanner.ts` and `library-scanner.ts` use `readFileSync` + `createRequire().resolve(.../package.json)` only. No `await import(<userPkg>)`.                                                                                                                                | M1 codifies this with a code-comment invariant + ESLint `no-restricted-imports` rule scoped to `scanner.ts`, `manifest.ts`, `lockfile.ts`, and `mcp/`. Manifest generation in M3 must stay static. MCP server in M5 must not load library code (see D12).          |
+| **Consumer-facing config lives in `package.json` (under `intent`), not in a separate config file.**                                                      | `scanner.ts:validateIntentField` reads `package.json#intent`. There is no `intent.config.json` in the repo.                                                                                                                                                               | Resolved: sources go in `package.json#intent.skills[]`. D2 closed.                                                                                                                                                                                                 |
+| **`bin.intent-library` was a planned consumer path that was abandoned in favor of the keyword model.**                                                   | `intent-library` bin exists in `package.json`, plus `src/intent-library.ts` + `src/library-scanner.ts`. `scanLibrary(process.argv[1])` walks up from the bin's own script path — only meaningful inside a library's `node_modules`.                                       | Do **not** revive this in v1. See §4.                                                                                                                                                                                                                              |
+| **Consumers can already exclude/blacklist packages.** A subtractive filter exists independent of any allowlist.                                          | `core/excludes.ts`: `package.json#intent.exclude[]` (package-name globs, merged from cwd up to workspace root) + `--exclude <pattern>` flag on `list`/`load`. Glob support is `*`-only; exact names match exactly.                                                        | M1's allowlist (`intent.skills[]`) is **additive** (opt-in); `intent.exclude[]` stays **subtractive** and is applied _after_ the allowlist. Removing exclude would be a regression. v1 also extends exclude to match skill names, not just package names (see M1). |
 
 ## 4. Cleanup item (blocks M1)
 
@@ -164,7 +164,7 @@ This is a breaking change (anyone wiring `intent-library` directly will break) b
 
 ## 5. Milestones
 
-Each milestone is independently shippable. The first four are sequential; M5 and M6 can move in parallel once M3 lands.
+Each milestone is independently shippable. The first four are sequential; M5, M6, and M7 can move in parallel once M3 lands. M7 is the designated **cut candidate** — first to slip if the security core (M1–M4) runs hot, because it has no security surface of its own.
 
 ### M1 — Explicit skill sources + static-discovery invariant
 
@@ -180,7 +180,7 @@ Each milestone is independently shippable. The first four are sequential; M5 and
   - Listed + not found → warning ("declared in intent.skills but not installed"). In M2 frozen mode this becomes a hard fail.
   - Not listed + found (has `skills/` dir) → warning ("found skills in <pkg> but not in intent.skills — add it to opt in"). In M2 frozen mode this becomes a hard fail.
 - **Exclude / blacklist is preserved and extended (regression guard — see §3).** The existing `package.json#intent.exclude[]` + `--exclude <pattern>` filter stays. Semantics in the allowlist world:
-  - The allowlist (`intent.skills[]`) is **additive** (opt-in); `exclude[]` is **subtractive** and applied *after* the allowlist resolves. A source can be admitted by the allowlist and then have specific skills suppressed.
+  - The allowlist (`intent.skills[]`) is **additive** (opt-in); `exclude[]` is **subtractive** and applied _after_ the allowlist resolves. A source can be admitted by the allowlist and then have specific skills suppressed.
   - v1 **extends exclude to skill-name granularity.** Today a pattern only matches a package name; v1 also matches a skill's `name` (e.g. `@scope/pkg`, `@scope/pkg#search-params`, or `*#experimental-*`), enabling exclusion of a single skill rather than a whole package. Backward compatible — bare package-name patterns keep working.
   - Excluded sources/skills never reach the lockfile, the diff, or the MCP server. An excluded-but-installed package does **not** trigger the "unlisted source" warning (exclude is an explicit decision, not an oversight).
   - **No dedicated `exclude` command in v1.** Excludes stay declarative — hand-edited in `package.json#intent.exclude[]` so they're reviewable in a PR like the allowlist. To keep that ergonomic, whenever `intent skills scan`/`diff` surfaces a discovered-but-unwanted source, it prints the exact line to paste (e.g. `to exclude: add "@scope/pkg#experimental-*" to intent.exclude[]`). The `--exclude <pattern>` flag still covers one-off runs. See §14.
@@ -356,7 +356,7 @@ Policy entries in `intent.lock`:
 
 **Touches:** new `mcp/server.ts`, new `mcp/tools/*.ts`, new `commands/mcp-serve.ts`, types.
 
-> **Open question — D15 (P1, shapes M5):** MCP tool shape. The single-tool shape (`get_skill` with the catalog embedded in its description) outperforms the two-step `list_skills` → `get_skill` for small/medium catalogs. Confirm the default, and decide the **catalog-size threshold** at which Intent registers the `list_skills` / `search_skills` fallback tools instead of (or alongside) the embedded catalog. Sub-questions: is the threshold by skill count, by estimated description tokens, or both? Do fallback tools *replace* the embedded catalog above the threshold or *augment* it?
+> **Open question — D15 (P1, shapes M5):** MCP tool shape. The single-tool shape (`get_skill` with the catalog embedded in its description) outperforms the two-step `list_skills` → `get_skill` for small/medium catalogs. Confirm the default, and decide the **catalog-size threshold** at which Intent registers the `list_skills` / `search_skills` fallback tools instead of (or alongside) the embedded catalog. Sub-questions: is the threshold by skill count, by estimated description tokens, or both? Do fallback tools _replace_ the embedded catalog above the threshold or _augment_ it?
 > **Lean:** Single-tool default; register fallbacks above a token-based threshold (≈ embedded catalog > ~2–4k tokens), augmenting rather than replacing. Make the threshold configurable. **Vote:** `[ ] single-tool default + token-threshold fallback   [ ] always register all three   [ ] other ____` —
 >
 > **Open question — D11 (P1, shapes M5):** `intent mcp serve` from `npx` — support, or require devDep? **Lean:** Require devDep; `npx` per-invocation is too slow for MCP and breaks pinning. **Vote:** `[ ] A devDep-only   [ ] B allow npx` —
@@ -384,6 +384,71 @@ Checks (each emits a categorized issue: `error`, `warning`, `info`):
 Exit code: non-zero if any `error`-level issue is present. Issues with explicit allow/ignore markers in `intent.lock` are skipped.
 
 **Touches:** new `commands/security-doctor.ts`. No new shared modules.
+
+### M7 — Maintainer agent surface + staleness hardening
+
+**Goal:** Maintainers invoke Intent's authoring workflows by _talking to their agent_ (`/tanstack-intent scaffold`, "update skills PR <#123>"), with hardened, security-aware staleness detection underneath. The CLI keeps working unchanged.
+
+This milestone has two parts that ship together because they share one substrate (the meta-skills, the lockfile baseline) and have to stay consistent.
+
+#### Part A — Maintainer agent surface
+
+Intent already ships five meta-skills (`packages/intent/meta/{domain-discovery,tree-generator,generate-skill,feedback-collection,skill-staleness-check}/SKILL.md`) and reaches them today via two CLI commands (`intent scaffold` prints an orchestration prompt; `intent meta [name]` lists/prints one). The agent-pluggable invocation surface is what's missing. M7 closes that without introducing a separate maintainer package or a new distribution channel.
+
+- **Auto-detected author mode.** The MCP server (M5) treats a project containing `skills/` as a maintainer context and exposes the meta-skills as first-party tools alongside the consumer's discovered skills. Projects without `skills/` get consumer mode only — meta-skills never appear. No flag required for the common case.
+- **Explicit override.** `intent mcp serve --author` forces author mode (covers pre-scaffold, where `skills/` doesn't exist yet).
+- **First-party trust.** Meta-skills bypass `intent.skills[]` allowlist gating because they ship inside `@tanstack/intent` itself — the one source the maintainer is already running code from. They are _not_ added to `intent.lock`. This is principled, not a hack: the trust model says "approve sources you don't already trust," and Intent trusts itself.
+- **CLI unchanged.** `intent scaffold` and `intent meta` keep working; `scaffold.ts`'s printed prompt collapses to a single pointer at the orchestration meta-skill, which becomes the **single source of truth** for the authoring flow (no prompt-vs-skill drift).
+- **Consumer-side isolation.** Meta-skills already live in `meta/` (not `skills/`) with `category: meta-tooling` in frontmatter — the separation exists. M7 codifies it: the consumer-side scanner never walks `meta/`, and the MCP server never exposes `category: meta-tooling` skills in consumer mode even if encountered.
+
+#### Part B — Staleness hardening (layered, security-aware)
+
+Today's `staleness.ts` does version-drift + artifact-drift well, but punts content-staleness to an external `sync-skills.mjs` (TanStack-internal, uses webhooks + GitHub API + a separate `sync-state.json`). That's both fragile for general library maintainers and a bag of security concerns. M7 generalizes detection into a layered model fed by the **committed lockfile**, not a parallel state file or the network.
+
+**Principle:** _staleness is a signal, not a gate._ The security boundary is M2 (lockfile mismatch refusal) + M4 (capability/manifest enforcement). Staleness only decides "should a maintainer re-review." This means staleness can be imperfect without being insecure — and over-precision buys fewer false PRs, not more security. Don't conflate the two.
+
+**Layered detector** (cheapest → most precise; an upper layer always feeds candidates to the layer above, never delivers a hard verdict):
+
+- **Layer 0 — Skill self-integrity (new).** SKILL.md `contentHash` is already recorded in `intent.lock` (M2). M7 surfaces a mismatch as a "skill modified since approval" staleness signal on the maintainer side, in addition to M2's serving-time refusal on the consumer side. Bidirectional integrity from one hash.
+- **Layer 1 — Version constraint (existing, downgraded).** `classifyVersionDrift()` already classifies major/minor/patch drift between skill `library_version` and current package version. **Patch is a low-signal hint, not "ignore"** — CVE fixes ship as patch versions, so dismissing patch drift hides security-relevant updates. Already implemented; only the policy changes.
+- **Layer 2 — Source SHA against the lockfile baseline.** Replace the current `skills/sync-state.json` `sources_sha` (remote GitHub SHAs) with **git blob SHAs against a baseline ref recorded in `intent.lock`** (default: last release tag, configurable). Source touched since baseline → candidate fed to the agent for impact classification; never a hard "stale" verdict on its own. This sidesteps byte-noise (whitespace/comment changes don't false-fail because the agent's classification step decides), and it makes the comparison **fully local** — no `registry.npmjs.org`, no GitHub API, no webhook. `sync-state.json` is removed; `intent.lock` is the single baseline.
+- **Layer 3 — Semantic anchors (future, out of v1).** Couple skills to API symbols and detect symbol-level change. Highest precision; tracked in §14.
+
+**Methods considered (with the security lens):**
+
+| Method                                           | Why considered     | Why not (alone)                                                                                                                                                                                                     |
+| ------------------------------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Constraint-only (uv-style)                       | Lowest noise       | **Unsafe alone** — CVE-bearing patches and within-version behavior changes slide past. Used only as Layer 1.                                                                                                        |
+| Local self-managed content hash                  | Self-contained     | Over-sensitive (byte-noise) → alert fatigue is itself a security failure (real signal hides in the noise); duplicates state already in `intent.lock`.                                                               |
+| Git blob SHA vs `HEAD~1`                         | Free, precise      | "Changed since last commit" is the wrong question — security-meaningful comparison is **vs the release the skill documents**. Layer 2 uses git blob SHA but against a lockfile-recorded baseline ref, not `HEAD~1`. |
+| Webhook-driven (current `sync-skills.mjs` model) | Cross-repo updates | Webhook payload is attacker-influenceable — forged webhooks can trigger false update PRs or suppress real ones. Out of v1 (§14); pull-based local detection is the trustworthy default.                             |
+| Semantic anchors (Swimm-style)                   | Highest precision  | Detector complexity = more attack surface in the detector itself. Layer 3, future.                                                                                                                                  |
+
+**`skill-staleness-check` meta-skill rewrite.** Today the meta-skill calls `node scripts/sync-skills.mjs <library>` (a TanStack-internal script not shipped in the package) and reasons about webhook payloads. M7 rewrites it to call `intent skills stale` (the shipped CLI, which performs Layers 0–2 locally) and reason about the candidate set it returns. Step 2 ("classify impact: no-impact / version-bump / content-update / breaking") stays — that's where the agent's judgement lives. Step 6 (open PR) stays. Steps that assume webhook/cross-repo context are removed.
+
+**New surface in `intent skills stale`:**
+
+- Default: Layer 0 + Layer 1 + Layer 2 against the lockfile baseline. Local-only.
+- `--baseline <ref>` to override the baseline ref (default: last release tag from `git describe --abbrev=0`, fallback to `HEAD~1` if no tags).
+- `--files <path...>` escape hatch for CI to pass an explicit changed-file set (optimization; same Layer 2 classification, narrower input).
+- Output: candidate skills + per-skill reasons (which layer fired). Exit non-zero if any candidate exists in `--frozen` mode (so CI gates a PR that hasn't refreshed staleness).
+
+**Frozen-mode and network discipline.** `intent skills stale` makes **no network calls** in any mode. The `staleness.ts:fetchNpmVersion` path (already gated in frozen mode by M2) is removed from the staleness signal entirely — Layer 1 reads `package.json` only. This makes staleness reproducible (audit-friendly) and removes a TLS/DNS/registry-compromise vector.
+
+**Touches:** `staleness.ts` (drop `fetchNpmVersion`, add lockfile-baseline Layer 2, expose Layer 0 from existing lockfile hash), `commands/stale.ts` (new flags + non-zero exit in frozen), `commands/mcp-serve.ts` (author-mode detection + first-party meta-skill exposure), `commands/scaffold.ts` (collapse to pointer at orchestration meta-skill), `packages/intent/meta/skill-staleness-check/SKILL.md` (rewrite around `intent skills stale`), new tests in `tests/staleness.test.ts` + `tests/mcp-author-mode.test.ts`. Removes: `skills/sync-state.json` reads, references to `sync-skills.mjs` in shipped meta-skills.
+
+**Migration:** existing `sync-state.json` files are ignored (not read, not deleted by Intent). TanStack's internal cross-repo workflow can keep its own `sync-skills.mjs` outside the published package — it's no longer wired into the shipped meta-skill.
+
+> **Open question — D17 (P1, shapes M7 Part B):** Default baseline ref for Layer 2. Options:
+>
+> - **A — last release tag** (`git describe --tags --abbrev=0`), fallback to `HEAD~1` if no tags. Best maps to "what did this skill document at release time." Requires tags.
+> - **B — `HEAD~1`** always. Simpler, no tag dependency, but answers a less-meaningful question ("changed since last commit").
+> - **C — explicit only** (no default; require `--baseline`). Most predictable, worst UX.
+>
+> **Lean:** A. **Vote:** `[ ] A release tag   [ ] B HEAD~1   [ ] C explicit only` —
+
+> **Open question — D18 (P2, confirm M7 scope):** Confirm M7 is in v1 (vs fast-follow). Reasoning for in-v1: v1's framing is "improve Intent for maintainers and consumers" but M1–M6 are almost entirely consumer-facing; M7 is the only milestone that materially improves the maintainer experience and dogfoods Intent on itself. Reasoning for fast-follow: protects the security core's schedule. M7 is already marked the designated cut candidate in §5.
+> **Lean:** In v1, with cut-candidate status. **Vote:** `[ ] In v1 (cut-candidate)   [ ] Fast-follow after v1` —
 
 ## 6. CLI grouping
 
@@ -505,21 +570,23 @@ How to vote: reply inline on a decision's vote line with your initials + choice.
 
 ### Status table
 
-| ID     | Topic                                                | Lean                      | Blocks rollout?      | Priority |
-| ------ | ---------------------------------------------------- | ------------------------- | -------------------- | -------- |
-| **D1** | Remove `intent-library` bin+sources now vs deprecate | Remove now                | **Yes — gates M1**   | P0       |
-| D4     | Single `intent.lock` vs `.intent/` folder            | Single file               | No (shapes M2)       | P1       |
-| D5     | Package-level vs per-skill manifest                  | Package-level             | No (shapes M3)       | P1       |
-| D7     | Flat vs nested CLI verbs                             | Nested                    | No (shapes CLI, M2+) | P1       |
-| D11    | `intent mcp serve` via `npx` vs devDep-only          | devDep-only               | No (shapes M5)       | P1       |
-| D12    | `mcpTools[]` pure metadata vs reserve for impls      | Pure metadata, extensible | No (shapes M3/M5)    | P1       |
-| D15    | MCP tool shape: single-tool vs list+get; fallback threshold | Single-tool + token-threshold fallback | No (shapes M5) | P1 |
-| D9     | Per-skill (not per-package) approvals                | Out of v1                 | No                   | P2       |
-| D10    | Publish `@tanstack/intent-types`                     | Not v1                    | No                   | P2       |
-| D13    | Interactive `prompt`-level MCP policy                | Out of v1                 | No                   | P2       |
-| D14    | Rename `intent install`                              | Defer to follow-up        | No                   | P2       |
+| ID     | Topic                                                       | Lean                                   | Blocks rollout?      | Priority |
+| ------ | ----------------------------------------------------------- | -------------------------------------- | -------------------- | -------- |
+| **D1** | Remove `intent-library` bin+sources now vs deprecate        | Remove now                             | **Yes — gates M1**   | P0       |
+| D4     | Single `intent.lock` vs `.intent/` folder                   | Single file                            | No (shapes M2)       | P1       |
+| D5     | Package-level vs per-skill manifest                         | Package-level                          | No (shapes M3)       | P1       |
+| D7     | Flat vs nested CLI verbs                                    | Nested                                 | No (shapes CLI, M2+) | P1       |
+| D11    | `intent mcp serve` via `npx` vs devDep-only                 | devDep-only                            | No (shapes M5)       | P1       |
+| D12    | `mcpTools[]` pure metadata vs reserve for impls             | Pure metadata, extensible              | No (shapes M3/M5)    | P1       |
+| D15    | MCP tool shape: single-tool vs list+get; fallback threshold | Single-tool + token-threshold fallback | No (shapes M5)       | P1       |
+| D17    | Default baseline ref for Layer 2 staleness                  | Last release tag, fallback `HEAD~1`    | No (shapes M7)       | P1       |
+| D18    | M7 in v1 (cut-candidate) vs fast-follow                     | In v1 (cut-candidate)                  | No (shapes scope)    | P2       |
+| D9     | Per-skill (not per-package) approvals                       | Out of v1                              | No                   | P2       |
+| D10    | Publish `@tanstack/intent-types`                            | Not v1                                 | No                   | P2       |
+| D13    | Interactive `prompt`-level MCP policy                       | Out of v1                              | No                   | P2       |
+| D14    | Rename `intent install`                                     | Defer to follow-up                     | No                   | P2       |
 
-Full context for each lives inline in the section it affects (D1 §4, D4 M2, D5 M3, D7/D14 §6, D9 §8, D10 §9, D11/D12/D15 M5).
+Full context for each lives inline in the section it affects (D1 §4, D4 M2, D5 M3, D7/D14 §6, D9 §8, D10 §9, D11/D12/D15 M5, D17/D18 M7).
 
 ### Resolved (audit trail — already closed)
 
@@ -533,8 +600,8 @@ Full context for each lives inline in the section it affects (D1 §4, D4 M2, D5 
 ### Suggested decision flow
 
 1. **Decide D1 first** — it unblocks M1 and nothing else can start until it's settled.
-2. Sweep the **P1 design questions** (D4, D5, D7, D11, D12, D15) — each pins one milestone's shape; cheap now, expensive after implementation starts.
-3. Rubber-stamp the **P2 "out of v1" items** (D9, D10, D13, D14) — just need an explicit "yes, defer."
+2. Sweep the **P1 design questions** (D4, D5, D7, D11, D12, D15, D17) — each pins one milestone's shape; cheap now, expensive after implementation starts.
+3. Rubber-stamp the **P2 "out of v1" items** (D9, D10, D13, D14, D18) — just need an explicit "yes, defer."
 4. Move every closed item into the Resolved table and update §13's status table.
 
 ## 14. Out of scope for v1
@@ -547,4 +614,6 @@ Full context for each lives inline in the section it affects (D1 §4, D4 M2, D5 
 - Per-transitive-dependency approval. Consumers approve at the boundary they declared in `intent.skills[]`; transitive trust follows the dependency tree.
 - Skill sources outside the project root (e.g. `~/` personal skill collections). Intent's goal is library knowledge distribution through npm — skills travel with packages and are discovered from a project's dependency tree. `file:` sources must stay inside the project root.
 - A dedicated config-mutation command for excludes (`intent skills exclude …`). Excludes are low-frequency, set-once, and already trivial to edit as declarative JSON that reviews well in a PR. Adding a command means a second write target (alongside `intent.lock`), package.json merge/formatting edge cases, and pressure to ship a matching `add`/`remove` family. v1 instead keeps excludes hand-edited and makes `scan`/`diff` print the exact line to paste. Revisit as a fast-follow if demand appears.
+- Webhook-driven staleness detection. Webhook payloads are attacker-influenceable (forged webhooks can trigger false update PRs or suppress real ones). v1 staleness is pull-based and local (M7 Part B). Cross-repo TanStack-internal workflows can keep their own out-of-package scripts.
+- Semantic-anchor staleness (Layer 3 in M7's layered model). Coupling skills to API symbols for symbol-level drift detection is the highest-precision approach but the heaviest to build and adds attack surface to the detector itself. v1 ships Layers 0–2; Layer 3 tracked for a future release.
 - Telemetry. Intent does not phone home in v1.
