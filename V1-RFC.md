@@ -111,7 +111,7 @@ When a consumer runs `intent list`, `scanner.ts` does the following:
 
 Today, `@tanstack/intent`'s consumer-facing scanner (`scanner.ts`) trusts any installed package that has a `skills/` directory and a derivable `intent` config (repo + docs, either explicit or derived from `repository`/`homepage`). It walks `node_modules` and workspace deps, reads `SKILL.md` content, and surfaces it to coding agents without any approval, lock, or capability gating. The `tanstack-intent` keyword exists, but it only gates registry indexing and the abandoned `library-scanner.ts` codepath — it does **not** gate consumer discovery.
 
-That model works as long as the only skills in the world are from a small set of trusted authors. Once skills become a broader ecosystem (third-party packages, monorepo internal skills, file-system skill sources), Intent needs:
+That model works as long as the only skills in the world are from a small set of trusted authors. Once skills become a broader ecosystem (third-party packages, monorepo internal skills), Intent needs:
 
 1. **Explicit trust** — the project declares which skill sources it uses.
 2. **Reproducibility** — what was approved is what's loaded, byte-for-byte.
@@ -196,18 +196,6 @@ If `pkg-a` depends on `pkg-b` and `pkg-b` provides skills, `pkg-b` must also app
 
 Implementations may include diagnostic context that explains why an unlisted source was discovered, such as `pkg-a -> pkg-b`. That relationship does not imply trust.
 
-### `file:` source containment
-
-**Resolved:** `file:` sources must pass lexical and canonical filesystem containment checks.
-
-`file:` sources in v1 are project-root-relative local directory references. Intent rejects absolute paths, drive-qualified paths, UNC paths, and normalized lexical paths that escape the project root.
-
-Before scanning, Intent resolves both the project root and the `file:` source directory with realpath-equivalent filesystem canonicalization, including symlinks, junctions, and other platform reparse points. The resolved source directory must equal the resolved project root or be path-segment-contained within it. Raw string prefix checks are not sufficient.
-
-If the source path does not exist or cannot be canonicalized, Intent rejects the source in v1. Any discovered skill file whose canonical realpath escapes the resolved project root is also rejected.
-
-The configured `file:` source string remains the lock identity. Canonical paths are used only for scanner access control and never stored as approval identity.
-
 ## 3. Audit of prior design decisions to preserve (no regressions)
 
 These were deliberately changed in earlier iterations. The v1 plan must not re-introduce them.
@@ -249,7 +237,6 @@ Each milestone is independently shippable. The first four are sequential; M5, M6
 - Source kinds, v1:
   - `"@scope/pkg"` or `"pkg"` — npm package, must be reachable via the project's dependency tree (direct or transitive).
   - `"workspace:@scope/pkg"` — a package in the current workspace. Works for npm, pnpm, yarn, bun workspaces — the `workspace:` prefix is Intent-internal syntax, not a package-manager protocol.
-  - `"file:./relative/path"` — an existing local directory containing `skills/`. Resolved relative to the project root. Must pass lexical containment and realpath containment, including symlink/junction checks.
 - `scanForIntents()` filters discovered packages against the allowlist:
   - Listed + found → included.
   - Listed + not found → warning ("declared in intent.skills but not installed"). In M2 frozen mode this becomes a hard fail.
@@ -319,7 +306,7 @@ New file `intent.lock` (committed at consumer project root). V1 uses a single co
 
 The lockfile does not store scanner read locations such as `node_modules/@scope/pkg`, `.pnpm/...`, or `.yarn/cache/*.zip/...`. The scanner may use those locations to read files during the current run, but lock comparison uses stable source identity plus package-relative paths.
 
-`contentHash` uses the canonical hashing rules in §2. A package moved between `node_modules`, pnpm, Yarn PnP, workspace, and file sources must produce the same hash when its package-relative skill paths and bytes are identical.
+`contentHash` uses the canonical hashing rules in §2. A package moved between `node_modules`, pnpm, Yarn PnP, and workspace sources must produce the same hash when its package-relative skill paths and bytes are identical.
 
 New shared modules: `lockfile.ts` (read/write/parse), `hash.ts` (sha256 helpers). New commands:
 
@@ -718,7 +705,7 @@ Deep imports from internal files are not supported. A separate type-only package
 
 ## 10. Testing strategy
 
-- **M1:** unit tests in `tests/scanner.test.ts` covering the allowlist matrix (listed/found, listed/missing, unlisted/found, file/workspace/npm kinds, transitive skill package not trusted unless listed). Exclusion tests assert suppressed skills are unavailable for discovery, generated indexes, MCP exposure, skill lookup, capability prompts, and invocation. `file:` source tests cover absolute paths, lexical escapes, Windows drive/UNC paths, symlink/junction escape, nested skill-file symlink escape, similar-prefix paths, and missing/non-canonicalizable paths. Integration test confirming a fresh project with no `intent.skills[]` emits the migration warning exactly once.
+- **M1:** unit tests in `tests/scanner.test.ts` covering the allowlist matrix (listed/found, listed/missing, unlisted/found, workspace/npm kinds, transitive skill package not trusted unless listed). Exclusion tests assert suppressed skills are unavailable for discovery, generated indexes, MCP exposure, skill lookup, capability prompts, and invocation. Integration test confirming a fresh project with no `intent.skills[]` emits the migration warning exactly once.
 - **M2:** fixture-driven lockfile round-trip tests (parse → write → parse byte-identical). Tests assert commands write only root `intent.lock`, do not create `.intent/`, preserve top-level policy/rejection/staleness sections, and produce deterministic ordering across regenerations. Frozen-mode integration tests assert non-zero exit on each drift category. First-run test: no lockfile → `scan` reports missing, `approve --all` creates it.
 - **M3:** manifest schema validation tests. `generate-manifest` golden-file tests over representative SKILL.md fixtures assert deterministic ordering/formatting, stable output across repeated runs, invalid path rejection, duplicate path/id rejection, missing/extra `SKILL.md` detection, per-skill manifest rejection, MCP-compatible `mcpTools[]` metadata validation, runtime-field rejection, and move/rename behavior. Round-trip with `scan` (manifest → lockfile manifestHash).
 - **M4:** diff-rendering snapshot tests for each capability/MCP/version-change category. Rejection tests assert the same source identity + same observed hashes stays suppressed, while source identity, version, content, manifest, or capability changes re-surface a previously rejected source.
@@ -789,8 +776,9 @@ All RFC decisions are resolved. Detailed rationale lives in the milestone sectio
 - Approval UI beyond a terminal prompt.
 - Cross-language MCP tool sandboxing.
 - Transitive skill trust. Consumers approve each skill-bearing source explicitly in v1. A listed package does not authorize skills in its dependencies.
-- Skill sources outside the project root (e.g. `~/` personal skill collections). Intent's goal is library knowledge distribution through npm — skills travel with packages and are discovered from a project's dependency tree. `file:` sources must stay inside the project root.
+- Local-directory skill sources not shipped as a package — `file:` paths, `~/` personal skill collections, or any arbitrary local directory. Intent's goal is library knowledge distribution through npm — skills travel with packages and are discovered from a project's dependency tree (npm dependencies and `workspace:` packages). Skills a developer wants to add by hand, outside a package, are the developer's own responsibility and are not an Intent source kind in v1.
 - A dedicated config-mutation command for excludes (`intent skills exclude …`). Excludes are low-frequency, set-once, and already trivial to edit as declarative JSON that reviews well in a PR. Adding a command means a second write target (alongside `intent.lock`), package.json merge/formatting edge cases, and pressure to ship a matching `add`/`remove` family. v1 instead keeps excludes hand-edited and makes `scan`/`diff` print the exact line to paste. Revisit as a fast-follow if demand appears.
 - Webhook-driven staleness detection. Webhook payloads are attacker-influenceable (forged webhooks can trigger false update PRs or suppress real ones). v1 staleness is pull-based and local (M7 Part B). Cross-repo TanStack-internal workflows can keep their own out-of-package scripts.
 - Semantic-anchor staleness (Layer 3 in M7's layered model). Coupling skills to API symbols for symbol-level drift detection is the highest-precision approach but the heaviest to build and adds attack surface to the detector itself. v1 ships Layers 0–2; Layer 3 tracked for a future release.
+- Tightening skill content to the non-derivable layer. A reviewer observed that generated skills often restate API surface — signatures, type definitions, exhaustive option lists — that an agent can already scan directly from a library's published `.d.ts` and source. That restatement adds no agent knowledge and is exactly the content that drifts on every API change, inflating M7's Layer 1–2 staleness signal. The principle: skills should capture what a type scan cannot derive — which API to reach for, the parameter and option interactions that matter, ordering and lifecycle invariants, and failure modes — not transcribe the surface itself. A future pass sharpens the `generate-skill` meta-skill's extract / don't-extract guidance and its validation checklist around this, which also shrinks the surface a future Layer 3 would have to track. This is authoring guidance, not a security boundary, so it sits outside the v1 security core.
 - Telemetry. Intent does not phone home in v1.
