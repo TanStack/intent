@@ -13,18 +13,13 @@
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
     },
-    "./intent-library": {
-      "import": "./dist/intent-library.mjs",
-      "types": "./dist/intent-library.d.mts"
-    },
     "./core": {
       "import": "./dist/core.mjs",
       "types": "./dist/core.d.mts"
     }
   },
   "bin": {
-    "intent": "dist/cli.mjs",
-    "intent-library": "dist/intent-library.mjs"
+    "intent": "dist/cli.mjs"
   },
   "files": [
     "dist",
@@ -44,7 +39,7 @@
   },
   "scripts": {
     "prepack": "npm run build",
-    "build": "tsdown src/index.ts src/cli.ts src/setup.ts src/intent-library.ts src/library-scanner.ts src/core.ts --format esm --dts",
+    "build": "tsdown src/index.ts src/cli.ts src/setup.ts src/core.ts --format esm --dts",
     "test:smoke": "pnpm run build && node dist/cli.mjs --help > /dev/null && node dist/cli.mjs load --help > /dev/null",
     "test:lib": "vitest run --exclude 'tests/integration/**'",
     "test:integration": "vitest run tests/integration/",
