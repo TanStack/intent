@@ -11,9 +11,10 @@ import {
   parseFrontmatter,
   toPosixPath,
 } from './utils.js'
-import { createIntentFsCache, type IntentFsCache } from './fs-cache.js'
+import { createIntentFsCache } from './fs-cache.js'
 import { detectPackageManager } from './package-manager.js'
 import { findWorkspaceRoot } from './workspace-patterns.js'
+import type { IntentFsCache } from './fs-cache.js'
 import type {
   InstalledVariant,
   IntentConfig,
@@ -53,17 +54,19 @@ const requireFromHere = createRequire(import.meta.url)
 
 function findPnpFile(start: string): string | null {
   let dir = resolve(start)
+  let prev: string | undefined
 
-  while (true) {
+  while (dir !== prev) {
     for (const fileName of ['.pnp.cjs', '.pnp.js']) {
       const pnpPath = join(dir, fileName)
       if (existsSync(pnpPath)) return pnpPath
     }
 
-    const next = dirname(dir)
-    if (next === dir) return null
-    dir = next
+    prev = dir
+    dir = dirname(dir)
   }
+
+  return null
 }
 
 function assertLocalNodeModulesSupported(root: string): void {

@@ -54,19 +54,18 @@ export function resolveProjectContext({
 
 function findOwningPackageRoot(startPath: string): string | null {
   let dir = toSearchDir(startPath)
+  let prev: string | undefined
 
-  while (true) {
+  while (dir !== prev) {
     if (existsSync(join(dir, 'package.json'))) {
       return dir
     }
 
-    const next = dirname(dir)
-    if (next === dir) {
-      return null
-    }
-
-    dir = next
+    prev = dir
+    dir = dirname(dir)
   }
+
+  return null
 }
 
 function toSearchDir(path: string): string {

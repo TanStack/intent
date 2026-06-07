@@ -2,10 +2,10 @@ import {
   coreOptionsFromGlobalFlags,
   printDebugInfo,
   printWarnings,
-  type GlobalScanFlags,
 } from '../cli-support.js'
 import { formatIntentCommand } from '../command-runner.js'
 import { listIntentSkills } from '../core.js'
+import type { GlobalScanFlags } from '../cli-support.js'
 import type {
   IntentPackageSummary,
   IntentSkillList,

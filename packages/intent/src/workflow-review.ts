@@ -18,33 +18,33 @@ export function collectStaleReviewItems(
   const items: Array<StaleReviewItem> = []
 
   for (const report of reports) {
-    for (const skill of report.skills ?? []) {
-      if (!skill?.needsReview) continue
+    for (const skill of report.skills) {
+      if (!skill.needsReview) continue
       items.push({
         type: 'stale-skill',
         library: report.library,
         subject: skill.name,
-        reasons: skill.reasons ?? [],
+        reasons: skill.reasons,
       })
     }
 
-    for (const signal of report.signals ?? []) {
-      if (signal?.needsReview === false) continue
+    for (const signal of report.signals) {
+      if (signal.needsReview === false) continue
       items.push({
-        type: signal?.type ?? 'review-signal',
-        library: signal?.library ?? report.library,
+        type: signal.type,
+        library: signal.library ?? report.library,
         subject:
-          signal?.packageName ??
-          signal?.packageRoot ??
-          signal?.skill ??
-          signal?.artifactPath ??
-          signal?.subject ??
+          signal.packageName ??
+          signal.packageRoot ??
+          signal.skill ??
+          signal.artifactPath ??
+          signal.subject ??
           report.library,
-        reasons: signal?.reasons ?? [],
-        artifactPath: signal?.artifactPath,
-        packageName: signal?.packageName,
-        packageRoot: signal?.packageRoot,
-        skill: signal?.skill,
+        reasons: signal.reasons,
+        artifactPath: signal.artifactPath,
+        packageName: signal.packageName,
+        packageRoot: signal.packageRoot,
+        skill: signal.skill,
       })
     }
   }
@@ -88,13 +88,13 @@ export function buildStaleReviewBody(items: Array<StaleReviewItem>): string {
 
   const itemRows = items.map((item) => {
     const subject = item.subject ? `\`${item.subject}\`` : '-'
-    const reasons = item.reasons?.length ? item.reasons.join('; ') : '-'
+    const reasons = item.reasons.length ? item.reasons.join('; ') : '-'
     return `| \`${item.type}\` | ${subject} | \`${item.library}\` | ${reasons} |`
   })
 
   const reasonBullets = items.map((item) => {
     const subject = item.subject ? `\`${item.subject}\`` : '`unknown`'
-    const reasons = item.reasons?.length
+    const reasons = item.reasons.length
       ? item.reasons.join('; ')
       : 'Intent did not emit a detailed reason for this signal.'
     return `- \`${item.type}\` for ${subject}: ${reasons}`

@@ -9,8 +9,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  getCheckSkillsWorkflowAdvisories,
   INTENT_CHECK_SKILLS_WORKFLOW_VERSION,
+  getCheckSkillsWorkflowAdvisories,
 } from '../src/cli-support.js'
 import { runStaleCommand } from '../src/commands/stale.js'
 

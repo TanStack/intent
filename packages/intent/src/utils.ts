@@ -5,11 +5,11 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
-  type Dirent,
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
+import type { Dirent } from 'node:fs'
 
 /**
  * Convert a path to use forward slashes (for cross-platform consistency).
@@ -268,12 +268,12 @@ export function resolveDepDir(
   // Fallback: walk up from parentDir checking node_modules/<depName>.
   // Handles packages with exports maps that don't expose ./package.json.
   let dir = parentDir
-  while (true) {
+  let prev: string | undefined
+  while (dir !== prev) {
     const candidate = join(dir, 'node_modules', depName)
     if (existsSync(join(candidate, 'package.json'))) return candidate
-    const parent = dirname(dir)
-    if (parent === dir) break
-    dir = parent
+    prev = dir
+    dir = dirname(dir)
   }
 
   return null

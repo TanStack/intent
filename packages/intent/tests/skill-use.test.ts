@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  SkillUseParseError,
   formatSkillUse,
   parseSkillUse,
-  SkillUseParseError,
 } from '../src/skill-use.js'
 
 describe('skill use helpers', () => {

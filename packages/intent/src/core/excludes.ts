@@ -1,9 +1,7 @@
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
-import {
-  resolveProjectContext,
-  type ProjectContext,
-} from './project-context.js'
+import { resolveProjectContext } from './project-context.js'
 import { readPackageJson } from './package-json.js'
+import type { ProjectContext } from './project-context.js'
 import type { IntentCoreOptions } from './types.js'
 
 const MAX_EXCLUDE_PATTERN_LENGTH = 200
@@ -117,12 +115,9 @@ export function warningMentionsPackage(
   warning: string,
   packageName: string,
 ): boolean {
-  let fromIndex = 0
+  let idx = warning.indexOf(packageName)
 
-  while (true) {
-    const idx = warning.indexOf(packageName, fromIndex)
-    if (idx === -1) return false
-
+  while (idx !== -1) {
     const before = warning[idx - 1]
     const after = warning[idx + packageName.length]
     if (
@@ -132,6 +127,8 @@ export function warningMentionsPackage(
       return true
     }
 
-    fromIndex = idx + packageName.length
+    idx = warning.indexOf(packageName, idx + packageName.length)
   }
+
+  return false
 }

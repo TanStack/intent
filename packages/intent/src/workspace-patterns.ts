@@ -1,8 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
+import { parse as parseJsonc } from 'jsonc-parser'
 import { parse as parseYaml } from 'yaml'
 import { findSkillFiles } from './utils.js'
+import type { ParseError } from 'jsonc-parser'
 
 function normalizeWorkspacePattern(pattern: string): string {
   return pattern.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
@@ -323,9 +324,10 @@ function readChildDirectories(dir: string): Array<string> {
 
 export function findWorkspaceRoot(start: string): string | null {
   let dir = start
+  let prev: string | undefined
   const visited: Array<string> = []
 
-  while (true) {
+  while (dir !== prev) {
     const cached = workspaceRootCache.get(dir)
     if (cached !== undefined) {
       for (const visitedDir of visited) {
@@ -343,15 +345,14 @@ export function findWorkspaceRoot(start: string): string | null {
       return dir
     }
 
-    const next = dirname(dir)
-    if (next === dir) {
-      for (const visitedDir of visited) {
-        workspaceRootCache.set(visitedDir, null)
-      }
-      return null
-    }
-    dir = next
+    prev = dir
+    dir = dirname(dir)
   }
+
+  for (const visitedDir of visited) {
+    workspaceRootCache.set(visitedDir, null)
+  }
+  return null
 }
 
 export function findPackagesWithSkills(root: string): Array<string> {

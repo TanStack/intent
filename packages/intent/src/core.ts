@@ -6,25 +6,23 @@ import {
   isPackageExcluded,
   warningMentionsPackage,
 } from './core/excludes.js'
-import { createIntentFsCache, type IntentFsCache } from './fs-cache.js'
+import { createIntentFsCache } from './fs-cache.js'
 import { rewriteLoadedSkillMarkdownDestinations } from './core/markdown.js'
 import { resolveSkillUseFastPath } from './core/load-resolution.js'
 import { resolveProjectContext } from './core/project-context.js'
-import {
-  ResolveSkillUseError,
-  resolveSkillUse,
-  type ResolveSkillResult,
-} from './resolver.js'
+import { ResolveSkillUseError, resolveSkillUse } from './resolver.js'
 import { formatSkillUse, parseSkillUse } from './skill-use.js'
 import { scanForIntents } from './scanner.js'
+import type { ResolveSkillResult } from './resolver.js'
+import type { IntentFsCache } from './fs-cache.js'
 import type { ScanOptions, ScanScope } from './types.js'
 import type {
   IntentCoreErrorCode,
   IntentCoreOptions,
   IntentSkillList,
   IntentSkillSummary,
-  LoadedIntentSkillDebug,
   LoadedIntentSkill,
+  LoadedIntentSkillDebug,
   ResolvedIntentSkill,
 } from './core/types.js'
 

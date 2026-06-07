@@ -145,7 +145,7 @@ function parseSyncState(value: unknown): SyncState | null {
 
       skills[skillName] = {}
       if (sourcesSha) {
-        skills[skillName]!.sources_sha = sourcesSha
+        skills[skillName].sources_sha = sourcesSha
       }
     }
 

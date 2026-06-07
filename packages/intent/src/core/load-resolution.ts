@@ -1,15 +1,15 @@
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { createIntentFsCache, type IntentFsCache } from '../fs-cache.js'
-import { resolveSkillEntry, type ResolveSkillResult } from '../resolver.js'
+import { createIntentFsCache } from '../fs-cache.js'
+import { resolveSkillEntry } from '../resolver.js'
 import { scanIntentPackageAtRoot } from '../scanner.js'
 import { findWorkspacePackages } from '../workspace-patterns.js'
 import { getDeps, resolveDepDir } from '../utils.js'
 import { warningMentionsPackage } from './excludes.js'
-import {
-  resolveProjectContext,
-  type ProjectContext,
-} from './project-context.js'
+import { resolveProjectContext } from './project-context.js'
+import type { ResolveSkillResult } from '../resolver.js'
+import type { IntentFsCache } from '../fs-cache.js'
+import type { ProjectContext } from './project-context.js'
 import type { SkillUse } from '../skill-use.js'
 import type { IntentCoreOptions } from './types.js'
 
@@ -70,15 +70,17 @@ function findVisibleDependencyDir(
   fromDir: string,
 ): string | null {
   let dir = fromDir
+  let prev: string | undefined
 
-  while (true) {
+  while (dir !== prev) {
     const candidate = join(dir, 'node_modules', packageName)
     if (existsSync(join(candidate, 'package.json'))) return candidate
 
-    const next = dirname(dir)
-    if (next === dir) return null
-    dir = next
+    prev = dir
+    dir = dirname(dir)
   }
+
+  return null
 }
 
 function resolveDependencyPackageDir(
@@ -134,7 +136,7 @@ function getDirectLoadFastPathCandidateDirs(
     seen,
     resolveDependencyPackageDir(
       packageName,
-      context.packageRoot ?? context.workspaceRoot ?? cwd,
+      context.packageRoot ?? context.workspaceRoot,
     ),
   )
 

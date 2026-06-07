@@ -2,11 +2,9 @@ import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { fail, isCliFailure } from '../cli-error.js'
 import { printWarnings } from '../cli-support.js'
-import {
-  type ProjectContext,
-  resolveProjectContext,
-} from '../core/project-context.js'
+import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../workspace-patterns.js'
+import type { ProjectContext } from '../core/project-context.js'
 
 interface ValidationError {
   file: string
