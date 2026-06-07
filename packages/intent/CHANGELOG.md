@@ -1,5 +1,11 @@
 # @tanstack/intent
 
+## 0.0.42
+
+### Patch Changes
+
+- [#148](https://github.com/TanStack/intent/pull/148) [`a8e0ea1`](https://github.com/TanStack/intent/commit/a8e0ea161006d7f81af93c4494bd5a5a8c33ae0f) - Remove the abandoned `intent-library` bin and its `./intent-library` export. The legacy library-bin discovery model was replaced by the keyword-based model; anything invoking `intent-library` directly must move to the normal `intent` discovery flow (no compatibility shim).
+
 ## 0.0.41
 
 ### Patch Changes
