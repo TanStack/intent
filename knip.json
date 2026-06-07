@@ -11,9 +11,7 @@
         "src/index.ts",
         "src/cli.ts",
         "src/core.ts",
-        "src/setup.ts",
-        "src/intent-library.ts",
-        "src/library-scanner.ts"
+        "src/setup.ts"
       ],
       "ignore": ["meta/**"],
       "ignoreDependencies": ["verdaccio", "@verdaccio/node-api"]
