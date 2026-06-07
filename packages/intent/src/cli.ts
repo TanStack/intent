@@ -247,14 +247,22 @@ export async function main(argv: Array<string> = process.argv.slice(2)) {
   }
 }
 
-let isMain = false
-try {
-  isMain =
-    process.argv[1] !== undefined &&
-    fileURLToPath(import.meta.url) === realpathSync(process.argv[1])
-} catch {}
+export function isMainModule(
+  metaUrl: string,
+  argvPath: string | undefined,
+  realpath: (path: string) => string = realpathSync,
+): boolean {
+  if (argvPath === undefined) {
+    return false
+  }
+  try {
+    return fileURLToPath(metaUrl) === realpath(argvPath)
+  } catch {
+    return false
+  }
+}
 
-if (isMain) {
+if (isMainModule(import.meta.url, process.argv[1])) {
   const exitCode = await main()
   process.exit(exitCode)
 }

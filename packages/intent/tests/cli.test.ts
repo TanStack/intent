@@ -9,11 +9,11 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { INSTALL_PROMPT } from '../src/commands/install.js'
 import { runLoadCommand } from '../src/commands/load.js'
-import { main } from '../src/cli.js'
+import { isMainModule, main } from '../src/cli.js'
 import type { ScanOptions, ScanResult } from '../src/types.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
@@ -433,7 +433,7 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('## Step 1')
-    expect(output).toContain('meta/domain-discovery/SKILL.md')
+    expect(output).toContain(join('meta', 'domain-discovery', 'SKILL.md'))
   })
 
   it('updates package.json for skill publishing', async () => {
@@ -2422,5 +2422,35 @@ describe('package metadata', () => {
     }
 
     expect(packageJson.scripts?.prepack).toBe('npm run build')
+  })
+})
+
+describe('isMainModule', () => {
+  const modulePath = fileURLToPath(import.meta.url)
+  const moduleUrl = pathToFileURL(modulePath).href
+  const otherPath = join(dirname(modulePath), 'other.mjs')
+
+  it('returns false when there is no argv script path', () => {
+    expect(isMainModule(moduleUrl, undefined, () => modulePath)).toBe(false)
+  })
+
+  it('returns true when the resolved argv path matches the module', () => {
+    const symlinkPath = join(dirname(modulePath), 'link')
+    const realpath = (path: string) =>
+      path === symlinkPath ? modulePath : path
+
+    expect(isMainModule(moduleUrl, symlinkPath, realpath)).toBe(true)
+  })
+
+  it('returns false when the resolved argv path is a different module', () => {
+    expect(isMainModule(moduleUrl, otherPath, (path) => path)).toBe(false)
+  })
+
+  it('returns false when resolving the argv path throws', () => {
+    expect(
+      isMainModule(moduleUrl, otherPath, () => {
+        throw new Error('ENOENT')
+      }),
+    ).toBe(false)
   })
 })

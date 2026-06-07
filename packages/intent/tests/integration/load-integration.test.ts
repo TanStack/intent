@@ -1,6 +1,8 @@
 import { rmSync } from 'node:fs'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
+  canSymlink,
+  isPackageManagerAvailable,
   publishFixtures,
   runLoad,
   scaffoldProject,
@@ -11,7 +13,7 @@ import type { PackageManager, Registry } from './scaffold.js'
 const PACKAGE_MANAGERS: Array<PackageManager> = ['npm', 'pnpm', 'yarn', 'bun']
 const SKILL_USE = '@test-intent/skills-leaf#core'
 
-let registry: Registry
+let registry: Registry | undefined
 const tempDirs: Array<string> = []
 
 beforeAll(async () => {
@@ -34,24 +36,28 @@ function expectSkillContent(stdout: string): void {
 }
 
 describe.each(PACKAGE_MANAGERS)('intent load via installed bin (%s)', (pm) => {
-  it('prints the resolved skill content', () => {
-    const { root, cwd } = scaffoldProject({
-      pm,
-      structure: 'single',
-      dependency: '@test-intent/skills-leaf',
-      registryUrl: registry.url,
-    })
-    tempDirs.push(root)
+  it.skipIf(!isPackageManagerAvailable(pm))(
+    'prints the resolved skill content',
+    () => {
+      const { root, cwd } = scaffoldProject({
+        pm,
+        structure: 'single',
+        dependency: '@test-intent/skills-leaf',
+        registryUrl: registry!.url,
+      })
+      tempDirs.push(root)
 
-    const result = runLoad(cwd, SKILL_USE)
+      const result = runLoad(cwd, SKILL_USE)
 
-    if (result.exitCode !== 0) {
-      throw new Error(
-        `intent load failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-      )
-    }
-    expectSkillContent(result.stdout)
-  }, 60_000)
+      if (result.exitCode !== 0) {
+        throw new Error(
+          `intent load failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+        )
+      }
+      expectSkillContent(result.stdout)
+    },
+    60_000,
+  )
 })
 
 describe('intent load resolution variants', () => {
@@ -60,7 +66,7 @@ describe('intent load resolution variants', () => {
       pm: 'npm',
       structure: 'single',
       dependency: '@test-intent/skills-leaf',
-      registryUrl: registry.url,
+      registryUrl: registry!.url,
     })
     tempDirs.push(root)
 
@@ -79,7 +85,7 @@ describe('intent load resolution variants', () => {
       pm: 'npm',
       structure: 'single',
       dependency: '@test-intent/skills-leaf',
-      registryUrl: registry.url,
+      registryUrl: registry!.url,
     })
     tempDirs.push(root)
 
@@ -99,31 +105,35 @@ describe('intent load resolution variants', () => {
     expect(result.parsed.content).toContain('# Core Skill')
   }, 60_000)
 
-  it('prints content when invoked through a symlink (mimics node_modules/.bin)', () => {
-    const { root, cwd } = scaffoldProject({
-      pm: 'npm',
-      structure: 'single',
-      dependency: '@test-intent/skills-leaf',
-      registryUrl: registry.url,
-    })
-    tempDirs.push(root)
+  it.skipIf(!canSymlink())(
+    'prints content when invoked through a symlink (mimics node_modules/.bin)',
+    () => {
+      const { root, cwd } = scaffoldProject({
+        pm: 'npm',
+        structure: 'single',
+        dependency: '@test-intent/skills-leaf',
+        registryUrl: registry!.url,
+      })
+      tempDirs.push(root)
 
-    const result = runLoad(cwd, SKILL_USE, { method: 'symlink' })
+      const result = runLoad(cwd, SKILL_USE, { method: 'symlink' })
 
-    if (result.exitCode !== 0) {
-      throw new Error(
-        `intent load via symlink failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-      )
-    }
-    expectSkillContent(result.stdout)
-  }, 60_000)
+      if (result.exitCode !== 0) {
+        throw new Error(
+          `intent load via symlink failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+        )
+      }
+      expectSkillContent(result.stdout)
+    },
+    60_000,
+  )
 
   it('resolves a workspace-dep skill from a monorepo workspace package', () => {
     const { root, cwd } = scaffoldProject({
       pm: 'pnpm',
       structure: 'monorepo-workspace',
       dependency: '@test-intent/skills-leaf',
-      registryUrl: registry.url,
+      registryUrl: registry!.url,
     })
     tempDirs.push(root)
 

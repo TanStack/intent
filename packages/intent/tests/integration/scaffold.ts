@@ -7,6 +7,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,6 +16,19 @@ const thisDir = dirname(fileURLToPath(import.meta.url))
 const fixturesDir = join(thisDir, '..', 'fixtures', 'integration')
 const cliPath = join(thisDir, '..', '..', 'dist', 'cli.mjs')
 const realTmpdir = realpathSync(tmpdir())
+
+function getFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer()
+    server.unref()
+    server.on('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      const port = typeof address === 'object' && address ? address.port : 0
+      server.close(() => resolve(port))
+    })
+  })
+}
 
 // ---------------------------------------------------------------------------
 // Verdaccio lifecycle
@@ -27,7 +41,7 @@ export interface Registry {
 
 export async function startRegistry(): Promise<Registry> {
   const storageDir = mkdtempSync(join(realTmpdir, 'verdaccio-storage-'))
-  const port = 6000 + Math.floor(Math.random() * 4000)
+  const port = await getFreePort()
   const configPath = join(storageDir, 'config.yaml')
 
   const htpasswdPath = join(storageDir, 'htpasswd')
@@ -37,7 +51,7 @@ export async function startRegistry(): Promise<Registry> {
     configPath,
     [
       `storage: ${storageDir}`,
-      `listen: 0.0.0.0:${port}`,
+      `listen: 127.0.0.1:${port}`,
       'auth:',
       '  htpasswd:',
       `    file: ${htpasswdPath}`,
@@ -56,6 +70,7 @@ export async function startRegistry(): Promise<Registry> {
     ].join('\n'),
   )
 
+  const isWindows = process.platform === 'win32'
   const verdaccioBin = join(
     thisDir,
     '..',
@@ -67,11 +82,14 @@ export async function startRegistry(): Promise<Registry> {
 
   return new Promise((resolve, reject) => {
     const child = spawn(
-      verdaccioBin,
-      ['--config', configPath, '--listen', String(port)],
+      isWindows ? `"${verdaccioBin}"` : verdaccioBin,
+      isWindows
+        ? ['--config', `"${configPath}"`, '--listen', `127.0.0.1:${port}`]
+        : ['--config', configPath, '--listen', `127.0.0.1:${port}`],
       {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false,
+        shell: isWindows,
       },
     )
 
@@ -85,12 +103,12 @@ export async function startRegistry(): Promise<Registry> {
 
     const onData = (chunk: Buffer) => {
       const text = chunk.toString()
-      if (text.includes('http address') || text.includes(`localhost:${port}`)) {
+      if (text.includes('http address') || text.includes(`:${port}`)) {
         if (!started) {
           started = true
           clearTimeout(timeout)
           resolve({
-            url: `http://localhost:${port}`,
+            url: `http://127.0.0.1:${port}`,
             stop: () => {
               child.kill('SIGTERM')
               rmSync(storageDir, { recursive: true, force: true })
@@ -125,24 +143,28 @@ export function publishFixtures(registryUrl: string): void {
   const host = new URL(registryUrl).host
   const npmrc = `//${host}/:_authToken=test-token\nregistry=${registryUrl}\n`
 
-  // Isolate npm cache to avoid EPERM on the host's ~/.npm/_cacache
+  // Isolate npm cache + config to avoid EPERM on the host's ~/.npm and to keep
+  // the shared fixture dirs read-only. Two integration suites publish in
+  // parallel, so writing a .npmrc into the shared fixture dirs races (one
+  // suite's cleanup deletes it before the other's publish reads it, causing
+  // ENEEDAUTH). A per-call userconfig file avoids both that race and the
+  // Windows-invalid `/dev/null` path.
   const cacheDir = mkdtempSync(join(realTmpdir, 'intent-npm-cache-'))
+  const userconfigPath = join(cacheDir, 'npmrc')
+  writeFileSync(userconfigPath, npmrc)
 
-  // Order matters: leaf first, then wrappers that depend on it
-  for (const pkg of ['skills-leaf', 'wrapper-1', 'wrapper-2', 'wrapper-3']) {
-    const pkgDir = join(fixturesDir, pkg)
-    writeFileSync(join(pkgDir, '.npmrc'), npmrc)
-    try {
+  try {
+    // Order matters: leaf first, then wrappers that depend on it
+    for (const pkg of ['skills-leaf', 'wrapper-1', 'wrapper-2', 'wrapper-3']) {
+      const pkgDir = join(fixturesDir, pkg)
       execSync(
-        `npm publish --registry ${registryUrl} --access public --provenance=false --cache=${cacheDir} --userconfig=/dev/null`,
+        `npm publish --registry ${registryUrl} --access public --provenance=false --cache="${cacheDir}" --userconfig="${userconfigPath}"`,
         { cwd: pkgDir, stdio: 'pipe' },
       )
-    } finally {
-      rmSync(join(pkgDir, '.npmrc'), { force: true })
     }
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true })
   }
-
-  rmSync(cacheDir, { recursive: true, force: true })
 }
 
 // ---------------------------------------------------------------------------
@@ -321,6 +343,56 @@ export interface CliResult {
   stderr: string
   exitCode: number
   parsed: any
+}
+
+const packageManagerAvailability = new Map<PackageManager, boolean>()
+
+export function isPackageManagerAvailable(pm: PackageManager): boolean {
+  const cached = packageManagerAvailability.get(pm)
+  if (cached !== undefined) return cached
+
+  let available: boolean
+  try {
+    execSync(`${pm} --version`, { stdio: 'ignore', cwd: realTmpdir })
+    available = true
+  } catch {
+    available = false
+  }
+
+  packageManagerAvailability.set(pm, available)
+  return available
+}
+
+let symlinkCapable: boolean | undefined
+
+export function canSymlink(): boolean {
+  if (symlinkCapable !== undefined) return symlinkCapable
+
+  const probeDir = mkdtempSync(join(realTmpdir, 'intent-symlink-probe-'))
+  try {
+    const target = join(probeDir, 'target')
+    writeFileSync(target, '')
+    symlinkSync(target, join(probeDir, 'link'))
+    symlinkCapable = true
+  } catch {
+    symlinkCapable = false
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true })
+  }
+
+  return symlinkCapable
+}
+
+export function isYarnClassic(): boolean {
+  try {
+    const version = execSync('yarn --version', {
+      encoding: 'utf8',
+      cwd: realTmpdir,
+    }).trim()
+    return Number.parseInt(version.split('.')[0]!, 10) === 1
+  } catch {
+    return false
+  }
 }
 
 export function runScanner(
