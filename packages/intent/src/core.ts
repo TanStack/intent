@@ -1,4 +1,3 @@
-import { readFileSync, realpathSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
 import {
   compileExcludePatterns,
@@ -15,6 +14,7 @@ import { formatSkillUse, parseSkillUse } from './skill-use.js'
 import { scanForIntents } from './scanner.js'
 import type { ResolveSkillResult } from './resolver.js'
 import type { IntentFsCache } from './fs-cache.js'
+import type { ReadFs } from './utils.js'
 import type { ScanOptions, ScanScope } from './types.js'
 import type {
   IntentCoreErrorCode,
@@ -178,22 +178,26 @@ function toResolvedIntentSkill(
   cwd: string,
   use: string,
   resolved: ResolveSkillResult,
+  readFs: ReadFs,
   debug?: LoadedIntentSkillDebug,
 ): {
   realPackageRoot: string
   realResolvedPath: string
+  readFs: ReadFs
   result: ResolvedIntentSkill
 } {
   let realResolvedPath: string
   try {
-    realResolvedPath = realpathSync.native(resolveFromCwd(cwd, resolved.path))
+    realResolvedPath = readFs.realpathSync.native(
+      resolveFromCwd(cwd, resolved.path),
+    )
   } catch {
     throw new IntentCoreError(
       'skill-file-not-found',
       `Resolved skill file was not found: ${resolved.path}`,
     )
   }
-  const realPackageRoot = realpathSync.native(
+  const realPackageRoot = readFs.realpathSync.native(
     resolveFromCwd(cwd, resolved.packageRoot),
   )
 
@@ -222,6 +226,7 @@ function toResolvedIntentSkill(
   return {
     realPackageRoot,
     realResolvedPath,
+    readFs,
     result,
   }
 }
@@ -263,6 +268,7 @@ function resolveIntentSkillInCwd(
 ): {
   realPackageRoot: string
   realResolvedPath: string
+  readFs: ReadFs
   result: ResolvedIntentSkill
 } {
   let parsedUse: ReturnType<typeof parseSkillUse>
@@ -301,6 +307,7 @@ function resolveIntentSkillInCwd(
       cwd,
       use,
       fastPathResolved,
+      fsCache.getReadFs(),
       options.debug
         ? createLoadedSkillDebug({
             cwd,
@@ -331,6 +338,7 @@ function resolveIntentSkillInCwd(
     cwd,
     use,
     resolved,
+    fsCache.getReadFs(),
     options.debug
       ? createLoadedSkillDebug({
           cwd,
@@ -358,7 +366,7 @@ export function loadIntentSkill(
   const cwd = resolveCoreCwd(options)
   const resolved = resolveIntentSkillInCwd(cwd, use, options)
   const content = rewriteLoadedSkillMarkdownDestinations({
-    content: readFileSync(resolved.realResolvedPath, 'utf8'),
+    content: resolved.readFs.readFileSync(resolved.realResolvedPath, 'utf8'),
     cwd,
     packageRoot: resolved.realPackageRoot,
     skillFilePath: resolved.realResolvedPath,

@@ -8,6 +8,7 @@ import {
 } from './discovery/index.js'
 import {
   detectGlobalNodeModules,
+  nodeReadFs,
   parseFrontmatter,
   toPosixPath,
 } from './utils.js'
@@ -15,6 +16,7 @@ import { createIntentFsCache } from './fs-cache.js'
 import { detectPackageManager } from './package-manager.js'
 import { findWorkspaceRoot } from './workspace-patterns.js'
 import type { IntentFsCache } from './fs-cache.js'
+import type { ReadFs } from './utils.js'
 import type {
   InstalledVariant,
   IntentConfig,
@@ -50,6 +52,21 @@ interface PnpApi {
   topLevel?: PnpPackageLocator
 }
 
+interface LoadedPnp {
+  api: PnpApi
+  /**
+   * Yarn's libzip-patched `fs`, captured after `.pnp.cjs` `setup()` runs. The
+   * scanner installs it as the active read filesystem so package roots inside
+   * `.yarn/cache/*.zip` are readable.
+   */
+  readFs: ReadFs
+}
+
+interface NodeModuleInternals {
+  _resolveFilename: (...args: Array<unknown>) => unknown
+  findPnpApi?: (lookupSource: string) => PnpApi | null
+}
+
 const requireFromHere = createRequire(import.meta.url)
 
 function findPnpFile(start: string): string | null {
@@ -80,9 +97,18 @@ function assertLocalNodeModulesSupported(root: string): void {
   }
 }
 
-function loadPnpApi(root: string): PnpApi | null {
+function loadPnpApi(root: string): LoadedPnp | null {
   const pnpPath = findPnpFile(root)
   if (!pnpPath) return null
+
+  const moduleApi = requireFromHere('node:module') as NodeModuleInternals
+  const originalResolveFilename = moduleApi._resolveFilename
+  // Capture `fs` before setup(). Yarn's `setup()` patches the `fs` module in
+  // place (libzip layer for reading inside `.yarn/cache/*.zip`), so this
+  // reference becomes patched without routing a post-setup `require('node:fs')`
+  // through Yarn's resolver hook (which rejects the `node:fs` specifier under
+  // Yarn 1 PnP).
+  const readFs = requireFromHere('node:fs') as unknown as ReadFs
 
   try {
     const pnpModule = requireFromHere(pnpPath) as PnpApi
@@ -90,22 +116,29 @@ function loadPnpApi(root: string): PnpApi | null {
       pnpModule.setup()
     }
 
+    // setup() also installs a global CommonJS module-resolution hook. Restore
+    // the resolver: Intent reads package data as files and never requires
+    // candidate package code, so leaving the resolver installed is an
+    // unnecessary, process-wide side effect (notably for a long-running
+    // `mcp serve`). The in-place `fs` patch survives the restore.
+    moduleApi._resolveFilename = originalResolveFilename
+
     if (
       typeof pnpModule.getDependencyTreeRoots === 'function' &&
       typeof pnpModule.getPackageInformation === 'function'
     ) {
-      return pnpModule
+      return { api: pnpModule, readFs }
     }
 
     const projectRequire = createRequire(join(dirname(pnpPath), 'package.json'))
-    return projectRequire('pnpapi') as PnpApi
+    return { api: projectRequire('pnpapi') as PnpApi, readFs }
   } catch (err) {
+    moduleApi._resolveFilename = originalResolveFilename
     try {
-      const moduleApi = requireFromHere('node:module') as {
-        findPnpApi?: (lookupSource: string) => PnpApi | null
-      }
       const foundApi = moduleApi.findPnpApi?.(root)
-      if (foundApi) return foundApi
+      if (foundApi) {
+        return { api: foundApi, readFs }
+      }
     } catch {
       // Ignore and report the project PnP load error below.
     }
@@ -215,8 +248,9 @@ function readSkillEntry(
   skillsDir: string,
   childDir: string,
   skillFile: string,
+  readFs: ReadFs = nodeReadFs,
 ): SkillEntry {
-  const fm = parseFrontmatter(skillFile)
+  const fm = parseFrontmatter(skillFile, readFs)
   const relName = toPosixPath(relative(skillsDir, childDir))
   const desc =
     typeof fm?.description === 'string'
@@ -236,6 +270,7 @@ function discoverSkillByNameHint(
   skillsDir: string,
   packageName: string,
   skillNameHint: string,
+  readFs: ReadFs = nodeReadFs,
 ): Array<SkillEntry> {
   const skills: Array<SkillEntry> = []
   const seen = new Set<string>()
@@ -246,9 +281,9 @@ function discoverSkillByNameHint(
     if (!resolvedHint) continue
 
     const { childDir, skillFile } = resolvedHint
-    if (!existsSync(skillFile)) continue
+    if (!readFs.existsSync(skillFile)) continue
 
-    const skill = readSkillEntry(skillsDir, childDir, skillFile)
+    const skill = readSkillEntry(skillsDir, childDir, skillFile, readFs)
     if (skill.name !== hint || seen.has(skill.name)) continue
 
     seen.add(skill.name)
@@ -262,12 +297,13 @@ function discoverSkills(
   skillsDir: string,
   fsCache: IntentFsCache,
 ): Array<SkillEntry> {
+  const readFs = fsCache.getReadFs()
   return fsCache
     .findSkillFiles(skillsDir)
     .flatMap((skillFile): Array<SkillEntry> => {
       const childDir = dirname(skillFile)
       if (childDir === skillsDir) return []
-      return [readSkillEntry(skillsDir, childDir, skillFile)]
+      return [readSkillEntry(skillsDir, childDir, skillFile, readFs)]
     })
 }
 
@@ -456,7 +492,11 @@ export function scanForIntents(
   function getPnpApi(): PnpApi | null {
     if (scanScope === 'global') return null
     if (pnpApi === undefined) {
-      pnpApi = loadPnpApi(projectRoot)
+      const loaded = loadPnpApi(projectRoot)
+      pnpApi = loaded?.api ?? null
+      // Install Yarn's libzip-patched fs before any package inside the zip
+      // cache is read (scanPnpPackages runs after this).
+      if (loaded) fsCache.useFs(loaded.readFs)
     }
     return pnpApi
   }
@@ -500,6 +540,7 @@ export function scanForIntents(
       discoverSkills: (skillsDir) => discoverSkills(skillsDir, fsCache),
       getPackageDepth,
       getFsIdentity: fsCache.getFsIdentity,
+      exists: fsCache.exists,
       packageIndexes,
       packages,
       projectRoot,
@@ -691,10 +732,12 @@ export function scanIntentPackageAtRoot(
             skillsDir,
             packageName,
             options.skillNameHint!,
+            fsCache.getReadFs(),
           )
       : (skillsDir) => discoverSkills(skillsDir, fsCache),
     getPackageDepth,
     getFsIdentity: fsCache.getFsIdentity,
+    exists: fsCache.exists,
     packageIndexes,
     packages,
     projectRoot,

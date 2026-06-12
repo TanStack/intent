@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -1116,6 +1117,63 @@ describe('scanForIntents', () => {
         'react-start',
         'react-start/server-components',
       ])
+    } finally {
+      if (previousFindPnpApi) {
+        moduleApi.findPnpApi = previousFindPnpApi
+      } else {
+        delete moduleApi.findPnpApi
+      }
+    }
+  })
+
+  it('fails closed with a diagnostic when the PnP API cannot be loaded', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'pnp-broken',
+      private: true,
+      packageManager: 'yarn@4.12.0',
+      dependencies: { '@scope/candidate': '1.0.0' },
+    })
+    writeFileSync(join(root, '.yarnrc.yml'), 'nodeLinker: pnp\n')
+
+    // A candidate package whose code must never be executed during discovery.
+    const candidateDir = createDir(
+      root,
+      '.yarn',
+      'cache',
+      'candidate.zip',
+      'node_modules',
+      '@scope',
+      'candidate',
+    )
+    writeJson(join(candidateDir, 'package.json'), {
+      name: '@scope/candidate',
+      version: '1.0.0',
+    })
+    const sideEffectMarker = join(root, 'candidate-was-imported')
+    writeFileSync(
+      join(candidateDir, 'index.js'),
+      `require('node:fs').writeFileSync(${JSON.stringify(sideEffectMarker)}, 'x')\n`,
+    )
+
+    // A .pnp.cjs that throws on load: Intent must surface a diagnostic and must
+    // not fall back to importing candidate package code.
+    writeFileSync(
+      join(root, '.pnp.cjs'),
+      "throw new Error('corrupt pnp runtime')\n",
+    )
+
+    const moduleApi = requireFromTest('node:module') as {
+      findPnpApi?: () => unknown
+    }
+    const previousFindPnpApi = moduleApi.findPnpApi
+    // Ensure no ambient PnP API masks the load failure.
+    moduleApi.findPnpApi = () => null
+
+    try {
+      expect(() => scanForIntents(root)).toThrow(
+        /Yarn PnP project detected, but Intent could not load Yarn's PnP API/,
+      )
+      expect(existsSync(sideEffectMarker)).toBe(false)
     } finally {
       if (previousFindPnpApi) {
         moduleApi.findPnpApi = previousFindPnpApi

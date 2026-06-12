@@ -1,9 +1,10 @@
-import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   createFsIdentityCache,
   findSkillFiles as findSkillFilesUncached,
+  nodeReadFs,
 } from './utils.js'
+import type { ReadFs } from './utils.js'
 
 type PackageJsonReadResult = {
   packageJson: Record<string, unknown> | null
@@ -21,6 +22,16 @@ export type IntentFsCache = {
   findSkillFiles: (dir: string) => Array<string>
   getFsIdentity: (path: string) => string
   getStats: () => IntentFsCacheStats
+  /**
+   * Swap the filesystem used for all reads. Under Yarn PnP the scanner installs
+   * Yarn's libzip-patched `fs` here once, so subsequent reads reach files inside
+   * `.yarn/cache/*.zip`. The patched `fs` also serves real paths, so it is safe
+   * to use for every read after the swap.
+   */
+  useFs: (fs: ReadFs) => void
+  /** The filesystem currently used for reads (patched under Yarn PnP). */
+  getReadFs: () => ReadFs
+  exists: (path: string) => boolean
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -30,7 +41,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function createIntentFsCache(): IntentFsCache {
   const packageJsonCache = new Map<string, PackageJsonReadResult>()
   const skillFilesCache = new Map<string, Array<string>>()
-  const getFsIdentity = createFsIdentityCache()
+  let activeFs: ReadFs = nodeReadFs
+  const getFsIdentity = createFsIdentityCache(() => activeFs)
   const stats: IntentFsCacheStats = {
     packageJsonReadCount: 0,
     packageJsonCacheHits: 0,
@@ -47,7 +59,7 @@ export function createIntentFsCache(): IntentFsCache {
     stats.packageJsonReadCount += 1
     try {
       const parsed = JSON.parse(
-        readFileSync(join(dir, 'package.json'), 'utf8'),
+        activeFs.readFileSync(join(dir, 'package.json'), 'utf8'),
       ) as unknown
       const result = {
         packageJson: isRecord(parsed) ? parsed : null,
@@ -73,7 +85,7 @@ export function createIntentFsCache(): IntentFsCache {
       return [...cached]
     }
 
-    const files = findSkillFilesUncached(dir)
+    const files = findSkillFilesUncached(dir, activeFs)
     skillFilesCache.set(key, files)
     return [...files]
   }
@@ -84,5 +96,10 @@ export function createIntentFsCache(): IntentFsCache {
     findSkillFiles,
     getFsIdentity,
     getStats: () => ({ ...stats }),
+    useFs: (fs: ReadFs) => {
+      activeFs = fs
+    },
+    getReadFs: () => activeFs,
+    exists: (path: string) => activeFs.existsSync(path),
   }
 }

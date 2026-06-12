@@ -28,6 +28,12 @@ export interface CreatePackageRegistrarOptions {
   projectRoot: string
   readPkgJson: (dirPath: string) => PackageJson | null
   getFsIdentity: (path: string) => string
+  /**
+   * Existence check routed through the scan's active filesystem, so package
+   * roots inside a Yarn PnP zip cache are seen (the static `node:fs` binding
+   * does not see Yarn's libzip patch).
+   */
+  exists: (path: string) => boolean
   rememberVariant: (pkg: IntentPackage) => void
   validateIntentField: (pkgName: string, intent: unknown) => IntentConfig | null
   warnings: Array<string>
@@ -76,7 +82,7 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     if (!shouldAttemptPackageRoot(dirPath)) return false
 
     const skillsDir = join(dirPath, 'skills')
-    if (!existsSync(skillsDir)) return false
+    if (!opts.exists(skillsDir)) return false
 
     const pkgJson = opts.readPkgJson(dirPath)
     if (!pkgJson) {

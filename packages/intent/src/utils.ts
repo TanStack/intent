@@ -12,13 +12,38 @@ import { parse as parseYaml } from 'yaml'
 import type { Dirent } from 'node:fs'
 
 /**
+ * The subset of `node:fs` the scanner reads through. Under Yarn PnP this is
+ * swapped for Yarn's libzip-patched `fs` so reads can reach files inside
+ * `.yarn/cache/*.zip` (see scanner `loadPnpApi`). The static `node:fs` named
+ * imports cannot be used directly for that, because their bindings are captured
+ * before Yarn's `setup()` patches the CommonJS `fs` module.
+ */
+export interface ReadFs {
+  existsSync: typeof existsSync
+  lstatSync: typeof lstatSync
+  readFileSync: typeof readFileSync
+  readdirSync: typeof readdirSync
+  realpathSync: typeof realpathSync
+}
+
+export const nodeReadFs: ReadFs = {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+}
+
+/**
  * Convert a path to use forward slashes (for cross-platform consistency).
  */
 export function toPosixPath(p: string): string {
   return p.split(sep).join('/')
 }
 
-export function createFsIdentityCache(): (path: string) => string {
+export function createFsIdentityCache(
+  getFs: () => ReadFs = () => nodeReadFs,
+): (path: string) => string {
   const cache = new Map<string, string>()
 
   return (path: string): string => {
@@ -26,10 +51,11 @@ export function createFsIdentityCache(): (path: string) => string {
     const cached = cache.get(resolved)
     if (cached) return cached
 
+    const fs = getFs()
     let identity: string
     try {
-      identity = lstatSync(resolved).isSymbolicLink()
-        ? realpathSync(resolved)
+      identity = fs.lstatSync(resolved).isSymbolicLink()
+        ? fs.realpathSync(resolved)
         : resolved
     } catch {
       identity = resolved
@@ -43,13 +69,16 @@ export function createFsIdentityCache(): (path: string) => string {
 /**
  * Recursively find all SKILL.md files under a directory.
  */
-export function findSkillFiles(dir: string): Array<string> {
+export function findSkillFiles(
+  dir: string,
+  fs: ReadFs = nodeReadFs,
+): Array<string> {
   const files: Array<string> = []
-  if (!existsSync(dir)) return files
+  if (!fs.existsSync(dir)) return files
 
   let entries: Array<Dirent<string>>
   try {
-    entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
+    entries = fs.readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
   } catch {
     return files
   }
@@ -57,7 +86,7 @@ export function findSkillFiles(dir: string): Array<string> {
   for (const entry of entries) {
     const fullPath = join(dir, entry.name)
     if (entry.isDirectory()) {
-      files.push(...findSkillFiles(fullPath))
+      files.push(...findSkillFiles(fullPath, fs))
     } else if (entry.name === 'SKILL.md') {
       files.push(fullPath)
     }
@@ -284,10 +313,11 @@ export function resolveDepDir(
  */
 export function parseFrontmatter(
   filePath: string,
+  fs: ReadFs = nodeReadFs,
 ): Record<string, unknown> | null {
   let content: string
   try {
-    content = readFileSync(filePath, 'utf8')
+    content = fs.readFileSync(filePath, 'utf8')
   } catch {
     return null
   }
