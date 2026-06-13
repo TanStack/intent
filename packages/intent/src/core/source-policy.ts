@@ -13,6 +13,7 @@ import { resolveProjectContext } from './project-context.js'
 import type { ExcludeMatcher } from './excludes.js'
 import type { ProjectContext } from './project-context.js'
 import type { SkillSourcesConfig } from './skill-sources.js'
+import type { SkillUse } from '../skill-use.js'
 import type { IntentCoreOptions } from './types.js'
 import type { IntentPackage, ScanOptions, ScanResult } from '../types.js'
 
@@ -41,9 +42,24 @@ export interface LoadRefusal {
   message: string
 }
 
+function isSourcePermitted(
+  config: SkillSourcesConfig,
+  packageName: string,
+): boolean {
+  switch (config.mode) {
+    case 'absent':
+    case 'allow-all':
+      return true
+    case 'empty':
+      return false
+    case 'explicit':
+      return config.sources.some((source) => source.id === packageName)
+  }
+}
+
 export function checkLoadAllowed(
   use: string,
-  parsed: { packageName: string; skillName: string },
+  parsed: SkillUse,
   params: {
     config: SkillSourcesConfig
     excludeMatchers: Array<ExcludeMatcher>
@@ -59,12 +75,7 @@ export function checkLoadAllowed(
     }
   }
 
-  const permitAll = config.mode === 'absent' || config.mode === 'allow-all'
-  const allowed =
-    permitAll ||
-    (config.mode === 'explicit' &&
-      config.sources.some((source) => source.id === packageName))
-  if (!allowed) {
+  if (!isSourcePermitted(config, packageName)) {
     return {
       code: 'package-not-listed',
       message: `Cannot load skill use "${use}": package "${packageName}" is not listed in intent.skills.`,
@@ -100,20 +111,12 @@ export function applySourcePolicy(
     warnings.push(warning)
   }
 
-  const permitAll = config.mode === 'absent' || config.mode === 'allow-all'
-  const allowedIds =
-    config.mode === 'explicit'
-      ? new Set(config.sources.map((source) => source.id))
-      : null
-  const discoveredNames = new Set(scanResult.packages.map((pkg) => pkg.name))
-
   const packages: Array<IntentPackage> = []
 
   for (const pkg of scanResult.packages) {
     if (isPackageExcluded(pkg.name, excludeMatchers)) continue
 
-    const allowed = permitAll || (allowedIds?.has(pkg.name) ?? false)
-    if (!allowed) {
+    if (!isSourcePermitted(config, pkg.name)) {
       if (config.mode === 'explicit') {
         emit(
           `Found skills in "${pkg.name}" but it is not listed in intent.skills — add it to opt in.`,
@@ -131,6 +134,7 @@ export function applySourcePolicy(
   }
 
   if (config.mode === 'explicit') {
+    const discoveredNames = new Set(scanResult.packages.map((pkg) => pkg.name))
     for (const source of config.sources) {
       if (!discoveredNames.has(source.id)) {
         emit(
