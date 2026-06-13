@@ -32,7 +32,7 @@ export interface SourcePolicyOptions {
   seen?: Set<string>
 }
 
-export type LoadRefusalCode =
+type LoadRefusalCode =
   | 'package-excluded'
   | 'package-not-listed'
   | 'skill-excluded'

@@ -64,9 +64,7 @@ export async function scanIntentsOrFail(
   }
 }
 
-export function scanOptionsFromGlobalFlags(
-  options: GlobalScanFlags,
-): ScanOptions {
+function scanOptionsFromGlobalFlags(options: GlobalScanFlags): ScanOptions {
   if (options.global && options.globalOnly) {
     fail('Use either --global or --global-only, not both.')
   }
