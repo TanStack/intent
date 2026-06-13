@@ -364,6 +364,7 @@ New shared modules: `lockfile.ts` (read/write/parse), `hash.ts` (sha256 helpers)
 - `approve` / `update` refuse to mutate `intent.lock`.
 - Unlisted sources with `skills/` directories are a hard fail (M1 warning promoted).
 - Lockfile mismatch (any pending diff) is a hard fail with non-zero exit and a one-screen summary.
+- The committed `intent.lock` is authoritative in frozen mode. A future uncommitted overlay (`intent.local.json`, §15 P1) admits personal sources **locally only**: such sources are never written into the committed lock and are exempt from its drift check (so a local run does not flag them as drift), and they may not admit sources under `--frozen` — where the gitignored overlay is absent and only committed, team-reviewed trust applies. This pre-settles P1's interaction with M2 even before P1 ships.
 - No outbound network: short-circuits `staleness.ts:fetchNpmVersion`.
 - No arbitrary `execFileSync`/`execSync` against user-side tools (`gh`, package managers, project scripts, globally installed binaries, etc.). `feedback.ts:submitFeedback` is interactive-only and not invoked in CI today; the guard makes that explicit.
 - Frozen mode exception: M7 may use an internal read-only Git adapter for local repository object inspection required by staleness checks. This adapter is not a general subprocess escape hatch.
@@ -886,6 +887,17 @@ team-reviewed trust decisions.
 **Scope.** Out of M1. This is a new trust-model decision intersecting D2 and D21; draft it as one
 section rather than bolting it on ad hoc.
 
+**M2-bundling decision (resolved 2026-06-13): not bundled into M2.** P1 has zero coupling to the
+lockfile — it plugs into the existing allowlist merge path (`core/excludes.ts` `getConfigDirs`,
+cwd → workspace-root), not `lockfile.ts` / `hash.ts` / frozen mode. M2 depends on nothing in P1
+and vice versa, so folding it in only widens M2's blast radius. P1's interaction with M2 is
+bounded and **already pre-settled in M2's frozen-mode rules**: an overlay source is admitted and
+loaded **locally** like any other allowlisted source, but because it is uncommitted it is (a) never
+written into the committed `intent.lock` by `approve`, (b) exempt from the committed-lock drift
+check in `scan` / `diff` so a local run does not flag it, and (c) unable to admit sources under
+`--frozen`, where the gitignored overlay is absent and only committed trust applies. Target: an
+independent fast-follow after M2 (“M2.5”), not part of M2.
+
 ### P2 — Allowlist bootstrap / `skills init` ergonomics gap
 
 **Problem.** Nothing populates `intent.skills` from currently-installed discovered packages. A new
@@ -909,3 +921,16 @@ banner).
 
 **Scope.** Out of M1. Same theme as P1: how a consumer _ergonomically manages_ the allowlist.
 Design in the RFC before implementing.
+
+**M2-bundling decision (resolved 2026-06-13): kept out of M2; resolve as its own decision.** There
+is a real argument _for_ pairing: a fresh consumer's true first run is two steps — populate
+`intent.skills` (P2) → write `intent.lock` (`approve --all`) — and the two share almost identical
+interactive UX (show discovered list, user confirms), so shipping `approve --all` without `init`
+leaves a visibly half-built onboarding. It is kept out anyway because: (1) M1 deliberately shipped
+the allowlist **read-only** — Intent never writes `intent.skills` — so `init` is a distinct
+trust-model change, not lockfile plumbing, and bundling smuggles a policy decision into a
+reproducibility milestone; (2) the polished first run is already deferred to **after M5** (§7), so
+P2 does not block M2's stated goal; (3) P2 is still open/unresolved here while M2's commands are
+resolved spec — bundling would force resolving P2 on M2's timeline. If it is later pulled into M2,
+the clean seam is: `init` writes `intent.skills` interactively, then hands off to the existing
+`approve --all` — two commands, one flow, no shared internals beyond the discovery scan both run.
