@@ -37,8 +37,8 @@ A malformed entry fails the whole command, and every bad entry is reported at on
 The list as a whole has three special forms:
 
 - **Absent.** No `intent.skills` key. Every discovered package is surfaced, and Intent prints a deprecation notice to stderr on each run until you set `intent.skills`. This is the upgrade path for existing projects. A future version will require an explicit allowlist.
-- **Empty.** `"skills": []`. No package is surfaced. Intent prints a quiet info note.
-- **Wildcard.** `"skills": ["*"]`. Every discovered package is surfaced. Intent prints a loud acknowledged-risk notice.
+- **Empty.** `"skills": []`. No package is surfaced. Intent prints an info notice to stderr.
+- **Wildcard.** `"skills": ["*"]`. Every discovered package is surfaced. Intent prints an acknowledged-risk notice to stderr, since unvetted skills may reach your agent.
 
 A package that ships skills but is not listed is dropped. When packages are dropped this way, Intent prints one summary line naming them so you can opt in. A listed package that was not discovered is reported as well.
 
