@@ -35,7 +35,7 @@ function readPackageExcludes(dir: string): Array<string> {
   return normalizeExcludePatterns((intent as Record<string, unknown>).exclude)
 }
 
-function getConfigExcludePatterns(
+export function getConfigDirs(
   cwd: string,
   context = resolveProjectContext({ cwd }),
 ): Array<string> {
@@ -52,7 +52,14 @@ function getConfigExcludePatterns(
     dir = next
   }
 
-  return dirs.reverse().flatMap(readPackageExcludes)
+  return dirs
+}
+
+function getConfigExcludePatterns(
+  cwd: string,
+  context = resolveProjectContext({ cwd }),
+): Array<string> {
+  return [...getConfigDirs(cwd, context)].reverse().flatMap(readPackageExcludes)
 }
 
 export function getEffectiveExcludePatterns(
