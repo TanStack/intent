@@ -24,9 +24,9 @@ describe('exclude matching — package level (backward compatible)', () => {
   })
 
   it('rejects an overly long pattern', () => {
-    expect(() =>
-      compileExcludePatterns(['@scope/'.padEnd(201, 'x')]),
-    ).toThrow('Intent exclude pattern is too long')
+    expect(() => compileExcludePatterns(['@scope/'.padEnd(201, 'x')])).toThrow(
+      'Intent exclude pattern is too long',
+    )
   })
 })
 
@@ -112,7 +112,9 @@ describe('exclude matching — combined patterns', () => {
     ])
     expect(isPackageExcluded('@scope/gone', matchers)).toBe(true)
     expect(isPackageExcluded('@scope/kept', matchers)).toBe(false)
-    expect(isSkillExcluded('@scope/kept', 'experimental-x', matchers)).toBe(true)
+    expect(isSkillExcluded('@scope/kept', 'experimental-x', matchers)).toBe(
+      true,
+    )
     expect(isSkillExcluded('@scope/kept', 'stable', matchers)).toBe(false)
   })
 })
