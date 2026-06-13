@@ -11,7 +11,7 @@ import type {
   IntentSkillList,
   IntentSkillSummary,
 } from '../core.js'
-import type { ScanOptions, ScanResult } from '../types.js'
+import type { ScanResult } from '../types.js'
 
 export interface ListCommandOptions extends GlobalScanFlags {
   json?: boolean
@@ -86,7 +86,6 @@ function formatLoadCommand(
 
 export async function runListCommand(
   options: ListCommandOptions,
-  _scanIntentsOrFail?: (options?: ScanOptions) => Promise<ScanResult>,
 ): Promise<void> {
   const result = listIntentSkills(coreOptionsFromGlobalFlags(options))
   printListDebug(result)

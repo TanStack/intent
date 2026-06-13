@@ -7,7 +7,6 @@ import {
 } from '../core.js'
 import type { GlobalScanFlags } from '../cli-support.js'
 import type { LoadedIntentSkill, ResolvedIntentSkill } from '../core.js'
-import type { ScanOptions, ScanResult } from '../types.js'
 
 export interface LoadCommandOptions extends GlobalScanFlags {
   json?: boolean
@@ -36,7 +35,6 @@ function printLoadDebug(loaded: LoadedIntentSkill | ResolvedIntentSkill): void {
 export async function runLoadCommand(
   use: string | undefined,
   options: LoadCommandOptions,
-  _scanIntentsOrFail?: (options?: ScanOptions) => Promise<ScanResult>,
 ): Promise<void> {
   if (!use) {
     fail('Missing skill use. Expected: intent load <package>#<skill>')
