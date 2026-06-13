@@ -3,6 +3,22 @@
 **Status:** Open for comment — for maintainer review before implementation.
 **Reading guide:** §0 is "state of the world today" — start here if you're not deeply familiar with the codebase. §1–4 are settled problem + context. §5–12 are the design. §13 contains the resolved decision audit trail.
 
+> **Implementation status (verified 2026-06-13 against `main` @ `0.0.43`).** Track progress here; the living tracker lives in [V1-RELEASE-PLAN.md](V1-RELEASE-PLAN.md) §7.
+>
+> | Item | Status |
+> | --- | --- |
+> | §4 — `intent-library` cleanup | ✅ **done on `main`** (bin, `intent-library.ts`, `library-scanner.ts`, `library-scanner.test.ts` removed; no refs remain) |
+> | M1 — explicit skill sources | ⬜ not started |
+> | M2 — lockfile + frozen mode | ⬜ not started |
+> | M3 — manifest + Agent Skills spec compliance (D20) | ⬜ not started |
+> | M4 — capability-aware diff | ⬜ not started |
+> | M5 — MCP server | ⬜ not started |
+> | M6 — `security doctor` | ⬜ not started |
+> | M7 Part B — staleness hardening (1.0 maintainer-reliability commitment) | ⬜ not started |
+> | M7 Part A — maintainer agent surface (cut candidate, rides on M5) | ⬜ not started |
+>
+> Note: the `rfc` branch working tree is behind `main` (`0.0.41`) and still contains the removed `intent-library` files. The §4 statements below describe the work as originally scoped; confirm completion against `main`, not the branch.
+
 ---
 
 ## 0. State of the world today
@@ -225,6 +241,8 @@ These were deliberately changed in earlier iterations. The v1 plan must not re-i
 
 ## 4. Cleanup item (blocks M1)
 
+> ✅ **Completed on `main` (@ `0.0.43`, verified 2026-06-13).** The `intent-library` bin, `src/intent-library.ts`, `src/library-scanner.ts`, and `tests/library-scanner.test.ts` are removed; the `build` script no longer lists them; no `bin.intent` legacy fallback remains; `git grep` finds no residual references in shipped `src`/`package.json`. The remaining open item is the docs/examples/CI usage search below. The original scope is preserved for the audit trail.
+
 Remove the vestiges of the abandoned library-bin model:
 
 - `bin.intent-library` entry in `packages/intent/package.json` (and remove from `build` script's tsdown entry list).
@@ -241,7 +259,7 @@ Before implementation, search repository docs, examples, package metadata, and C
 
 ## 5. Milestones
 
-Each milestone is independently shippable. The first four are sequential; M5, M6, and M7 can move in parallel once M3 lands. M7 is the designated **cut candidate** — first to slip if the security core (M1–M4) runs hot, because it has no security surface of its own.
+Each milestone is independently shippable. The first four are sequential; M5, M6, and M7 can move in parallel once M3 lands. **M7 splits for v1:** Part B (staleness hardening) is a **maintainer-reliability commitment** that ships in 1.0 — it builds on the M2 lockfile and is prioritized alongside M3, ahead of M4/M5/M6. Part A (the maintainer agent surface) is the designated **cut candidate** — first to slip if the security core (M1–M4) runs hot, because it rides on the M5 MCP server and has no security surface of its own.
 
 ### M1 — Explicit skill sources + static-discovery invariant
 
@@ -357,7 +375,20 @@ New shared modules: `lockfile.ts` (read/write/parse), `hash.ts` (sha256 helpers)
 
 ### M3 — Manifest schema + `intent skills generate-manifest` + extended `intent skills validate`
 
-**Goal:** Give skill packages a stable, hashable surface separate from `SKILL.md` content. Authored by maintainers, consumed by the lockfile diff on the consumer side.
+**Goal:** Give skill packages a stable, hashable surface separate from `SKILL.md` content, **and bring generated `SKILL.md` frontmatter into full Agent Skills–spec compliance** (D20). Authored by maintainers, consumed by the lockfile diff on the consumer side.
+
+#### Agent Skills frontmatter compliance (D20)
+
+**Resolved D20:** `SKILL.md` frontmatter must be compliant with the [Agent Skills specification](https://agentskills.io/specification). Intent-specific data moves off the top level; the manifest carries everything structured.
+
+The spec allows exactly six top-level frontmatter keys: `name` (required), `description` (required), `license`, `compatibility`, `metadata`, and `allowed-tools`. `metadata` is a **string→string map only** — no arrays, no nested objects. Today Intent emits non-spec top-level keys (`type`, `library`, `library_version`, `framework`, `sources`), which IDE schema validation and external Agent Skills tooling reject (discussions #116, #140).
+
+v1 resolution — **manifest-first, no backward-compat shim** (v1 is already a breaking release; these fields are Intent-internal and read only by Intent):
+
+- **Scalar Intent fields move under `metadata` as strings.** `type`, `library`, `library_version`, `framework` become `metadata.type`, `metadata.library`, `metadata.library_version`, `metadata.framework`. `library_version` stays machine-readable there for staleness Layer 1.
+- **Array / structured fields move to the manifest, not frontmatter.** `sources` and `requires` are not representable in a string-only `metadata` map, so they live in `skills/intent.manifest.json` (the manifest is Intent's structured surface and is not bound by the frontmatter spec). `requires` load-order hints also remain available via `package.json#intent.requires`.
+- **No serialized-string duplication in `metadata`.** Arrays are not stuffed into `metadata` as delimited strings — that would be permanent cruft the content hash must keep tracking. The manifest is the single structured source.
+- **Migration:** existing skills with non-spec top-level keys are migrated by `generate-manifest`/a `validate --fix` path — scalars rewritten under `metadata`, arrays lifted into the manifest. Documented in `docs/migration/v0-to-v1.md`.
 
 New file per skill package: `skills/intent.manifest.json` (ships with the package). V1 uses this package-level manifest as the canonical manifest surface. Per-skill manifest files such as `intent.skill.json` are not part of v1 and are rejected to avoid split-brain metadata.
 
@@ -396,6 +427,7 @@ New file per skill package: `skills/intent.manifest.json` (ships with the packag
 - `intent skills generate-manifest` — walks `skills/`, computes content hashes, runs static heuristics (regex scan for `curl|wget`, `npm i|pnpm add|yarn add|bun add|pip install`, `SECRET_PATTERNS` from the shared `secrets.ts` module, fenced code blocks containing `child_process`/`spawn`/`exec`), and emits a manifest pre-filled with the heuristic findings. The maintainer reviews the diff and commits. Static analysis **informs** the manifest; the maintainer has final say on declared capabilities.
 - `intent skills validate` (replaces today's flat `intent validate`):
   - All existing SKILL.md format/length/frontmatter checks.
+  - **Agent Skills–spec frontmatter compliance (D20): error (not warning) on any non-spec top-level key.** Only `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` are allowed at the top level; `metadata` must be a string→string map. Non-spec keys (`type`, `library`, `library_version`, `framework`, `sources`, `requires`, …) fail validation with a remediation pointer ("move scalars under `metadata`; move arrays to the manifest"). `validate --fix` performs the migration.
   - Manifest exists, parses, every `SKILL.md` is listed, every listed path exists.
   - Stored `contentHash` matches actual content (catches missed regenerate).
   - Manifest entries are sorted by normalized package-relative `SKILL.md` path. Paths use `/`, are package-relative, and must not be absolute or contain `.` / `..` escapes.
@@ -406,8 +438,9 @@ New file per skill package: `skills/intent.manifest.json` (ships with the packag
   - `mcpTools[]` entries must not contain runtime wiring fields such as `command`, `entrypoint`, `runtime`, `transport`, `server`, `package`, `module`, `env`, or `cwd`.
   - Static heuristics agree with declared capabilities. Disagreement → warning, not error. Hard error only if a literal secret value matches `SECRET_PATTERNS` in skill body — the maintainer can declare a secret _name_ (`GITHUB_TOKEN`) but never embed a value.
 - `SECRET_PATTERNS` moves from `feedback.ts` into a new `secrets.ts` module so scanner, validator, manifest generator, and feedback share one source.
+- **`generate-skill` meta-skill rewrite (D20):** its Step 3 frontmatter templates emit the spec-compliant shape — spec keys at top level, Intent scalars under `metadata`, no top-level `type`/`library`/`library_version`/`framework`/`sources`. Structured data is written to the manifest via `generate-manifest`, not the frontmatter.
 
-**Touches:** new `manifest.ts`, new `secrets.ts` (move + add patterns), new `commands/skills-generate-manifest.ts`, refactor `commands/validate.ts` → `commands/skills-validate.ts`, types.
+**Touches:** new `manifest.ts`, new `secrets.ts` (move + add patterns), new `commands/skills-generate-manifest.ts`, refactor `commands/validate.ts` → `commands/skills-validate.ts` (add spec-key enforcement + `--fix`), `packages/intent/meta/generate-skill/SKILL.md` (compliant frontmatter templates), types.
 
 ### M4 — Capability/secret/download metadata wired through lockfile
 
@@ -542,11 +575,14 @@ Ignores suppress only findings whose `id` and `scope` match. When the observed s
 
 **Goal:** Maintainers invoke Intent's authoring workflows by _talking to their agent_ (`/tanstack-intent scaffold`, "update skills PR <#123>"), with hardened, security-aware staleness detection underneath. The CLI keeps working unchanged.
 
-This milestone has two parts that ship together because they share one substrate (the meta-skills, the lockfile baseline) and have to stay consistent.
+This milestone has two parts. They share one substrate (the meta-skills, the lockfile baseline) and must stay consistent, but for v1 they have **different release commitments**:
 
-**Resolved D18:** include a minimal M7 in v1 as the designated cut candidate.
+- **Part B — staleness hardening: a 1.0 maintainer-reliability commitment.** Stale-skill detection is the reliability promise the whole project rests on — a maintainer who can't tell their skills have drifted is the failure this exists to prevent. Part B builds only on the M2 lockfile (Layer 0 `contentHash`, Layer 2 baseline ref) and ships in 1.0, prioritized alongside M3 and ahead of M4/M5/M6.
+- **Part A — maintainer agent surface: the cut candidate.** Part A rides on the M5 MCP server (it exposes meta-skills as MCP tools) and has no security surface of its own, so it is first to slip. If M5 runs hot, Part A fast-follows after 1.0. The CLI authoring flow (`scaffold`, `skills validate`, `skills generate-manifest`, `skills stale`, `skills update`) keeps working unchanged without it.
 
-M7 ships only if M1–M4 security-core work is complete and verified without schedule risk. If M1–M4 run hot, M7 moves wholesale to fast-follow rather than shipping partially. Fast-follow is the planned safety valve, not a failed v1.
+**Resolved D18 (revised):** Part B ships in v1 as a maintainer-reliability commitment; Part A is the minimal cut candidate.
+
+Part A ships in v1 only if M1–M5 work is complete and verified without schedule risk. If it runs hot, Part A moves wholesale to fast-follow rather than shipping partially — the planned safety valve, not a failed v1. **Part B does not slip with it:** the layered staleness detector and `intent skills stale`/`update` surface are part of the 1.0 maintainer-reliability gate.
 
 M7's v1 scope is gated:
 
@@ -558,7 +594,7 @@ M7's v1 scope is gated:
 - No non-bundled author-mode skills.
 - No maintainer automation beyond the defined author-mode and staleness surface.
 
-If M7 expands beyond those gates, it moves to fast-follow automatically.
+If Part A expands beyond those gates, it moves to fast-follow automatically. Part B (local Layer 0–2 staleness, read-only and no-network) stays in 1.0 within these gates.
 
 #### Part A — Maintainer agent surface
 
@@ -725,7 +761,7 @@ Deep imports from internal files are not supported. A separate type-only package
 
 - **M1:** unit tests in `tests/scanner.test.ts` covering the allowlist matrix (listed/found, listed/missing, unlisted/found, workspace/npm kinds, transitive skill package not trusted unless listed). Exclusion tests assert suppressed skills are unavailable for discovery, generated indexes, MCP exposure, skill lookup, capability prompts, and invocation. Integration test confirming a fresh project with no `intent.skills[]` emits the migration warning exactly once.
 - **M2:** fixture-driven lockfile round-trip tests (parse → write → parse byte-identical). Tests assert commands write only root `intent.lock`, do not create `.intent/`, preserve top-level policy/rejection/staleness sections, and produce deterministic ordering across regenerations. Frozen-mode integration tests assert non-zero exit on each drift category. First-run test: no lockfile → `scan` reports missing, `approve --all` creates it.
-- **M3:** manifest schema validation tests. `generate-manifest` golden-file tests over representative SKILL.md fixtures assert deterministic ordering/formatting, stable output across repeated runs, invalid path rejection, duplicate path/id rejection, missing/extra `SKILL.md` detection, per-skill manifest rejection, MCP-compatible `mcpTools[]` metadata validation, runtime-field rejection, and move/rename behavior. Round-trip with `scan` (manifest → lockfile manifestHash).
+- **M3:** manifest schema validation tests. `generate-manifest` golden-file tests over representative SKILL.md fixtures assert deterministic ordering/formatting, stable output across repeated runs, invalid path rejection, duplicate path/id rejection, missing/extra `SKILL.md` detection, per-skill manifest rejection, MCP-compatible `mcpTools[]` metadata validation, runtime-field rejection, and move/rename behavior. Round-trip with `scan` (manifest → lockfile manifestHash). **D20 spec-compliance tests:** `validate` errors on each non-spec top-level key (`type`, `library`, `library_version`, `framework`, `sources`, `requires`), accepts the six spec keys, rejects non-string `metadata` values; `validate --fix` migrates a non-compliant fixture to scalars-under-`metadata` + arrays-in-manifest; `generate-skill` output validates clean against the spec.
 - **M4:** diff-rendering snapshot tests for each capability/MCP/version-change category. Rejection tests assert the same source identity + same observed hashes stays suppressed, while source identity, version, content, manifest, or capability changes re-surface a previously rejected source.
 - **M5:** MCP server tested via the SDK's in-memory transport — `list_skills`, `get_skill`, `get_diff` over fixture lockfiles, including the lockfile-mismatch error path. Tool-shape tests assert small catalogs expose `get_skill` with the full embedded catalog, large or verbose catalogs expose `get_skill` with a compact summary plus `list_skills` / `search_skills`, and fallback tools augment rather than replace `get_skill`. Launch-path tests assert local project/workspace installs can serve MCP, while `npx`/`dlx`/global/ephemeral invocations fail for `mcp serve` but remain allowed for one-off `list`/`install`. `mcpTools[]` tests assert metadata is surfaced only after policy approval, tool identities are fully scoped, duplicate bare names do not collide, `prompt` and unknown policy values fail closed, and no imports, subprocesses, or MCP connections occur. Lock mismatch tests assert `get_lock`/`get_diff` remain callable while skill-serving/catalog tools fail. Author-mode tests assert `--author` without `intent.lock` serves only bundled meta-skills, does not serve workspace/consumer skills, and cannot be shadowed by local files.
 - **M6:** doctor tests assert correct issue classification (error/warning/info) for each check. Ignore-policy tests assert matching `policy.ignores[]` entries suppress only matching issue/scope pairs, changed source hashes re-surface findings, expired ignores do not suppress findings, non-expiring ignores appear in the suppressed summary, and inline ignore markers in source entries are rejected.
@@ -746,7 +782,7 @@ Existing test commands (`test:lib`, `test:integration`, `test:smoke`) absorb the
 
 - **Cleanup + M1:** README + `docs/overview.md` + `docs/registry.md` updated for devDep-first install. New `docs/security/trust-model.md` (explicit sources + static-discovery invariant). Migration guide `docs/migration/v0-to-v1.md`.
 - **M2:** `docs/security/lockfile.md`, `docs/cli/intent-skills.md` (scan/approve/diff/update). Frozen-mode reference.
-- **M3:** `docs/security/manifest.md`, `docs/cli/intent-skills-validate.md`, `docs/cli/intent-skills-generate-manifest.md`.
+- **M3:** `docs/security/manifest.md`, `docs/cli/intent-skills-validate.md`, `docs/cli/intent-skills-generate-manifest.md`. Document Agent Skills frontmatter compliance (D20): the six allowed top-level keys, Intent scalars under `metadata`, arrays in the manifest, and the `validate --fix` migration. The `v0-to-v1` migration guide covers moving existing non-spec frontmatter.
 - **M5:** `docs/mcp/overview.md`, `docs/mcp/policy.md`, `docs/cli/intent-mcp-serve.md`.
 - **M6:** `docs/cli/intent-security-doctor.md`, troubleshooting page.
 - **Install guidance:** `docs/cli/intent-install.md` documents managed-block behavior, non-managed surrounding content preservation, dry-run/print/write modes, configurable `list`/`load` command templates, `<use>` placeholder validation, and wrapper/pinned-version examples.
@@ -784,8 +820,9 @@ All RFC decisions are resolved. Detailed rationale lives in the milestone sectio
 | D14 | Rename `intent install`                                                   | Keep the name in v1. Add configurable guidance commands for managed agent guidance.                                                                                                                                                                                                                                     |
 | D15 | MCP tool shape and fallback threshold                                     | `get_skill` is primary. Embed full catalog below threshold; above threshold use compact summary plus `list_skills` / `search_skills`.                                                                                                                                                                                   |
 | D17 | Default baseline ref for Layer 2 staleness                                | `--baseline`, then lockfile baseline, then nearest local tag. No implicit `HEAD~1` fallback.                                                                                                                                                                                                                            |
-| D18 | M7 in v1 vs fast-follow                                                   | Include minimal M7 in v1 as cut candidate with hard local/read-only/no-network gates.                                                                                                                                                                                                                                   |
+| D18 | M7 in v1 vs fast-follow                                                   | Split. Part B (layered staleness) ships in v1 as a maintainer-reliability commitment, prioritized with M3 ahead of M4–M6. Part A (agent surface) is the minimal cut candidate — rides on M5, fast-follows if the core runs hot. Both keep the hard local/read-only/no-network gates.                                    |
 | D19 | Standalone/personal skills as a generic installer vs a pinned source kind | Pinned source kind (`kind: git`), not a generic installer. Reserved in M1 (parse-and-reject), implemented post-M2 once the lockfile can pin the ref + content hash. Materialized into a gitignored managed dir; identified by the pinned ref, never the path. Unpinned hand-dropped local dirs stay out of scope (§14). |
+| D20 | Agent Skills frontmatter compliance (#116, #140)                          | Enforce spec compliance in M3. Only the six spec keys at top level; Intent scalars move under `metadata`; arrays (`sources`, `requires`) move to the manifest. `validate` errors on non-spec keys with a `--fix` migration. No backward-compat shim.                                                                    |
 
 ## 14. Out of scope for v1
 
