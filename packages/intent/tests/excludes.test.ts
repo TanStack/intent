@@ -53,6 +53,21 @@ describe('exclude matching — skill level', () => {
       false,
     )
   })
+
+  it('matches a prefixed skill excluded by its canonical name when queried by short alias', () => {
+    const matchers = compileExcludePatterns(['@tanstack/router#router/guards'])
+    expect(isSkillExcluded('@tanstack/router', 'guards', matchers)).toBe(true)
+    expect(isSkillExcluded('@tanstack/router', 'router/guards', matchers)).toBe(
+      true,
+    )
+  })
+
+  it('matches a prefixed skill excluded by short alias when queried by canonical name', () => {
+    const matchers = compileExcludePatterns(['@tanstack/router#guards'])
+    expect(isSkillExcluded('@tanstack/router', 'router/guards', matchers)).toBe(
+      true,
+    )
+  })
 })
 
 describe('exclude matching — #* whole-package shortcut', () => {

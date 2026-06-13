@@ -31,6 +31,56 @@ export interface SourcePolicyOptions {
   seen?: Set<string>
 }
 
+export type LoadRefusalCode =
+  | 'package-excluded'
+  | 'package-not-listed'
+  | 'skill-excluded'
+
+export interface LoadRefusal {
+  code: LoadRefusalCode
+  message: string
+}
+
+export function checkLoadAllowed(
+  use: string,
+  parsed: { packageName: string; skillName: string },
+  params: {
+    config: SkillSourcesConfig
+    excludeMatchers: Array<ExcludeMatcher>
+  },
+): LoadRefusal | null {
+  const { config, excludeMatchers } = params
+  const { packageName, skillName } = parsed
+
+  if (isPackageExcluded(packageName, excludeMatchers)) {
+    return {
+      code: 'package-excluded',
+      message: `Cannot load skill use "${use}": package "${packageName}" is excluded by Intent configuration.`,
+    }
+  }
+
+  const permitAll = config.mode === 'absent' || config.mode === 'allow-all'
+  const allowed =
+    permitAll ||
+    (config.mode === 'explicit' &&
+      config.sources.some((source) => source.id === packageName))
+  if (!allowed) {
+    return {
+      code: 'package-not-listed',
+      message: `Cannot load skill use "${use}": package "${packageName}" is not listed in intent.skills.`,
+    }
+  }
+
+  if (isSkillExcluded(packageName, skillName, excludeMatchers)) {
+    return {
+      code: 'skill-excluded',
+      message: `Cannot load skill use "${use}": skill "${packageName}#${skillName}" is excluded by Intent configuration.`,
+    }
+  }
+
+  return null
+}
+
 export interface SourcePolicyResult {
   packages: Array<IntentPackage>
   warnings: Array<string>

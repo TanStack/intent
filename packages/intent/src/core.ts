@@ -2,16 +2,18 @@ import { isAbsolute, relative, resolve } from 'node:path'
 import {
   compileExcludePatterns,
   getEffectiveExcludePatterns,
-  isPackageExcluded,
 } from './core/excludes.js'
 import { createIntentFsCache } from './fs-cache.js'
 import { rewriteLoadedSkillMarkdownDestinations } from './core/markdown.js'
 import { resolveSkillUseFastPath } from './core/load-resolution.js'
 import { resolveProjectContext } from './core/project-context.js'
-import { scanForPolicedIntents } from './core/source-policy.js'
+import {
+  checkLoadAllowed,
+  readSkillSourcesConfig,
+  scanForPolicedIntents,
+} from './core/source-policy.js'
 import { ResolveSkillUseError, resolveSkillUse } from './resolver.js'
 import { formatSkillUse, parseSkillUse } from './skill-use.js'
-import { scanForIntents } from './scanner.js'
 import type { ResolveSkillResult } from './resolver.js'
 import type { IntentFsCache } from './fs-cache.js'
 import type { ReadFs } from './utils.js'
@@ -276,12 +278,11 @@ function resolveIntentSkillInCwd(
   const projectContext = resolveProjectContext({ cwd })
   const excludePatterns = getEffectiveExcludePatterns(options, projectContext)
   const excludeMatchers = compileExcludePatterns(excludePatterns)
+  const config = readSkillSourcesConfig(cwd, projectContext)
 
-  if (isPackageExcluded(parsedUse.packageName, excludeMatchers)) {
-    throw new IntentCoreError(
-      'package-excluded',
-      `Cannot load skill use "${use}": package "${parsedUse.packageName}" is excluded by Intent configuration.`,
-    )
+  const refusal = checkLoadAllowed(use, parsedUse, { config, excludeMatchers })
+  if (refusal) {
+    throw new IntentCoreError(refusal.code, refusal.message)
   }
 
   const scanOptions = toScanOptions(options)
@@ -312,7 +313,12 @@ function resolveIntentSkillInCwd(
     )
   }
 
-  const scanResult = scanForIntents(cwd, withFsCache(scanOptions, fsCache))
+  const { scan: scanResult } = scanForPolicedIntents({
+    cwd,
+    scanOptions: withFsCache(scanOptions, fsCache),
+    coreOptions: options,
+    context: projectContext,
+  })
   let resolved: ReturnType<typeof resolveSkillUse>
   try {
     resolved = resolveSkillUse(use, scanResult)

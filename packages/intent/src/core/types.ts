@@ -91,6 +91,8 @@ export type IntentCoreErrorCode =
   | 'invalid-skill-use'
   | 'package-not-found'
   | 'package-excluded'
+  | 'package-not-listed'
+  | 'skill-excluded'
   | 'skill-not-found'
   | 'skill-path-outside-package'
   | 'skill-file-not-found'

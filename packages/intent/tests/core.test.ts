@@ -605,6 +605,41 @@ describe('loadIntentSkill', () => {
     )
   })
 
+  it('refuses a prefixed skill excluded by canonical name when loaded by short alias', () => {
+    const appDir = join(root, 'packages', 'app')
+    const routerDir = join(root, 'packages', 'router-core')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-monorepo',
+      private: true,
+      workspaces: ['packages/*'],
+      intent: {
+        skills: ['@tanstack/router-core'],
+        exclude: ['@tanstack/router-core#router-core/auth-and-guards'],
+      },
+    })
+    writeJson(join(appDir, 'package.json'), {
+      name: '@test/app',
+    })
+    writeJson(join(routerDir, 'package.json'), {
+      name: '@tanstack/router-core',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'TanStack/router', docs: 'docs/' },
+    })
+    writeSkillMd({
+      dir: join(routerDir, 'skills', 'router-core', 'auth-and-guards'),
+      frontmatter: {
+        name: 'router-core/auth-and-guards',
+        description: 'Router auth and guards',
+      },
+    })
+
+    expect(() =>
+      loadIntentSkill('@tanstack/router-core#auth-and-guards', { cwd: appDir }),
+    ).toThrow(
+      'Cannot load skill use "@tanstack/router-core#auth-and-guards": skill "@tanstack/router-core#auth-and-guards" is excluded by Intent configuration.',
+    )
+  })
+
   it('loads a dependency declared by a workspace package without a root link', () => {
     const appDir = join(root, 'packages', 'app')
     const storeDir = join(root, '.store', '@tanstack', 'query')
@@ -763,5 +798,67 @@ describe('loadIntentSkill', () => {
     ).toThrow(
       'Cannot load skill use "@tanstack/devtools#panel": package "@tanstack/devtools" is excluded by Intent configuration.',
     )
+  })
+
+  it('refuses to load a package not listed in intent.skills', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['@tanstack/router'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow(
+      'Cannot load skill use "@tanstack/query#fetching": package "@tanstack/query" is not listed in intent.skills.',
+    )
+  })
+
+  it('refuses to load a skill-level excluded skill before the fast path resolves it', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: {
+        skills: ['@tanstack/query'],
+        exclude: ['@tanstack/query#fetching'],
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow(
+      'Cannot load skill use "@tanstack/query#fetching": skill "@tanstack/query#fetching" is excluded by Intent configuration.',
+    )
+  })
+
+  it('loads a listed skill that is not excluded', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    const loaded = loadIntentSkill('@tanstack/query#fetching', { cwd: root })
+
+    expect(loaded.packageName).toBe('@tanstack/query')
+    expect(loaded.skillName).toBe('fetching')
   })
 })

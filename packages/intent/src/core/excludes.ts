@@ -136,14 +136,29 @@ export function isPackageExcluded(
   )
 }
 
+// A prefixed skill is loadable by its short alias too; an exclude must match either form.
+function skillNameVariants(
+  packageName: string,
+  skillName: string,
+): Array<string> {
+  const shortName = packageName.split('/').pop() ?? packageName
+  const prefix = `${shortName}/`
+  if (skillName.startsWith(prefix)) {
+    return [skillName, skillName.slice(prefix.length)]
+  }
+  return [skillName, `${prefix}${skillName}`]
+}
+
 export function isSkillExcluded(
   packageName: string,
   skillName: string,
   matchers: Array<ExcludeMatcher>,
 ): boolean {
+  const variants = skillNameVariants(packageName, skillName)
   return matchers.some((matcher) => {
     if (!matcher.matchesPackage(packageName)) return false
-    return matcher.matchesSkill === undefined || matcher.matchesSkill(skillName)
+    if (matcher.matchesSkill === undefined) return true
+    return variants.some((variant) => matcher.matchesSkill!(variant))
   })
 }
 
