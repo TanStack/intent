@@ -136,13 +136,17 @@ export function parseSkillSources(value: unknown): SkillSourcesConfig {
   return { mode: 'explicit', sources }
 }
 
-function parseEntry(raw: string, trimmed: string): SkillSource | SkillSourceIssue {
+function parseEntry(
+  raw: string,
+  trimmed: string,
+): SkillSource | SkillSourceIssue {
   const colon = trimmed.indexOf(':')
 
   // npm names cannot contain ':', so a colon-free entry is unambiguously npm.
   if (colon === -1) {
     const invalid = validateId(trimmed)
-    if (invalid) return { raw, message: `Invalid npm source "${trimmed}": ${invalid}` }
+    if (invalid)
+      return { raw, message: `Invalid npm source "${trimmed}": ${invalid}` }
     return { raw, id: trimmed, kind: 'npm' }
   }
 
@@ -159,7 +163,10 @@ function parseEntry(raw: string, trimmed: string): SkillSource | SkillSourceIssu
       }
       const invalid = validateId(rest)
       if (invalid) {
-        return { raw, message: `Invalid workspace source "${trimmed}": ${invalid}` }
+        return {
+          raw,
+          message: `Invalid workspace source "${trimmed}": ${invalid}`,
+        }
       }
       return { raw, id: rest, kind: 'workspace' }
     }

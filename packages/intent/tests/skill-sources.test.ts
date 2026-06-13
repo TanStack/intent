@@ -110,7 +110,10 @@ describe('parseSkillSources — malformed entries (fail-whole-list)', () => {
   it('rejects an unknown prefix', () => {
     const error = expectParseError(['file:./local'])
     expect(error.issues).toEqual([
-      { raw: 'file:./local', message: 'Unknown source prefix "file" in "file:./local".' },
+      {
+        raw: 'file:./local',
+        message: 'Unknown source prefix "file" in "file:./local".',
+      },
     ])
   })
 
@@ -192,7 +195,9 @@ describe('parseSkillSources — normalization and dedup', () => {
 
   it('treats prefix case variance as an unknown prefix', () => {
     const error = expectParseError(['Workspace:foo'])
-    expect(error.issues[0]?.message).toContain('Unknown source prefix "Workspace"')
+    expect(error.issues[0]?.message).toContain(
+      'Unknown source prefix "Workspace"',
+    )
   })
 })
 
@@ -266,7 +271,9 @@ describe('parseSkillSources — error reporting', () => {
   it('renders a human-readable message listing every issue', () => {
     const error = expectParseError(['file:./local', '   '])
     expect(error.message).toContain('Invalid intent.skills configuration:')
-    expect(error.message).toContain('"file:./local": Unknown source prefix "file"')
+    expect(error.message).toContain(
+      '"file:./local": Unknown source prefix "file"',
+    )
     expect(error.message).toContain('Entry is empty.')
   })
 
