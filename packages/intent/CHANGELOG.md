@@ -1,5 +1,11 @@
 # @tanstack/intent
 
+## 0.0.44
+
+### Patch Changes
+
+- [#154](https://github.com/TanStack/intent/pull/154) [`d787ddc`](https://github.com/TanStack/intent/commit/d787ddc1e6151a4a663bc1604234cf57be597ddd) - Fix transitive skill discovery under pnpm's isolated linker. Skills shipped by a transitive dependency of a skill-bearing direct dependency were not discovered… Each package's dependencies are now resolved from its realpath, where pnpm resolution succeeds. Hoisted (npm/yarn/bun) layouts are unaffected.
+
 ## 0.0.43
 
 ### Patch Changes
