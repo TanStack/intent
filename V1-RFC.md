@@ -276,10 +276,10 @@ Each milestone is independently shippable. The first four are sequential; M5, M6
   - **Empty** (`intent.skills: []`, key present) — **deny all**. A deliberately empty allowlist permits no sources; it is a migrated project's explicit "surface nothing," not an oversight, so it emits a quiet info note ("`intent.skills` is empty — no skill sources permitted") rather than the absent-state deprecation warning. Absent and empty are never collapsed.
   - **Wildcard** (`intent.skills: ["*"]`) — **permit all discovered sources**, with a loud acknowledged-risk notice ("all skill sources allowed — unvetted skills may be surfaced into agent guidance"). The `"*"` sentinel flows through the same permit-all machinery as the absent state but carries the acknowledged-risk banner instead of the deprecation banner.
   - **Wildcard composition is additive, not exclusive (decided: C).** `"*"` is not required to be the sole entry. The inevitable end state is `"*"` meaning "everything discovered in the dependency tree" composing **additively** with explicit `git:` entries that pull curated/personal repos which are _not_ in the dependency tree — e.g. `["*", "git:github.com/me/skills#main"]` reads as "all discovered sources **plus** my personal skills repo." Redundant npm/workspace entries alongside `"*"` are subsumed (no error). Because `git:` is parse-and-reject in M1 (D19), a `"*"` + `git:` list still fails the whole list under M1's git rejection until M2 materialization lands — the composition is the designed model, deferred only by git materialization, not a conflict to be re-litigated.
-- `scanForIntents()` filters discovered packages against the allowlist:
+- **Filtering is a pure policy pass, separate from discovery.** `scanForIntents()` stays a pure raw discoverer — it never reads the allowlist. A new pure `applySourcePolicy()` filters the discovered packages against the parsed allowlist, and `scanForPolicedIntents()` composes the two (discover, then apply policy). This split keeps the scanner free of trust logic and makes the policy independently testable.
   - Listed + found → included.
-  - Listed + not found → warning ("declared in intent.skills but not installed"). In M2 frozen mode this becomes a hard fail.
-  - Not listed + found (has `skills/` dir) → warning ("found skills in <pkg> but not in intent.skills — add it to opt in"). In M2 frozen mode this becomes a hard fail.
+  - Listed + not found → warning ("`<source>` is declared in intent.skills but was not discovered"). In M2 frozen mode this becomes a hard fail. The wording is deliberately "not discovered," never "not installed" — static discovery is never provably complete, so Intent reports what it failed to find, not an absolute claim about what is installed (D8).
+  - Not listed + found (has `skills/` dir) → warning naming the discovered-but-unlisted packages ("N discovered package(s) ship skills but are not listed in intent.skills: … — add to opt in"). In M2 frozen mode this becomes a hard fail. **The warning is flat — it names each unlisted package, not the transitive chain that pulled it in.** Surfacing the parent chain (e.g. `pkg-a → pkg-b`) needs parent-edge data the `ScanResult` does not carry today; it is deferred to a later milestone (see §14), not part of M1.
 - Trust does not propagate transitively. If a listed package depends on another package that provides skills, the dependency is still an unlisted source until it appears in `intent.skills[]`.
 - **Matching is name-only in M1; `kind` is stored but not yet a match discriminant (F1).** The scanner emits no workspace-membership signal in M1 (deferred to M2/F2), so there is nothing to discriminate a workspace member from a published npm dependency at match time. Each `SkillSource` still carries its parsed `kind` (for M2's lockfile identity, which keys on `kind` + `id`), but M1 matches a discovered package against an allowlist entry by **normalized name only**. Consequence: `"foo"` (npm) and `"workspace:foo"` both authorize any discovered package named `foo`, and a workspace member and an npm package sharing a name collapse on the name. This looseness errs **permissive** (it can authorize a same-named package you didn't precisely mean, never deny one you listed) and is the pinned M1 baseline; M2 tightens it to a true `kind`+`id` match once the scanner gains the membership signal.
 - **Exclude / blacklist is preserved and extended (regression guard — see §3).** The existing `package.json#intent.exclude[]` + `--exclude <pattern>` filter stays. Semantics in the allowlist world:
@@ -841,9 +841,71 @@ All RFC decisions are resolved. Detailed rationale lives in the milestone sectio
 - Approval UI beyond a terminal prompt.
 - Cross-language MCP tool sandboxing.
 - Transitive skill trust. Consumers approve each skill-bearing source explicitly in v1. A listed package does not authorize skills in its dependencies.
+- Transitive parent-chain context in the unlisted-source warning. M1's warning for a discovered-but-unlisted package is **flat** — it names the package, not the dependency path that pulled it in (`pkg-a → pkg-b`). Showing the chain needs parent-edge data the `ScanResult` does not carry today; adding it is a scanner change deferred to a later milestone. The opt-in decision is unaffected (the package name is enough to allow or exclude it); only the diagnostic breadcrumb is deferred.
 - **Unpinned** local-directory skill sources — `file:` paths, `~/` personal skill collections, or any arbitrary hand-dropped local directory the scanner would trust by presence alone. Intent's goal is library knowledge distribution as _pinned, versioned_ sources; an unpinned drop-zone re-opens the over-permissive trust default M1 closes. Skills a developer wants to add by hand with no pinning stay in a personal/global skills directory, outside Intent — the developer's own responsibility, not an Intent source kind. **Note:** a _pinned_ standalone curated source (`kind: git`, reserved — §2, D19) is the in-model way to bring a personal/curated skills repo under Intent's lockfile; it is deferred to post-M2, not rejected. The line is pinning, not "npm package vs not."
 - A dedicated config-mutation command for excludes (`intent skills exclude …`). Excludes are low-frequency, set-once, and already trivial to edit as declarative JSON that reviews well in a PR. Adding a command means a second write target (alongside `intent.lock`), package.json merge/formatting edge cases, and pressure to ship a matching `add`/`remove` family. v1 instead keeps excludes hand-edited and makes `scan`/`diff` print the exact line to paste. Revisit as a fast-follow if demand appears.
 - Webhook-driven staleness detection. Webhook payloads are attacker-influenceable (forged webhooks can trigger false update PRs or suppress real ones). v1 staleness is pull-based and local (M7 Part B). Cross-repo TanStack-internal workflows can keep their own out-of-package scripts.
 - Semantic-anchor staleness (Layer 3 in M7's layered model). Coupling skills to API symbols for symbol-level drift detection is the highest-precision approach but the heaviest to build and adds attack surface to the detector itself. v1 ships Layers 0–2; Layer 3 tracked for a future release.
 - Tightening skill content to the non-derivable layer. A reviewer observed that generated skills often restate API surface — signatures, type definitions, exhaustive option lists — that an agent can already scan directly from a library's published `.d.ts` and source. That restatement adds no agent knowledge and is exactly the content that drifts on every API change, inflating M7's Layer 1–2 staleness signal. The principle: skills should capture what a type scan cannot derive — which API to reach for, the parameter and option interactions that matter, ordering and lifecycle invariants, and failure modes — not transcribe the surface itself. A future pass sharpens the `generate-skill` meta-skill's extract / don't-extract guidance and its validation checklist around this, which also shrinks the surface a future Layer 3 would have to track. This is authoring guidance, not a security boundary, so it sits outside the v1 security core.
 - Telemetry. Intent does not phone home in v1.
+
+## 15. Proposed additions — consumer allowlist ergonomics (open)
+
+The decisions in §13 are resolved. The two proposals below are **not yet resolved** — they
+surface real gaps in how a consumer _manages_ the allowlist that M1 and M2 as specced do not
+close. Each is recorded as a problem, options, a recommendation, and its security constraint
+so the design happens in the RFC rather than being improvised in code. Both are human-gated
+like D21 and both sit **outside the M1 security core** (M1 shipped a read-only
+`package.json#intent.skills` allowlist per the RFC).
+
+### P1 — Config layering / personal source overlay
+
+**Problem.** A consumer's work repo can have a committed `package.json#intent.skills` allowlist,
+but a developer may want to add their own personal skills repo locally **without committing it**
+to the shared repo. Today there is no uncommitted layer: the allowlist is hand-authored in
+`package.json#intent.skills` and merged cwd → workspace-root, and everything is committed.
+This is a real unmet need and the same shape as the `git:` personal-repo use case (D21's
+`["*", "git:…"]` composition).
+
+**Options** (recommend 1):
+
+1. **`intent.local.json` (gitignored by convention), merged last / most-local-wins, additive.**
+   Mirrors `.env.local`. Reuses the existing merge machinery, keeps the committed allowlist
+   reviewable, and composes with the planned `git:` source kind. Does **not** reopen D2 — it is
+   a local _overlay_, not a replacement home for the committed allowlist.
+2. User-level config `~/.config/intent/config.json` for cross-repo personal defaults — a nice
+   follow-on to option 1, not a substitute.
+3. Env var `INTENT_SKILLS_EXTRA` — cheapest but unreviewable; weak for a trust surface. Avoid.
+4. A separate committed `intent.config.json` — reopens D2 (the RFC chose `package.json#intent`).
+   Avoid.
+
+**Security constraint.** A personal / uncommitted overlay must be **allow-only**: it can _add_
+sources, but it can **never suppress a committed exclude**. An uncommitted layer must not weaken
+team-reviewed trust decisions.
+
+**Scope.** Out of M1. This is a new trust-model decision intersecting D2 and D21; draft it as one
+section rather than bolting it on ad hoc.
+
+### P2 — Allowlist bootstrap / `skills init` ergonomics gap
+
+**Problem.** Nothing populates `intent.skills` from currently-installed discovered packages. A new
+consumer with N skill-shipping dependencies must discover and hand-type all N names. The only
+built-in permit-all is hand-writing `["*"]`. M2's planned `intent skills approve --all` does **not**
+fill this gap: it writes `intent.lock` _from sources already matching `intent.skills`_; it does not
+bootstrap `intent.skills` itself. So the gap is covered by neither M1 nor M2 as specced.
+
+**Options** (recommend 2):
+
+1. `intent skills add <pkg>` / interactive picker — already acknowledged as deferred M1 scope.
+   Good incremental management once an allowlist exists, but still manual per-package.
+2. **`intent skills init` (new) — writes `intent.skills` from currently-discovered packages,**
+   interactively. The consumer-side analog of M2's lockfile `approve --all`. Closes the
+   onboarding-friction gap directly.
+
+**Security constraint.** A bootstrap that auto-adds every discovered package _blindly_ defeats the
+opt-in trust model. `init` must be **interactive and reviewable** — show the discovered list, let
+the user confirm — never a silent allow-all (that is what `["*"]` is for, with its acknowledged-risk
+banner).
+
+**Scope.** Out of M1. Same theme as P1: how a consumer _ergonomically manages_ the allowlist.
+Design in the RFC before implementing.
