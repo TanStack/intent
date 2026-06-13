@@ -734,6 +734,33 @@ describe('cli commands', () => {
     expect(output).not.toContain('Could not read')
   })
 
+  it('prints the intent.skills migration notice to stderr, not stdout', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-migration-'))
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-list-migration-empty-global-'),
+    )
+    tempDirs.push(root, isolatedGlobalRoot)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['list'])
+    const stdout = logSpy.mock.calls.flat().join('\n')
+    const stderr = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('@tanstack/query')
+    expect(stderr).toContain('intent.skills is not set')
+    expect(stdout).not.toContain('intent.skills is not set')
+    expect(stdout).not.toContain('Notices:')
+  })
+
   it('prints list debug details to stderr without changing json stdout', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-debug-'))
     tempDirs.push(root)
