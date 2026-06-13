@@ -222,18 +222,25 @@ describe('applySourcePolicy — exclude interaction', () => {
 })
 
 describe('applySourcePolicy — warning dedup', () => {
-  it('emits a shared warning only once across calls that share a seen set', () => {
-    const seen = new Set<string>()
-    const first = applySourcePolicy(
-      { packages: [pkg('@scope/a', ['x'])] },
-      { config: config(undefined), excludeMatchers: [], seen },
+  it('emits each warning only once within a single call', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [
+          pkg('@scope/a', ['x']),
+          pkg('@scope/b', ['y']),
+          pkg('@scope/c', ['z']),
+        ],
+      },
+      { config: config(['@scope/a']), excludeMatchers: [] },
     )
-    const second = applySourcePolicy(
-      { packages: [pkg('@scope/a', ['x'])] },
-      { config: config(undefined), excludeMatchers: [], seen },
+    const counts = result.warnings.reduce<Record<string, number>>(
+      (acc, warning) => {
+        acc[warning] = (acc[warning] ?? 0) + 1
+        return acc
+      },
+      {},
     )
-    expect(first.warnings).toEqual([MIGRATION_WARNING])
-    expect(second.warnings).toEqual([])
+    expect(Object.values(counts).every((count) => count === 1)).toBe(true)
   })
 })
 

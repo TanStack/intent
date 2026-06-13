@@ -29,7 +29,6 @@ export const EMPTY_NOTE =
 export interface SourcePolicyOptions {
   config: SkillSourcesConfig
   excludeMatchers: Array<ExcludeMatcher>
-  seen?: Set<string>
 }
 
 type LoadRefusalCode =
@@ -102,7 +101,7 @@ export function applySourcePolicy(
   options: SourcePolicyOptions,
 ): SourcePolicyResult {
   const { config, excludeMatchers } = options
-  const seen = options.seen ?? new Set<string>()
+  const seen = new Set<string>()
   const warnings: Array<string> = []
 
   const emit = (warning: string): void => {
@@ -181,9 +180,8 @@ export function scanForPolicedIntents(params: {
   scanOptions: ScanOptions
   coreOptions: IntentCoreOptions
   context?: ProjectContext
-  seen?: Set<string>
 }): PolicedScan {
-  const { cwd, scanOptions, coreOptions, seen } = params
+  const { cwd, scanOptions, coreOptions } = params
   const context = params.context ?? resolveProjectContext({ cwd })
 
   const scanResult = scanForIntents(cwd, scanOptions)
@@ -194,7 +192,6 @@ export function scanForPolicedIntents(params: {
   const policy = applySourcePolicy(scanResult, {
     config,
     excludeMatchers,
-    seen,
   })
 
   const survivingNames = new Set(policy.packages.map((pkg) => pkg.name))
