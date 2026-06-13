@@ -64,7 +64,7 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
     if (walkVisited.has(pkgKey)) return
     walkVisited.add(pkgKey)
 
-    const pkgJson = opts.readPkgJson(pkgKey)
+    const pkgJson = opts.readPkgJson(pkgDir)
     if (!pkgJson) {
       opts.warnings.push(
         `Could not read package.json for ${pkgName} (skipping dependency walk)`,
