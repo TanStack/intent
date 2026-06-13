@@ -1,3 +1,7 @@
+// Static-discovery invariant: discovery reads package data as files and never
+// executes discovered package code. The only sanctioned dynamic load is Yarn's
+// PnP runtime (.pnp.cjs / pnpapi), used solely to map identities to readable
+// roots. Enforced by the `intent/static-discovery` ESLint rule.
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -111,6 +115,7 @@ function loadPnpApi(root: string): LoadedPnp | null {
   const readFs = requireFromHere('node:fs') as unknown as ReadFs
 
   try {
+    // eslint-disable-next-line no-restricted-syntax -- sanctioned PnP runtime load
     const pnpModule = requireFromHere(pnpPath) as PnpApi
     if (typeof pnpModule.setup === 'function') {
       pnpModule.setup()

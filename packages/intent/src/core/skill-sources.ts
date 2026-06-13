@@ -1,8 +1,6 @@
 // Static-discovery invariant: this module only inspects strings. It never
 // resolves, requires, or executes any discovered package.
 
-export type SkillSourceKind = 'npm' | 'workspace' | 'git'
-
 /**
  * `kind` + `id` is the identity M2's lockfile reuses; `ref` exists only on
  * `git`. The `git` variant is never constructed in M1 (git entries are rejected
