@@ -31,6 +31,9 @@ import { afterAll, describe, expect, it } from 'vitest'
  */
 
 const YARN_VERSION = '4.12.0'
+// Bound every external command so a stalled corepack/npm/node cannot hang CI:
+// execFileSync is synchronous, so Vitest's test timeout cannot interrupt it.
+const CMD_TIMEOUT_MS = 90_000
 const isCI = Boolean(process.env.CI)
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const cliPath = join(thisDir, '..', '..', 'dist', 'cli.mjs')
@@ -46,6 +49,7 @@ function berryAvailable(): boolean {
       cwd: realTmpdir,
       env: corepackEnv,
       stdio: 'ignore',
+      timeout: CMD_TIMEOUT_MS,
     })
     return true
   } catch {
@@ -87,7 +91,10 @@ function scaffoldBerryProject(): string {
     join(pkgSrc, 'skills', 'core', 'SKILL.md'),
     '---\nname: core\ndescription: Core skill from the leaf package.\n---\n# Core\n',
   )
-  execFileSync('npm', ['pack', '--pack-destination', dir], { cwd: pkgSrc })
+  execFileSync('npm', ['pack', '--pack-destination', dir], {
+    cwd: pkgSrc,
+    timeout: CMD_TIMEOUT_MS,
+  })
   const tarball = readdirSync(dir).find((f) => f.endsWith('.tgz'))
   if (!tarball) throw new Error('npm pack did not produce a tarball')
 
@@ -105,6 +112,8 @@ function scaffoldBerryProject(): string {
     cwd: dir,
     stdio: 'pipe',
     env: corepackEnv,
+    timeout: CMD_TIMEOUT_MS,
+    maxBuffer: 10 * 1024 * 1024,
   })
   return dir
 }
@@ -116,6 +125,8 @@ describe.skipIf(!shouldRun)('Yarn Berry PnP (zip-backed dependencies)', () => {
     const list = execFileSync('node', [cliPath, 'list', '--json'], {
       cwd,
       encoding: 'utf8',
+      timeout: CMD_TIMEOUT_MS,
+      maxBuffer: 5 * 1024 * 1024,
     })
     const parsed = JSON.parse(list)
     expect(parsed.packages.map((p: { name: string }) => p.name)).toContain(
@@ -128,7 +139,12 @@ describe.skipIf(!shouldRun)('Yarn Berry PnP (zip-backed dependencies)', () => {
     const load = execFileSync(
       'node',
       [cliPath, 'load', '@repro/skills-leaf#core'],
-      { cwd, encoding: 'utf8' },
+      {
+        cwd,
+        encoding: 'utf8',
+        timeout: CMD_TIMEOUT_MS,
+        maxBuffer: 5 * 1024 * 1024,
+      },
     )
     expect(load).toContain('# Core')
   }, 120_000)
