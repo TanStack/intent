@@ -91,6 +91,12 @@ export function checkLoadAllowed(
   return null
 }
 
+function formatUnlistedWarning(names: Array<string>): string {
+  const sorted = [...names].sort()
+  const noun = sorted.length === 1 ? 'package ships' : 'packages ship'
+  return `${sorted.length} discovered ${noun} skills but ${sorted.length === 1 ? 'is' : 'are'} not listed in intent.skills: ${sorted.join(', ')}. Add to opt in.`
+}
+
 export interface SourcePolicyResult {
   packages: Array<IntentPackage>
   warnings: Array<string>
@@ -111,15 +117,14 @@ export function applySourcePolicy(
   }
 
   const packages: Array<IntentPackage> = []
+  const unlistedNames: Array<string> = []
 
   for (const pkg of scanResult.packages) {
     if (isPackageExcluded(pkg.name, excludeMatchers)) continue
 
     if (!isSourcePermitted(config, pkg.name)) {
       if (config.mode === 'explicit') {
-        emit(
-          `Found skills in "${pkg.name}" but it is not listed in intent.skills — add it to opt in.`,
-        )
+        unlistedNames.push(pkg.name)
       }
       continue
     }
@@ -130,6 +135,10 @@ export function applySourcePolicy(
     packages.push(
       skills.length === pkg.skills.length ? pkg : { ...pkg, skills },
     )
+  }
+
+  if (unlistedNames.length > 0) {
+    emit(formatUnlistedWarning(unlistedNames))
   }
 
   if (config.mode === 'explicit') {

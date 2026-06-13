@@ -41,7 +41,21 @@ Before substantial work:
 
 Intent detects the package manager when generating this block, so the runner may be `npx`, `pnpm dlx`, `yarn dlx`, or `bunx`.
 
-## 2. Use skills in your workflow
+## 2. Choose which packages' skills to use
+
+`package.json#intent.skills` is an allowlist of the packages whose skills you want surfaced.
+
+```json
+{
+  "intent": {
+    "skills": ["@tanstack/query", "@tanstack/router"]
+  }
+}
+```
+
+List the packages you trust. Intent then surfaces skills from those packages and leaves the rest out. See the [source entries](../concepts/configuration#source-entries) in Configuration for the forms an entry can take, and [Trust model](../concepts/trust-model) for why the allowlist exists.
+
+## 3. Use skills in your workflow
 
 When your agent works on a task that matches an available skill, it loads the matching `SKILL.md` into context.
 
@@ -59,7 +73,7 @@ If you want explicit task-to-skill mappings in your agent config, opt in:
 npx @tanstack/intent@latest install --map
 ```
 
-## 3. Keep skills up-to-date
+## 4. Keep skills up-to-date
 
 Skills version with library releases. When you update a library:
 
@@ -93,7 +107,7 @@ You can also check if any skills reference outdated source documentation:
 npx @tanstack/intent@latest stale
 ```
 
-## 4. Submit feedback (optional)
+## 5. Submit feedback (optional)
 
 After using a skill, you can submit feedback to help maintainers improve it:
 

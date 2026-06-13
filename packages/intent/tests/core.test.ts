@@ -263,7 +263,7 @@ describe('listIntentSkills', () => {
 
     expect(result.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
     expect(result.warnings).toEqual([
-      'Found skills in "@tanstack/unlisted" but it is not listed in intent.skills — add it to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: @tanstack/unlisted. Add to opt in.',
     ])
   })
 

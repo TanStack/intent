@@ -61,7 +61,23 @@ describe('applySourcePolicy — allowlist matrix', () => {
     )
     expect(names(result.packages)).toEqual(['@scope/a'])
     expect(result.warnings).toEqual([
-      'Found skills in "@scope/b" but it is not listed in intent.skills — add it to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: @scope/b. Add to opt in.',
+    ])
+  })
+
+  it('collapses several unlisted packages into one sorted summary warning', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [
+          pkg('@scope/a', ['x']),
+          pkg('@scope/c', ['y']),
+          pkg('@scope/b', ['z']),
+        ],
+      },
+      { config: config(['@scope/a']), excludeMatchers: [] },
+    )
+    expect(result.warnings).toEqual([
+      '2 discovered packages ship skills but are not listed in intent.skills: @scope/b, @scope/c. Add to opt in.',
     ])
   })
 
@@ -92,7 +108,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
     )
     expect(names(result.packages)).toEqual(['@scope/listed'])
     expect(result.warnings).toEqual([
-      'Found skills in "@scope/dep" but it is not listed in intent.skills — add it to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: @scope/dep. Add to opt in.',
     ])
   })
 
@@ -105,7 +121,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
       },
     )
     expect(result.warnings).toEqual([
-      'Found skills in "@scope/unlisted" but it is not listed in intent.skills — add it to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: @scope/unlisted. Add to opt in.',
       '"@scope/missing" is declared in intent.skills but was not discovered.',
     ])
   })

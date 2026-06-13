@@ -5,14 +5,15 @@ id: overview
 
 `@tanstack/intent` is a CLI for shipping and consuming Agent Skills as package artifacts.
 
-Skills are markdown documents that teach AI coding agents how to use your library correctly. Intent versions them with your releases, ships them inside npm packages, discovers them from your project and workspace by default, and helps agents load them automatically when working on matching tasks.
+Skills are markdown documents that teach AI coding agents how to use your library correctly. Intent versions them with your releases and ships them inside npm packages. It discovers skills from your project and workspace dependencies, then helps agents load them when working on matching tasks.
 
 ## What Intent does
 
 Intent provides tooling for two workflows:
 
 **For consumers:**
-- Discover skills from installed dependencies
+- Discover skills from your project and workspace dependencies
+- Control which packages' skills are surfaced with an allowlist
 - Add lightweight skill loading guidance to your agent config
 - Keep skills synchronized with library versions
 
@@ -39,7 +40,7 @@ Examples use `npx` for npm projects. In pnpm, Yarn, or Bun projects, use the mat
 npx @tanstack/intent@latest list
 ```
 
-Scans the current project's installed dependencies for intent-enabled packages, including `node_modules`, workspace dependencies, and Yarn PnP projects without `node_modules`.
+Scans the current project's installed dependencies for intent-enabled packages, including `node_modules`, workspace dependencies, and Yarn PnP projects without `node_modules`. You can narrow which packages are surfaced with `package.json#intent.skills`. See the [Trust model](./concepts/trust-model) and [Configuration](./concepts/configuration) for how the allowlist works.
 Global package scanning is explicit; pass `--global` to include global packages or `--global-only` to ignore local packages.
 When both local and global packages are scanned, local packages take precedence.
 

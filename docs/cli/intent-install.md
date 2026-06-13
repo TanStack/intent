@@ -24,6 +24,7 @@ npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--glob
 - Updates an existing managed block in a supported config file.
 - Preserves all content outside the managed block.
 - Scans packages and writes compact `when` and `use` mappings only when `--map` is passed.
+- Surfaces packages permitted by `package.json#intent.skills` in `--map` mode. See [Configuration](../concepts/configuration).
 - Skips reference, meta, maintainer, and maintainer-only skills in `--map` mode.
 - Writes compact `when` and `use` entries instead of load paths in `--map` mode.
 - Verifies the managed block before reporting success.

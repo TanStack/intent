@@ -28,6 +28,19 @@
       ]
     },
     {
+      "label": "Concepts",
+      "children": [
+        {
+          "label": "Trust Model",
+          "to": "concepts/trust-model"
+        },
+        {
+          "label": "Configuration",
+          "to": "concepts/configuration"
+        }
+      ]
+    },
+    {
       "label": "CLI Reference",
       "children": [
         {
