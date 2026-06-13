@@ -1,7 +1,11 @@
+import { scanForIntents } from '../scanner.js'
 import {
+  compileExcludePatterns,
   getConfigDirs,
+  getEffectiveExcludePatterns,
   isPackageExcluded,
   isSkillExcluded,
+  warningMentionsPackage,
 } from './excludes.js'
 import { readPackageJson } from './package-json.js'
 import { parseSkillSources } from './skill-sources.js'
@@ -9,7 +13,8 @@ import { resolveProjectContext } from './project-context.js'
 import type { ExcludeMatcher } from './excludes.js'
 import type { ProjectContext } from './project-context.js'
 import type { SkillSourcesConfig } from './skill-sources.js'
-import type { IntentPackage } from '../types.js'
+import type { IntentCoreOptions } from './types.js'
+import type { IntentPackage, ScanOptions, ScanResult } from '../types.js'
 
 export const ALLOW_ALL_WARNING =
   'All skill sources allowed (intent.skills: ["*"]) — unvetted skills may be surfaced into agent guidance.'
@@ -110,4 +115,54 @@ export function readSkillSourcesConfig(
   }
 
   return { mode: 'absent' }
+}
+
+export interface PolicedScan {
+  scan: ScanResult
+  excludePatterns: Array<string>
+}
+
+export function scanForPolicedIntents(params: {
+  cwd: string
+  scanOptions: ScanOptions
+  coreOptions: IntentCoreOptions
+  context?: ProjectContext
+  seen?: Set<string>
+}): PolicedScan {
+  const { cwd, scanOptions, coreOptions, seen } = params
+  const context = params.context ?? resolveProjectContext({ cwd })
+
+  const scanResult = scanForIntents(cwd, scanOptions)
+  const config = readSkillSourcesConfig(cwd, context)
+  const excludePatterns = getEffectiveExcludePatterns(coreOptions, context)
+  const excludeMatchers = compileExcludePatterns(excludePatterns)
+
+  const policy = applySourcePolicy(scanResult, {
+    config,
+    excludeMatchers,
+    seen,
+  })
+
+  const survivingNames = new Set(policy.packages.map((pkg) => pkg.name))
+  const droppedNames = scanResult.packages
+    .map((pkg) => pkg.name)
+    .filter((name) => !survivingNames.has(name))
+
+  return {
+    scan: {
+      ...scanResult,
+      packages: policy.packages,
+      warnings: [
+        ...scanResult.warnings.filter(
+          (warning) =>
+            !droppedNames.some((name) => warningMentionsPackage(warning, name)),
+        ),
+        ...policy.warnings,
+      ],
+      conflicts: scanResult.conflicts.filter((conflict) =>
+        survivingNames.has(conflict.packageName),
+      ),
+    },
+    excludePatterns,
+  }
 }

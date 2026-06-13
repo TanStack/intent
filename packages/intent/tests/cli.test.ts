@@ -549,6 +549,11 @@ describe('cli commands', () => {
     tempDirs.push(root, isolatedGlobalRoot)
     const pkgDir = join(root, 'node_modules', '@tanstack', 'db')
 
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['@tanstack/db'] },
+    })
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/db',
       version: '0.5.2',
@@ -664,6 +669,7 @@ describe('cli commands', () => {
     writeJson(join(root, 'package.json'), {
       name: 'app',
       private: true,
+      intent: { skills: ['@tanstack/query'] },
       dependencies: {
         wrapper: '1.0.0',
       },

@@ -93,6 +93,11 @@ afterEach(() => {
 
 describe('listIntentSkills', () => {
   it('returns a flat skill list and package summaries', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',
       version: '5.0.0',
@@ -134,6 +139,11 @@ describe('listIntentSkills', () => {
   })
 
   it('includes debug metadata when requested', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',
       version: '5.0.0',
@@ -228,6 +238,129 @@ describe('listIntentSkills', () => {
         `Cannot load skill use "${packageName}#core": package "${packageName}" is excluded by Intent configuration.`,
       )
     }
+  })
+
+  it('surfaces only allowlisted packages and warns about an unlisted one', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/unlisted',
+      version: '1.0.0',
+      skillName: 'panel',
+      description: 'Unlisted skill',
+    })
+
+    const result = listIntentSkills({ cwd: root })
+
+    expect(result.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
+    expect(result.warnings).toEqual([
+      'Found skills in "@tanstack/unlisted" but it is not listed in intent.skills — add it to opt in.',
+    ])
+  })
+
+  it('drops a skill-level excluded skill from an allowlisted package', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: {
+        skills: ['@tanstack/query'],
+        exclude: ['@tanstack/query#legacy'],
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeSkillMd({
+      dir: join(root, 'node_modules', '@tanstack', 'query', 'skills', 'legacy'),
+      frontmatter: { name: 'legacy', description: 'Legacy skill' },
+    })
+
+    const result = listIntentSkills({ cwd: root })
+
+    expect(result.skills.map((skill) => skill.use)).toEqual([
+      '@tanstack/query#fetching',
+    ])
+    expect(result.packages[0]?.skillCount).toBe(1)
+  })
+
+  it('warns about migration when intent.skills is absent', () => {
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    const result = listIntentSkills({ cwd: root })
+
+    expect(result.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
+    expect(result.warnings).toEqual([
+      'intent.skills is not set — all discovered skill sources are surfaced. A future version will require an explicit intent.skills allowlist; add one to opt in to specific sources.',
+    ])
+  })
+
+  it('permits nothing and notes an empty allowlist', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: [] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    const result = listIntentSkills({ cwd: root })
+
+    expect(result.packages).toEqual([])
+    expect(result.skills).toEqual([])
+    expect(result.warnings).toEqual([
+      'intent.skills is empty — no skill sources are permitted.',
+    ])
+  })
+
+  it('keeps an allowlisted package whose only skill is skill-excluded as a skillCount-0 entry', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: {
+        skills: ['@tanstack/query'],
+        exclude: ['@tanstack/query#fetching'],
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    const result = listIntentSkills({ cwd: root })
+
+    expect(result.skills).toEqual([])
+    expect(result.packages).toEqual([
+      {
+        name: '@tanstack/query',
+        version: '5.0.0',
+        source: 'local',
+        packageRoot: join(root, 'node_modules', '@tanstack', 'query'),
+        skillCount: 0,
+      },
+    ])
   })
 })
 

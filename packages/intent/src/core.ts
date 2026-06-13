@@ -3,12 +3,12 @@ import {
   compileExcludePatterns,
   getEffectiveExcludePatterns,
   isPackageExcluded,
-  warningMentionsPackage,
 } from './core/excludes.js'
 import { createIntentFsCache } from './fs-cache.js'
 import { rewriteLoadedSkillMarkdownDestinations } from './core/markdown.js'
 import { resolveSkillUseFastPath } from './core/load-resolution.js'
 import { resolveProjectContext } from './core/project-context.js'
+import { scanForPolicedIntents } from './core/source-policy.js'
 import { ResolveSkillUseError, resolveSkillUse } from './resolver.js'
 import { formatSkillUse, parseSkillUse } from './skill-use.js'
 import { scanForIntents } from './scanner.js'
@@ -97,15 +97,13 @@ export function listIntentSkills(
   const scanOptions = toScanOptions(options)
   const fsCache = createIntentFsCache()
   const projectContext = resolveProjectContext({ cwd })
-  const scanResult = scanForIntents(cwd, withFsCache(scanOptions, fsCache))
-  const excludePatterns = getEffectiveExcludePatterns(options, projectContext)
-  const excludeMatchers = compileExcludePatterns(excludePatterns)
-  const excludedPackages = scanResult.packages
-    .filter((pkg) => isPackageExcluded(pkg.name, excludeMatchers))
-    .map((pkg) => pkg.name)
-  const packages = scanResult.packages.filter(
-    (pkg) => !isPackageExcluded(pkg.name, excludeMatchers),
-  )
+  const { scan, excludePatterns } = scanForPolicedIntents({
+    cwd,
+    scanOptions: withFsCache(scanOptions, fsCache),
+    coreOptions: options,
+    context: projectContext,
+  })
+  const packages = scan.packages
   const skills = packages.flatMap((pkg) =>
     pkg.skills.map((skill): IntentSkillSummary => {
       return {
@@ -123,7 +121,7 @@ export function listIntentSkills(
   )
 
   const result: IntentSkillList = {
-    packageManager: scanResult.packageManager,
+    packageManager: scan.packageManager,
     skills,
     packages: packages.map((pkg) => ({
       name: pkg.name,
@@ -132,15 +130,8 @@ export function listIntentSkills(
       packageRoot: pkg.packageRoot,
       skillCount: pkg.skills.length,
     })),
-    warnings: scanResult.warnings.filter(
-      (warning) =>
-        !excludedPackages.some((packageName) =>
-          warningMentionsPackage(warning, packageName),
-        ),
-    ),
-    conflicts: scanResult.conflicts.filter(
-      (conflict) => !isPackageExcluded(conflict.packageName, excludeMatchers),
-    ),
+    warnings: scan.warnings,
+    conflicts: scan.conflicts,
   }
 
   if (options.debug) {
@@ -152,7 +143,7 @@ export function listIntentSkills(
       skillCount: result.skills.length,
       warningCount: result.warnings.length,
       conflictCount: result.conflicts.length,
-      scan: scanResult.stats ?? fsCache.getStats(),
+      scan: scan.stats ?? fsCache.getStats(),
     }
   }
 
