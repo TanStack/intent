@@ -1,7 +1,11 @@
 import { relative } from 'node:path'
 import { fail } from '../cli-error.js'
 import { detectIntentCommandPackageManager } from '../command-runner.js'
-import { coreOptionsFromGlobalFlags, printWarnings } from '../cli-support.js'
+import {
+  coreOptionsFromGlobalFlags,
+  printNotices,
+  printWarnings,
+} from '../cli-support.js'
 import {
   buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
@@ -129,9 +133,13 @@ function formatMappingCount(mappingCount: number): string {
   return `${mappingCount} ${mappingCount === 1 ? 'mapping' : 'mappings'}`
 }
 
-function printNoActionableSkills(warnings: Array<string>): void {
+function printNoActionableSkills(
+  warnings: Array<string>,
+  notices: Array<string>,
+): void {
   console.log('No intent-enabled skills found.')
   printWarnings(warnings)
+  printNotices(notices)
 }
 
 function printPlacementTip(targetPath: string): void {
@@ -248,7 +256,7 @@ export async function runInstallCommand(
     )
 
     if (!targetPath) {
-      printNoActionableSkills(scanResult.warnings)
+      printNoActionableSkills(scanResult.warnings, scanResult.notices)
       return
     }
 
@@ -257,6 +265,7 @@ export async function runInstallCommand(
     )
     console.log(generated.block)
     printWarnings(scanResult.warnings)
+    printNotices(scanResult.notices)
     return
   }
 
@@ -266,7 +275,7 @@ export async function runInstallCommand(
   })
 
   if (!result.targetPath) {
-    printNoActionableSkills(scanResult.warnings)
+    printNoActionableSkills(scanResult.warnings, scanResult.notices)
     return
   }
 
@@ -290,4 +299,5 @@ export async function runInstallCommand(
   printPlacementTip(result.targetPath)
 
   printWarnings(scanResult.warnings)
+  printNotices(scanResult.notices)
 }

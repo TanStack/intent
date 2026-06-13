@@ -51,7 +51,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
       { config: config(['@scope/a']), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual(['@scope/a'])
-    expect(result.warnings).toEqual([])
+    expect(result.notices).toEqual([])
   })
 
   it('drops an unlisted discovered package and warns', () => {
@@ -60,7 +60,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
       { config: config(['@scope/a']), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual(['@scope/a'])
-    expect(result.warnings).toEqual([
+    expect(result.notices).toEqual([
       '1 discovered package ships skills but is not listed in intent.skills: @scope/b. Add to opt in.',
     ])
   })
@@ -76,7 +76,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
       },
       { config: config(['@scope/a']), excludeMatchers: [] },
     )
-    expect(result.warnings).toEqual([
+    expect(result.notices).toEqual([
       '2 discovered packages ship skills but are not listed in intent.skills: @scope/b, @scope/c. Add to opt in.',
     ])
   })
@@ -87,7 +87,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
       { config: config(['@scope/a', '@scope/missing']), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual(['@scope/a'])
-    expect(result.warnings).toEqual([
+    expect(result.notices).toEqual([
       '"@scope/missing" is declared in intent.skills but was not discovered.',
     ])
   })
@@ -98,7 +98,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
       { config: config(['workspace:foo']), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual(['foo'])
-    expect(result.warnings).toEqual([])
+    expect(result.notices).toEqual([])
   })
 
   it('does not trust a discovered dependency just because its dependent is listed', () => {
@@ -107,7 +107,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
       { config: config(['@scope/listed']), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual(['@scope/listed'])
-    expect(result.warnings).toEqual([
+    expect(result.notices).toEqual([
       '1 discovered package ships skills but is not listed in intent.skills: @scope/dep. Add to opt in.',
     ])
   })
@@ -120,7 +120,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
         excludeMatchers: [],
       },
     )
-    expect(result.warnings).toEqual([
+    expect(result.notices).toEqual([
       '1 discovered package ships skills but is not listed in intent.skills: @scope/unlisted. Add to opt in.',
       '"@scope/missing" is declared in intent.skills but was not discovered.',
     ])
@@ -146,7 +146,7 @@ describe('applySourcePolicy — permit-all and empty modes', () => {
       { config: config(['*']), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual(['@scope/a', '@scope/b'])
-    expect(result.warnings).toEqual([ALLOW_ALL_WARNING])
+    expect(result.notices).toEqual([ALLOW_ALL_WARNING])
   })
 
   it('permits every discovered source under absent config with a migration warning', () => {
@@ -155,7 +155,7 @@ describe('applySourcePolicy — permit-all and empty modes', () => {
       { config: config(undefined), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual(['@scope/a'])
-    expect(result.warnings).toEqual([MIGRATION_WARNING])
+    expect(result.notices).toEqual([MIGRATION_WARNING])
   })
 
   it('permits nothing under empty config with a quiet info note', () => {
@@ -164,7 +164,7 @@ describe('applySourcePolicy — permit-all and empty modes', () => {
       { config: config([]), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual([])
-    expect(result.warnings).toEqual([EMPTY_NOTE])
+    expect(result.notices).toEqual([EMPTY_NOTE])
   })
 
   it('stays quiet under empty config even with several discovered packages', () => {
@@ -172,7 +172,7 @@ describe('applySourcePolicy — permit-all and empty modes', () => {
       { packages: [pkg('@scope/a', ['x']), pkg('@scope/b', ['y'])] },
       { config: config([]), excludeMatchers: [] },
     )
-    expect(result.warnings).toEqual([EMPTY_NOTE])
+    expect(result.notices).toEqual([EMPTY_NOTE])
   })
 })
 
@@ -197,7 +197,7 @@ describe('applySourcePolicy — exclude interaction', () => {
       },
     )
     expect(names(result.packages)).toEqual(['@scope/a'])
-    expect(result.warnings).toEqual([MIGRATION_WARNING])
+    expect(result.notices).toEqual([MIGRATION_WARNING])
   })
 
   it('treats an unlisted+excluded package as excluded with no unlisted warning', () => {
@@ -209,7 +209,7 @@ describe('applySourcePolicy — exclude interaction', () => {
       },
     )
     expect(names(result.packages)).toEqual(['@scope/a'])
-    expect(result.warnings).toEqual([])
+    expect(result.notices).toEqual([])
   })
 
   it('does not report a listed+excluded package as undiscovered', () => {
@@ -221,7 +221,7 @@ describe('applySourcePolicy — exclude interaction', () => {
       },
     )
     expect(names(result.packages)).toEqual([])
-    expect(result.warnings).toEqual([])
+    expect(result.notices).toEqual([])
   })
 
   it('removes skill-level excluded skills while keeping the package', () => {
@@ -249,9 +249,9 @@ describe('applySourcePolicy — warning dedup', () => {
       },
       { config: config(['@scope/a']), excludeMatchers: [] },
     )
-    const counts = result.warnings.reduce<Record<string, number>>(
-      (acc, warning) => {
-        acc[warning] = (acc[warning] ?? 0) + 1
+    const counts = result.notices.reduce<Record<string, number>>(
+      (acc, notice) => {
+        acc[notice] = (acc[notice] ?? 0) + 1
         return acc
       },
       {},

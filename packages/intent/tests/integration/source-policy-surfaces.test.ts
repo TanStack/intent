@@ -76,10 +76,13 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     const result = listIntentSkills({ cwd: root })
 
     expect(result.packages.map((pkg) => pkg.name)).toEqual([LISTED])
-    expect(result.warnings.some((warning) => warning.includes(UNLISTED))).toBe(
+    expect(result.notices.some((notice) => notice.includes(UNLISTED))).toBe(
       true,
     )
-    expect(result.warnings.some((warning) => warning.includes(EXCLUDED))).toBe(
+    expect(result.notices.some((notice) => notice.includes(EXCLUDED))).toBe(
+      false,
+    )
+    expect(result.warnings.some((warning) => warning.includes(UNLISTED))).toBe(
       false,
     )
   })

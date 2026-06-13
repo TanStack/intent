@@ -17,6 +17,7 @@ export interface ScanResult {
   packageManager: PackageManager
   packages: Array<IntentPackage>
   warnings: Array<string>
+  notices: Array<string>
   conflicts: Array<VersionConflict>
   nodeModules: {
     local: NodeModulesScanTarget

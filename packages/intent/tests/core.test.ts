@@ -134,6 +134,7 @@ describe('listIntentSkills', () => {
         },
       ],
       warnings: [],
+      notices: [],
       conflicts: [],
     })
   })
@@ -164,6 +165,7 @@ describe('listIntentSkills', () => {
       packageCount: 1,
       skillCount: 1,
       warningCount: 0,
+      noticeCount: 0,
       conflictCount: 0,
       scan: expect.objectContaining({
         packageJsonReadCount: expect.any(Number),
@@ -262,7 +264,7 @@ describe('listIntentSkills', () => {
     const result = listIntentSkills({ cwd: root })
 
     expect(result.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
-    expect(result.warnings).toEqual([
+    expect(result.notices).toEqual([
       '1 discovered package ships skills but is not listed in intent.skills: @tanstack/unlisted. Add to opt in.',
     ])
   })
@@ -306,7 +308,7 @@ describe('listIntentSkills', () => {
     const result = listIntentSkills({ cwd: root })
 
     expect(result.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
-    expect(result.warnings).toEqual([
+    expect(result.notices).toEqual([
       'intent.skills is not set — all discovered skill sources are surfaced. A future version will require an explicit intent.skills allowlist; add one to opt in to specific sources.',
     ])
   })
@@ -328,7 +330,7 @@ describe('listIntentSkills', () => {
 
     expect(result.packages).toEqual([])
     expect(result.skills).toEqual([])
-    expect(result.warnings).toEqual([
+    expect(result.notices).toEqual([
       'intent.skills is empty — no skill sources are permitted.',
     ])
   })

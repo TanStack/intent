@@ -133,6 +133,7 @@ export function listIntentSkills(
       skillCount: pkg.skills.length,
     })),
     warnings: scan.warnings,
+    notices: scan.notices,
     conflicts: scan.conflicts,
   }
 
@@ -144,6 +145,7 @@ export function listIntentSkills(
       packageCount: result.packages.length,
       skillCount: result.skills.length,
       warningCount: result.warnings.length,
+      noticeCount: result.notices.length,
       conflictCount: result.conflicts.length,
       scan: scan.stats ?? fsCache.getStats(),
     }

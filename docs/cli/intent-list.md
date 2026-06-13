@@ -104,7 +104,7 @@ Each entry is one source:
 
 The list as a whole has three special forms:
 
-- **Absent** (no `intent.skills` key): every discovered package is surfaced, with a one-time deprecation warning. This is the upgrade path for existing projects. A future version will require an explicit allowlist.
+- **Absent** (no `intent.skills` key): every discovered package is surfaced, with a deprecation notice printed to stderr on each run until you set `intent.skills`. This is the upgrade path for existing projects. A future version will require an explicit allowlist.
 - **Empty** (`"skills": []`): no package is surfaced, with a quiet info note.
 - **Wildcard** (`"skills": ["*"]`): every discovered package is surfaced, with a loud acknowledged-risk notice.
 

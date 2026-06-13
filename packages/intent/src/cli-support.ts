@@ -6,7 +6,7 @@ import { resolveProjectContext } from './core/project-context.js'
 import type { IntentCoreOptions } from './core.js'
 import type { ScanOptions, ScanResult, StalenessReport } from './types.js'
 
-export { printWarnings } from './cli-output.js'
+export { printNotices, printWarnings } from './cli-output.js'
 
 export interface GlobalScanFlags {
   debug?: boolean

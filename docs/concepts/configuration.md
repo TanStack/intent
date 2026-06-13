@@ -36,7 +36,7 @@ A malformed entry fails the whole command, and every bad entry is reported at on
 
 The list as a whole has three special forms:
 
-- **Absent.** No `intent.skills` key. Every discovered package is surfaced, and Intent prints a one-time deprecation warning. This is the upgrade path for existing projects. A future version will require an explicit allowlist.
+- **Absent.** No `intent.skills` key. Every discovered package is surfaced, and Intent prints a deprecation notice to stderr on each run until you set `intent.skills`. This is the upgrade path for existing projects. A future version will require an explicit allowlist.
 - **Empty.** `"skills": []`. No package is surfaced. Intent prints a quiet info note.
 - **Wildcard.** `"skills": ["*"]`. Every discovered package is surfaced. Intent prints a loud acknowledged-risk notice.
 
@@ -44,7 +44,7 @@ A package that ships skills but is not listed is dropped. When packages are drop
 
 ### Existing projects
 
-A project that has not set `intent.skills` keeps working. Intent surfaces every discovered package and prints the one-time deprecation notice described under the absent form. Nothing breaks. Add an allowlist when you are ready, before a future version requires one. Run `intent list` to confirm which packages are surfaced.
+A project that has not set `intent.skills` keeps working. Intent surfaces every discovered package and prints the deprecation notice described under the absent form. Nothing breaks. Add an allowlist when you are ready, before a future version requires one. Run `intent list` to confirm which packages are surfaced.
 
 ## `intent.exclude`
 

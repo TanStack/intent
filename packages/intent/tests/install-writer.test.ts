@@ -57,6 +57,7 @@ function scanResult(packages: Array<IntentPackage>): ScanResult {
     packageManager: 'pnpm',
     packages,
     warnings: [],
+    notices: [],
     conflicts: [],
     nodeModules: {
       local: {

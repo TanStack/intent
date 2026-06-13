@@ -91,7 +91,7 @@ export function checkLoadAllowed(
   return null
 }
 
-function formatUnlistedWarning(names: Array<string>): string {
+function formatUnlistedNotice(names: Array<string>): string {
   const sorted = [...names].sort()
   const noun = sorted.length === 1 ? 'package ships' : 'packages ship'
   return `${sorted.length} discovered ${noun} skills but ${sorted.length === 1 ? 'is' : 'are'} not listed in intent.skills: ${sorted.join(', ')}. Add to opt in.`
@@ -99,7 +99,7 @@ function formatUnlistedWarning(names: Array<string>): string {
 
 export interface SourcePolicyResult {
   packages: Array<IntentPackage>
-  warnings: Array<string>
+  notices: Array<string>
 }
 
 export function applySourcePolicy(
@@ -108,12 +108,12 @@ export function applySourcePolicy(
 ): SourcePolicyResult {
   const { config, excludeMatchers } = options
   const seen = new Set<string>()
-  const warnings: Array<string> = []
+  const notices: Array<string> = []
 
-  const emit = (warning: string): void => {
-    if (seen.has(warning)) return
-    seen.add(warning)
-    warnings.push(warning)
+  const emit = (notice: string): void => {
+    if (seen.has(notice)) return
+    seen.add(notice)
+    notices.push(notice)
   }
 
   const packages: Array<IntentPackage> = []
@@ -138,7 +138,7 @@ export function applySourcePolicy(
   }
 
   if (unlistedNames.length > 0) {
-    emit(formatUnlistedWarning(unlistedNames))
+    emit(formatUnlistedNotice(unlistedNames))
   }
 
   if (config.mode === 'explicit') {
@@ -156,7 +156,7 @@ export function applySourcePolicy(
   else if (config.mode === 'allow-all') emit(ALLOW_ALL_WARNING)
   else if (config.mode === 'empty') emit(EMPTY_NOTE)
 
-  return { packages, warnings }
+  return { packages, notices }
 }
 
 // A null/undefined intent.skills is treated as not-declared so it cannot
@@ -212,13 +212,11 @@ export function scanForPolicedIntents(params: {
     scan: {
       ...scanResult,
       packages: policy.packages,
-      warnings: [
-        ...scanResult.warnings.filter(
-          (warning) =>
-            !droppedNames.some((name) => warningMentionsPackage(warning, name)),
-        ),
-        ...policy.warnings,
-      ],
+      warnings: scanResult.warnings.filter(
+        (warning) =>
+          !droppedNames.some((name) => warningMentionsPackage(warning, name)),
+      ),
+      notices: policy.notices,
       conflicts: scanResult.conflicts.filter((conflict) =>
         survivingNames.has(conflict.packageName),
       ),

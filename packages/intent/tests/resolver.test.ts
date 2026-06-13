@@ -47,6 +47,7 @@ function scanResult(
 ): ScanResult {
   return {
     conflicts,
+    notices: [],
     nodeModules: {
       global: {
         detected: false,
