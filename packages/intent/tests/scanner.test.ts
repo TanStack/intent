@@ -194,6 +194,173 @@ describe('scanForIntents', () => {
     expect(result.packages[0]!.name).toBe('my-lib')
   })
 
+  it('discovers transitive skills of a skill-bearing direct dep under pnpm isolated linker (#153)', () => {
+    // pnpm isolated layout: a store-only transitive dep (start-core) reached
+    // only through its skill-bearing parent's (react-start) store dir.
+    writeFileSync(join(root, 'pnpm-lock.yaml'), '')
+    writeJson(join(root, 'package.json'), {
+      name: 'consumer',
+      version: '1.0.0',
+      dependencies: { '@scope/react-start': '1.0.0' },
+    })
+
+    const pnpmDir = join(root, 'node_modules', '.pnpm')
+
+    const startCoreStore = createDir(
+      pnpmDir,
+      '@scope+start-core@1.0.0',
+      'node_modules',
+      '@scope',
+      'start-core',
+    )
+    writeJson(join(startCoreStore, 'package.json'), {
+      name: '@scope/start-core',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'scope/start-core', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(startCoreStore, 'skills', 'start-core'), {
+      name: 'start-core',
+      description: 'Start core skill',
+      type: 'core',
+    })
+
+    const reactStartStore = createDir(
+      pnpmDir,
+      '@scope+react-start@1.0.0',
+      'node_modules',
+      '@scope',
+      'react-start',
+    )
+    writeJson(join(reactStartStore, 'package.json'), {
+      name: '@scope/react-start',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'scope/react-start', docs: 'docs/' },
+      dependencies: { '@scope/start-core': '1.0.0' },
+    })
+    writeSkillMd(createDir(reactStartStore, 'skills', 'react-start'), {
+      name: 'react-start',
+      description: 'React start skill',
+      type: 'core',
+    })
+
+    // start-core symlinked as a sibling inside react-start's store dir only.
+    createDir(pnpmDir, '@scope+react-start@1.0.0', 'node_modules', '@scope')
+    symlinkSync(
+      startCoreStore,
+      join(
+        pnpmDir,
+        '@scope+react-start@1.0.0',
+        'node_modules',
+        '@scope',
+        'start-core',
+      ),
+    )
+
+    // react-start hoisted to the top-level node_modules; start-core is not.
+    createDir(root, 'node_modules', '@scope')
+    symlinkSync(
+      reactStartStore,
+      join(root, 'node_modules', '@scope', 'react-start'),
+    )
+
+    const result = scanForIntents(root)
+
+    const names = result.packages.map((p) => p.name)
+    expect(names).toContain('@scope/react-start')
+    expect(names).toContain('@scope/start-core')
+
+    const startCore = result.packages.find(
+      (p) => p.name === '@scope/start-core',
+    )
+    expect(startCore!.skills.map((s) => s.name)).toContain('start-core')
+
+    // One installed version must not be reported as a version conflict.
+    expect(result.conflicts).toEqual([])
+  })
+
+  it('discovers transitive skills when the dep resolves through a second symlink hop (#153 residual risk)', () => {
+    // The transitive dep is reached through two symlink hops; realpathSync must
+    // collapse the whole chain, not just one hop.
+    writeFileSync(join(root, 'pnpm-lock.yaml'), '')
+    writeJson(join(root, 'package.json'), {
+      name: 'consumer',
+      version: '1.0.0',
+      dependencies: { '@scope/react-start': '1.0.0' },
+    })
+
+    const pnpmDir = join(root, 'node_modules', '.pnpm')
+
+    const startCoreReal = createDir(
+      pnpmDir,
+      '@scope+start-core@1.0.0',
+      'node_modules',
+      '@scope',
+      'start-core',
+    )
+    writeJson(join(startCoreReal, 'package.json'), {
+      name: '@scope/start-core',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'scope/start-core', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(startCoreReal, 'skills', 'start-core'), {
+      name: 'start-core',
+      description: 'Start core skill',
+      type: 'core',
+    })
+
+    // Intermediate symlink hop: a separate link that targets the real store dir.
+    const intermediateScope = createDir(root, '.intermediate', '@scope')
+    const intermediateStartCore = join(intermediateScope, 'start-core')
+    symlinkSync(startCoreReal, intermediateStartCore)
+
+    const reactStartStore = createDir(
+      pnpmDir,
+      '@scope+react-start@1.0.0',
+      'node_modules',
+      '@scope',
+      'react-start',
+    )
+    writeJson(join(reactStartStore, 'package.json'), {
+      name: '@scope/react-start',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'scope/react-start', docs: 'docs/' },
+      dependencies: { '@scope/start-core': '1.0.0' },
+    })
+    writeSkillMd(createDir(reactStartStore, 'skills', 'react-start'), {
+      name: 'react-start',
+      description: 'React start skill',
+      type: 'core',
+    })
+
+    // react-start's sibling link -> intermediate link -> real store dir.
+    createDir(pnpmDir, '@scope+react-start@1.0.0', 'node_modules', '@scope')
+    symlinkSync(
+      intermediateStartCore,
+      join(
+        pnpmDir,
+        '@scope+react-start@1.0.0',
+        'node_modules',
+        '@scope',
+        'start-core',
+      ),
+    )
+
+    createDir(root, 'node_modules', '@scope')
+    symlinkSync(
+      reactStartStore,
+      join(root, 'node_modules', '@scope', 'react-start'),
+    )
+
+    const result = scanForIntents(root)
+
+    const startCore = result.packages.find(
+      (p) => p.name === '@scope/start-core',
+    )
+    expect(startCore).toBeDefined()
+    expect(startCore!.skills.map((s) => s.name)).toContain('start-core')
+    expect(result.conflicts).toEqual([])
+  })
+
   it('discovers sub-skills', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'db')
     writeJson(join(pkgDir, 'package.json'), {
