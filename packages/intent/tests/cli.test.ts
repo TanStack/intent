@@ -368,6 +368,41 @@ describe('cli commands', () => {
     expect(readFileSync(agentsPath, 'utf8')).toBe(content)
   })
 
+  it('omits unlisted packages from the install --map block', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-allowlist-'))
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-allowlist-global-'),
+    )
+    tempDirs.push(root, isolatedGlobalRoot)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/unlisted',
+      version: '1.0.0',
+      skillName: 'panel',
+      description: 'Unlisted panel skill',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--map'])
+    const content = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+
+    expect(exitCode).toBe(0)
+    expect(content).toContain('use: "@tanstack/query#fetching"')
+    expect(content).not.toContain('@tanstack/unlisted')
+  })
+
   it('ignores configured global packages during install --map by default', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-local-only-'))
     const globalRoot = mkdtempSync(

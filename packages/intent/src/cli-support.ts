@@ -48,12 +48,17 @@ export function getCheckSkillsWorkflowAdvisories(root: string): Array<string> {
 }
 
 export async function scanIntentsOrFail(
-  options?: ScanOptions,
+  coreOptions: IntentCoreOptions = {},
 ): Promise<ScanResult> {
-  const { scanForIntents } = await import('./scanner.js')
+  const { scanForPolicedIntents } = await import('./core/source-policy.js')
 
   try {
-    return scanForIntents(undefined, options)
+    const { scan } = scanForPolicedIntents({
+      cwd: process.cwd(),
+      scanOptions: scanOptionsFromGlobalFlags(coreOptions),
+      coreOptions,
+    })
+    return scan
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err))
   }

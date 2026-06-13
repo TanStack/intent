@@ -1,3 +1,4 @@
+import { isCliFailure } from '../cli-error.js'
 import type { StalenessReport } from '../types.js'
 
 export interface StaleCommandOptions {
@@ -105,7 +106,11 @@ async function runGithubReview(
   } catch (err) {
     const item = createFailedStaleReviewItem(packageLabel)
     writeStaleReviewWorkflowFiles([item])
-    const message = err instanceof Error ? err.message : String(err)
+    const message = isCliFailure(err)
+      ? err.message
+      : err instanceof Error
+        ? err.message
+        : String(err)
     console.log(`Intent stale check failed: ${message}`)
     console.log('Wrote a review PR body so maintainers can inspect the logs.')
   }

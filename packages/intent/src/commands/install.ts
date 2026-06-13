@@ -1,7 +1,7 @@
 import { relative } from 'node:path'
 import { fail } from '../cli-error.js'
 import { detectIntentCommandPackageManager } from '../command-runner.js'
-import { printWarnings, scanOptionsFromGlobalFlags } from '../cli-support.js'
+import { coreOptionsFromGlobalFlags, printWarnings } from '../cli-support.js'
 import {
   buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
@@ -10,7 +10,8 @@ import {
   writeIntentSkillsBlock,
 } from './install-writer.js'
 import type { GlobalScanFlags } from '../cli-support.js'
-import type { ScanOptions, ScanResult } from '../types.js'
+import type { IntentCoreOptions } from '../core.js'
+import type { ScanResult } from '../types.js'
 
 export const INSTALL_PROMPT = `You are an AI assistant helping a developer set up skill-to-task mappings for their project.
 
@@ -184,14 +185,14 @@ function printWriteResult({
 
 export async function runInstallCommand(
   options: InstallCommandOptions,
-  scanIntentsOrFail: (options?: ScanOptions) => Promise<ScanResult>,
+  scanIntentsOrFail: (coreOptions?: IntentCoreOptions) => Promise<ScanResult>,
 ): Promise<void> {
   if (options.printPrompt) {
     console.log(INSTALL_PROMPT)
     return
   }
 
-  const scanOptions = scanOptionsFromGlobalFlags(options)
+  const coreOptions = coreOptionsFromGlobalFlags(options)
 
   if (!options.map) {
     const generated = buildIntentSkillGuidanceBlock(
@@ -237,7 +238,7 @@ export async function runInstallCommand(
     return
   }
 
-  const scanResult = await scanIntentsOrFail(scanOptions)
+  const scanResult = await scanIntentsOrFail(coreOptions)
   const generated = buildIntentSkillsBlock(scanResult)
 
   if (options.dryRun) {
