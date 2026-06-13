@@ -139,6 +139,20 @@ The scanner may keep read locations internally (`node_modules`, pnpm store paths
 
 This keeps approvals portable across package managers, CI caches, symlinks, and Yarn PnP.
 
+### Standalone curated sources (reserved, post-M2)
+
+**Resolved (D19):** a standalone curated/personal skills repository is a future **source kind** (`kind: git`), not a generic local-directory drop-zone. The kind is reserved in M1 and implemented after M2, because the property that makes it safe — pinning — lives in the lockfile.
+
+This is the "skills travel with a package" model widened to one more intake, **not** a repositioning toward a generic skills installer (cf. skills.sh). The difference is mechanism: a generic installer _copies_ skills into a project and forgets where they came from; an Intent git source is _materialized from a pinned ref_ and stays tracked, versioned, and approvable. The git kind widens the intake, not the trust model.
+
+When implemented (post-M2), a `git:` source:
+
+- Is **materialized** into a gitignored managed directory (a derived cache under `.intent/`, the `node_modules`/`.pnpm-store` analogue — Intent fills it from a pinned source; it is never a hand-edited drop-zone the scanner blindly trusts).
+- Has its identity recorded in `intent.lock` as the **pinned ref**, never the materialized path — exactly like npm `resolution` (e.g. `"resolution": "git:github.com/sarah/skills@<sha>"`). The materialized directory is a read location, not an approval identity (same rule as §_Source identity vs read location_).
+- Flows through the identical lockfile lifecycle: stable identity (the ref), version (the sha/tag), `contentHash` over package-relative skill bytes, approval, and diff. It earns no trust shortcut over npm or workspace sources.
+
+Unpinned, hand-dropped local skill directories remain **out of scope** (§14) — only a pinned source kind brings standalone skills into the trust model. If a developer wants ad-hoc personal skills with no pinning, those stay in a personal/global skills directory outside Intent.
+
 ### Canonical content hashing
 
 **Resolved:** `contentHash` is an aggregate hash over normalized package-relative `SKILL.md` paths and raw file bytes, sorted by normalized path.
@@ -200,14 +214,14 @@ Implementations may include diagnostic context that explains why an unlisted sou
 
 These were deliberately changed in earlier iterations. The v1 plan must not re-introduce them.
 
-| Past decision                                                                                                                                            | Evidence in repo                                                                                                                                                                                                                                                          | Implication for v1                                                                                                                                                                                                                                                 |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Library packages do not ship bins.** Detection moved from `bin.intent` to `keywords: ["tanstack-intent"]`.                                             | `library-scanner.ts:isIntentPackage` comment: _"Legacy fallback: packages published before the keyword-based detection change may only have bin.intent. Keep this until a breaking release."_                                                                             | Don't propose any v1 feature that requires a library package to ship an executable (no per-library MCP server, no per-library `intent-library` bin, no per-library policy enforcer). Anything that needs runtime lives in `@tanstack/intent`.                      |
-| **Consumer discovery today is over-permissive — `skills/` dir + derivable `intent` config is enough.** The keyword is _not_ a gate on the consumer side. | `scanner.ts:tryRegister` registers any installed package with a `skills/` directory and a `validateIntentField`-passable or `deriveIntentConfig`-derivable config. No keyword check. The keyword check exists only in the abandoned `library-scanner.ts:isIntentPackage`. | M1's explicit-sources list **replaces** today's permissive default. The keyword stays as a marker for registry indexing and as a sanity hint, but it does not authorize consumer trust. After M1, presence in `intent.skills[]` is the authorization.              |
+| Past decision                                                                                                                                            | Evidence in repo                                                                                                                                                                                                                                                          | Implication for v1                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Library packages do not ship bins.** Detection moved from `bin.intent` to `keywords: ["tanstack-intent"]`.                                             | `library-scanner.ts:isIntentPackage` comment: _"Legacy fallback: packages published before the keyword-based detection change may only have bin.intent. Keep this until a breaking release."_                                                                             | Don't propose any v1 feature that requires a library package to ship an executable (no per-library MCP server, no per-library `intent-library` bin, no per-library policy enforcer). Anything that needs runtime lives in `@tanstack/intent`.                                                                                               |
+| **Consumer discovery today is over-permissive — `skills/` dir + derivable `intent` config is enough.** The keyword is _not_ a gate on the consumer side. | `scanner.ts:tryRegister` registers any installed package with a `skills/` directory and a `validateIntentField`-passable or `deriveIntentConfig`-derivable config. No keyword check. The keyword check exists only in the abandoned `library-scanner.ts:isIntentPackage`. | M1's explicit-sources list **replaces** today's permissive default. The keyword stays as a marker for registry indexing and as a sanity hint, but it does not authorize consumer trust. After M1, presence in `intent.skills[]` is the authorization.                                                                                       |
 | **Discovery is static. Scanner never imports user package code.**                                                                                        | `scanner.ts` and `library-scanner.ts` use `readFileSync` + `createRequire().resolve(.../package.json)` only. No `await import(<userPkg>)`.                                                                                                                                | M1 codifies this with a code-comment invariant + ESLint `no-restricted-imports` rule scoped to `scanner.ts`, `manifest.ts`, `lockfile.ts`, and `mcp/`. Package-manager resolution infrastructure such as Yarn PnP is the only execution exception. Manifest generation in M3 and the MCP server in M5 must not load library code (see D12). |
-| **Consumer-facing config lives in `package.json` (under `intent`), not in a separate config file.**                                                      | `scanner.ts:validateIntentField` reads `package.json#intent`. There is no `intent.config.json` in the repo.                                                                                                                                                               | Resolved: sources go in `package.json#intent.skills[]`. D2 closed.                                                                                                                                                                                                 |
-| **`bin.intent-library` was a planned consumer path that was abandoned in favor of the keyword model.**                                                   | `intent-library` bin exists in `package.json`, plus `src/intent-library.ts` + `src/library-scanner.ts`. `scanLibrary(process.argv[1])` walks up from the bin's own script path — only meaningful inside a library's `node_modules`.                                       | Do **not** revive this in v1. See §4.                                                                                                                                                                                                                              |
-| **Consumers can already exclude/blacklist packages.** A subtractive filter exists independent of any allowlist.                                          | `core/excludes.ts`: `package.json#intent.exclude[]` (package-name globs, merged from cwd up to workspace root) + `--exclude <pattern>` flag on `list`/`load`. Glob support is `*`-only; exact names match exactly.                                                        | M1's allowlist (`intent.skills[]`) is **additive** (opt-in); `intent.exclude[]` stays **subtractive** and is applied _after_ the allowlist. Removing exclude would be a regression. v1 also extends exclude to match skill names, not just package names (see M1). |
+| **Consumer-facing config lives in `package.json` (under `intent`), not in a separate config file.**                                                      | `scanner.ts:validateIntentField` reads `package.json#intent`. There is no `intent.config.json` in the repo.                                                                                                                                                               | Resolved: sources go in `package.json#intent.skills[]`. D2 closed.                                                                                                                                                                                                                                                                          |
+| **`bin.intent-library` was a planned consumer path that was abandoned in favor of the keyword model.**                                                   | `intent-library` bin exists in `package.json`, plus `src/intent-library.ts` + `src/library-scanner.ts`. `scanLibrary(process.argv[1])` walks up from the bin's own script path — only meaningful inside a library's `node_modules`.                                       | Do **not** revive this in v1. See §4.                                                                                                                                                                                                                                                                                                       |
+| **Consumers can already exclude/blacklist packages.** A subtractive filter exists independent of any allowlist.                                          | `core/excludes.ts`: `package.json#intent.exclude[]` (package-name globs, merged from cwd up to workspace root) + `--exclude <pattern>` flag on `list`/`load`. Glob support is `*`-only; exact names match exactly.                                                        | M1's allowlist (`intent.skills[]`) is **additive** (opt-in); `intent.exclude[]` stays **subtractive** and is applied _after_ the allowlist. Removing exclude would be a regression. v1 also extends exclude to match skill names, not just package names (see M1).                                                                          |
 
 ## 4. Cleanup item (blocks M1)
 
@@ -234,9 +248,11 @@ Each milestone is independently shippable. The first four are sequential; M5, M6
 **Goal:** Stop trusting every installed package with a `skills/` directory. Make the project's allowlist the sole gate.
 
 - Read `package.json#intent.skills[]` as the project's allowlist (D2 closed).
+- **Model sources as a discriminated union from day one** (`{ id, kind, ... }`), not a flat list of package-name strings. This is the same source-identity shape M2's lockfile stores (`id`, `kind`, `version`, optional `resolution`), so M1 builds it once instead of M2 refactoring it. Each entry in `intent.skills[]` parses into a typed `SkillSource`; an unrecognized prefix is a clear error, never a silent drop.
 - Source kinds, v1:
-  - `"@scope/pkg"` or `"pkg"` — npm package, must be reachable via the project's dependency tree (direct or transitive).
-  - `"workspace:@scope/pkg"` — a package in the current workspace. Works for npm, pnpm, yarn, bun workspaces — the `workspace:` prefix is Intent-internal syntax, not a package-manager protocol.
+  - `"@scope/pkg"` or `"pkg"` — `kind: npm`. An npm package, must be reachable via the project's dependency tree (direct or transitive).
+  - `"workspace:@scope/pkg"` — `kind: workspace`. A package in the current workspace. Works for npm, pnpm, yarn, bun workspaces — the `workspace:` prefix is Intent-internal syntax, not a package-manager protocol.
+  - `"git:<host>/<repo>#<ref>"` — `kind: git`. A standalone curated/personal skills repository pinned to a ref. **Reserved in M1, not implemented.** M1 parses and validates the shape but rejects it with a "not supported until the lockfile lands" diagnostic, because a git source cannot be trusted without M2's pin (see §2 _Standalone curated sources_, D19). Implementing materialization in M1 — before there is a lockfile to pin the resolved ref and content hash — would re-open the over-permissive trust hole this milestone closes.
 - `scanForIntents()` filters discovered packages against the allowlist:
   - Listed + found → included.
   - Listed + not found → warning ("declared in intent.skills but not installed"). In M2 frozen mode this becomes a hard fail.
@@ -266,8 +282,8 @@ New file `intent.lock` (committed at consumer project root). V1 uses a single co
     "baseline": {
       "kind": "tag",
       "ref": "v1.42.0",
-      "commit": "abc123..."
-    }
+      "commit": "abc123...",
+    },
   },
   "sources": [
     {
@@ -291,14 +307,14 @@ New file `intent.lock` (committed at consumer project root). V1 uses a single co
         "id": "skill-package-install-script",
         "scope": {
           "source": "@tanstack/router",
-          "contentHash": "sha256-..."
+          "contentHash": "sha256-...",
         },
         "reason": "Accepted until upstream removes the install script.",
         "createdAt": "2026-05-26T...",
-        "expiresAt": "2026-08-26"
-      }
-    ]
-  }
+        "expiresAt": "2026-08-26",
+      },
+    ],
+  },
 }
 ```
 
@@ -366,11 +382,11 @@ New file per skill package: `skills/intent.manifest.json` (ships with the packag
           "inputSchema": {
             "type": "object",
             "properties": {
-              "query": { "type": "string" }
+              "query": { "type": "string" },
             },
-            "required": ["query"]
-          }
-        }
+            "required": ["query"],
+          },
+        },
       ],
     },
   ],
@@ -678,6 +694,8 @@ pnpm exec intent security doctor        # warns on weak hygiene
 
 Skills sourced via `workspace:@scope/pkg` are first-party to the project and follow the same lockfile lifecycle as npm sources — they show up in `intent.lock`, require approval, are diffed on change. Content/manifest hashing catches drift across workspace package updates the same way it does for external packages. There is no "trust workspace blindly" shortcut in v1, because workspace authors and project authors aren't always the same person in larger monorepos.
 
+Standalone curated sources (`kind: git`, reserved — §2 _Standalone curated sources_, D19) follow this same lifecycle when implemented post-M2: pinned ref identity, content hash, approval, and diff, with no trust shortcut. They are materialized into a gitignored managed directory but identified by the pinned ref, never the materialized path. M1 reserves the kind and rejects it; the build waits for the lockfile pin from M2.
+
 **Resolved D9:** v1 approvals are source/package-scoped, not per-skill.
 
 A source listed in `intent.skills[]` may be approved or rejected as a unit based on its manifest, content hash, and capability deltas. Individual skills cannot be independently approved in v1. Users may exclude individual skills from an approved source; exclusion suppresses discovery, catalog publication, MCP exposure, capability selection, generated indexes, skill lookup, and invocation, but it is not a separate trust decision.
@@ -748,25 +766,26 @@ Existing test commands (`test:lib`, `test:integration`, `test:smoke`) absorb the
 
 All RFC decisions are resolved. Detailed rationale lives in the milestone sections above.
 
-| ID  | Question                                                         | Resolution |
-| --- | ---------------------------------------------------------------- | ---------- |
-| D1  | Remove `intent-library` bin+sources now vs deprecate             | Remove now as a v1 breaking cleanup. No compatibility shim. |
-| D2  | Sources in `package.json#intent.skills` vs `intent.config.json`? | Use `package.json#intent.skills[]`. |
-| D3  | Drop `bin.intent` legacy fallback in `isIntentPackage`?          | Yes. Removed with the abandoned `library-scanner.ts` path. |
-| D4  | Single `intent.lock` vs `.intent/` folder                        | Single committed root `intent.lock`. VCS history and deterministic diffs are the audit mechanism. |
-| D5  | Package-level vs per-skill manifest                              | Package-level `skills/intent.manifest.json`. Per-skill manifests are rejected in v1. |
-| D6  | MCP transport: stdio only vs stdio + HTTP/SSE                    | Stdio only in v1. |
-| D7  | Flat vs nested CLI verbs                                         | Nested domain commands are canonical. No new flat aliases. |
-| D8  | What does an unlisted source do in M1?                            | Warn in M1. Hard fail in M2 frozen mode. |
-| D9  | Per-skill approvals                                               | Out of v1. Approvals are source/package-scoped; individual skills can be excluded. |
-| D10 | Publish `@tanstack/intent-types`                                  | Not in v1. Public types are exported from `@tanstack/intent`. |
-| D11 | `intent mcp serve` via `npx` vs local dependency                  | Local project/workspace install only. `npx` remains for one-off `list` / `install`. |
-| D12 | `mcpTools[]` metadata vs runtime implementation shape             | Metadata only in v1. Runtime fields are invalid; future runtime support needs a new versioned shape. |
-| D13 | Interactive `prompt` MCP policy                                   | Out of v1. Valid policy values are `allow` and `deny`; `prompt` and unknown values fail closed. |
-| D14 | Rename `intent install`                                           | Keep the name in v1. Add configurable guidance commands for managed agent guidance. |
-| D15 | MCP tool shape and fallback threshold                             | `get_skill` is primary. Embed full catalog below threshold; above threshold use compact summary plus `list_skills` / `search_skills`. |
-| D17 | Default baseline ref for Layer 2 staleness                        | `--baseline`, then lockfile baseline, then nearest local tag. No implicit `HEAD~1` fallback. |
-| D18 | M7 in v1 vs fast-follow                                           | Include minimal M7 in v1 as cut candidate with hard local/read-only/no-network gates. |
+| ID  | Question                                                                  | Resolution                                                                                                                                                                                                                                                                                                              |
+| --- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Remove `intent-library` bin+sources now vs deprecate                      | Remove now as a v1 breaking cleanup. No compatibility shim.                                                                                                                                                                                                                                                             |
+| D2  | Sources in `package.json#intent.skills` vs `intent.config.json`?          | Use `package.json#intent.skills[]`.                                                                                                                                                                                                                                                                                     |
+| D3  | Drop `bin.intent` legacy fallback in `isIntentPackage`?                   | Yes. Removed with the abandoned `library-scanner.ts` path.                                                                                                                                                                                                                                                              |
+| D4  | Single `intent.lock` vs `.intent/` folder                                 | Single committed root `intent.lock`. VCS history and deterministic diffs are the audit mechanism.                                                                                                                                                                                                                       |
+| D5  | Package-level vs per-skill manifest                                       | Package-level `skills/intent.manifest.json`. Per-skill manifests are rejected in v1.                                                                                                                                                                                                                                    |
+| D6  | MCP transport: stdio only vs stdio + HTTP/SSE                             | Stdio only in v1.                                                                                                                                                                                                                                                                                                       |
+| D7  | Flat vs nested CLI verbs                                                  | Nested domain commands are canonical. No new flat aliases.                                                                                                                                                                                                                                                              |
+| D8  | What does an unlisted source do in M1?                                    | Warn in M1. Hard fail in M2 frozen mode.                                                                                                                                                                                                                                                                                |
+| D9  | Per-skill approvals                                                       | Out of v1. Approvals are source/package-scoped; individual skills can be excluded.                                                                                                                                                                                                                                      |
+| D10 | Publish `@tanstack/intent-types`                                          | Not in v1. Public types are exported from `@tanstack/intent`.                                                                                                                                                                                                                                                           |
+| D11 | `intent mcp serve` via `npx` vs local dependency                          | Local project/workspace install only. `npx` remains for one-off `list` / `install`.                                                                                                                                                                                                                                     |
+| D12 | `mcpTools[]` metadata vs runtime implementation shape                     | Metadata only in v1. Runtime fields are invalid; future runtime support needs a new versioned shape.                                                                                                                                                                                                                    |
+| D13 | Interactive `prompt` MCP policy                                           | Out of v1. Valid policy values are `allow` and `deny`; `prompt` and unknown values fail closed.                                                                                                                                                                                                                         |
+| D14 | Rename `intent install`                                                   | Keep the name in v1. Add configurable guidance commands for managed agent guidance.                                                                                                                                                                                                                                     |
+| D15 | MCP tool shape and fallback threshold                                     | `get_skill` is primary. Embed full catalog below threshold; above threshold use compact summary plus `list_skills` / `search_skills`.                                                                                                                                                                                   |
+| D17 | Default baseline ref for Layer 2 staleness                                | `--baseline`, then lockfile baseline, then nearest local tag. No implicit `HEAD~1` fallback.                                                                                                                                                                                                                            |
+| D18 | M7 in v1 vs fast-follow                                                   | Include minimal M7 in v1 as cut candidate with hard local/read-only/no-network gates.                                                                                                                                                                                                                                   |
+| D19 | Standalone/personal skills as a generic installer vs a pinned source kind | Pinned source kind (`kind: git`), not a generic installer. Reserved in M1 (parse-and-reject), implemented post-M2 once the lockfile can pin the ref + content hash. Materialized into a gitignored managed dir; identified by the pinned ref, never the path. Unpinned hand-dropped local dirs stay out of scope (§14). |
 
 ## 14. Out of scope for v1
 
@@ -776,7 +795,7 @@ All RFC decisions are resolved. Detailed rationale lives in the milestone sectio
 - Approval UI beyond a terminal prompt.
 - Cross-language MCP tool sandboxing.
 - Transitive skill trust. Consumers approve each skill-bearing source explicitly in v1. A listed package does not authorize skills in its dependencies.
-- Local-directory skill sources not shipped as a package — `file:` paths, `~/` personal skill collections, or any arbitrary local directory. Intent's goal is library knowledge distribution through npm — skills travel with packages and are discovered from a project's dependency tree (npm dependencies and `workspace:` packages). Skills a developer wants to add by hand, outside a package, are the developer's own responsibility and are not an Intent source kind in v1.
+- **Unpinned** local-directory skill sources — `file:` paths, `~/` personal skill collections, or any arbitrary hand-dropped local directory the scanner would trust by presence alone. Intent's goal is library knowledge distribution as _pinned, versioned_ sources; an unpinned drop-zone re-opens the over-permissive trust default M1 closes. Skills a developer wants to add by hand with no pinning stay in a personal/global skills directory, outside Intent — the developer's own responsibility, not an Intent source kind. **Note:** a _pinned_ standalone curated source (`kind: git`, reserved — §2, D19) is the in-model way to bring a personal/curated skills repo under Intent's lockfile; it is deferred to post-M2, not rejected. The line is pinning, not "npm package vs not."
 - A dedicated config-mutation command for excludes (`intent skills exclude …`). Excludes are low-frequency, set-once, and already trivial to edit as declarative JSON that reviews well in a PR. Adding a command means a second write target (alongside `intent.lock`), package.json merge/formatting edge cases, and pressure to ship a matching `add`/`remove` family. v1 instead keeps excludes hand-edited and makes `scan`/`diff` print the exact line to paste. Revisit as a fast-follow if demand appears.
 - Webhook-driven staleness detection. Webhook payloads are attacker-influenceable (forged webhooks can trigger false update PRs or suppress real ones). v1 staleness is pull-based and local (M7 Part B). Cross-repo TanStack-internal workflows can keep their own out-of-package scripts.
 - Semantic-anchor staleness (Layer 3 in M7's layered model). Coupling skills to API symbols for symbol-level drift detection is the highest-precision approach but the heaviest to build and adds attack surface to the detector itself. v1 ships Layers 0–2; Layer 3 tracked for a future release.
