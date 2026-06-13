@@ -3,21 +3,21 @@
 **Status:** Open for comment — for maintainer review before implementation.
 **Reading guide:** §0 is "state of the world today" — start here if you're not deeply familiar with the codebase. §1–4 are settled problem + context. §5–12 are the design. §13 contains the resolved decision audit trail.
 
-> **Implementation status (verified 2026-06-13 against `main` @ `0.0.43`).** Track progress here; the living tracker lives in [V1-RELEASE-PLAN.md](V1-RELEASE-PLAN.md) §7.
+> **Implementation status (verified 2026-06-13 against `main`; latest release `0.0.44`, M1 merged and unreleased).**
 >
-> | Item                                                                    | Status                                                                                                                    |
-> | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-> | §4 — `intent-library` cleanup                                           | ✅ **done on `main`** (bin, `intent-library.ts`, `library-scanner.ts`, `library-scanner.test.ts` removed; no refs remain) |
-> | M1 — explicit skill sources                                             | ⬜ not started                                                                                                            |
-> | M2 — lockfile + frozen mode                                             | ⬜ not started                                                                                                            |
-> | M3 — manifest + Agent Skills spec compliance (D20)                      | ⬜ not started                                                                                                            |
-> | M4 — capability-aware diff                                              | ⬜ not started                                                                                                            |
-> | M5 — MCP server                                                         | ⬜ not started                                                                                                            |
-> | M6 — `security doctor`                                                  | ⬜ not started                                                                                                            |
-> | M7 Part B — staleness hardening (1.0 maintainer-reliability commitment) | ⬜ not started                                                                                                            |
-> | M7 Part A — maintainer agent surface (cut candidate, rides on M5)       | ⬜ not started                                                                                                            |
+> | Item                                                                    | Status                                                                                                                             |
+> | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+> | §4 — `intent-library` cleanup                                           | ✅ **done on `main`** (bin, `intent-library.ts`, `library-scanner.ts`, `library-scanner.test.ts` removed; no refs remain)          |
+> | M1 — explicit skill sources                                             | ✅ **done on `main`** (#156; `core/skill-sources.ts`, `core/source-policy.ts` gate discovery behind the `intent.skills` allowlist) |
+> | M2 — lockfile + frozen mode                                             | ⬜ not started                                                                                                                     |
+> | M3 — manifest + Agent Skills spec compliance (D20)                      | ⬜ not started                                                                                                                     |
+> | M4 — capability-aware diff                                              | ⬜ not started                                                                                                                     |
+> | M5 — MCP server                                                         | ⬜ not started                                                                                                                     |
+> | M6 — `security doctor`                                                  | ⬜ not started                                                                                                                     |
+> | M7 Part B — staleness hardening (1.0 maintainer-reliability commitment) | ⬜ not started                                                                                                                     |
+> | M7 Part A — maintainer agent surface (cut candidate, rides on M5)       | ⬜ not started                                                                                                                     |
 >
-> Note: the `rfc` branch working tree is behind `main` (`0.0.41`) and still contains the removed `intent-library` files. The §4 statements below describe the work as originally scoped; confirm completion against `main`, not the branch.
+> Note: the `rfc` branch working tree is behind `main` (`0.0.41`) — it still contains the removed `intent-library` files and predates the M1 allowlist merge. The §4 and M1 statements below describe the work as originally scoped; confirm completion against `main`, not the branch.
 
 ---
 
