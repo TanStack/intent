@@ -10,9 +10,9 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { compileExcludePatterns } from '../src/core/excludes.js'
 import {
-  ALLOW_ALL_WARNING,
+  ALLOW_ALL_NOTICE,
   EMPTY_NOTE,
-  MIGRATION_WARNING,
+  MIGRATION_NOTICE,
   applySourcePolicy,
   readSkillSourcesConfig,
 } from '../src/core/source-policy.js'
@@ -146,7 +146,7 @@ describe('applySourcePolicy — permit-all and empty modes', () => {
       { config: config(['*']), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual(['@scope/a', '@scope/b'])
-    expect(result.notices).toEqual([ALLOW_ALL_WARNING])
+    expect(result.notices).toEqual([ALLOW_ALL_NOTICE])
   })
 
   it('permits every discovered source under absent config with a migration warning', () => {
@@ -155,7 +155,7 @@ describe('applySourcePolicy — permit-all and empty modes', () => {
       { config: config(undefined), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual(['@scope/a'])
-    expect(result.notices).toEqual([MIGRATION_WARNING])
+    expect(result.notices).toEqual([MIGRATION_NOTICE])
   })
 
   it('permits nothing under empty config with a quiet info note', () => {
@@ -197,7 +197,7 @@ describe('applySourcePolicy — exclude interaction', () => {
       },
     )
     expect(names(result.packages)).toEqual(['@scope/a'])
-    expect(result.notices).toEqual([MIGRATION_WARNING])
+    expect(result.notices).toEqual([MIGRATION_NOTICE])
   })
 
   it('treats an unlisted+excluded package as excluded with no unlisted warning', () => {

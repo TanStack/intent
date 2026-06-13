@@ -17,10 +17,10 @@ import type { SkillUse } from '../skill-use.js'
 import type { IntentCoreOptions } from './types.js'
 import type { IntentPackage, ScanOptions, ScanResult } from '../types.js'
 
-export const ALLOW_ALL_WARNING =
+export const ALLOW_ALL_NOTICE =
   'All skill sources allowed (intent.skills: ["*"]) — unvetted skills may be surfaced into agent guidance.'
 
-export const MIGRATION_WARNING =
+export const MIGRATION_NOTICE =
   'intent.skills is not set — all discovered skill sources are surfaced. A future version will require an explicit intent.skills allowlist; add one to opt in to specific sources.'
 
 export const EMPTY_NOTE =
@@ -152,8 +152,8 @@ export function applySourcePolicy(
     }
   }
 
-  if (config.mode === 'absent') emit(MIGRATION_WARNING)
-  else if (config.mode === 'allow-all') emit(ALLOW_ALL_WARNING)
+  if (config.mode === 'absent') emit(MIGRATION_NOTICE)
+  else if (config.mode === 'allow-all') emit(ALLOW_ALL_NOTICE)
   else if (config.mode === 'empty') emit(EMPTY_NOTE)
 
   return { packages, notices }
