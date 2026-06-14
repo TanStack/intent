@@ -1,5 +1,21 @@
 # @tanstack/intent
 
+## 0.1.0
+
+### Minor Changes
+
+- [#157](https://github.com/TanStack/intent/pull/157) [`665370e`](https://github.com/TanStack/intent/commit/665370eeda0187643141f7bfb40619a0c62383e9) - Add `package.json#intent.skills` source allowlisting to gate which discovered packages can contribute skills.
+
+  `intent.exclude` now supports skill-level matching (for example `@scope/pkg#skill-id` and globs), and policy filtering is applied consistently across `intent list`, `intent load`, `intent install`, and `intent stale`. Notices are surfaced separately from warnings to keep command output machine-safe.
+
+- [#157](https://github.com/TanStack/intent/pull/157) [`665370e`](https://github.com/TanStack/intent/commit/665370eeda0187643141f7bfb40619a0c62383e9) - Add a persistent `intent exclude` command for managing `package.json#intent.exclude` (`list`, `add`, `remove`), and document it in the CLI/config guides.
+
+  Add notice suppression controls for automation:
+  - `--no-notices` on `intent list` and `intent install`
+  - `INTENT_NO_NOTICES=1` environment variable
+
+  Remove one-off CLI exclude flags from command surfaces (`list/load --exclude`); excludes are now managed via `package.json#intent.exclude` and `intent exclude`.
+
 ## 0.0.44
 
 ### Patch Changes
