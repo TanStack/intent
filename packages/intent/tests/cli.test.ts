@@ -72,6 +72,7 @@ let errorSpy: ReturnType<typeof vi.spyOn>
 let stdoutWriteSpy: ReturnType<typeof vi.spyOn>
 let tempDirs: Array<string>
 let previousGlobalNodeModules: string | undefined
+let previousNoNotices: string | undefined
 
 function getHelpOutput(): string {
   return [...infoSpy.mock.calls, ...logSpy.mock.calls]
@@ -83,7 +84,9 @@ beforeEach(() => {
   originalCwd = process.cwd()
   tempDirs = []
   previousGlobalNodeModules = process.env.INTENT_GLOBAL_NODE_MODULES
+  previousNoNotices = process.env.INTENT_NO_NOTICES
   delete process.env.INTENT_GLOBAL_NODE_MODULES
+  delete process.env.INTENT_NO_NOTICES
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
   infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -98,6 +101,11 @@ afterEach(() => {
     delete process.env.INTENT_GLOBAL_NODE_MODULES
   } else {
     process.env.INTENT_GLOBAL_NODE_MODULES = previousGlobalNodeModules
+  }
+  if (previousNoNotices === undefined) {
+    delete process.env.INTENT_NO_NOTICES
+  } else {
+    process.env.INTENT_NO_NOTICES = previousNoNotices
   }
   logSpy.mockRestore()
   infoSpy.mockRestore()
@@ -759,6 +767,59 @@ describe('cli commands', () => {
     expect(stderr).toContain('intent.skills is not set')
     expect(stdout).not.toContain('intent.skills is not set')
     expect(stdout).not.toContain('Notices:')
+  })
+
+  it('suppresses notices when --no-notices is passed', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-no-notices-'))
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-list-no-notices-empty-global-'),
+    )
+    tempDirs.push(root, isolatedGlobalRoot)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['list', '--no-notices'])
+    const stdout = logSpy.mock.calls.flat().join('\n')
+    const stderr = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('@tanstack/query')
+    expect(stderr).not.toContain('intent.skills is not set')
+    expect(stderr).not.toContain('Notices:')
+  })
+
+  it('suppresses notices when INTENT_NO_NOTICES=1 is set', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-env-no-notices-'))
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-list-env-no-notices-empty-global-'),
+    )
+    tempDirs.push(root, isolatedGlobalRoot)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.env.INTENT_NO_NOTICES = '1'
+    process.chdir(root)
+
+    const exitCode = await main(['list'])
+    const stdout = logSpy.mock.calls.flat().join('\n')
+    const stderr = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('@tanstack/query')
+    expect(stderr).not.toContain('intent.skills is not set')
+    expect(stderr).not.toContain('Notices:')
   })
 
   it('prints list debug details to stderr without changing json stdout', async () => {

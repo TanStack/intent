@@ -46,6 +46,17 @@ A package that ships skills but is not listed is dropped. When packages are drop
 
 A project that has not set `intent.skills` keeps working. Intent surfaces every discovered package and prints the deprecation notice described under the absent form. Nothing breaks. Add an allowlist when you are ready, before a future version requires one. Run `intent list` to confirm which packages are surfaced.
 
+### Suppressing notices temporarily
+
+Use `--no-notices` to suppress non-critical notices on stderr for one run:
+
+```bash
+npx @tanstack/intent@latest list --no-notices
+npx @tanstack/intent@latest install --map --no-notices
+```
+
+For CI or wrapper scripts, set `INTENT_NO_NOTICES=1` to suppress notices without changing command arguments.
+
 ## `intent.exclude`
 
 `intent.exclude` removes packages or individual skills after the allowlist resolves. It also accepts the `--exclude <pattern>` flag on `list` and `load` for one-off runs.

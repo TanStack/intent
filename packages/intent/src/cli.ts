@@ -21,13 +21,14 @@ function createCli(): CAC {
       'Discover intent-enabled packages from the project or workspace',
     )
     .usage(
-      'list [--json] [--debug] [--exclude <pattern>] [--global] [--global-only]',
+      'list [--json] [--debug] [--exclude <pattern>] [--global] [--global-only] [--no-notices]',
     )
     .option('--json', 'Output JSON')
     .option('--debug', 'Print discovery debug details to stderr')
     .option('--exclude <pattern>', 'Exclude package name glob')
     .option('--global', 'Include global packages after project packages')
     .option('--global-only', 'List global packages only')
+    .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('list')
     .example('list --json')
     .example('list --global')
@@ -86,7 +87,7 @@ function createCli(): CAC {
       'Create or update skill loading guidance in an agent config file',
     )
     .usage(
-      'install [--map] [--dry-run] [--print-prompt] [--global] [--global-only]',
+      'install [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]',
     )
     .option('--map', 'Write explicit skill-to-task mappings')
     .option('--dry-run', 'Print the generated block without writing')
@@ -96,6 +97,7 @@ function createCli(): CAC {
     )
     .option('--global', 'Include global packages after project packages')
     .option('--global-only', 'Install mappings from global packages only')
+    .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('install')
     .example('install --map')
     .example('install --dry-run')

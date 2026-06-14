@@ -1,5 +1,6 @@
 import {
   coreOptionsFromGlobalFlags,
+  noticeOptionsFromGlobalFlags,
   printDebugInfo,
   printNotices,
   printWarnings,
@@ -90,6 +91,7 @@ export async function runListCommand(
   options: ListCommandOptions,
 ): Promise<void> {
   const result = listIntentSkills(coreOptionsFromGlobalFlags(options))
+  const noticeOptions = noticeOptionsFromGlobalFlags(options)
   printListDebug(result)
 
   if (options.json) {
@@ -111,7 +113,7 @@ export async function runListCommand(
       console.log()
       printWarnings(result.warnings)
     }
-    printNotices(result.notices)
+    printNotices(result.notices, noticeOptions)
     return
   }
 
@@ -170,5 +172,5 @@ export async function runListCommand(
   console.log()
 
   printWarnings(result.warnings)
-  printNotices(result.notices)
+  printNotices(result.notices, noticeOptions)
 }

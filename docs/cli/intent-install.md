@@ -6,7 +6,7 @@ id: intent-install
 `intent install` creates or updates an `intent-skills` guidance block in a project guidance file.
 
 ```bash
-npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--global] [--global-only]
+npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
 ```
 
 ## Options
@@ -16,6 +16,7 @@ npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--glob
 - `--print-prompt`: print the agent setup prompt instead of writing files
 - `--global`: include global packages after project packages when `--map` is passed
 - `--global-only`: install mappings from global packages only when `--map` is passed
+- `--no-notices`: suppress non-critical notices on stderr
 
 ## Behavior
 
@@ -74,6 +75,8 @@ skills:
 - Guidance unchanged: `No changes to AGENTS.md; skill loading guidance already current.`
 - Placement tip: `Tip: Keep the intent-skills block near the top of AGENTS.md so agents read it before task-specific instructions.`
 - No actionable skills in `--map` mode: `No intent-enabled skills found.`
+
+To suppress trust and migration notices in automation, pass `--no-notices`.
 
 ## Related
 

@@ -6,7 +6,7 @@ id: intent-list
 `intent list` discovers skill-enabled packages and prints available skills.
 
 ```bash
-npx @tanstack/intent@latest list [--json] [--debug] [--exclude <pattern>] [--global] [--global-only]
+npx @tanstack/intent@latest list [--json] [--debug] [--exclude <pattern>] [--global] [--global-only] [--no-notices]
 ```
 
 ## Options
@@ -16,6 +16,7 @@ npx @tanstack/intent@latest list [--json] [--debug] [--exclude <pattern>] [--glo
 - `--exclude <pattern>`: exclude package names matching a simple glob; can be passed more than once
 - `--global`: include global packages after project packages
 - `--global-only`: list global packages only
+- `--no-notices`: suppress non-critical notices on stderr
 
 ## What you get
 
@@ -30,6 +31,7 @@ npx @tanstack/intent@latest list [--json] [--debug] [--exclude <pattern>] [--glo
 - Package table columns: `PACKAGE`, `SOURCE`, `VERSION`, `SKILLS`
 - Skill tree grouped by package
 - Optional warnings section (`⚠ ...` per warning)
+- Optional notices section on stderr (`ℹ ...` per notice), suppressed by `--no-notices`
 
 `SOURCE` is a lightweight indicator showing whether the selected package came from local discovery or explicit global scanning.
 When both local and global packages are scanned, local packages take precedence.

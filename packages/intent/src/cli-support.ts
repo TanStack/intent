@@ -13,6 +13,8 @@ export interface GlobalScanFlags {
   exclude?: string | Array<string>
   global?: boolean
   globalOnly?: boolean
+  notices?: boolean
+  noNotices?: boolean
 }
 
 export interface StaleTargetResult {
@@ -97,6 +99,12 @@ export function coreOptionsFromGlobalFlags(
     global: options.global,
     globalOnly: options.globalOnly,
   }
+}
+
+export function noticeOptionsFromGlobalFlags(
+  options: GlobalScanFlags,
+): { noNotices?: boolean } {
+  return { noNotices: options.noNotices || options.notices === false }
 }
 
 function formatDebugValue(value: string | number | Array<string>): string {

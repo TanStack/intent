@@ -3,6 +3,7 @@ import { fail } from '../cli-error.js'
 import { detectIntentCommandPackageManager } from '../command-runner.js'
 import {
   coreOptionsFromGlobalFlags,
+  noticeOptionsFromGlobalFlags,
   printNotices,
   printWarnings,
 } from '../cli-support.js'
@@ -136,10 +137,11 @@ function formatMappingCount(mappingCount: number): string {
 function printNoActionableSkills(
   warnings: Array<string>,
   notices: Array<string>,
+  noticeOptions: { noNotices?: boolean },
 ): void {
   console.log('No intent-enabled skills found.')
   printWarnings(warnings)
-  printNotices(notices)
+  printNotices(notices, noticeOptions)
 }
 
 function printPlacementTip(targetPath: string): void {
@@ -201,6 +203,7 @@ export async function runInstallCommand(
   }
 
   const coreOptions = coreOptionsFromGlobalFlags(options)
+  const noticeOptions = noticeOptionsFromGlobalFlags(options)
 
   if (!options.map) {
     const generated = buildIntentSkillGuidanceBlock(
@@ -256,8 +259,12 @@ export async function runInstallCommand(
     )
 
     if (!targetPath) {
-      printNoActionableSkills(scanResult.warnings, scanResult.notices)
-      return
+    printNoActionableSkills(
+      scanResult.warnings,
+      scanResult.notices,
+      noticeOptions,
+    )
+    return
     }
 
     console.log(
@@ -265,7 +272,7 @@ export async function runInstallCommand(
     )
     console.log(generated.block)
     printWarnings(scanResult.warnings)
-    printNotices(scanResult.notices)
+    printNotices(scanResult.notices, noticeOptions)
     return
   }
 
@@ -275,7 +282,11 @@ export async function runInstallCommand(
   })
 
   if (!result.targetPath) {
-    printNoActionableSkills(scanResult.warnings, scanResult.notices)
+    printNoActionableSkills(
+      scanResult.warnings,
+      scanResult.notices,
+      noticeOptions,
+    )
     return
   }
 
@@ -299,5 +310,5 @@ export async function runInstallCommand(
   printPlacementTip(result.targetPath)
 
   printWarnings(scanResult.warnings)
-  printNotices(scanResult.notices)
+  printNotices(scanResult.notices, noticeOptions)
 }
