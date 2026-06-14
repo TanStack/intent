@@ -18,9 +18,7 @@ function envSuppressesNotices(): boolean {
   return value ? TRUE_LIKE_VALUES.has(value) : false
 }
 
-export function shouldSuppressNotices(
-  options: NoticeOutputOptions = {},
-): boolean {
+function shouldSuppressNotices(options: NoticeOutputOptions = {}): boolean {
   return options.noNotices === true || envSuppressesNotices()
 }
 
