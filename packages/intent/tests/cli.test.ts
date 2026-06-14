@@ -250,7 +250,9 @@ describe('cli commands', () => {
       '@tanstack/router#experimental-*',
     ])
     const listExitCode = await main(['exclude'])
-    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+    const pkg = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    ) as {
       intent?: { exclude?: Array<string> }
     }
     const output = logSpy.mock.calls.flat().join('\n')
@@ -279,7 +281,9 @@ describe('cli commands', () => {
       'remove',
       '@tanstack/router#experimental-*',
     ])
-    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+    const pkg = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    ) as {
       intent?: { exclude?: Array<string> }
     }
 
@@ -903,7 +907,9 @@ describe('cli commands', () => {
   })
 
   it('suppresses notices when INTENT_NO_NOTICES=1 is set', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-env-no-notices-'))
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-list-env-no-notices-'),
+    )
     const isolatedGlobalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-list-env-no-notices-empty-global-'),
     )

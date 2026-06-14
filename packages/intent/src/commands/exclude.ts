@@ -11,7 +11,8 @@ type ExcludeAction = 'add' | 'list' | 'remove'
 
 function normalizeAction(action: string | undefined): ExcludeAction {
   if (!action) return 'list'
-  if (action === 'list' || action === 'add' || action === 'remove') return action
+  if (action === 'list' || action === 'add' || action === 'remove')
+    return action
   fail(`Unknown exclude action: ${action}. Expected list, add, or remove.`)
 }
 
@@ -80,13 +81,20 @@ function writePackageJson(cwd: string, pkg: Record<string, unknown>): void {
   writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8')
 }
 
-function normalizePattern(pattern: string | undefined, action: ExcludeAction): string {
+function normalizePattern(
+  pattern: string | undefined,
+  action: ExcludeAction,
+): string {
   if (!pattern) {
-    fail(`Missing exclude pattern. Expected: intent exclude ${action} <pattern>`)
+    fail(
+      `Missing exclude pattern. Expected: intent exclude ${action} <pattern>`,
+    )
   }
   const trimmed = pattern.trim()
   if (trimmed.length === 0) {
-    fail(`Missing exclude pattern. Expected: intent exclude ${action} <pattern>`)
+    fail(
+      `Missing exclude pattern. Expected: intent exclude ${action} <pattern>`,
+    )
   }
   return trimmed
 }
@@ -156,7 +164,9 @@ export async function runExcludeCommand(
       printExcludes(updated, true)
       return
     }
-    console.log(`Added exclude pattern "${pattern}" to package.json intent.exclude.`)
+    console.log(
+      `Added exclude pattern "${pattern}" to package.json intent.exclude.`,
+    )
     return
   }
 
@@ -176,5 +186,7 @@ export async function runExcludeCommand(
     printExcludes(updated, true)
     return
   }
-  console.log(`Removed exclude pattern "${pattern}" from package.json intent.exclude.`)
+  console.log(
+    `Removed exclude pattern "${pattern}" from package.json intent.exclude.`,
+  )
 }

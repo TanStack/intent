@@ -95,9 +95,9 @@ export function coreOptionsFromGlobalFlags(
   }
 }
 
-export function noticeOptionsFromGlobalFlags(
-  options: GlobalScanFlags,
-): { noNotices?: boolean } {
+export function noticeOptionsFromGlobalFlags(options: GlobalScanFlags): {
+  noNotices?: boolean
+} {
   return { noNotices: options.noNotices || options.notices === false }
 }
 

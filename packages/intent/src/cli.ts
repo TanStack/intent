@@ -21,9 +21,7 @@ function createCli(): CAC {
       'list',
       'Discover intent-enabled packages from the project or workspace',
     )
-    .usage(
-      'list [--json] [--debug] [--global] [--global-only] [--no-notices]',
-    )
+    .usage('list [--json] [--debug] [--global] [--global-only] [--no-notices]')
     .option('--json', 'Output JSON')
     .option('--debug', 'Print discovery debug details to stderr')
     .option('--global', 'Include global packages after project packages')
@@ -61,9 +59,7 @@ function createCli(): CAC {
 
   cli
     .command('load [use]', 'Load a compact skill use and print its SKILL.md')
-    .usage(
-      'load <use> [--path] [--json] [--debug] [--global] [--global-only]',
-    )
+    .usage('load <use> [--path] [--json] [--debug] [--global] [--global-only]')
     .option('--path', 'Print the resolved skill path instead of file content')
     .option('--json', 'Output JSON')
     .option('--debug', 'Print resolution debug details to stderr')

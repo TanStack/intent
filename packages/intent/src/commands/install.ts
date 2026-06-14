@@ -259,12 +259,12 @@ export async function runInstallCommand(
     )
 
     if (!targetPath) {
-    printNoActionableSkills(
-      scanResult.warnings,
-      scanResult.notices,
-      noticeOptions,
-    )
-    return
+      printNoActionableSkills(
+        scanResult.warnings,
+        scanResult.notices,
+        noticeOptions,
+      )
+      return
     }
 
     console.log(
