@@ -6,14 +6,13 @@ id: intent-list
 `intent list` discovers skill-enabled packages and prints available skills.
 
 ```bash
-npx @tanstack/intent@latest list [--json] [--debug] [--exclude <pattern>] [--global] [--global-only] [--no-notices]
+npx @tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] [--no-notices]
 ```
 
 ## Options
 
 - `--json`: print JSON instead of text output
 - `--debug`: print discovery debug details to stderr
-- `--exclude <pattern>`: exclude package names matching a simple glob; can be passed more than once
 - `--global`: include global packages after project packages
 - `--global-only`: list global packages only
 - `--no-notices`: suppress non-critical notices on stderr
@@ -24,7 +23,7 @@ npx @tanstack/intent@latest list [--json] [--debug] [--exclude <pattern>] [--glo
 - Surfaces packages permitted by `package.json#intent.skills` (see [Allowlist](#allowlist))
 - Includes global packages only when `--global` or `--global-only` is passed
 - Includes warnings from discovery
-- Excludes packages and skills matched by package.json `intent.exclude` or `--exclude`
+- Excludes packages and skills matched by package.json `intent.exclude`
 - Prints debug details to stderr when `--debug` is passed
 - If no packages are discovered, prints `No intent-enabled packages found.`
 - Summary line with package count and skill count
@@ -115,7 +114,8 @@ A package that ships skills but is not listed is dropped. When packages are drop
 ## Excludes
 
 Package excludes are hard filters for packages that should not be used in a repo, applied after the allowlist.
-Intent reads `intent.exclude` arrays from package.json files while walking from the workspace or project root to the current working directory, then appends any `--exclude` flags.
+Intent reads `intent.exclude` arrays from package.json files while walking from the workspace or project root to the current working directory.
+Manage persistent excludes with `intent exclude add|remove|list`.
 
 ```json
 {

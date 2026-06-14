@@ -6,7 +6,7 @@ id: intent-load
 `intent load` loads a compact skill identity from the current install and prints the matching `SKILL.md` content.
 
 ```bash
-npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--exclude <pattern>] [--global] [--global-only]
+npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
 ```
 
 ## Options
@@ -14,7 +14,6 @@ npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [
 - `--path`: print the resolved skill path instead of the file content
 - `--json`: print structured JSON with metadata and content
 - `--debug`: print resolution debug details to stderr
-- `--exclude <pattern>`: exclude a package or skill matching a simple glob; can be passed more than once
 - `--global`: load from project packages first, then global packages
 - `--global-only`: load from global packages only
 
@@ -24,7 +23,7 @@ npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [
 - Scans project-local packages by default
 - Includes global packages only when `--global` or `--global-only` is passed
 - Refuses before scanning when the target package is not permitted by `package.json#intent.skills`
-- Refuses before scanning when the target package or skill matches `intent.exclude` or `--exclude`
+- Refuses before scanning when the target package or skill matches `intent.exclude`
 - Prefers local packages when `--global` is used and the same package exists locally and globally
 - Accepts an unambiguous short skill name when a package-prefixed skill exists
 - Prints raw `SKILL.md` content by default

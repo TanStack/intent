@@ -220,6 +220,113 @@ describe('cli commands', () => {
     expect(logSpy).toHaveBeenCalledWith(INSTALL_PROMPT)
   })
 
+  it('lists excludes when none are configured', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-exclude-list-empty-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['exclude'])
+
+    expect(exitCode).toBe(0)
+    expect(logSpy).toHaveBeenCalledWith('No excludes configured.')
+  })
+
+  it('adds and lists an exclude pattern', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-exclude-add-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+    })
+    process.chdir(root)
+
+    const addExitCode = await main([
+      'exclude',
+      'add',
+      '@tanstack/router#experimental-*',
+    ])
+    const listExitCode = await main(['exclude'])
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+      intent?: { exclude?: Array<string> }
+    }
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(addExitCode).toBe(0)
+    expect(listExitCode).toBe(0)
+    expect(pkg.intent?.exclude).toEqual(['@tanstack/router#experimental-*'])
+    expect(output).toContain('Configured excludes:')
+    expect(output).toContain('- @tanstack/router#experimental-*')
+  })
+
+  it('removes an exclude pattern', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-exclude-remove-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        exclude: ['@tanstack/router#experimental-*'],
+      },
+    })
+    process.chdir(root)
+
+    const exitCode = await main([
+      'exclude',
+      'remove',
+      '@tanstack/router#experimental-*',
+    ])
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+      intent?: { exclude?: Array<string> }
+    }
+
+    expect(exitCode).toBe(0)
+    expect(pkg.intent?.exclude).toEqual([])
+    expect(logSpy).toHaveBeenCalledWith(
+      'Removed exclude pattern "@tanstack/router#experimental-*" from package.json intent.exclude.',
+    )
+  })
+
+  it('prints excludes as JSON', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-exclude-list-json-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        exclude: ['@tanstack/router#experimental-*', '*#draft-*'],
+      },
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['exclude', 'list', '--json'])
+    const output = logSpy.mock.calls.at(-1)?.[0]
+    const parsed = JSON.parse(String(output)) as Array<string>
+
+    expect(exitCode).toBe(0)
+    expect(parsed).toEqual(['@tanstack/router#experimental-*', '*#draft-*'])
+  })
+
+  it('fails cleanly on unknown exclude actions', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-exclude-bad-action-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['exclude', 'enable', '@tanstack/router'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Unknown exclude action: enable. Expected list, add, or remove.',
+    )
+  })
+
   it('writes skill loading guidance by default and is idempotent', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-'))
     const isolatedGlobalRoot = mkdtempSync(
@@ -1073,9 +1180,14 @@ describe('cli commands', () => {
     })
   })
 
-  it('excludes packages from list output with --exclude', async () => {
+  it('excludes packages from list output with package.json intent.exclude', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-exclude-'))
     tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { exclude: ['@tanstack/*devtools*'] },
+    })
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',
       version: '5.0.0',
@@ -1091,12 +1203,7 @@ describe('cli commands', () => {
 
     process.chdir(root)
 
-    const exitCode = await main([
-      'list',
-      '--json',
-      '--exclude',
-      '@tanstack/*devtools*',
-    ])
+    const exitCode = await main(['list', '--json'])
     const output = logSpy.mock.calls.at(-1)?.[0]
     const parsed = JSON.parse(String(output)) as {
       packages: Array<{ name: string }>
@@ -1512,9 +1619,14 @@ describe('cli commands', () => {
     )
   })
 
-  it('fails clearly when loading an excluded package', async () => {
+  it('fails clearly when loading a package excluded by package.json', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-exclude-'))
     tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { exclude: ['@tanstack/*devtools*'] },
+    })
     writeInstalledIntentPackage(root, {
       name: '@tanstack/devtools',
       version: '1.0.0',
@@ -1523,12 +1635,7 @@ describe('cli commands', () => {
     })
     process.chdir(root)
 
-    const exitCode = await main([
-      'load',
-      '@tanstack/devtools#panel',
-      '--exclude',
-      '@tanstack/*devtools*',
-    ])
+    const exitCode = await main(['load', '@tanstack/devtools#panel'])
 
     expect(exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledWith(

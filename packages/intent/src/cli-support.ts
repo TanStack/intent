@@ -10,7 +10,6 @@ export { printNotices, printWarnings } from './cli-output.js'
 
 export interface GlobalScanFlags {
   debug?: boolean
-  exclude?: string | Array<string>
   global?: boolean
   globalOnly?: boolean
   notices?: boolean
@@ -91,11 +90,6 @@ export function coreOptionsFromGlobalFlags(
 
   return {
     debug: options.debug,
-    exclude: Array.isArray(options.exclude)
-      ? options.exclude
-      : options.exclude
-        ? [options.exclude]
-        : undefined,
     global: options.global,
     globalOnly: options.globalOnly,
   }

@@ -59,7 +59,15 @@ For CI or wrapper scripts, set `INTENT_NO_NOTICES=1` to suppress notices without
 
 ## `intent.exclude`
 
-`intent.exclude` removes packages or individual skills after the allowlist resolves. It also accepts the `--exclude <pattern>` flag on `list` and `load` for one-off runs.
+`intent.exclude` removes packages or individual skills after the allowlist resolves.
+
+Use `intent exclude` to manage this list from the CLI:
+
+```bash
+npx @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+npx @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
+npx @tanstack/intent@latest exclude list
+```
 
 ```json
 {
