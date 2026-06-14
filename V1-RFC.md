@@ -186,7 +186,7 @@ Path rules:
 - Reject `.` / `..` segments that escape the package root.
 - Never include physical read locations such as `node_modules`, `.pnpm`, or `.yarn/cache/*.zip`.
 
-The aggregate hash sorts entries by normalized path using ordinal string order. Duplicate canonical paths are invalid. Duplicate skill names are not part of the hash identity; manifest validation may still flag them separately.
+The aggregate hash sorts entries by normalized path using ordinal string order. Duplicate canonical paths are invalid. Skill `name` values are intentionally **non-unique** within a package — the package-relative path is the uniqueness key (D22). Duplicate `name` values are permitted and are never flagged; only duplicate canonical paths fail validation.
 
 Intent hashes exact bytes, including line endings. Package authors should publish consistent bytes. This favors supply-chain integrity over semantic normalization.
 
@@ -392,12 +392,14 @@ New shared modules: `lockfile.ts` (read/write/parse), `hash.ts` (sha256 helpers)
 
 The spec allows exactly six top-level frontmatter keys: `name` (required), `description` (required), `license`, `compatibility`, `metadata`, and `allowed-tools`. `metadata` is a **string→string map only** — no arrays, no nested objects. Today Intent emits non-spec top-level keys (`type`, `library`, `library_version`, `framework`, `sources`), which IDE schema validation and external Agent Skills tooling reject (discussions #116, #140).
 
+**The `name` value is itself non-compliant (D22).** D20 above moves the non-spec _keys_ off the top level, but the `name` _value_ Intent emits — `routing/file-based` — is independently rejected by the spec: `name` may contain only lowercase alphanumerics and hyphens (a `/` is "invalid characters") and must equal the parent directory name (a multi-segment value cannot). This is the specific error reported in #116, #140, and `reduxjs/redux-toolkit#5303` (which copied Intent's slash pattern and is waiting on Intent to change). **Resolved D22:** `name` is the spec-legal leaf segment matching the parent directory (`file-based`); the namespace Intent previously packed into `name` (`routing/...`) is carried by the package-relative path, which is already Intent's canonical identity (lockfile id, `contentHash` sort key). The slash-`name` was a redundant second copy of an identity the path already guarantees; D22 deletes the copy and keeps the one the security model already treats as canonical. Skill names are therefore intentionally **non-unique** across a package; uniqueness is enforced on path, never on `name`. Lookup everywhere — lockfile, manifest, `load`, MCP `get_skill` — keys on the qualified path-based identity (e.g. `@tanstack/router#routing/file-based`), never the bare `name`.
+
 v1 resolution — **manifest-first, no backward-compat shim** (v1 is already a breaking release; these fields are Intent-internal and read only by Intent):
 
 - **Scalar Intent fields move under `metadata` as strings.** `type`, `library`, `library_version`, `framework` become `metadata.type`, `metadata.library`, `metadata.library_version`, `metadata.framework`. `library_version` stays machine-readable there for staleness Layer 1.
 - **Array / structured fields move to the manifest, not frontmatter.** `sources` and `requires` are not representable in a string-only `metadata` map, so they live in `skills/intent.manifest.json` (the manifest is Intent's structured surface and is not bound by the frontmatter spec). `requires` load-order hints also remain available via `package.json#intent.requires`.
 - **No serialized-string duplication in `metadata`.** Arrays are not stuffed into `metadata` as delimited strings — that would be permanent cruft the content hash must keep tracking. The manifest is the single structured source.
-- **Migration:** existing skills with non-spec top-level keys are migrated by `generate-manifest`/a `validate --fix` path — scalars rewritten under `metadata`, arrays lifted into the manifest. Documented in `docs/migration/v0-to-v1.md`.
+- **Migration:** existing skills with non-spec top-level keys are migrated by `generate-manifest`/a `validate --fix` path — scalars rewritten under `metadata`, arrays lifted into the manifest, and `name` rewritten to the parent-directory leaf (D22). Documented in `docs/migration/v0-to-v1.md`.
 
 New file per skill package: `skills/intent.manifest.json` (ships with the package). V1 uses this package-level manifest as the canonical manifest surface. Per-skill manifest files such as `intent.skill.json` are not part of v1 and are rejected to avoid split-brain metadata.
 
@@ -408,7 +410,7 @@ New file per skill package: `skills/intent.manifest.json` (ships with the packag
   "packageVersion": "1.42.0",
   "skills": [
     {
-      "name": "routing/file-based",
+      "name": "file-based",
       "path": "skills/routing/file-based/SKILL.md",
       "contentHash": "sha256-...",
       "capabilities": ["reads_project_files", "writes_project_files"],
@@ -436,7 +438,7 @@ New file per skill package: `skills/intent.manifest.json` (ships with the packag
 - `intent skills generate-manifest` — walks `skills/`, computes content hashes, runs static heuristics (regex scan for `curl|wget`, `npm i|pnpm add|yarn add|bun add|pip install`, `SECRET_PATTERNS` from the shared `secrets.ts` module, fenced code blocks containing `child_process`/`spawn`/`exec`), and emits a manifest pre-filled with the heuristic findings. The maintainer reviews the diff and commits. Static analysis **informs** the manifest; the maintainer has final say on declared capabilities.
 - `intent skills validate` (replaces today's flat `intent validate`):
   - All existing SKILL.md format/length/frontmatter checks.
-  - **Agent Skills–spec frontmatter compliance (D20): error (not warning) on any non-spec top-level key.** Only `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` are allowed at the top level; `metadata` must be a string→string map. Non-spec keys (`type`, `library`, `library_version`, `framework`, `sources`, `requires`, …) fail validation with a remediation pointer ("move scalars under `metadata`; move arrays to the manifest"). `validate --fix` performs the migration.
+  - **Agent Skills–spec frontmatter compliance (D20): error (not warning) on any non-spec top-level key.** Only `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` are allowed at the top level; `metadata` must be a string→string map. Non-spec keys (`type`, `library`, `library_version`, `framework`, `sources`, `requires`, …) fail validation with a remediation pointer ("move scalars under `metadata`; move arrays to the manifest"). The `name` _value_ must also be spec-legal: lowercase alphanumerics and hyphens only, no `/`, equal to the parent directory leaf (D22) — a slash-namespaced `name` fails with a pointer to the leaf form. `validate --fix` performs the full migration (keys + `name`).
   - Manifest exists, parses, every `SKILL.md` is listed, every listed path exists.
   - Stored `contentHash` matches actual content (catches missed regenerate).
   - Manifest entries are sorted by normalized package-relative `SKILL.md` path. Paths use `/`, are package-relative, and must not be absolute or contain `.` / `..` escapes.
@@ -447,7 +449,7 @@ New file per skill package: `skills/intent.manifest.json` (ships with the packag
   - `mcpTools[]` entries must not contain runtime wiring fields such as `command`, `entrypoint`, `runtime`, `transport`, `server`, `package`, `module`, `env`, or `cwd`.
   - Static heuristics agree with declared capabilities. Disagreement → warning, not error. Hard error only if a literal secret value matches `SECRET_PATTERNS` in skill body — the maintainer can declare a secret _name_ (`GITHUB_TOKEN`) but never embed a value.
 - `SECRET_PATTERNS` moves from `feedback.ts` into a new `secrets.ts` module so scanner, validator, manifest generator, and feedback share one source.
-- **`generate-skill` meta-skill rewrite (D20):** its Step 3 frontmatter templates emit the spec-compliant shape — spec keys at top level, Intent scalars under `metadata`, no top-level `type`/`library`/`library_version`/`framework`/`sources`. Structured data is written to the manifest via `generate-manifest`, not the frontmatter.
+- **`generate-skill` meta-skill rewrite (D20 + D22):** its Step 3 frontmatter templates emit the spec-compliant shape — spec keys at top level, Intent scalars under `metadata`, no top-level `type`/`library`/`library_version`/`framework`/`sources`. `name` is emitted as the spec-legal leaf matching the parent directory (D22), not the slash-namespaced form. Structured data (including the per-skill `requires` graph, keyed by qualified path identity) is written to the manifest via `generate-manifest`, not the frontmatter.
 
 **Touches:** new `manifest.ts`, new `secrets.ts` (move + add patterns), new `commands/skills-generate-manifest.ts`, refactor `commands/validate.ts` → `commands/skills-validate.ts` (add spec-key enforcement + `--fix`), `packages/intent/meta/generate-skill/SKILL.md` (compliant frontmatter templates), types.
 
@@ -485,7 +487,8 @@ New file per skill package: `skills/intent.manifest.json` (ships with the packag
 
 **Primary tool (default):**
 
-- `get_skill(name)` — returns the full `SKILL.md` body for one approved skill. **Its description is generated at server start from the approved lockfile** and embeds the catalog when the catalog fits within configured size limits: each approved skill's `name` + one-line description + capabilities summary. The agent picks a `name` directly from the description; no separate discovery call. The description is rebuilt whenever the lockfile is reloaded (start / SIGHUP).
+- `get_skill(name)` — returns the full `SKILL.md` body for one approved skill. **Its description is generated at server start from the approved lockfile** and embeds the catalog when the catalog fits within configured size limits: each approved skill's qualified identity + one-line description + capabilities summary. The agent picks an entry directly from the description; no separate discovery call. The description is rebuilt whenever the lockfile is reloaded (start / SIGHUP).
+  - **The lookup key is the qualified path-based identity, not the bare spec `name` (D22).** Because leaf names are intentionally non-unique (D22), the `get_skill` argument and the embedded catalog key on the qualified identity Intent already uses in the lockfile (e.g. `@tanstack/router#routing/file-based`). The catalog may also render the leaf `name` and its namespace for readability, but the selectable key is unambiguous. `intent load <use>` resolves the same way: a bare leaf is accepted only when it resolves to exactly one skill, otherwise it returns a disambiguation error listing the qualified candidates.
 
 **Catalog-scaling fallback tools (overflow path):**
 
@@ -833,6 +836,7 @@ All RFC decisions are resolved. Detailed rationale lives in the milestone sectio
 | D19 | Standalone/personal skills as a generic installer vs a pinned source kind  | Pinned source kind (`kind: git`), not a generic installer. Reserved in M1 (parse-and-reject), implemented post-M2 once the lockfile can pin the ref + content hash. Materialized into a gitignored managed dir; identified by the pinned ref, never the path. Unpinned hand-dropped local dirs stay out of scope (§14).                                                                                                                                                                                                                       |
 | D20 | Agent Skills frontmatter compliance (#116, #140)                           | Enforce spec compliance in M3. Only the six spec keys at top level; Intent scalars move under `metadata`; arrays (`sources`, `requires`) move to the manifest. `validate` errors on non-spec keys with a `--fix` migration. No backward-compat shim.                                                                                                                                                                                                                                                                                          |
 | D21 | `intent.skills[]` absent vs empty `[]` vs wildcard `["*"]`; can `"*"` mix? | Absent → show-all + one-time deprecation warning (v0 upgrade path). Empty `[]` → deny-all + quiet info note (never collapsed with absent). `["*"]` → permit-all-discovered + loud acknowledged-risk notice. `"*"` composes **additively** with `git:` entries (`["*", "git:…"]` = all discovered **plus** curated repos) — the inevitable end state; redundant npm/workspace entries alongside `"*"` are subsumed, not errors. Git stays parse-and-reject in M1 (D19), so `"*"` + `git:` fails the whole list until M2 materialization lands. |
+| D22 | Skill `name` value: slash-namespaced vs spec-legal leaf?                   | Spec-legal leaf matching the parent directory; the namespace moves to the package-relative path, which is already Intent's canonical identity (lockfile id, `contentHash` sort key). Closes the gap D20 left (D20 fixed non-spec _keys_; the `name` _value_ slash is independently spec-illegal and is the reported error in #116/#140/`redux-toolkit#5303`). `get_skill` / `load` / lockfile key on the qualified path-based identity, never the bare `name`; leaf names are intentionally non-unique, uniqueness is enforced on path. `validate --fix` rewrites `name` to the leaf in the same pass as D20. Extends D20; no backward-compat shim beyond a deprecation-window reader. |
 
 ## 14. Out of scope for v1
 
