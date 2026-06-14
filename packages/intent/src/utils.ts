@@ -347,6 +347,23 @@ export function resolveDepDir(
 }
 
 /**
+ * Read a scalar string field from frontmatter, preferring `metadata.<key>` over
+ * a top-level `<key>` (#159 back-compat for the frontmatter migration).
+ */
+export function readScalarField(
+  fm: Record<string, unknown> | null | undefined,
+  key: string,
+): string | undefined {
+  const metadata = fm?.metadata
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    const nested = (metadata as Record<string, unknown>)[key]
+    if (typeof nested === 'string') return nested
+  }
+  const top = fm?.[key]
+  return typeof top === 'string' ? top : undefined
+}
+
+/**
  * Parse YAML frontmatter from a file. Returns null if no frontmatter or on error.
  */
 export function parseFrontmatter(

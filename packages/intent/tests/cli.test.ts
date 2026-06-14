@@ -1767,6 +1767,36 @@ describe('cli commands', () => {
     )
   })
 
+  it('enforces framework requires when type is under metadata (new shape)', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-fw-meta-'))
+    tempDirs.push(root)
+
+    const skillDir = join(root, 'skills', 'db-core')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: db-core',
+        'description: Core database concepts',
+        'metadata:',
+        '  type: framework',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain('Framework skills must have a "requires" field')
+  })
+
   it('validates package skills from repo root without root packaging warnings', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-mono-'))
     tempDirs.push(root)

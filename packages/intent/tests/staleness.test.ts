@@ -180,6 +180,30 @@ describe('checkStaleness', () => {
     expect(report.versionDrift).toBe('patch')
   })
 
+  it('reads library_version from metadata (new shape)', async () => {
+    const skillDir = join(tmpDir, 'skills', 'core')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: core',
+        'description: Core',
+        'metadata:',
+        '  library_version: 1.2.3',
+        '---',
+        '# Skill',
+        '',
+      ].join('\n'),
+    )
+
+    mockFetchVersion('2.0.0')
+
+    const report = await checkStaleness(tmpDir, '@example/lib')
+    expect(report.skillVersion).toBe('1.2.3')
+    expect(report.versionDrift).toBe('major')
+  })
+
   it.each([
     ['1.0.0', '2.0.0', 'major'],
     ['1.0.0', '1.1.0', 'minor'],

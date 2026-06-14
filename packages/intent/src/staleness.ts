@@ -2,7 +2,12 @@ import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import semver from 'semver'
 import { readIntentArtifacts } from './artifact-coverage.js'
-import { findSkillFiles, parseFrontmatter, toPosixPath } from './utils.js'
+import {
+  findSkillFiles,
+  parseFrontmatter,
+  readScalarField,
+  toPosixPath,
+} from './utils.js'
 import type {
   IntentArtifactSet,
   IntentArtifactSkill,
@@ -484,7 +489,7 @@ export async function checkStaleness(
       name: typeof fm?.name === 'string' ? fm.name : relName,
       relName,
       filePath,
-      libraryVersion: fm?.library_version as string | undefined,
+      libraryVersion: readScalarField(fm, 'library_version'),
       sources: Array.isArray(fm?.sources)
         ? (fm.sources as Array<string>)
         : undefined,
