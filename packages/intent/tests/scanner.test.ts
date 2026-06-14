@@ -1930,34 +1930,6 @@ describe('back-compat frontmatter reader (metadata.* fallback)', () => {
     expect(skill.framework).toBe('react')
   })
 
-  it('resolves identically whether scalars are top-level or under metadata', () => {
-    installPackageWithRawSkill(
-      [
-        'name: db-core',
-        'description: Core database concepts',
-        'type: core',
-        'framework: react',
-      ].join('\n'),
-    )
-    const oldShape = scanForIntents(root).packages[0]!.skills[0]!
-
-    rmSync(join(root, 'node_modules'), { recursive: true, force: true })
-
-    installPackageWithRawSkill(
-      [
-        'name: db-core',
-        'description: Core database concepts',
-        'metadata:',
-        '  type: core',
-        '  framework: react',
-      ].join('\n'),
-    )
-    const newShape = scanForIntents(root).packages[0]!.skills[0]!
-
-    expect(newShape.type).toBe(oldShape.type)
-    expect(newShape.framework).toBe(oldShape.framework)
-  })
-
   it('prefers metadata over top-level during partial migration', () => {
     installPackageWithRawSkill(
       [

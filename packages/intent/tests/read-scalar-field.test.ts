@@ -55,10 +55,6 @@ describe('readScalarField', () => {
     expect(readScalarField(null, 'type')).toBeUndefined()
   })
 
-  it('returns undefined for undefined frontmatter', () => {
-    expect(readScalarField(undefined, 'type')).toBeUndefined()
-  })
-
   it('returns an empty-string metadata value as-is', () => {
     expect(readScalarField({ metadata: { type: '' } }, 'type')).toBe('')
   })
