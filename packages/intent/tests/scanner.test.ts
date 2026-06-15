@@ -1895,6 +1895,57 @@ describe('scanIntentPackageAtRoot', () => {
   })
 })
 
+describe('back-compat frontmatter reader (metadata.* fallback)', () => {
+  function writeRawSkillMd(dir: string, frontmatter: string): void {
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(
+      join(dir, 'SKILL.md'),
+      `---\n${frontmatter}\n---\n\nSkill content here.\n`,
+    )
+  }
+
+  function installPackageWithRawSkill(frontmatter: string): void {
+    const pkgDir = createDir(root, 'node_modules', '@tanstack', 'db')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/db',
+      version: '0.5.2',
+      intent: { version: 1, repo: 'TanStack/db', docs: 'docs/' },
+    })
+    writeRawSkillMd(join(pkgDir, 'skills', 'db-core'), frontmatter)
+  }
+
+  it('resolves type and framework from metadata (new shape)', () => {
+    installPackageWithRawSkill(
+      [
+        'name: db-core',
+        'description: Core database concepts',
+        'metadata:',
+        '  type: core',
+        '  framework: react',
+      ].join('\n'),
+    )
+
+    const skill = scanForIntents(root).packages[0]!.skills[0]!
+    expect(skill.type).toBe('core')
+    expect(skill.framework).toBe('react')
+  })
+
+  it('prefers metadata over top-level during partial migration', () => {
+    installPackageWithRawSkill(
+      [
+        'name: db-core',
+        'description: Core database concepts',
+        'type: legacy',
+        'metadata:',
+        '  type: core',
+      ].join('\n'),
+    )
+
+    const skill = scanForIntents(root).packages[0]!.skills[0]!
+    expect(skill.type).toBe('core')
+  })
+})
+
 describe('package manager detection', () => {
   it('detects npm from package-lock.json', () => {
     writeFileSync(join(root, 'package-lock.json'), '{}')

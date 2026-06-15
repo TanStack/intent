@@ -14,6 +14,7 @@ import {
   detectGlobalNodeModules,
   nodeReadFs,
   parseFrontmatter,
+  readScalarField,
   toPosixPath,
 } from './utils.js'
 import { createIntentFsCache } from './fs-cache.js'
@@ -266,8 +267,8 @@ function readSkillEntry(
     name: typeof fm?.name === 'string' ? fm.name : relName,
     path: skillFile,
     description: desc,
-    type: typeof fm?.type === 'string' ? fm.type : undefined,
-    framework: typeof fm?.framework === 'string' ? fm.framework : undefined,
+    type: readScalarField(fm, 'type'),
+    framework: readScalarField(fm, 'framework'),
   }
 }
 

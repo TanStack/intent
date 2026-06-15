@@ -221,10 +221,8 @@ export async function runValidateCommand(
 }
 
 async function runValidateCommandInternal(dir?: string): Promise<void> {
-  const [{ parse: parseYaml }, { findSkillFiles }] = await Promise.all([
-    import('yaml'),
-    import('../utils.js'),
-  ])
+  const [{ parse: parseYaml }, { findSkillFiles, readScalarField }] =
+    await Promise.all([import('yaml'), import('../utils.js')])
   const context = resolveProjectContext({
     cwd: process.cwd(),
     targetPath: dir,
@@ -315,7 +313,10 @@ async function runValidateCommandInternal(dir?: string): Promise<void> {
         })
       }
 
-      if (fm.type === 'framework' && !Array.isArray(fm.requires)) {
+      if (
+        readScalarField(fm, 'type') === 'framework' &&
+        !Array.isArray(fm.requires)
+      ) {
         errors.push({
           file: rel,
           message: 'Framework skills must have a "requires" field',
