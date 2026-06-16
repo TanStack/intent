@@ -117,8 +117,6 @@ npx @tanstack/intent@latest setup
 
 The real risk with any derived artifact is staleness. `npx @tanstack/intent@latest stale` flags skills whose source docs have changed, generated skills that drift from `_artifacts`, and public workspace packages missing coverage. CI templates catch drift before it ships.
 
-The feedback loop runs both directions. `npx @tanstack/intent@latest feedback` lets users submit structured reports when a skill produces wrong output — which skill, which version, what broke. That context flows back to the maintainer, and the fix ships to everyone on the next package update. Every support interaction produces an artifact that prevents the same class of problem for all future users — not just the one who reported it.
-
 ## CLI Commands
 
 | Command                                            | Description                                         |
@@ -131,7 +129,6 @@ The feedback loop runs both directions. `npx @tanstack/intent@latest feedback` l
 | `npx @tanstack/intent@latest validate [dir]`       | Validate SKILL.md files                             |
 | `npx @tanstack/intent@latest setup`                | Copy CI templates into your repo                    |
 | `npx @tanstack/intent@latest stale [dir] [--json]` | Check skills for version drift                      |
-| `npx @tanstack/intent@latest feedback`             | Submit skill feedback                               |
 
 ## License
 

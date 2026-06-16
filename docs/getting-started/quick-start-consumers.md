@@ -107,12 +107,3 @@ You can also check if any skills reference outdated source documentation:
 npx @tanstack/intent@latest stale
 ```
 
-## 5. Submit feedback (optional)
-
-After using a skill, you can submit feedback to help maintainers improve it:
-
-```bash
-npx @tanstack/intent@latest meta feedback-collection
-```
-
-This prints a skill that guides your agent to collect structured feedback about gaps, errors, and improvements.

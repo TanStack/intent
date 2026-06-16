@@ -572,7 +572,7 @@ Include the full draft domain_map.yaml in your message so the maintainer
 can review it. Also include a checklist of all docs files you read.
 
 **── STOP ── Do not proceed to Phase 4 until the maintainer has
-reviewed the draft and responded. Their feedback on the draft informs
+reviewed the draft and responded. Their response to the draft informs
 the detail interview questions.**
 
 ---

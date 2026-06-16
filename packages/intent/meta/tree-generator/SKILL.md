@@ -702,7 +702,7 @@ Run when:
 - The library has released a new version
 - A maintainer reports skills produce outdated code
 - A changelog or migration guide has been published since skill creation
-- Feedback reports indicate skill content is inaccurate
+- Issue reports indicate skill content is inaccurate
 
 ### Step 1 — Detect staleness
 
