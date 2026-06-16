@@ -8,17 +8,6 @@ export {
   type StaleReviewItem,
 } from './workflow-review.js'
 export {
-  containsSecrets,
-  hasGhCli,
-  metaToMarkdown,
-  resolveFrequency,
-  submitFeedback,
-  submitMetaFeedback,
-  toMarkdown,
-  validateMetaPayload,
-  validatePayload,
-} from './feedback.js'
-export {
   findSkillFiles,
   getDeps,
   parseFrontmatter,
@@ -45,8 +34,6 @@ export type {
   SetupGithubActionsResult,
 } from './setup.js'
 export type {
-  AgentName,
-  FeedbackPayload,
   IntentConfig,
   IntentArtifactCoverageIgnore,
   IntentArtifactFile,
@@ -54,9 +41,6 @@ export type {
   IntentArtifactSkill,
   IntentArtifactWarning,
   IntentPackage,
-  IntentProjectConfig,
-  MetaFeedbackPayload,
-  MetaSkillName,
   ScanOptions,
   ScanResult,
   SkillEntry,

@@ -118,7 +118,7 @@ cannot already know:
 
 Before writing the skill body, search the library's GitHub repo for issues
 and discussions relevant to THIS skill's topic. This step is important for
-both initial generation and regeneration — community feedback reveals
+both initial generation and regeneration — issue discussions reveal
 failure modes that docs miss.
 
 **Search strategy:**
@@ -443,11 +443,4 @@ Output is consumed by all major AI coding agents. To ensure consistency:
 - Critical info at start or end of sections (not buried in middle)
 - Each SKILL.md is self-contained except for declared `requires`
 
----
-
-## Meta-skill feedback
-
-After generating all skills, run the `skill-feedback-collection` skill to
-capture feedback about the scaffolding process (domain-discovery,
-tree-generator, and generate-skill).
 ```
