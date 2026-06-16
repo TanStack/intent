@@ -1,5 +1,18 @@
 # @tanstack/intent
 
+## 0.1.1
+
+### Patch Changes
+
+- [#165](https://github.com/TanStack/intent/pull/165) [`2676302`](https://github.com/TanStack/intent/commit/267630263126d318df06db6ec74345aef4fe5711) - Remove the unused feedback APIs, bundled feedback meta-skill, tests, and docs references.
+
+- [#162](https://github.com/TanStack/intent/pull/162) [`d5d9181`](https://github.com/TanStack/intent/commit/d5d91811ed273e5ede142213566f64d4533899ea) - Read skill frontmatter scalar fields (`type`, `framework`, `library_version`)
+  from `metadata.*` with a fallback to the top-level key ([#159](https://github.com/TanStack/intent/issues/159)). This is a
+  back-compat safety net for the frontmatter migration: skills authored in the
+  new `metadata`-nested shape resolve correctly while existing top-level skills
+  keep working unchanged. The scanner, staleness checker, and the framework
+  `requires` validation all honor both shapes.
+
 ## 0.1.0
 
 ### Minor Changes
