@@ -64,6 +64,5 @@
       "cache": true,
       "inputs": ["{workspaceRoot}/**/package.json"]
     }
-  },
-  "analytics": true
+  }
 }
