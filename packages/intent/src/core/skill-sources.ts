@@ -6,7 +6,7 @@
  * `git`. The `git` variant is never constructed in M1 (git entries are rejected
  * at parse time) but is defined here so M2 builds on this shape.
  */
-export type SkillSource =
+type SkillSource =
   | { raw: string; id: string; kind: 'npm' }
   | { raw: string; id: string; kind: 'workspace' }
   | { raw: string; id: string; kind: 'git'; ref: string }

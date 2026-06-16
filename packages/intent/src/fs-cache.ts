@@ -11,7 +11,7 @@ type PackageJsonReadResult = {
   error: unknown | null
 }
 
-export type IntentFsCacheStats = {
+type IntentFsCacheStats = {
   packageJsonReadCount: number
   packageJsonCacheHits: number
 }
