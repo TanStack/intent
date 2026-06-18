@@ -5,9 +5,9 @@
     "type": "git",
     "url": "https://github.com/TanStack/intent"
   },
-  "packageManager": "pnpm@11.1.1",
+  "packageManager": "pnpm@11.7.0",
   "engines": {
-    "pnpm": ">=11.0.0"
+    "pnpm": ">=11.7.0"
   },
   "type": "module",
   "scripts": {
@@ -17,8 +17,8 @@
     "changeset": "changeset",
     "changeset:publish": "changeset publish",
     "changeset:version": "changeset version && pnpm install --no-frozen-lockfile && pnpm format",
-    "clean": "find agents -name 'dist' -type d -prune -exec rm -rf {} +",
-    "clean:node_modules": "find agents -name 'node_modules' -type d -prune -exec rm -rf {} +",
+    "clean": "if [ -d packages ]; then find packages -name 'dist' -type d -prune -exec rm -rf {} +; fi",
+    "clean:node_modules": "if [ -d packages ]; then find packages -name 'node_modules' -type d -prune -exec rm -rf {} +; fi",
     "clean:all": "pnpm run clean && pnpm run clean:node_modules",
     "copy:readme": "cp README.md packages/intent/README.md",
     "dev": "pnpm run watch",
@@ -47,24 +47,20 @@
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.29.8",
-    "@faker-js/faker": "^10.2.0",
+    "@changesets/cli": "^2.31.0",
     "@tanstack/eslint-config": "0.4.0",
     "@tanstack/typedoc-config": "^0.3.3",
     "@types/node": "^25.0.7",
-    "eslint": "^9.39.2",
-    "eslint-plugin-unused-imports": "^4.3.0",
-    "happy-dom": "^20.1.0",
-    "knip": "^5.80.2",
+    "eslint": "^9.39.4",
+    "eslint-plugin-unused-imports": "^4.4.1",
+    "knip": "^6.16.1",
     "markdown-link-extractor": "^4.0.3",
-    "nx": "^22.3.3",
-    "prettier": "^3.7.4",
-    "prettier-plugin-svelte": "^3.4.1",
-    "sherif": "^1.9.0",
-    "tinyglobby": "^0.2.15",
-    "typescript": "5.9.3",
-    "vitest": "^4.0.17",
-    "yaml": "2.8.3"
-  },
-  "overrides": {}
+    "nx": "^22.7.5",
+    "prettier": "^3.8.4",
+    "sherif": "^1.11.1",
+    "tinyglobby": "^0.2.17",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8",
+    "yaml": "2.9.0"
+  }
 }

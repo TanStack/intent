@@ -6,9 +6,9 @@
     "test:perf": "vitest bench --config ./vitest.config.ts ./*.bench.ts"
   },
   "devDependencies": {
-    "@codspeed/vitest-plugin": "^5.0.1",
-    "typescript": "5.9.3",
-    "vitest": "^4.0.17"
+    "@codspeed/vitest-plugin": "^5.5.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8"
   },
   "nx": {
     "targets": {

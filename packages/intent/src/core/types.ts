@@ -69,7 +69,7 @@ export interface IntentSkillListDebug {
   warningCount: number
   noticeCount: number
   conflictCount: number
-  scan: IntentScanDebugStats
+  scan: ScanStats
 }
 
 export interface LoadedIntentSkillDebug {
@@ -83,10 +83,8 @@ export interface LoadedIntentSkillDebug {
   source: IntentPackage['source']
   path: string
   warningCount: number
-  scan: IntentScanDebugStats
+  scan: ScanStats
 }
-
-export interface IntentScanDebugStats extends ScanStats {}
 
 export type IntentCoreErrorCode =
   | 'invalid-options'

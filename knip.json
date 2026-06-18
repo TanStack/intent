@@ -1,7 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignoreDependencies": ["@faker-js/faker"],
-  "ignoreBinaries": ["tsx"],
   "workspaces": {
     ".": {
       "entry": ["scripts/*.ts"]
@@ -9,7 +7,7 @@
     "packages/intent": {
       "entry": ["src/index.ts", "src/cli.ts", "src/core.ts", "src/setup.ts"],
       "ignore": ["meta/**"],
-      "ignoreDependencies": ["verdaccio", "@verdaccio/node-api"]
+      "ignoreDependencies": ["verdaccio"]
     }
   }
 }
