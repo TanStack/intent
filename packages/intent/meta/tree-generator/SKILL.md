@@ -287,14 +287,15 @@ framework-agnostic concepts and contains the sub-skill registry.
 
 ```yaml
 ---
-name: [lib]-core
+name: '[lib]-core'
 description: >
   [1–3 sentences. What this library does and the framework-agnostic
   concepts it provides. Pack with keywords: function names, config
   options, concepts. This is a routing key, not a human summary.]
-type: core
-library: [lib]
-library_version: "[version this targets]"
+metadata:
+  type: core
+  library: '[lib]'
+  library_version: '[version this targets]'
 ---
 ```
 
@@ -332,16 +333,17 @@ One SKILL.md per domain. Follow this structure exactly.
 
 ```yaml
 ---
-name: [lib]-core/[domain-slug]
+name: '[domain-slug]'
 description: >
   [1–3 sentences. What this domain covers AND when to load it. Name
   specific functions, options, or APIs. Dense routing key.]
-type: sub-skill
-library: [lib]
-library_version: "[version]"
+metadata:
+  type: sub-skill
+  library: '[lib]'
+  library_version: '[version]'
 sources:
-  - "[repo]:docs/[path].md"
-  - "[repo]:src/[path].ts"
+  - '[repo]:docs/[path].md'
+  - '[repo]:src/[path].ts'
 ---
 ```
 
@@ -452,17 +454,18 @@ framework-specific patterns and mistakes.
 
 ```yaml
 ---
-name: react-[lib]
+name: 'react-[lib]'
 description: >
   [1–3 sentences. React-specific bindings for [library]. Name the hooks,
   components, and providers. Mention React-specific patterns like SSR
   hydration if applicable.]
-type: framework
-library: [lib]
-framework: react
-library_version: "[version]"
+metadata:
+  type: framework
+  library: '[lib]'
+  framework: react
+  library_version: '[version]'
 requires:
-  - [lib]-core
+  - '[lib]-core'
 ---
 ```
 
@@ -499,18 +502,18 @@ with the framework frontmatter:
 
 ```yaml
 ---
-name: react-[lib]/[domain-slug]
+name: '[domain-slug]'
 description: >
   [React-specific description for this domain.]
-type: sub-skill
-library: [lib]
-framework: react
-library_version: "[version]"
+metadata:
+  type: sub-skill
+  library: '[lib]'
+  framework: react
+  library_version: '[version]'
 requires:
-  - [lib]-core
-  - [lib]-core/[domain-slug]
+  - '[lib]-core'
+  - '[lib]-core/[domain-slug]'
 ---
-
 This skill builds on [lib]-core/[domain-slug]. Read the core skill first.
 ```
 
@@ -556,19 +559,19 @@ framework hooks and providers).
 
 ```yaml
 ---
-name: compositions/[lib-a]-[lib-b]
+name: '[lib-a]-[lib-b]'
 description: >
   [How lib-a and lib-b wire together. Name the specific integration
   points: functions, hooks, patterns.]
-type: composition
-library_version: "[version of primary lib]"
+metadata:
+  type: composition
+  library_version: '[version of primary lib]'
 requires:
-  - [lib-a]-core
-  - react-[lib-a]
-  - [lib-b]-core
-  - react-[lib-b]
+  - '[lib-a]-core'
+  - 'react-[lib-a]'
+  - '[lib-b]-core'
+  - 'react-[lib-b]'
 ---
-
 This skill requires familiarity with both [lib-a] and [lib-b].
 Read their core and framework skills first.
 ```
@@ -601,15 +604,16 @@ for these skill types.
 
 ```yaml
 ---
-name: react-[lib]/security
+name: security
 description: >
   Go-live security validation for [library]. Checks [specific concerns].
-type: security
-library: [lib]
-framework: react
-library_version: '[version]'
+metadata:
+  type: security
+  library: '[lib]'
+  framework: react
+  library_version: '[version]'
 requires:
-  - react-[lib]
+  - 'react-[lib]'
 ---
 ```
 

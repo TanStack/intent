@@ -21,7 +21,11 @@ For each discovered `SKILL.md`:
 - Frontmatter delimiter and structure are valid
 - YAML frontmatter parses successfully
 - Required fields exist: `name`, `description`
-- `name` matches skill directory path under the target root
+- `name` is a single leaf segment matching the skill's parent directory (no slashes); the namespace is carried by the directory path
+- `name` uses only lowercase letters, numbers, and hyphens
+- `name` is at most 64 characters
+- Only spec top-level keys are allowed (`name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`); Intent-specific scalars (`type`, `library`, `library_version`, `framework`) must live under `metadata`
+- `metadata`, when present, is a mapping of string values
 - `description` length is at most 1024 characters
 - `type: framework` requires `requires` to be an array
 - Total file length is at most 500 lines

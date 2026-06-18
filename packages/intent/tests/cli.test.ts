@@ -1732,7 +1732,7 @@ describe('cli commands', () => {
     tempDirs.push(root)
 
     writeSkillMd(join(root, 'skills', 'core', 'setup'), {
-      name: 'core/setup',
+      name: 'setup',
       description: 'Core setup concepts',
     })
 
@@ -1746,7 +1746,153 @@ describe('cli commands', () => {
     expect(output).not.toContain('Agent Skills spec warning')
   })
 
-  it('warns but does not fail for Agent Skills spec-incompatible names', async () => {
+  it('fails when a nested skill name carries a slash instead of a leaf segment', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-slash-'))
+    tempDirs.push(root)
+
+    writeSkillMd(join(root, 'skills', 'core', 'setup'), {
+      name: 'core/setup',
+      description: 'Core setup concepts',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain(
+      'name "core/setup" must be a single leaf segment matching its parent directory "setup"',
+    )
+  })
+
+  it('fails when a non-spec scalar field is emitted at the top level', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-scalar-'))
+    tempDirs.push(root)
+
+    const skillDir = join(root, 'skills', 'db-core')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: db-core',
+        'description: Core database concepts',
+        'type: core',
+        'library: db',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain('non-spec top-level key "type"')
+    expect(output).toContain('non-spec top-level key "library"')
+  })
+
+  it('fails when metadata holds a non-string value', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-meta-'))
+    tempDirs.push(root)
+
+    const skillDir = join(root, 'skills', 'db-core')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: db-core',
+        'description: Core database concepts',
+        'metadata:',
+        '  library_version:',
+        '    - 1.0.0',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain('metadata values must be strings')
+  })
+
+  it('fails when metadata is not a mapping', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-meta-map-'))
+    tempDirs.push(root)
+
+    const skillDir = join(root, 'skills', 'db-core')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: db-core',
+        'description: Core database concepts',
+        'metadata: just-a-string',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain('metadata must be a mapping')
+  })
+
+  it('does not flag array-valued top-level keys as non-spec scalars', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-array-key-'))
+    tempDirs.push(root)
+
+    const skillDir = join(root, 'skills', 'react-db')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: react-db',
+        'description: React bindings for db',
+        'metadata:',
+        '  type: framework',
+        'requires:',
+        '  - db-core',
+        'sources:',
+        '  - "TanStack/db:docs/react.md"',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('✅ Validated 1 skill files — all passed')
+    expect(output).not.toContain('non-spec top-level key')
+  })
+
+  it('fails for names with non-spec characters (uppercase)', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-spec-'))
     tempDirs.push(root)
 
@@ -1758,12 +1904,34 @@ describe('cli commands', () => {
     process.chdir(root)
 
     const exitCode = await main(['validate'])
-    const output = logSpy.mock.calls.flat().join('\n')
+    const output = errorSpy.mock.calls.flat().join('\n')
 
-    expect(exitCode).toBe(0)
-    expect(output).toContain('✅ Validated 1 skill files — all passed')
+    expect(exitCode).toBe(1)
     expect(output).toContain(
-      'Agent Skills spec warning: each name segment should use lowercase letters, numbers, and single hyphens only',
+      'name "PDF-Processing" must use only lowercase letters, numbers, and hyphens',
+    )
+  })
+
+  it('fails when name exceeds 64 characters', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-len-'))
+    tempDirs.push(root)
+
+    const longName = `a${'-very-long'.repeat(7)}`
+    expect(longName.length).toBeGreaterThan(64)
+
+    writeSkillMd(join(root, 'skills', longName), {
+      name: longName,
+      description: 'A skill with an overly long name',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain(
+      `name exceeds 64 characters (${longName.length} chars)`,
     )
   })
 
@@ -2017,7 +2185,7 @@ describe('cli commands', () => {
       expect(summary).toContain('Skill validation failed.')
       expect(summary).toContain('Why this failed:')
       expect(summary).toContain(
-        'name "wrong-name" does not match directory path "db-core"',
+        'name "wrong-name" does not match parent directory "db-core"',
       )
     } finally {
       if (previousSummary === undefined) {

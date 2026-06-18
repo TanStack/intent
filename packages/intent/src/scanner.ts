@@ -264,7 +264,7 @@ function readSkillEntry(
       : ''
 
   return {
-    name: typeof fm?.name === 'string' ? fm.name : relName,
+    name: relName,
     path: skillFile,
     description: desc,
     type: readScalarField(fm, 'type'),

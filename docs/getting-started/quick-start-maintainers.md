@@ -65,7 +65,8 @@ npx @tanstack/intent@latest validate
 This checks:
 - Valid YAML frontmatter in every SKILL.md
 - Required fields (`name`, `description`) are present
-- Skill names match their directory paths
+- Skill `name` is a leaf segment matching its parent directory
+- Intent-specific scalars (`type`, `library`, `library_version`, `framework`) live under `metadata`, not at the top level
 - Description length <= 1024 characters
 - Line count limits (500 lines max per skill)
 - Framework skills have a `requires` array

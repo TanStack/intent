@@ -21,7 +21,6 @@ import type {
 // ---------------------------------------------------------------------------
 
 interface SkillMeta {
-  name: string
   relName: string
   filePath: string
   libraryVersion?: string
@@ -275,7 +274,6 @@ function findMatchingSkill(
 
   const skillsByName = new Map<string, SkillMeta>()
   for (const skill of skillMetas) {
-    skillsByName.set(skill.name, skill)
     skillsByName.set(skill.relName, skill)
   }
 
@@ -359,7 +357,7 @@ function buildArtifactSignals({
         reasons: ['artifact sources differ from SKILL.md frontmatter sources'],
         needsReview: true,
         artifactPath: artifact.artifactPath,
-        skill: matchingSkill.name,
+        skill: matchingSkill.relName,
       })
     }
 
@@ -380,7 +378,7 @@ function buildArtifactSignals({
         ],
         needsReview: true,
         artifactPath: artifact.artifactPath,
-        skill: matchingSkill.name,
+        skill: matchingSkill.relName,
       })
     }
   }
@@ -486,7 +484,6 @@ export async function checkStaleness(
       '',
     )
     return {
-      name: typeof fm?.name === 'string' ? fm.name : relName,
       relName,
       filePath,
       libraryVersion: readScalarField(fm, 'library_version'),
@@ -532,7 +529,7 @@ export async function checkStaleness(
     }
 
     // Source SHA changes (from sync-state)
-    const storedShas = syncState?.skills?.[skill.name]?.sources_sha ?? {}
+    const storedShas = syncState?.skills?.[skill.relName]?.sources_sha ?? {}
     // We only flag if there are stored SHAs but we can't check remote
     // (actual remote checking requires GitHub API — deferred to agent)
     if (skill.sources && Object.keys(storedShas).length > 0) {
@@ -545,7 +542,7 @@ export async function checkStaleness(
     }
 
     return {
-      name: skill.name,
+      name: skill.relName,
       reasons,
       needsReview: reasons.length > 0,
     }
