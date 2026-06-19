@@ -6,13 +6,46 @@ id: intent-validate
 `intent validate` checks `SKILL.md` files and artifacts for structural problems.
 
 ```bash
-npx @tanstack/intent@latest validate [<dir>]
+npx @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]
 ```
 
 ## Arguments
 
 - `<dir>`: directory containing skills; default is `skills`
 - Relative paths are resolved from the current working directory
+
+## Options
+
+- `--github-summary`: write a GitHub Actions step summary when `GITHUB_STEP_SUMMARY` is set
+- `--check`: fail if any `SKILL.md` has fixable frontmatter migrations pending, without writing files
+- `--fix`: rewrite fixable `SKILL.md` frontmatter migrations, then validate the result
+
+## Frontmatter migration fixes
+
+Use `--check` in CI to detect mechanical frontmatter migrations that have not been applied:
+
+```bash
+npx @tanstack/intent@latest validate --check
+```
+
+Use `--fix` locally to apply the mechanical frontmatter migrations:
+
+```bash
+npx @tanstack/intent@latest validate --fix
+```
+
+`--fix` only rewrites unambiguous frontmatter migrations:
+
+- `name` values are rewritten to the parent directory leaf when the parent directory is already a legal skill name
+- Top-level string fields `type`, `library`, `library_version`, and `framework` are moved under `metadata`
+
+`--fix` does not rewrite authoring-judgment validation errors:
+
+- Missing or invalid `description`
+- Length-limit failures
+- Invalid `metadata` shape or non-string `metadata` values
+- Missing `requires` for framework skills
+- Artifact validation failures
 
 ## Validation checks
 
