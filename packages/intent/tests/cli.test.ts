@@ -1815,6 +1815,43 @@ describe('cli commands', () => {
     expect(output).toContain('✅ Validated 1 skill files — all passed')
   })
 
+  it('fixes mechanical frontmatter migrations and validates the result', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-fix-'))
+    tempDirs.push(root)
+
+    const skillPath = join(root, 'skills', 'core', 'setup', 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    writeFileSync(
+      skillPath,
+      [
+        '---',
+        'name: core/setup',
+        'description: Core setup concepts',
+        'type: core',
+        'library: core',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--fix'])
+    const output = logSpy.mock.calls.flat().join('\n')
+    const fixed = readFileSync(skillPath, 'utf8')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('✅ Fixed 1 skill files')
+    expect(output).toContain('✅ Validated 1 skill files — all passed')
+    expect(fixed).toContain('name: setup')
+    expect(fixed).toContain('metadata:\n  type: core\n  library: core')
+    expect(fixed).not.toContain('\ntype: core')
+    expect(fixed).not.toContain('\nlibrary: core')
+    expect(fixed).toContain('\nSkill content here.\n')
+  })
+
   it('fails when a non-spec scalar field is emitted at the top level', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-scalar-'))
     tempDirs.push(root)

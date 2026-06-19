@@ -1,4 +1,9 @@
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fail, isCliFailure } from '../cli-error.js'
 import { printWarnings } from '../cli-support.js'
@@ -18,6 +23,7 @@ interface ValidationWarning {
 
 interface FrontmatterFixPlan {
   file: string
+  filePath: string
   changes: Array<string>
 }
 
@@ -169,7 +175,68 @@ function collectFrontmatterFixPlan({
     }
   }
 
-  return changes.length > 0 ? { file: rel, changes } : null
+  return changes.length > 0 ? { file: rel, filePath, changes } : null
+}
+
+function normalizeLineEndings(value: string, lineEnding: string): string {
+  return lineEnding === '\r\n' ? value.replace(/\r?\n/g, '\r\n') : value
+}
+
+async function applyFrontmatterFixes(
+  fixPlans: Array<FrontmatterFixPlan>,
+): Promise<void> {
+  const { parseDocument } = await import('yaml')
+
+  for (const plan of fixPlans) {
+    const content = readFileSync(plan.filePath, 'utf8')
+    const match = content.match(
+      /^---(\r?\n)([\s\S]*?)(\r?\n)---(\r?\n?)([\s\S]*)/,
+    )
+    if (!match) continue
+
+    const [
+      ,
+      openingLineEnding,
+      frontmatter,
+      closingLineEnding,
+      afterClose,
+      body,
+    ] = match
+    const doc = parseDocument(frontmatter)
+    if (doc.errors.length > 0) continue
+
+    const fm = doc.toJS() as Record<string, unknown>
+    const parentDir = basename(dirname(plan.filePath))
+
+    if (
+      typeof fm.name === 'string' &&
+      (fm.name.includes('/') || fm.name !== parentDir) &&
+      agentSkillNamePattern.test(parentDir)
+    ) {
+      doc.set('name', parentDir)
+    }
+
+    const metadata = fm.metadata
+    const canMoveMetadata = metadata === undefined || isRecord(metadata)
+    if (canMoveMetadata) {
+      for (const key of metadataScalarKeys) {
+        const value = fm[key]
+        if (typeof value !== 'string') continue
+
+        if (!doc.hasIn(['metadata', key])) {
+          doc.setIn(['metadata', key], value)
+        }
+        doc.delete(key)
+      }
+    }
+
+    const nextFrontmatter = normalizeLineEndings(
+      doc.toString().replace(/\r?\n$/, ''),
+      openingLineEnding,
+    )
+    const nextContent = `---${openingLineEnding}${nextFrontmatter}${closingLineEnding}---${afterClose}${body}`
+    writeFileSync(plan.filePath, nextContent)
+  }
 }
 
 function collectAgentSkillSpecWarnings({
@@ -470,6 +537,13 @@ async function runValidateCommandInternal(
         message: `fixable frontmatter migration pending: ${plan.changes.join('; ')}`,
       })
     }
+  }
+
+  if (options.fix && fixPlans.length > 0) {
+    await applyFrontmatterFixes(fixPlans)
+    console.log(`✅ Fixed ${fixPlans.length} skill files`)
+    await runValidateCommandInternal(dir, { ...options, fix: false })
+    return
   }
 
   if (errors.length > 0) {
