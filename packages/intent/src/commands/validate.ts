@@ -185,7 +185,7 @@ function normalizeLineEndings(value: string, lineEnding: string): string {
 async function applyFrontmatterFixes(
   fixPlans: Array<FrontmatterFixPlan>,
 ): Promise<void> {
-  const { isMap, isScalar, parseDocument } = await import('yaml')
+  const { parseDocument } = await import('yaml')
 
   for (const plan of fixPlans) {
     const content = readFileSync(plan.filePath, 'utf8')
@@ -194,14 +194,21 @@ async function applyFrontmatterFixes(
     )
     if (!match) continue
 
-    const [
-      ,
-      openingLineEnding,
-      frontmatter,
-      closingLineEnding,
-      afterClose,
-      body,
-    ] = match
+    const openingLineEnding = match[1]
+    const frontmatter = match[2]
+    const closingLineEnding = match[3]
+    const afterClose = match[4]
+    const body = match[5]
+    if (
+      openingLineEnding === undefined ||
+      frontmatter === undefined ||
+      closingLineEnding === undefined ||
+      afterClose === undefined ||
+      body === undefined
+    ) {
+      continue
+    }
+
     const doc = parseDocument(frontmatter)
     if (doc.errors.length > 0) continue
 
@@ -228,15 +235,6 @@ async function applyFrontmatterFixes(
           doc.setIn(['metadata', key], valueNode ?? value)
         }
         doc.delete(key)
-      }
-    }
-
-    const metadataNode = doc.get('metadata', true)
-    if (isMap(metadataNode)) {
-      for (const pair of metadataNode.items) {
-        if (isScalar(pair.key) && metadataScalarKeys.includes(pair.key.value)) {
-          pair.key.value = String(pair.key.value)
-        }
       }
     }
 
