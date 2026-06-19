@@ -17,6 +17,8 @@ interface ValidationWarning {
 }
 
 export interface ValidateCommandOptions {
+  check?: boolean
+  fix?: boolean
   githubSummary?: boolean
 }
 
@@ -174,6 +176,10 @@ export async function runValidateCommand(
   dir?: string,
   options: ValidateCommandOptions = {},
 ): Promise<void> {
+  if (options.fix && options.check) {
+    fail('Cannot combine --fix and --check')
+  }
+
   if (!options.githubSummary) {
     await runValidateCommandInternal(dir)
     return
