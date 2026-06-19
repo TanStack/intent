@@ -87,8 +87,13 @@ function createCli(): CAC {
 
   cli
     .command('validate [dir]', 'Validate skill files')
-    .usage('validate [dir] [--github-summary]')
+    .usage('validate [dir] [--github-summary] [--fix] [--check]')
     .option('--github-summary', 'Write a GitHub Actions step summary')
+    .option('--fix', 'Rewrite fixable SKILL.md frontmatter issues')
+    .option(
+      '--check',
+      'Fail if fixable SKILL.md frontmatter issues would be rewritten',
+    )
     .example('validate')
     .example('validate packages/query/skills')
     .action(

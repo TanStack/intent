@@ -1,4 +1,9 @@
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fail, isCliFailure } from '../cli-error.js'
 import { printWarnings } from '../cli-support.js'
@@ -16,7 +21,15 @@ interface ValidationWarning {
   message: string
 }
 
+interface FrontmatterFixPlan {
+  file: string
+  filePath: string
+  changes: Array<string>
+}
+
 export interface ValidateCommandOptions {
+  check?: boolean
+  fix?: boolean
   githubSummary?: boolean
 }
 
@@ -35,6 +48,13 @@ const specTopLevelKeys = new Set([
 // Array fields Intent still emits at the top level; their migration to a
 // structured surface is tracked separately (#161), so they are not flagged here.
 const intentArrayKeys = new Set(['sources', 'requires'])
+
+const metadataScalarKeys = [
+  'type',
+  'library',
+  'library_version',
+  'framework',
+] as const
 
 function isScalarValue(value: unknown): boolean {
   return (
@@ -118,6 +138,115 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
+function collectFrontmatterFixPlan({
+  filePath,
+  fm,
+  rel,
+}: {
+  filePath: string
+  fm: Record<string, unknown>
+  rel: string
+}): FrontmatterFixPlan | null {
+  const changes: Array<string> = []
+  const parentDir = basename(dirname(filePath))
+
+  if (
+    typeof fm.name === 'string' &&
+    (fm.name.includes('/') || fm.name !== parentDir) &&
+    agentSkillNamePattern.test(parentDir)
+  ) {
+    changes.push(`rewrite name to "${parentDir}"`)
+  }
+
+  const metadata = fm.metadata
+  const canMoveMetadata = metadata === undefined || isRecord(metadata)
+  if (canMoveMetadata) {
+    const metadataRecord = isRecord(metadata) ? metadata : undefined
+    for (const key of metadataScalarKeys) {
+      if (typeof fm[key] !== 'string') continue
+
+      if (metadataRecord && key in metadataRecord) {
+        changes.push(
+          `remove top-level "${key}"; metadata.${key} already exists`,
+        )
+      } else {
+        changes.push(`move top-level "${key}" under metadata.${key}`)
+      }
+    }
+  }
+
+  return changes.length > 0 ? { file: rel, filePath, changes } : null
+}
+
+function normalizeLineEndings(value: string, lineEnding: string): string {
+  return lineEnding === '\r\n' ? value.replace(/\r?\n/g, '\r\n') : value
+}
+
+async function applyFrontmatterFixes(
+  fixPlans: Array<FrontmatterFixPlan>,
+): Promise<void> {
+  const { parseDocument } = await import('yaml')
+
+  for (const plan of fixPlans) {
+    const content = readFileSync(plan.filePath, 'utf8')
+    const match = content.match(
+      /^---(\r?\n)([\s\S]*?)(\r?\n)---(\r?\n?)([\s\S]*)/,
+    )
+    if (!match) continue
+
+    const openingLineEnding = match[1]
+    const frontmatter = match[2]
+    const closingLineEnding = match[3]
+    const afterClose = match[4]
+    const body = match[5]
+    if (
+      openingLineEnding === undefined ||
+      frontmatter === undefined ||
+      closingLineEnding === undefined ||
+      afterClose === undefined ||
+      body === undefined
+    ) {
+      continue
+    }
+
+    const doc = parseDocument(frontmatter)
+    if (doc.errors.length > 0) continue
+
+    const fm = doc.toJS() as Record<string, unknown>
+    const parentDir = basename(dirname(plan.filePath))
+
+    if (
+      typeof fm.name === 'string' &&
+      (fm.name.includes('/') || fm.name !== parentDir) &&
+      agentSkillNamePattern.test(parentDir)
+    ) {
+      doc.set('name', parentDir)
+    }
+
+    const metadata = fm.metadata
+    const canMoveMetadata = metadata === undefined || isRecord(metadata)
+    if (canMoveMetadata) {
+      for (const key of metadataScalarKeys) {
+        const value = fm[key]
+        if (typeof value !== 'string') continue
+
+        if (!doc.hasIn(['metadata', key])) {
+          const valueNode = doc.get(key, true)
+          doc.setIn(['metadata', key], valueNode ?? value)
+        }
+        doc.delete(key)
+      }
+    }
+
+    const nextFrontmatter = normalizeLineEndings(
+      doc.toString().replace(/\r?\n$/, ''),
+      openingLineEnding,
+    )
+    const nextContent = `---${openingLineEnding}${nextFrontmatter}${closingLineEnding}---${afterClose}${body}`
+    writeFileSync(plan.filePath, nextContent)
+  }
+}
+
 function collectAgentSkillSpecWarnings({
   fm,
   rel,
@@ -174,13 +303,17 @@ export async function runValidateCommand(
   dir?: string,
   options: ValidateCommandOptions = {},
 ): Promise<void> {
+  if (options.fix && options.check) {
+    fail('Cannot combine --fix and --check')
+  }
+
   if (!options.githubSummary) {
-    await runValidateCommandInternal(dir)
+    await runValidateCommandInternal(dir, options)
     return
   }
 
   try {
-    await runValidateCommandInternal(dir)
+    await runValidateCommandInternal(dir, options)
     writeGithubValidationSummary({ ok: true })
   } catch (err) {
     writeGithubValidationSummary({
@@ -191,7 +324,10 @@ export async function runValidateCommand(
   }
 }
 
-async function runValidateCommandInternal(dir?: string): Promise<void> {
+async function runValidateCommandInternal(
+  dir?: string,
+  options: ValidateCommandOptions = {},
+): Promise<void> {
   const [{ parse: parseYaml }, { findSkillFiles, readScalarField }] =
     await Promise.all([import('yaml'), import('../utils.js')])
   const context = resolveProjectContext({
@@ -209,6 +345,7 @@ async function runValidateCommandInternal(dir?: string): Promise<void> {
 
   const errors: Array<ValidationError> = []
   const warnings: Array<string> = []
+  const fixPlans: Array<FrontmatterFixPlan> = []
   let validatedCount = 0
 
   if (explicitDir && findSkillFiles(skillsDirs[0]!).length === 0) {
@@ -253,6 +390,9 @@ async function runValidateCommandInternal(dir?: string): Promise<void> {
         })
         continue
       }
+
+      const fixPlan = collectFrontmatterFixPlan({ filePath, fm, rel })
+      if (fixPlan) fixPlans.push(fixPlan)
 
       if (!fm.name) {
         errors.push({ file: rel, message: 'Missing required field: name' })
@@ -396,6 +536,22 @@ async function runValidateCommandInternal(dir?: string): Promise<void> {
 
     validatedCount += skillFiles.length
     warnings.push(...collectPackagingWarnings(validateContext))
+  }
+
+  if (options.check) {
+    for (const plan of fixPlans) {
+      errors.push({
+        file: plan.file,
+        message: `fixable frontmatter migration pending: ${plan.changes.join('; ')}`,
+      })
+    }
+  }
+
+  if (options.fix && fixPlans.length > 0) {
+    await applyFrontmatterFixes(fixPlans)
+    console.log(`✅ Fixed ${fixPlans.length} skill files`)
+    await runValidateCommandInternal(dir, { ...options, fix: false })
+    return
   }
 
   if (errors.length > 0) {

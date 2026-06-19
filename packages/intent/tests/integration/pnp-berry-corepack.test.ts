@@ -108,7 +108,8 @@ function scaffoldBerryProject(): string {
     dependencies: { '@repro/skills-leaf': `file:./${tarball}` },
   })
 
-  execFileSync('corepack', ['yarn', 'install'], {
+  // CI makes Berry installs immutable by default; this fixture creates lockfile fresh.
+  execFileSync('corepack', ['yarn', 'install', '--no-immutable'], {
     cwd: dir,
     stdio: 'pipe',
     env: corepackEnv,
