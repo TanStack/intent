@@ -1852,6 +1852,199 @@ describe('cli commands', () => {
     expect(fixed).toContain('\nSkill content here.\n')
   })
 
+  it('keeps existing metadata values when removing conflicting top-level scalars', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-validate-fix-conflict-'),
+    )
+    tempDirs.push(root)
+
+    const skillPath = join(root, 'skills', 'db-core', 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    writeFileSync(
+      skillPath,
+      [
+        '---',
+        'name: db-core',
+        'description: Core database concepts',
+        'metadata:',
+        '  library: nested',
+        'library: top',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--fix'])
+    const fixed = readFileSync(skillPath, 'utf8')
+
+    expect(exitCode).toBe(0)
+    expect(fixed).toContain('metadata:\n  library: nested')
+    expect(fixed).not.toContain('\nlibrary: top')
+  })
+
+  it('fixes names while leaving scalar migrations blocked by non-mapping metadata', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-validate-fix-meta-block-'),
+    )
+    tempDirs.push(root)
+
+    const skillPath = join(root, 'skills', 'core', 'setup', 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    writeFileSync(
+      skillPath,
+      [
+        '---',
+        'name: core/setup',
+        'description: Core setup concepts',
+        'metadata: nope',
+        'type: core',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--fix'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+    const fixed = readFileSync(skillPath, 'utf8')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain('metadata must be a mapping')
+    expect(fixed).toContain('name: setup')
+    expect(fixed).toContain('type: core')
+  })
+
+  it('preserves CRLF line endings and markdown body bytes when fixing frontmatter', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-fix-crlf-'))
+    tempDirs.push(root)
+
+    const skillPath = join(root, 'skills', 'db-core', 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    const body = 'First body line.\r\n\r\nSecond body line.\r\n'
+    writeFileSync(
+      skillPath,
+      [
+        '---',
+        'name: wrong-name',
+        'description: Core database concepts',
+        'type: core',
+        '---',
+        '',
+      ].join('\r\n') + body,
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--fix'])
+    const fixed = readFileSync(skillPath, 'utf8')
+    const fixedBody = fixed.slice(fixed.indexOf(body))
+
+    expect(exitCode).toBe(0)
+    expect(fixed).toContain('name: db-core\r\n')
+    expect(fixed).toContain('metadata:\r\n  type: core\r\n')
+    expect(fixedBody).toBe(body)
+  })
+
+  it('preserves trailing comments on migrated scalar values', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-validate-fix-comments-'),
+    )
+    tempDirs.push(root)
+
+    const skillPath = join(root, 'skills', 'db-core', 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    writeFileSync(
+      skillPath,
+      [
+        '---',
+        'name: db-core',
+        'description: Core database concepts',
+        'library: core # keep this comment',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--fix'])
+    const fixed = readFileSync(skillPath, 'utf8')
+
+    expect(exitCode).toBe(0)
+    expect(fixed).toContain('metadata:\n  library: core # keep this comment')
+  })
+
+  it('does not fix names when the parent directory is not a legal skill name', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-validate-fix-invalid-parent-'),
+    )
+    tempDirs.push(root)
+
+    writeSkillMd(join(root, 'skills', 'PDF-Processing'), {
+      name: 'wrong-name',
+      description: 'PDF processing concepts',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--fix'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain(
+      'name "wrong-name" does not match parent directory "PDF-Processing"',
+    )
+  })
+
+  it('is idempotent after fixing mechanical frontmatter migrations', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-validate-fix-idempotent-'),
+    )
+    tempDirs.push(root)
+
+    const skillPath = join(root, 'skills', 'db-core', 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    writeFileSync(
+      skillPath,
+      [
+        '---',
+        'name: wrong-name',
+        'description: Core database concepts',
+        'type: core',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const firstExitCode = await main(['validate', '--fix'])
+    const fixed = readFileSync(skillPath, 'utf8')
+    const secondExitCode = await main(['validate', '--fix'])
+
+    expect(firstExitCode).toBe(0)
+    expect(secondExitCode).toBe(0)
+    expect(readFileSync(skillPath, 'utf8')).toBe(fixed)
+  })
+
+  it('fails cleanly when fix and check are combined', async () => {
+    const exitCode = await main(['validate', '--fix', '--check'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith('Cannot combine --fix and --check')
+  })
+
   it('fails when a non-spec scalar field is emitted at the top level', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-scalar-'))
     tempDirs.push(root)
