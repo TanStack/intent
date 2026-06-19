@@ -16,6 +16,11 @@ interface ValidationWarning {
   message: string
 }
 
+interface FrontmatterFixPlan {
+  file: string
+  changes: Array<string>
+}
+
 export interface ValidateCommandOptions {
   check?: boolean
   fix?: boolean
@@ -37,6 +42,13 @@ const specTopLevelKeys = new Set([
 // Array fields Intent still emits at the top level; their migration to a
 // structured surface is tracked separately (#161), so they are not flagged here.
 const intentArrayKeys = new Set(['sources', 'requires'])
+
+const metadataScalarKeys = [
+  'type',
+  'library',
+  'library_version',
+  'framework',
+] as const
 
 function isScalarValue(value: unknown): boolean {
   return (
@@ -120,6 +132,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
+function collectFrontmatterFixPlan({
+  filePath,
+  fm,
+  rel,
+}: {
+  filePath: string
+  fm: Record<string, unknown>
+  rel: string
+}): FrontmatterFixPlan | null {
+  const changes: Array<string> = []
+  const parentDir = basename(dirname(filePath))
+
+  if (
+    typeof fm.name === 'string' &&
+    (fm.name.includes('/') || fm.name !== parentDir) &&
+    agentSkillNamePattern.test(parentDir)
+  ) {
+    changes.push(`rewrite name to "${parentDir}"`)
+  }
+
+  const metadata = fm.metadata
+  const canMoveMetadata = metadata === undefined || isRecord(metadata)
+  if (canMoveMetadata) {
+    const metadataRecord = isRecord(metadata) ? metadata : undefined
+    for (const key of metadataScalarKeys) {
+      if (typeof fm[key] !== 'string') continue
+
+      if (metadataRecord && key in metadataRecord) {
+        changes.push(
+          `remove top-level "${key}"; metadata.${key} already exists`,
+        )
+      } else {
+        changes.push(`move top-level "${key}" under metadata.${key}`)
+      }
+    }
+  }
+
+  return changes.length > 0 ? { file: rel, changes } : null
+}
+
 function collectAgentSkillSpecWarnings({
   fm,
   rel,
@@ -181,12 +233,12 @@ export async function runValidateCommand(
   }
 
   if (!options.githubSummary) {
-    await runValidateCommandInternal(dir)
+    await runValidateCommandInternal(dir, options)
     return
   }
 
   try {
-    await runValidateCommandInternal(dir)
+    await runValidateCommandInternal(dir, options)
     writeGithubValidationSummary({ ok: true })
   } catch (err) {
     writeGithubValidationSummary({
@@ -197,7 +249,10 @@ export async function runValidateCommand(
   }
 }
 
-async function runValidateCommandInternal(dir?: string): Promise<void> {
+async function runValidateCommandInternal(
+  dir?: string,
+  options: ValidateCommandOptions = {},
+): Promise<void> {
   const [{ parse: parseYaml }, { findSkillFiles, readScalarField }] =
     await Promise.all([import('yaml'), import('../utils.js')])
   const context = resolveProjectContext({
@@ -215,6 +270,7 @@ async function runValidateCommandInternal(dir?: string): Promise<void> {
 
   const errors: Array<ValidationError> = []
   const warnings: Array<string> = []
+  const fixPlans: Array<FrontmatterFixPlan> = []
   let validatedCount = 0
 
   if (explicitDir && findSkillFiles(skillsDirs[0]!).length === 0) {
@@ -259,6 +315,9 @@ async function runValidateCommandInternal(dir?: string): Promise<void> {
         })
         continue
       }
+
+      const fixPlan = collectFrontmatterFixPlan({ filePath, fm, rel })
+      if (fixPlan) fixPlans.push(fixPlan)
 
       if (!fm.name) {
         errors.push({ file: rel, message: 'Missing required field: name' })
@@ -402,6 +461,15 @@ async function runValidateCommandInternal(dir?: string): Promise<void> {
 
     validatedCount += skillFiles.length
     warnings.push(...collectPackagingWarnings(validateContext))
+  }
+
+  if (options.check) {
+    for (const plan of fixPlans) {
+      errors.push({
+        file: plan.file,
+        message: `fixable frontmatter migration pending: ${plan.changes.join('; ')}`,
+      })
+    }
   }
 
   if (errors.length > 0) {

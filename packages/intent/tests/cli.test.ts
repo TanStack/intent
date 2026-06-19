@@ -1766,6 +1766,55 @@ describe('cli commands', () => {
     )
   })
 
+  it('reports fixable frontmatter migrations in check mode without writing', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-check-'))
+    tempDirs.push(root)
+
+    const skillPath = join(root, 'skills', 'core', 'setup', 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    const original = [
+      '---',
+      'name: core/setup',
+      'description: Core setup concepts',
+      'type: framework',
+      'library: core',
+      '---',
+      '',
+      'Skill content here.',
+      '',
+    ].join('\n')
+    writeFileSync(skillPath, original)
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--check'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain('fixable frontmatter migration pending')
+    expect(output).toContain('rewrite name to "setup"')
+    expect(output).toContain('move top-level "type" under metadata.type')
+    expect(readFileSync(skillPath, 'utf8')).toBe(original)
+  })
+
+  it('passes check mode when skills are already compliant', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-check-ok-'))
+    tempDirs.push(root)
+
+    writeSkillMd(join(root, 'skills', 'db-core'), {
+      name: 'db-core',
+      description: 'Core database concepts',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--check'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('✅ Validated 1 skill files — all passed')
+  })
+
   it('fails when a non-spec scalar field is emitted at the top level', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-scalar-'))
     tempDirs.push(root)
