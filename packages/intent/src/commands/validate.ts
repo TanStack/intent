@@ -1,5 +1,5 @@
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
-import { basename, dirname, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fail, isCliFailure } from '../cli-error.js'
 import { printWarnings } from '../cli-support.js'
 import { resolveProjectContext } from '../core/project-context.js'
@@ -21,6 +21,28 @@ export interface ValidateCommandOptions {
 }
 
 const agentSkillNamePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+// The Agent Skills spec allows exactly these six top-level frontmatter keys.
+const specTopLevelKeys = new Set([
+  'name',
+  'description',
+  'license',
+  'compatibility',
+  'metadata',
+  'allowed-tools',
+])
+
+// Array fields Intent still emits at the top level; their migration to a
+// structured surface is tracked separately (#161), so they are not flagged here.
+const intentArrayKeys = new Set(['sources', 'requires'])
+
+function isScalarValue(value: unknown): boolean {
+  return (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  )
+}
 
 function buildValidationFailure(
   errors: Array<ValidationError>,
@@ -97,44 +119,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function collectAgentSkillSpecWarnings({
-  filePath,
   fm,
   rel,
 }: {
-  filePath: string
   fm: Record<string, unknown>
   rel: string
 }): Array<ValidationWarning> {
   const warnings: Array<ValidationWarning> = []
-
-  if (typeof fm.name === 'string') {
-    if (fm.name.length > 64) {
-      warnings.push({
-        file: rel,
-        message: `Agent Skills spec warning: name exceeds 64 characters (${fm.name.length} chars)`,
-      })
-    }
-
-    for (const segment of fm.name.split('/')) {
-      if (!agentSkillNamePattern.test(segment)) {
-        warnings.push({
-          file: rel,
-          message:
-            'Agent Skills spec warning: each name segment should use lowercase letters, numbers, and single hyphens only',
-        })
-        break
-      }
-    }
-
-    const parentDir = basename(dirname(filePath))
-    if (!fm.name.includes('/') && fm.name !== parentDir) {
-      warnings.push({
-        file: rel,
-        message:
-          'Agent Skills spec warning: name should match the parent directory name',
-      })
-    }
-  }
 
   if (
     fm.license !== undefined &&
@@ -162,26 +153,6 @@ function collectAgentSkillSpecWarnings({
         file: rel,
         message: `Agent Skills spec warning: compatibility exceeds 500 characters (${fm.compatibility.length} chars)`,
       })
-    }
-  }
-
-  if (fm.metadata !== undefined) {
-    if (!isRecord(fm.metadata)) {
-      warnings.push({
-        file: rel,
-        message: 'Agent Skills spec warning: metadata should be a mapping',
-      })
-    } else {
-      const hasNonStringValue = Object.values(fm.metadata).some(
-        (value) => typeof value !== 'string',
-      )
-      if (hasNonStringValue) {
-        warnings.push({
-          file: rel,
-          message:
-            'Agent Skills spec warning: metadata values should be strings',
-        })
-      }
     }
   }
 
@@ -294,14 +265,59 @@ async function runValidateCommandInternal(dir?: string): Promise<void> {
       }
 
       if (typeof fm.name === 'string') {
-        const expectedPath = relative(skillsDir, filePath)
-          .replace(/[/\\]SKILL\.md$/, '')
-          .split(sep)
-          .join('/')
-        if (fm.name !== expectedPath) {
+        const parentDir = basename(dirname(filePath))
+        if (fm.name.length > 64) {
           errors.push({
             file: rel,
-            message: `name "${fm.name}" does not match directory path "${expectedPath}"`,
+            message: `name exceeds 64 characters (${fm.name.length} chars)`,
+          })
+        }
+        if (fm.name.includes('/')) {
+          errors.push({
+            file: rel,
+            message: `name "${fm.name}" must be a single leaf segment matching its parent directory "${parentDir}" — the namespace is carried by the directory path, not the name`,
+          })
+        } else {
+          if (fm.name !== parentDir) {
+            errors.push({
+              file: rel,
+              message: `name "${fm.name}" does not match parent directory "${parentDir}"`,
+            })
+          }
+          if (!agentSkillNamePattern.test(fm.name)) {
+            errors.push({
+              file: rel,
+              message: `name "${fm.name}" must use only lowercase letters, numbers, and hyphens`,
+            })
+          }
+        }
+      }
+
+      for (const [key, value] of Object.entries(fm)) {
+        if (
+          !specTopLevelKeys.has(key) &&
+          !intentArrayKeys.has(key) &&
+          isScalarValue(value)
+        ) {
+          errors.push({
+            file: rel,
+            message: `non-spec top-level key "${key}" — move client-specific scalar fields under "metadata"`,
+          })
+        }
+      }
+
+      if (fm.metadata !== undefined) {
+        if (!isRecord(fm.metadata)) {
+          errors.push({
+            file: rel,
+            message: 'metadata must be a mapping',
+          })
+        } else if (
+          Object.values(fm.metadata).some((value) => typeof value !== 'string')
+        ) {
+          errors.push({
+            file: rel,
+            message: 'metadata values must be strings',
           })
         }
       }
@@ -324,9 +340,7 @@ async function runValidateCommandInternal(dir?: string): Promise<void> {
       }
 
       warnings.push(
-        ...collectAgentSkillSpecWarnings({ filePath, fm, rel }).map(
-          formatWarning,
-        ),
+        ...collectAgentSkillSpecWarnings({ fm, rel }).map(formatWarning),
       )
 
       const lineCount = content.split(/\r?\n/).length

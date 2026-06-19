@@ -52,7 +52,9 @@ SKILL.md into that package's skills directory (e.g.
 `packages/client/skills/core/SKILL.md`), not a shared root.
 
 1. **Skill name** — format `library-group/skill-name` (e.g. `tanstack-query/core`,
-   `tanstack-router/loaders`, `db/core/live-queries`)
+   `tanstack-router/loaders`, `db/core/live-queries`). This is the skill's
+   directory path: its **last segment** becomes the frontmatter `name` (a
+   spec-legal leaf), and the full path is where the `SKILL.md` lives.
 2. **Skill description** — what the skill covers and when an agent should load it
 3. **Source documentation** — the docs, guides, API references, and/or source
    files to distill from
@@ -170,17 +172,18 @@ domain-discovery — use those directly.
 
 ```yaml
 ---
-name: [library]/[skill-name]
+name: '[skill-name]'
 description: >
   [1–3 sentences. What this skill covers and exactly when an agent should
   load it. Written for the agent — include the keywords an agent would
   encounter when it needs this skill. Dense routing key.]
-type: core
-library: [library]
-library_version: "[version this targets]"
+metadata:
+  type: core
+  library: '[library]'
+  library_version: '[version this targets]'
 sources:
-  - "[Owner/repo]:docs/[path].md"
-  - "[Owner/repo]:src/[path].ts"
+  - '[Owner/repo]:docs/[path].md'
+  - '[Owner/repo]:src/[path].ts'
 ---
 ```
 
@@ -188,14 +191,15 @@ sources:
 
 ```yaml
 ---
-name: [library]/[parent]/[skill-name]
+name: '[skill-name]'
 description: >
   [1–3 sentences. What this sub-topic covers and when to load it.]
-type: sub-skill
-library: [library]
-library_version: "[version]"
+metadata:
+  type: sub-skill
+  library: '[library]'
+  library_version: '[version]'
 sources:
-  - "[Owner/repo]:docs/[path].md"
+  - '[Owner/repo]:docs/[path].md'
 ---
 ```
 
@@ -203,29 +207,39 @@ sources:
 
 ```yaml
 ---
-name: [library]/[framework]
+name: '[framework]'
 description: >
   [1–3 sentences. Framework-specific bindings. Name the hooks, components,
   providers.]
-type: framework
-library: [library]
-framework: [react | vue | solid | svelte | angular]
-library_version: "[version]"
+metadata:
+  type: framework
+  library: '[library]'
+  framework: '[react | vue | solid | svelte | angular]'
+  library_version: '[version]'
 requires:
-  - [library]/core
+  - '[library]/core'
 sources:
-  - "[Owner/repo]:docs/framework/[framework]/[path].md"
+  - '[Owner/repo]:docs/framework/[framework]/[path].md'
 ---
 ```
 
 ### Frontmatter rules
 
+- `name` is the spec-legal leaf segment — lowercase letters, numbers, and
+  hyphens only — and matches the skill's parent directory. It carries no
+  slashes; the namespace lives in the skill's directory path instead.
+- Intent-specific scalars (`type`, `library`, `library_version`, `framework`)
+  live under the `metadata` map. The Agent Skills spec permits only `name`,
+  `description`, `license`, `compatibility`, `metadata`, and `allowed-tools`
+  at the top level, so emitting these scalars at the top level fails
+  validation.
 - `description` must be written so the agent loads this skill at the right
   time — not too broad (triggers on everything) and not too narrow (never
   triggers). Pack with function names, option names, concept keywords.
 - `sources` uses the format `Owner/repo:relative-path`. Glob patterns are
   supported (e.g. `TanStack/query:docs/framework/react/guides/*.md`).
-- `library_version` is the version of the source library this skill targets.
+- `metadata.library_version` is the version of the source library this skill
+  targets.
 - `requires` lists skills that must be loaded before this one.
 
 ---

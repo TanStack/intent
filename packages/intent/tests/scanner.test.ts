@@ -1843,7 +1843,7 @@ describe('scanIntentPackageAtRoot', () => {
     ])
   })
 
-  it('falls back when the hinted path has a different canonical skill name', () => {
+  it('derives skill identity from the directory path, not the frontmatter name', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'query')
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/query',
@@ -1865,7 +1865,15 @@ describe('scanIntentPackageAtRoot', () => {
       skillNameHint: 'cache',
     })
 
-    expect(result.package?.skills).toEqual([])
+    expect(result.package?.skills).toEqual([
+      {
+        name: 'cache',
+        path: 'node_modules/@tanstack/query/skills/cache/SKILL.md',
+        description: 'Cache query skill',
+        type: undefined,
+        framework: undefined,
+      },
+    ])
   })
 
   it('does not follow hinted skill paths outside the skills directory', () => {
