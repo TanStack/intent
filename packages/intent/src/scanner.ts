@@ -19,7 +19,10 @@ import {
 } from './utils.js'
 import { createIntentFsCache } from './fs-cache.js'
 import { detectPackageManager } from './package-manager.js'
-import { findWorkspaceRoot } from './workspace-patterns.js'
+import {
+  findWorkspacePackages,
+  findWorkspaceRoot,
+} from './workspace-patterns.js'
 import type { IntentFsCache } from './fs-cache.js'
 import type { ReadFs } from './utils.js'
 import type {
@@ -451,6 +454,28 @@ function getScanScope(options: ScanOptions): ScanScope {
   return options.scope ?? (options.includeGlobal ? 'local-and-global' : 'local')
 }
 
+function createWorkspacePackageKeySet(
+  workspaceRoot: string | null,
+  getFsIdentity: (path: string) => string,
+): Set<string> {
+  if (!workspaceRoot) return new Set()
+
+  return new Set(
+    findWorkspacePackages(workspaceRoot).map((dir) => getFsIdentity(dir)),
+  )
+}
+
+function createPackageKindResolver(
+  workspacePackageKeys: Set<string>,
+  getFsIdentity: (path: string) => string,
+): (packageRoot: string) => IntentPackage['kind'] {
+  return (packageRoot: string): IntentPackage['kind'] => {
+    return workspacePackageKeys.has(getFsIdentity(packageRoot))
+      ? 'workspace'
+      : 'npm'
+  }
+}
+
 export function scanForIntents(
   root?: string,
   options: ScanOptions = {},
@@ -494,6 +519,11 @@ export function scanForIntents(
     Map<string, { version: string; packageRoot: string }>
   >()
   let pnpApi: PnpApi | null | undefined
+
+  const getPackageKind = createPackageKindResolver(
+    createWorkspacePackageKeySet(workspaceRoot, fsCache.getFsIdentity),
+    fsCache.getFsIdentity,
+  )
 
   function getPnpApi(): PnpApi | null {
     if (scanScope === 'global') return null
@@ -545,6 +575,7 @@ export function scanForIntents(
       deriveIntentConfig,
       discoverSkills: (skillsDir) => discoverSkills(skillsDir, fsCache),
       getPackageDepth,
+      getPackageKind,
       getFsIdentity: fsCache.getFsIdentity,
       exists: fsCache.exists,
       packageIndexes,
@@ -726,6 +757,13 @@ export function scanIntentPackageAtRoot(
   const warnings: Array<string> = []
   const packageIndexes = new Map<string, number>()
   const fsCache = options.fsCache ?? createIntentFsCache()
+  const getPackageKind = createPackageKindResolver(
+    createWorkspacePackageKeySet(
+      findWorkspaceRoot(projectRoot),
+      fsCache.getFsIdentity,
+    ),
+    fsCache.getFsIdentity,
+  )
 
   function readPkgJson(dirPath: string): Record<string, unknown> | null {
     return fsCache.readPackageJson(dirPath)
@@ -744,6 +782,7 @@ export function scanIntentPackageAtRoot(
           )
       : (skillsDir) => discoverSkills(skillsDir, fsCache),
     getPackageDepth,
+    getPackageKind,
     getFsIdentity: fsCache.getFsIdentity,
     exists: fsCache.exists,
     packageIndexes,

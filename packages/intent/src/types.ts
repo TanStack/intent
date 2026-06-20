@@ -23,7 +23,7 @@ export interface ScanResult {
     local: NodeModulesScanTarget
     global: NodeModulesScanTarget
   }
-  stats?: ScanStats
+  stats: ScanStats
 }
 
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'unknown'
@@ -54,6 +54,7 @@ export interface IntentPackage {
   intent: IntentConfig
   skills: Array<SkillEntry>
   packageRoot: string
+  kind: 'npm' | 'workspace'
   source: 'local' | 'global'
 }
 

@@ -147,7 +147,7 @@ export function listIntentSkills(
       warningCount: result.warnings.length,
       noticeCount: result.notices.length,
       conflictCount: result.conflicts.length,
-      scan: scan.stats ?? fsCache.getStats(),
+      scan: scan.stats,
     }
   }
 
@@ -344,7 +344,7 @@ function resolveIntentSkillInCwd(
           excludes: excludePatterns,
           resolution: 'full-scan',
           resolved,
-          scan: scanResult.stats ?? fsCache.getStats(),
+          scan: scanResult.stats,
           scope,
         })
       : undefined,

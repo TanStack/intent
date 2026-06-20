@@ -32,6 +32,7 @@ function pkg(name: string, skillNames: Array<string>): IntentPackage {
     intent: { version: 1, repo: 'owner/repo', docs: '' },
     skills: skillNames.map(skill),
     packageRoot: `/root/node_modules/${name}`,
+    kind: 'npm',
     source: 'local',
   }
 }
