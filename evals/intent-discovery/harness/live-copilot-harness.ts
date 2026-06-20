@@ -6,6 +6,7 @@ import {
   LiveCopilotRunnerUnavailableError,
   runCopilotTask,
 } from './run-copilot-task'
+import { applyIntentCondition } from './setup-intent-condition'
 
 export type LiveCopilotOutput = {
   finalAnswer: string
@@ -20,10 +21,16 @@ export const liveCopilotHarness = createHarness<
   run: async ({ input, setArtifact }) => {
     const runId = `live:${input.id}`
     const prepared = prepareFixtureWorkspace({ fixture: input.fixture })
+    const appliedCondition = applyIntentCondition({
+      condition: input.condition,
+      expectedSkillAreas: input.expectedSkillAreas,
+      workspacePath: prepared.workspacePath,
+    })
 
     setCommonArtifacts({
       input,
       runId,
+      setupFilesWritten: appliedCondition.filesWritten,
       workspacePath: prepared.workspacePath,
       setArtifact,
     })
@@ -141,11 +148,13 @@ export const liveCopilotHarness = createHarness<
 function setCommonArtifacts({
   input,
   runId,
+  setupFilesWritten,
   workspacePath,
   setArtifact,
 }: {
   input: IntentDiscoveryTask
   runId: string
+  setupFilesWritten: Array<string>
   workspacePath: string
   setArtifact: (name: string, value: string | Array<string>) => void
 }): void {
@@ -155,6 +164,7 @@ function setCommonArtifacts({
   setArtifact('fixture', input.fixture)
   setArtifact('prompt', input.prompt)
   setArtifact('expectedSkillAreas', input.expectedSkillAreas)
+  setArtifact('setupFilesWritten', setupFilesWritten)
   setArtifact('workspacePath', workspacePath)
 }
 

@@ -12,6 +12,10 @@ export const intentDiscoveryConditions = [
     countsTowardAutonomousScore: true,
   },
   {
+    id: 'mapped-intent',
+    countsTowardAutonomousScore: true,
+  },
+  {
     id: 'explicit-intent-control',
     countsTowardAutonomousScore: false,
   },
