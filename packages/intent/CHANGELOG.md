@@ -1,5 +1,11 @@
 # @tanstack/intent
 
+## 0.2.1
+
+### Patch Changes
+
+- [#171](https://github.com/TanStack/intent/pull/171) [`392016b`](https://github.com/TanStack/intent/commit/392016b461578a76fdba6f25669154eb7a8bb150) - Adds package source-kind metadata to scanner results, tightens scan stats to match the runtime contract, and adds focused markdown destination rewrite coverage while preserving the current name-based allowlist behavior.
+
 ## 0.2.0
 
 ### Minor Changes
