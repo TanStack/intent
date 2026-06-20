@@ -5,7 +5,13 @@ import { join } from 'node:path'
 import type { HarnessContext, HarnessRun } from 'vitest-evals'
 import { describe, expect, it } from 'vitest'
 import { failedSpans, toolCalls } from 'vitest-evals'
+import { countsTowardAutonomousScore } from './corpus/conditions'
 import { tasks, type IntentDiscoveryTask } from './corpus/tasks'
+import { correctSkillLoaded } from './graders/correct-skill-loaded'
+import { attachEvalMetadata, score } from './graders/eval-metadata'
+import { classifyFailure } from './graders/failure-classifier'
+import { referenceOnly } from './graders/reference-only'
+import { strictIntentInvocation } from './graders/strict-invocation'
 import {
   liveCopilotHarness,
   type LiveCopilotOutput,
@@ -21,7 +27,7 @@ if (!routerTask) {
 
 describe('Intent discovery live Copilot harness', () => {
   it('returns an explicit unsupported result until live capture is wired', async () => {
-    const result = await runLiveHarness(routerTask)
+    const result = await withoutCopilotCommand(() => runLiveHarness(routerTask))
 
     expect(result.output).toEqual({
       finalAnswer: '',
@@ -91,7 +97,75 @@ describe('Intent discovery live Copilot harness', () => {
       rmSync(tempDir, { recursive: true, force: true })
     }
   })
+
+  it.skipIf(process.env.INTENT_DISCOVERY_RUN_LIVE !== '1')(
+    'runs the configured live backend',
+    async (context) => {
+      const result = await runLiveHarness(routerTask)
+      const strict = strictIntentInvocation(result)
+      const loaded = correctSkillLoaded(result, routerTask.expectedSkillAreas)
+      const reference = referenceOnly(result, routerTask.expectedSkillAreas)
+      const failureClass = classifyFailure(
+        result,
+        routerTask.expectedSkillAreas,
+      )
+      const autonomous = countsTowardAutonomousScore({
+        condition: routerTask.condition,
+        explicitnessLevel: routerTask.explicitnessLevel,
+      })
+
+      attachEvalMetadata({
+        harnessName: liveCopilotHarness.name,
+        run: result,
+        scores: [
+          score(
+            'AutonomousDiscoverySuccess',
+            autonomous && strict.passed && loaded.passed,
+            {
+              rationale:
+                'Scores only autonomous live runs where Copilot invoked Intent and loaded the expected skill.',
+              failureClass,
+              runnerStatus: String(result.artifacts?.runnerStatus ?? ''),
+            },
+          ),
+          score('StrictIntentInvocation', strict.passed, {
+            matchedCommand: strict.matchedCommand,
+            source: strict.source,
+          }),
+          score('CorrectSkillLoaded', loaded.passed, {
+            loadedSkills: loaded.loadedSkills,
+            expectedSkillAreas: routerTask.expectedSkillAreas,
+          }),
+          score('NoReferenceOnlyFalsePositive', !reference, {
+            referenceOnly: reference,
+          }),
+        ],
+        task: context.task,
+      })
+
+      expect(result.artifacts?.runnerStatus).toBe('completed')
+      expect(result.output.runId).toBe(`live:${routerTask.id}`)
+      expect(result.artifacts?.transcriptPath).toEqual(expect.any(String))
+      expect(result.artifacts?.commandsInvoked).toEqual(expect.any(Array))
+      expect(result.artifacts?.loadedSkills).toEqual(expect.any(Array))
+    },
+    300_000,
+  )
 })
+
+async function withoutCopilotCommand<T>(run: () => Promise<T>): Promise<T> {
+  const previousCommand = process.env.INTENT_DISCOVERY_COPILOT_COMMAND
+
+  delete process.env.INTENT_DISCOVERY_COPILOT_COMMAND
+
+  try {
+    return await run()
+  } finally {
+    if (previousCommand !== undefined) {
+      process.env.INTENT_DISCOVERY_COPILOT_COMMAND = previousCommand
+    }
+  }
+}
 
 async function runLiveHarness(
   task: IntentDiscoveryTask,

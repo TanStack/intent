@@ -1,8 +1,9 @@
-import type { HarnessContext, HarnessRun, JudgeResult } from 'vitest-evals'
+import type { HarnessContext, HarnessRun } from 'vitest-evals'
 import { describe, expect, it } from 'vitest'
 import { failedSpans, toolCalls } from 'vitest-evals'
 import { countsTowardAutonomousScore } from './corpus/conditions'
 import { correctSkillLoaded } from './graders/correct-skill-loaded'
+import { attachEvalMetadata, score } from './graders/eval-metadata'
 import { classifyFailure } from './graders/failure-classifier'
 import { referenceOnly } from './graders/reference-only'
 import { strictIntentInvocation } from './graders/strict-invocation'
@@ -66,54 +67,6 @@ describe('Intent discovery saved transcripts', () => {
     })
   }
 })
-
-type NamedJudgeResult = JudgeResult & { name: string }
-
-function score(
-  name: string,
-  passed: boolean,
-  metadata?: NamedJudgeResult['metadata'],
-): NamedJudgeResult {
-  return {
-    name,
-    score: passed ? 1 : 0,
-    metadata,
-  }
-}
-
-function attachEvalMetadata({
-  harnessName,
-  run,
-  scores,
-  task,
-}: {
-  harnessName: string
-  run: HarnessRun<IntentDiscoveryOutput>
-  scores: Array<NamedJudgeResult>
-  task: RuntimeTask
-}): void {
-  const avgScore =
-    scores.reduce((total, item) => total + (item.score ?? 0), 0) / scores.length
-
-  task.meta.harness = {
-    name: harnessName,
-    run,
-  }
-  task.meta.eval = {
-    scores,
-    avgScore,
-    output: run.output,
-    toolCalls: toolCalls(run),
-    thresholdFailed: false,
-  }
-}
-
-type RuntimeTask = {
-  meta: {
-    harness?: unknown
-    eval?: unknown
-  }
-}
 
 async function runSavedTranscript(
   evalCase: (typeof savedTranscriptCases)[number],
