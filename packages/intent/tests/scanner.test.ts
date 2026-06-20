@@ -115,6 +115,7 @@ describe('scanForIntents', () => {
     const result = scanForIntents(root)
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('@tanstack/db')
+    expect(result.packages[0]!.kind).toBe('npm')
     expect(result.packages[0]!.version).toBe('0.5.2')
     expect(result.packages[0]!.packageRoot).toBe(pkgDir)
     expect(result.packages[0]!.skills).toHaveLength(1)
@@ -128,7 +129,7 @@ describe('scanForIntents', () => {
         packageJsonCacheHits: expect.any(Number),
       }),
     )
-    expect(result.stats!.packageJsonReadCount).toBeGreaterThan(0)
+    expect(result.stats.packageJsonReadCount).toBeGreaterThan(0)
   })
 
   it('does not throw when skills exists but is not a directory', () => {
@@ -1556,7 +1557,7 @@ describe('scanForIntents', () => {
       '@tanstack/query',
       '@tanstack/store',
     ])
-    expect(result.stats!.packageJsonReadCount).toBeLessThan(10)
+    expect(result.stats.packageJsonReadCount).toBeLessThan(10)
   })
 
   it('does not crawl package source trees during nested node_modules discovery', () => {
@@ -1591,7 +1592,7 @@ describe('scanForIntents', () => {
     const result = scanForIntents(root)
 
     expect(result.packages).toEqual([])
-    expect(result.stats!.packageJsonReadCount).toBeLessThan(4)
+    expect(result.stats.packageJsonReadCount).toBeLessThan(4)
   })
 
   it('dedupes recursive workspace symlink paths by real package identity', () => {
@@ -1639,7 +1640,8 @@ describe('scanForIntents', () => {
 
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.name).toBe('b')
-    expect(result.stats!.packageJsonReadCount).toBeLessThan(10)
+    expect(result.packages[0]!.kind).toBe('workspace')
+    expect(result.stats.packageJsonReadCount).toBeLessThan(10)
   })
 
   it('prefers valid semver versions over invalid ones at the same depth', () => {

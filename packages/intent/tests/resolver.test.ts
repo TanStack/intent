@@ -29,6 +29,7 @@ function intentPackage(
     },
     packageRoot: `node_modules/${overrides.name}`,
     skills: [skill('core')],
+    kind: 'npm',
     source: 'local',
     version: '1.0.0',
     ...overrides,
@@ -64,6 +65,10 @@ function scanResult(
     },
     packageManager: 'npm',
     packages,
+    stats: {
+      packageJsonCacheHits: 0,
+      packageJsonReadCount: 0,
+    },
     warnings,
   }
 }

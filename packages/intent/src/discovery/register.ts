@@ -23,6 +23,7 @@ export interface CreatePackageRegistrarOptions {
   deriveIntentConfig: (pkgJson: PackageJson) => IntentConfig | null
   discoverSkills: (skillsDir: string, packageName: string) => Array<SkillEntry>
   getPackageDepth: (packageRoot: string, projectRoot: string) => number
+  getPackageKind: (packageRoot: string) => IntentPackage['kind']
   packageIndexes: Map<string, number>
   packages: Array<IntentPackage>
   projectRoot: string
@@ -120,6 +121,7 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
       intent,
       skills,
       packageRoot: dirPath,
+      kind: opts.getPackageKind(dirPath),
       source,
     }
     const existingIndex = opts.packageIndexes.get(name)

@@ -47,6 +47,7 @@ function pkg(overrides: Partial<IntentPackage>): IntentPackage {
     intent: { version: 1, repo: 'test/pkg', docs: 'docs/' },
     skills: [],
     packageRoot: 'node_modules/pkg',
+    kind: 'npm',
     source: 'local',
     ...overrides,
   }
@@ -72,6 +73,10 @@ function scanResult(packages: Array<IntentPackage>): ScanResult {
         exists: false,
         scanned: false,
       },
+    },
+    stats: {
+      packageJsonCacheHits: 0,
+      packageJsonReadCount: 0,
     },
   }
 }
