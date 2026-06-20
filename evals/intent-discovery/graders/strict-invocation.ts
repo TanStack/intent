@@ -1,5 +1,5 @@
-import type { HarnessRun } from 'vitest-evals'
 import { intentCommandsFromRun } from '../harness/parse-intent-commands'
+import type { HarnessRun } from 'vitest-evals'
 
 export type StrictInvocationResult = {
   passed: boolean

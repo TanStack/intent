@@ -95,8 +95,31 @@ function messagesWithToolCalls(
     index === firstAssistantIndex
       ? {
           ...message,
-          toolCalls: [...(message.toolCalls ?? []), ...toolCalls],
+          toolCalls: mergeToolCalls(message.toolCalls ?? [], toolCalls),
         }
       : message,
   )
+}
+
+function mergeToolCalls(
+  existing: Array<ToolCallRecord>,
+  incoming: Array<ToolCallRecord>,
+): Array<ToolCallRecord> {
+  const seen = new Set(
+    existing.map((call) => `${call.name}:${JSON.stringify(call.arguments ?? {})}`),
+  )
+
+  return [
+    ...existing,
+    ...incoming.filter((call) => {
+      const key = `${call.name}:${JSON.stringify(call.arguments ?? {})}`
+
+      if (seen.has(key)) {
+        return false
+      }
+
+      seen.add(key)
+      return true
+    }),
+  ]
 }

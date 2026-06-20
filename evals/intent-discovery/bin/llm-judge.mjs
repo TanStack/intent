@@ -7,6 +7,9 @@ const reportPath =
   process.argv[2] ?? 'evals/intent-discovery/runs/latest/vitest-results.json'
 const apiKey = process.env.OPENAI_API_KEY
 const model = process.env.INTENT_DISCOVERY_LLM_JUDGE_MODEL ?? 'gpt-4o-mini'
+const requestTimeoutMs = Number(
+  process.env.INTENT_DISCOVERY_LLM_JUDGE_TIMEOUT_MS ?? '30000',
+)
 
 if (!apiKey) {
   console.log('Skipped LLM judge: OPENAI_API_KEY is not set.')
@@ -66,7 +69,12 @@ function reportCases(report) {
 }
 
 async function judgeCase({ apiKey, item, model }) {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), requestTimeoutMs)
+  let response
+
+  try {
+    response = await fetch('https://api.openai.com/v1/chat/completions', {
     body: JSON.stringify({
       messages: [
         {
@@ -92,7 +100,17 @@ async function judgeCase({ apiKey, item, model }) {
       'content-type': 'application/json',
     },
     method: 'POST',
+    signal: controller.signal,
   })
+  } catch (error) {
+    return {
+      deterministicScores: item.scores,
+      error: `LLM judge request failed: ${String(error)}`,
+      title: item.title,
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (!response.ok) {
     return {
@@ -103,10 +121,21 @@ async function judgeCase({ apiKey, item, model }) {
 
   const body = await response.json()
   const content = body.choices?.[0]?.message?.content ?? '{}'
+  let judgment
+  try {
+    judgment = JSON.parse(content)
+  } catch (error) {
+    return {
+      deterministicScores: item.scores,
+      error: `Invalid JSON from model: ${String(error)}`,
+      rawContent: content,
+      title: item.title,
+    }
+  }
 
   return {
     deterministicScores: item.scores,
-    judgment: JSON.parse(content),
+    judgment,
     title: item.title,
   }
 }

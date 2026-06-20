@@ -1,5 +1,4 @@
 import { createHarness } from 'vitest-evals'
-import type { IntentDiscoveryTask } from '../corpus/tasks'
 import { intentCommandsFromToolCalls } from './parse-intent-commands'
 import { prepareFixtureWorkspace } from './prepare-fixture'
 import {
@@ -7,6 +6,7 @@ import {
   runCopilotTask,
 } from './run-copilot-task'
 import { applyIntentCondition } from './setup-intent-condition'
+import type { IntentDiscoveryTask } from '../corpus/tasks'
 
 export type LiveCopilotOutput = {
   finalAnswer: string
@@ -20,22 +20,24 @@ export const liveCopilotHarness = createHarness<
   name: 'intent-discovery-live-copilot',
   run: async ({ input, setArtifact }) => {
     const runId = `live:${input.id}`
-    const prepared = prepareFixtureWorkspace({ fixture: input.fixture })
-    const appliedCondition = applyIntentCondition({
-      condition: input.condition,
-      expectedSkillAreas: input.expectedSkillAreas,
-      workspacePath: prepared.workspacePath,
-    })
-
-    setCommonArtifacts({
-      input,
-      runId,
-      setupFilesWritten: appliedCondition.filesWritten,
-      workspacePath: prepared.workspacePath,
-      setArtifact,
-    })
+    let prepared: ReturnType<typeof prepareFixtureWorkspace> | undefined
 
     try {
+      prepared = prepareFixtureWorkspace({ fixture: input.fixture })
+      const appliedCondition = applyIntentCondition({
+        condition: input.condition,
+        expectedSkillAreas: input.expectedSkillAreas,
+        workspacePath: prepared.workspacePath,
+      })
+
+      setCommonArtifacts({
+        input,
+        runId,
+        setupFilesWritten: appliedCondition.filesWritten,
+        workspacePath: prepared.workspacePath,
+        setArtifact,
+      })
+
       const run = await runCopilotTask({
         task: input,
         runId,
@@ -140,7 +142,7 @@ export const liveCopilotHarness = createHarness<
         errors: [normalizedError],
       }
     } finally {
-      prepared.cleanup()
+      prepared?.cleanup()
     }
   },
 })

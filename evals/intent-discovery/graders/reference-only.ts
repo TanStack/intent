@@ -1,7 +1,7 @@
-import type { HarnessRun } from 'vitest-evals'
-import type { ExpectedSkillArea } from '../corpus/tasks'
 import { jsonToSearchableText, textMatchesSkillArea } from './skill-areas'
 import { strictIntentInvocation } from './strict-invocation'
+import type { HarnessRun } from 'vitest-evals'
+import type { ExpectedSkillArea } from '../corpus/tasks'
 
 export function referenceOnly(
   run: HarnessRun,

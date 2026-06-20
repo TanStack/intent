@@ -1,6 +1,6 @@
+import { tasks } from '../corpus/tasks'
 import type { NormalizedMessage, ToolCallRecord } from 'vitest-evals'
 import type { IntentDiscoveryTask } from '../corpus/tasks'
-import { tasks } from '../corpus/tasks'
 
 export type SavedTranscriptCase = IntentDiscoveryTask & {
   finalAnswer: string

@@ -3,7 +3,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { fixtures } from './corpus/fixtures'
-import { tasks, type ExpectedSkillArea } from './corpus/tasks'
+import {  tasks } from './corpus/tasks'
+import type {ExpectedSkillArea} from './corpus/tasks';
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 

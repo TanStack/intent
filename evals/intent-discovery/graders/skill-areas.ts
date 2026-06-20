@@ -4,7 +4,12 @@ import type { ExpectedSkillArea } from '../corpus/tasks'
 const skillAreaPatterns: Record<ExpectedSkillArea, Array<RegExp>> = {
   router: [/router/i, /routing/i, /@tanstack\/router/i],
   start: [/tanstack start/i, /react-start/i, /server function/i, /full-stack/i],
-  'table-v9': [/tanstack table/i, /react-table/i, /table v9/i, /v9/i],
+  'table-v9': [
+    /tanstack table/i,
+    /react-table/i,
+    /@tanstack\/react-table/i,
+    /\btable[\s-]?v9\b/i,
+  ],
 }
 
 export function jsonToSearchableText(value: JsonValue | undefined): string {

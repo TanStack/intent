@@ -1,4 +1,3 @@
-import type { HarnessContext, HarnessRun } from 'vitest-evals'
 import { describe, expect, it } from 'vitest'
 import { failedSpans, toolCalls } from 'vitest-evals'
 import { countsTowardAutonomousScore } from './corpus/conditions'
@@ -10,8 +9,8 @@ import { strictIntentInvocation } from './graders/strict-invocation'
 import { savedTranscriptCases } from './fixtures/saved-transcripts'
 import {
   savedTranscriptHarness,
-  type IntentDiscoveryOutput,
 } from './harness/saved-transcript-harness'
+import type { HarnessContext } from 'vitest-evals'
 
 describe('Intent discovery saved transcripts', () => {
   for (const evalCase of savedTranscriptCases) {
@@ -79,7 +78,5 @@ async function runSavedTranscript(
     },
   }
 
-  return savedTranscriptHarness.run(evalCase, context) as Promise<
-    HarnessRun<IntentDiscoveryOutput>
-  >
+  return savedTranscriptHarness.run(evalCase, context)
 }

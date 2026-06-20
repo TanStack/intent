@@ -1,5 +1,5 @@
-import type { HarnessRun, JudgeResult, JsonValue } from 'vitest-evals'
 import { toolCalls } from 'vitest-evals'
+import type { HarnessRun, JsonValue, JudgeResult } from 'vitest-evals'
 
 export type NamedJudgeResult = JudgeResult & { name: string }
 
@@ -34,7 +34,10 @@ export function attachEvalMetadata<TOutput extends JsonValue | undefined>({
   task: RuntimeTask
 }): void {
   const avgScore =
-    scores.reduce((total, item) => total + (item.score ?? 0), 0) / scores.length
+    scores.length === 0
+      ? 0
+      : scores.reduce((total, item) => total + (item.score ?? 0), 0) /
+        scores.length
 
   task.meta.harness = {
     name: harnessName,

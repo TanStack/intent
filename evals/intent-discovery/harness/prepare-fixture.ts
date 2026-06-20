@@ -7,7 +7,7 @@ import {
   rmSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { IntentDiscoveryFixture } from '../corpus/tasks'
 
@@ -47,7 +47,7 @@ export function prepareFixtureWorkspace({
   cpSync(sourcePath, workspacePath, {
     recursive: true,
     verbatimSymlinks: true,
-    filter: (source) => !source.includes(`${fixturesDir}/runs/`),
+    filter: (source) => !source.includes(`${fixturesDir}${sep}runs${sep}`),
   })
 
   return {

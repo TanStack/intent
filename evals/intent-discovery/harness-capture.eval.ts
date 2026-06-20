@@ -1,9 +1,7 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync  } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { ToolCallRecord } from 'vitest-evals'
 import { fixtures } from './corpus/fixtures'
 import { tasks } from './corpus/tasks'
 import {
@@ -11,6 +9,7 @@ import {
   parseIntentCommand,
 } from './harness/parse-intent-commands'
 import { prepareFixtureWorkspace } from './harness/prepare-fixture'
+import type { ToolCallRecord } from 'vitest-evals'
 
 describe('Intent discovery harness capture', () => {
   it('parses accepted Intent command forms from tool calls', () => {
@@ -48,6 +47,10 @@ describe('Intent discovery harness capture', () => {
       },
       {
         name: 'shell_command',
+        arguments: { command: 'pnpm dlx @tanstack/intent list' },
+      },
+      {
+        name: 'shell_command',
         arguments: {
           command:
             'yarn dlx @tanstack/intent@latest load @tanstack/router#routing',
@@ -59,6 +62,10 @@ describe('Intent discovery harness capture', () => {
       },
       {
         name: 'shell_command',
+        arguments: { command: 'yarn dlx @tanstack/intent list' },
+      },
+      {
+        name: 'shell_command',
         arguments: {
           command: 'bunx @tanstack/intent@latest load @tanstack/router#routing',
         },
@@ -66,6 +73,10 @@ describe('Intent discovery harness capture', () => {
       {
         name: 'shell_command',
         arguments: { command: 'bunx @tanstack/intent@latest list' },
+      },
+      {
+        name: 'shell_command',
+        arguments: { command: 'bunx @tanstack/intent list' },
       },
     ]
 
@@ -111,6 +122,12 @@ describe('Intent discovery harness capture', () => {
         source: 'tool-call',
       },
       {
+        raw: 'pnpm dlx @tanstack/intent list',
+        executable: 'pnpm dlx @tanstack/intent',
+        action: 'list',
+        source: 'tool-call',
+      },
+      {
         raw: 'yarn dlx @tanstack/intent@latest load @tanstack/router#routing',
         executable: 'yarn dlx @tanstack/intent@latest',
         action: 'load',
@@ -124,6 +141,12 @@ describe('Intent discovery harness capture', () => {
         source: 'tool-call',
       },
       {
+        raw: 'yarn dlx @tanstack/intent list',
+        executable: 'yarn dlx @tanstack/intent',
+        action: 'list',
+        source: 'tool-call',
+      },
+      {
         raw: 'bunx @tanstack/intent@latest load @tanstack/router#routing',
         executable: 'bunx @tanstack/intent@latest',
         action: 'load',
@@ -133,6 +156,12 @@ describe('Intent discovery harness capture', () => {
       {
         raw: 'bunx @tanstack/intent@latest list',
         executable: 'bunx @tanstack/intent@latest',
+        action: 'list',
+        source: 'tool-call',
+      },
+      {
+        raw: 'bunx @tanstack/intent list',
+        executable: 'bunx @tanstack/intent',
         action: 'list',
         source: 'tool-call',
       },

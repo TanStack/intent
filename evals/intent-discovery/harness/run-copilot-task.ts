@@ -1,17 +1,20 @@
-import type {
-  NormalizedMessage,
-  ToolCallRecord,
-  UsageSummary,
-} from 'vitest-evals'
-import type { IntentDiscoveryTask } from '../corpus/tasks'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { parseIntentCommand } from './parse-intent-commands'
+import type { IntentDiscoveryTask } from '../corpus/tasks'
+import type {
+  NormalizedMessage,
+  ToolCallRecord,
+  UsageSummary,
+} from 'vitest-evals'
 
 const evalDir = dirname(dirname(fileURLToPath(import.meta.url)))
 const transcriptDir = join(evalDir, 'runs', 'latest', 'transcripts')
+const commandTimeoutMs = Number(
+  process.env.INTENT_DISCOVERY_COMMAND_TIMEOUT_MS ?? '300000',
+)
 
 export class LiveCopilotRunnerUnavailableError extends Error {
   constructor() {
@@ -125,6 +128,7 @@ async function runCommand({
   input: RunCopilotTaskInput
 }): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
+    let settled = false
     const child = spawn(command, {
       cwd: input.workspacePath,
       shell: true,
@@ -139,11 +143,25 @@ async function runCommand({
     })
     const stdoutChunks: Array<Buffer> = []
     const stderrChunks: Array<Buffer> = []
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      child.kill('SIGKILL')
+      reject(new Error(`Copilot command timed out after ${commandTimeoutMs}ms`))
+    }, commandTimeoutMs)
 
     child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk))
     child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk))
-    child.on('error', reject)
+    child.on('error', (error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      reject(error)
+    })
     child.on('close', (exitCode) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
       resolve({
         stdout: Buffer.concat(stdoutChunks).toString('utf8'),
         stderr: Buffer.concat(stderrChunks).toString('utf8'),
@@ -244,14 +262,29 @@ async function runDiff(
   workspacePath: string,
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
+    let settled = false
     const child = spawn('diff', ['-ruN', sourcePath, workspacePath])
     const stdoutChunks: Array<Buffer> = []
     const stderrChunks: Array<Buffer> = []
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      child.kill('SIGKILL')
+      reject(new Error(`diff timed out after ${commandTimeoutMs}ms`))
+    }, commandTimeoutMs)
 
     child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk))
     child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk))
-    child.on('error', reject)
+    child.on('error', (error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      reject(error)
+    })
     child.on('close', (exitCode) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
       resolve({
         stdout: Buffer.concat(stdoutChunks).toString('utf8'),
         stderr: Buffer.concat(stderrChunks).toString('utf8'),

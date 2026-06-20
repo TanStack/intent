@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@tanstack/react-router": "latest",
-    "react": "latest",
-    "react-dom": "latest"
+    "@tanstack/react-router": "1.170.16",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
   }
 }

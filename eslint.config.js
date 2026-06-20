@@ -7,6 +7,10 @@ import unusedImports from 'eslint-plugin-unused-imports'
 const config = [
   ...tanstackConfig,
   {
+    name: 'intent/eval-fixture-ignores',
+    ignores: ['evals/intent-discovery/fixtures/**/*.tsx'],
+  },
+  {
     name: 'tanstack/temp',
     plugins: {
       'unused-imports': unusedImports,

@@ -1,7 +1,7 @@
-import type { HarnessRun } from 'vitest-evals'
-import type { ExpectedSkillArea } from '../corpus/tasks'
 import { loadedSkillUsesFromRun } from '../harness/parse-intent-commands'
 import { listIncludesExpectedSkillArea } from './skill-areas'
+import type { HarnessRun } from 'vitest-evals'
+import type { ExpectedSkillArea } from '../corpus/tasks'
 
 export type CorrectSkillLoadedResult = {
   passed: boolean

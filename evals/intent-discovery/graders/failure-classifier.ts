@@ -1,11 +1,11 @@
-import type { HarnessRun } from 'vitest-evals'
+import { correctSkillLoaded } from './correct-skill-loaded'
+import { referenceOnly } from './reference-only'
+import { strictIntentInvocation } from './strict-invocation'
 import type {
   ExpectedSkillArea,
   IntentDiscoveryFailureClass,
 } from '../corpus/tasks'
-import { correctSkillLoaded } from './correct-skill-loaded'
-import { referenceOnly } from './reference-only'
-import { strictIntentInvocation } from './strict-invocation'
+import type { HarnessRun } from 'vitest-evals'
 
 export function classifyFailure(
   run: HarnessRun,
