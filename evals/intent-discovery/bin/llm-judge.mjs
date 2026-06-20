@@ -75,33 +75,33 @@ async function judgeCase({ apiKey, item, model }) {
 
   try {
     response = await fetch('https://api.openai.com/v1/chat/completions', {
-    body: JSON.stringify({
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You judge whether a coding agent output appears to apply loaded library skill guidance. You must not decide whether Intent was invoked; that is provided by deterministic scores. Return strict JSON only.',
-        },
-        {
-          role: 'user',
-          content: JSON.stringify({
-            instruction:
-              'Assess final output quality only. Return {"appliedGuidance":"yes"|"no"|"unknown","rationale":"..."}. Use unknown when evidence is insufficient.',
-            item,
-          }),
-        },
-      ],
-      model,
-      response_format: { type: 'json_object' },
-      temperature: 0,
-    }),
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      'content-type': 'application/json',
-    },
-    method: 'POST',
-    signal: controller.signal,
-  })
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You judge whether a coding agent output appears to apply loaded library skill guidance. You must not decide whether Intent was invoked; that is provided by deterministic scores. Return strict JSON only.',
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              instruction:
+                'Assess final output quality only. Return {"appliedGuidance":"yes"|"no"|"unknown","rationale":"..."}. Use unknown when evidence is insufficient.',
+              item,
+            }),
+          },
+        ],
+        model,
+        response_format: { type: 'json_object' },
+        temperature: 0,
+      }),
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+      },
+      method: 'POST',
+      signal: controller.signal,
+    })
   } catch (error) {
     return {
       deterministicScores: item.scores,

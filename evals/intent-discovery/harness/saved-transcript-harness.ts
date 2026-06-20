@@ -106,7 +106,9 @@ function mergeToolCalls(
   incoming: Array<ToolCallRecord>,
 ): Array<ToolCallRecord> {
   const seen = new Set(
-    existing.map((call) => `${call.name}:${JSON.stringify(call.arguments ?? {})}`),
+    existing.map(
+      (call) => `${call.name}:${JSON.stringify(call.arguments ?? {})}`,
+    ),
   )
 
   return [

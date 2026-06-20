@@ -1,22 +1,19 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync  } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { failedSpans, toolCalls } from 'vitest-evals'
 import { countsTowardAutonomousScore } from './corpus/conditions'
 import { liveTasks } from './corpus/live-tasks'
-import {  tasks } from './corpus/tasks'
+import { tasks } from './corpus/tasks'
 import { correctSkillLoaded } from './graders/correct-skill-loaded'
 import { attachEvalMetadata, score } from './graders/eval-metadata'
 import { classifyFailure } from './graders/failure-classifier'
 import { referenceOnly } from './graders/reference-only'
 import { strictIntentInvocation } from './graders/strict-invocation'
-import {
-  
-  liveCopilotHarness
-} from './harness/live-copilot-harness'
-import type {IntentDiscoveryTask} from './corpus/tasks';
-import type {LiveCopilotOutput} from './harness/live-copilot-harness';
+import { liveCopilotHarness } from './harness/live-copilot-harness'
+import type { IntentDiscoveryTask } from './corpus/tasks'
+import type { LiveCopilotOutput } from './harness/live-copilot-harness'
 import type { HarnessContext, HarnessRun } from 'vitest-evals'
 
 const routerTask = tasks.find(

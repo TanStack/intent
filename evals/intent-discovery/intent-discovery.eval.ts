@@ -7,9 +7,7 @@ import { classifyFailure } from './graders/failure-classifier'
 import { referenceOnly } from './graders/reference-only'
 import { strictIntentInvocation } from './graders/strict-invocation'
 import { savedTranscriptCases } from './fixtures/saved-transcripts'
-import {
-  savedTranscriptHarness,
-} from './harness/saved-transcript-harness'
+import { savedTranscriptHarness } from './harness/saved-transcript-harness'
 import type { HarnessContext } from 'vitest-evals'
 
 describe('Intent discovery saved transcripts', () => {
