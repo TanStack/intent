@@ -3,7 +3,7 @@ import type {
   PromptExplicitnessLevel,
 } from './conditions'
 
-export const expectedSkillAreas = ['router', 'start', 'table-v9'] as const
+const expectedSkillAreas = ['router', 'start', 'table-v9'] as const
 
 export type ExpectedSkillArea = (typeof expectedSkillAreas)[number]
 
@@ -27,7 +27,7 @@ export type IntentDiscoveryFailureClass =
   | 'prompt-too-vague'
   | 'harness-error'
 
-export type IntentDiscoveryExpected = {
+type IntentDiscoveryExpected = {
   strictInvocation: boolean
   correctSkillLoaded: boolean
   referenceOnly: boolean

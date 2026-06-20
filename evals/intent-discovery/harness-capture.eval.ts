@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { fixtures } from './corpus/fixtures'
 import { tasks } from './corpus/tasks'
+import { referenceOnly } from './graders/reference-only'
 import {
   intentCommandsFromToolCalls,
   parseIntentCommand,
@@ -181,6 +182,31 @@ describe('Intent discovery harness capture', () => {
         'tool-message',
       ),
     ).toBeUndefined()
+  })
+
+  it('does not treat user prompt skill mentions as reference-only evidence', () => {
+    expect(
+      referenceOnly(
+        {
+          errors: [],
+          output: { finalAnswer: 'Done.' },
+          session: {
+            messages: [
+              {
+                role: 'user',
+                content: 'Use TanStack Router if needed.',
+              },
+              {
+                role: 'assistant',
+                content: 'Done.',
+              },
+            ],
+          },
+          usage: {},
+        },
+        ['router'],
+      ),
+    ).toBe(false)
   })
 
   it('prepares an isolated workspace for every task fixture', () => {

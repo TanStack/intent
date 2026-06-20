@@ -2,7 +2,13 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.ts"]
+      "entry": [
+        "scripts/*.ts",
+        "evals/intent-discovery/*.eval.ts",
+        "evals/intent-discovery/bin/*.mjs"
+      ],
+      "ignoreBinaries": ["copilot", "diff"],
+      "ignoreFiles": ["evals/intent-discovery/fixtures/**/src/**/*"]
     },
     "packages/intent": {
       "entry": ["src/index.ts", "src/cli.ts", "src/core.ts", "src/setup.ts"],

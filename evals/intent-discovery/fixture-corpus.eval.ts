@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { fixtures } from './corpus/fixtures'
 import { tasks } from './corpus/tasks'
-import type { ExpectedSkillArea } from './corpus/tasks'
+import type { IntentDiscoveryFixtureDefinition } from './corpus/fixtures'
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 
@@ -22,12 +22,18 @@ describe('Intent discovery fixture corpus', () => {
 
   it('points each task at a fixture that covers its expected skill areas', () => {
     for (const task of tasks) {
-      const fixture = fixtures[task.fixture]
+      const fixture = (
+        fixtures as Partial<Record<string, IntentDiscoveryFixtureDefinition>>
+      )[task.fixture]
 
       expect(fixture, `${task.id} uses an unknown fixture`).toBeDefined()
+      if (!fixture) {
+        continue
+      }
+
       expect(
         task.expectedSkillAreas.every((area) =>
-          (fixture.skillAreas as Array<ExpectedSkillArea>).includes(area),
+          fixture.skillAreas.includes(area),
         ),
         `${task.id} expects ${task.expectedSkillAreas.join(', ')} but ${fixture.id} covers ${fixture.skillAreas.join(', ')}`,
       ).toBe(true)

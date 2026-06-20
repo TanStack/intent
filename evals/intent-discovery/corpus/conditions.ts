@@ -1,4 +1,4 @@
-export const intentDiscoveryConditions = [
+const intentDiscoveryConditions = [
   {
     id: 'no-intent',
     countsTowardAutonomousScore: true,
@@ -24,7 +24,7 @@ export const intentDiscoveryConditions = [
 export type IntentDiscoveryCondition =
   (typeof intentDiscoveryConditions)[number]['id']
 
-export const promptExplicitnessLevels = [0, 1, 2, 3, 4] as const
+const promptExplicitnessLevels = [0, 1, 2, 3, 4] as const
 
 export type PromptExplicitnessLevel = (typeof promptExplicitnessLevels)[number]
 

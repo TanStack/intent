@@ -21,7 +21,7 @@ export type PreparedFixtureWorkspace = {
   cleanup: () => void
 }
 
-export function fixturePath(fixture: IntentDiscoveryFixture): string {
+function fixturePath(fixture: IntentDiscoveryFixture): string {
   return join(fixturesDir, fixture)
 }
 

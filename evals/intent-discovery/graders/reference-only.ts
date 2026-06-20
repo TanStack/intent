@@ -12,6 +12,7 @@ export function referenceOnly(
   }
 
   const transcriptText = run.session.messages
+    .filter((message) => message.role !== 'user')
     .map((message) => jsonToSearchableText(message.content))
     .join('\n')
 
