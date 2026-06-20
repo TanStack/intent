@@ -25,9 +25,16 @@
     "format": "prettier --experimental-cli --ignore-unknown '**/*' --write",
     "lint:fix": "nx affected --target=lint:fix --exclude=examples/**",
     "lint:fix:all": "nx run-many --targets=lint --fix",
+    "generate-docs": "node scripts/generate-docs.ts",
+    "eval:intent-discovery": "vitest run --config evals/intent-discovery/vitest.evals.config.ts",
+    "eval:intent-discovery:json": "vitest run --config evals/intent-discovery/vitest.evals.config.ts --reporter=default --reporter=json --outputFile.json=evals/intent-discovery/runs/latest/vitest-results.json",
+    "eval:intent-discovery:live": "INTENT_DISCOVERY_RUN_LIVE=1 INTENT_DISCOVERY_COPILOT_COMMAND=\"node $PWD/evals/intent-discovery/bin/copilot-cli-adapter.mjs\" vitest run --config evals/intent-discovery/vitest.evals.config.ts",
+    "eval:intent-discovery:live:json": "INTENT_DISCOVERY_RUN_LIVE=1 INTENT_DISCOVERY_COPILOT_COMMAND=\"node $PWD/evals/intent-discovery/bin/copilot-cli-adapter.mjs\" vitest run --config evals/intent-discovery/vitest.evals.config.ts --reporter=default --reporter=json --outputFile.json=evals/intent-discovery/runs/latest/vitest-results.json",
+    "eval:intent-discovery:judge": "node evals/intent-discovery/bin/llm-judge.mjs evals/intent-discovery/runs/latest/vitest-results.json",
+    "eval:intent-discovery:report": "vitest-evals serve evals/intent-discovery/runs/latest/vitest-results.json",
+    "eval:intent-discovery:summary": "node evals/intent-discovery/bin/summarize-results.mjs evals/intent-discovery/runs/latest/vitest-results.json",
     "test": "pnpm run test:ci",
     "test:ci": "tsc --noEmit && nx run-many --targets=test:eslint,test:sherif,test:knip,test:docs,test:lib,test:integration,test:types,build",
-    "generate-docs": "node scripts/generate-docs.ts",
     "test:docs": "node scripts/verify-links.ts",
     "test:eslint": "nx affected --target=test:eslint --exclude=examples/**",
     "test:knip": "knip",
@@ -60,6 +67,7 @@
     "sherif": "^1.11.1",
     "tinyglobby": "^0.2.17",
     "typescript": "6.0.3",
-    "vitest": "4.1.8"
+    "vitest": "4.1.8",
+    "vitest-evals": "^0.13.1"
   }
 }

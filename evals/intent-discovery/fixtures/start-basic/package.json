@@ -1,0 +1,11 @@
+{
+  "name": "intent-eval-start-basic",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@tanstack/react-router": "1.170.16",
+    "@tanstack/react-start": "1.168.26",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  }
+}

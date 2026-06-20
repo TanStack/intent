@@ -63,3 +63,10 @@ vite.config.ts.timestamp-*
 .angular
 
 docs/superpowers
+
+evals/intent-discovery/.vitest-evals/
+evals/intent-discovery/runs/*
+!evals/intent-discovery/runs/.gitkeep
+!evals/intent-discovery/runs/latest/
+evals/intent-discovery/runs/latest/*
+!evals/intent-discovery/runs/latest/.gitkeep

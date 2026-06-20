@@ -7,6 +7,10 @@ import unusedImports from 'eslint-plugin-unused-imports'
 const config = [
   ...tanstackConfig,
   {
+    name: 'intent/eval-fixture-ignores',
+    ignores: ['evals/intent-discovery/fixtures/**/*.tsx'],
+  },
+  {
     name: 'tanstack/temp',
     plugins: {
       'unused-imports': unusedImports,
@@ -71,6 +75,15 @@ const config = [
             'Static-discovery invariant: createRequire().resolve is limited to package.json targets (disable inline for that case).',
         },
       ],
+    },
+  },
+  {
+    name: 'intent/evals',
+    files: ['evals/intent-discovery/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: './evals/intent-discovery/tsconfig.json',
+      },
     },
   },
 ]

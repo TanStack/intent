@@ -1,0 +1,10 @@
+{
+  "name": "intent-eval-table-v9-basic",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@tanstack/react-table": "9.0.0-beta.16",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  }
+}
