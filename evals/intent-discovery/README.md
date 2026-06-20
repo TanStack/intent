@@ -8,14 +8,21 @@ Opt-in eval suite for measuring whether Copilot discovers and invokes Intent sur
 - `pnpm eval:intent-discovery:json` writes `evals/intent-discovery/runs/latest/vitest-results.json`.
 - `pnpm eval:intent-discovery:live` runs the eval suite with the local Copilot CLI adapter enabled.
 - `pnpm eval:intent-discovery:live:json` writes a JSON report that includes live Copilot condition cases.
+- `pnpm eval:intent-discovery:judge` optionally annotates the latest JSON report with an OpenAI-backed output-quality judge when `OPENAI_API_KEY` is set.
 - `pnpm eval:intent-discovery:report` serves the saved JSON report.
+- `pnpm eval:intent-discovery:summary` writes `summary.json` and `summary.md` from the latest JSON report.
 
 The default JSON/report commands show saved-transcript efficacy cases only. To include the live Copilot condition matrix in the report artifact, run:
 
 ```sh
 pnpm eval:intent-discovery:live:json
+pnpm eval:intent-discovery:summary
 pnpm eval:intent-discovery:report
 ```
+
+Set `INTENT_DISCOVERY_RUN_COUNT=3` with the live commands to run each live condition three times and include `pass@k` / `pass^k` in the generated summary.
+
+The optional LLM judge is secondary. It can annotate whether final answers appear to apply loaded guidance, but it never changes deterministic scores such as `StrictIntentInvocation`, `CorrectSkillLoaded`, or `AutonomousDiscoverySuccess`.
 
 ## Current scope
 

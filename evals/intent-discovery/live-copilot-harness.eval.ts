@@ -21,6 +21,7 @@ import {
 const routerTask = tasks.find(
   (task) => task.id === 'router-current-intent-loads-router',
 )
+const liveRunCount = liveRunCountFromEnv()
 
 if (!routerTask) {
   throw new Error('Missing router-current-intent-loads-router task')
@@ -100,28 +101,51 @@ describe('Intent discovery live Copilot harness', () => {
   })
 
   for (const liveTask of liveTasks) {
-    it.skipIf(process.env.INTENT_DISCOVERY_RUN_LIVE !== '1')(
-      `live/${liveTask.condition}/${liveTask.fixture}`,
-      async (context) => {
-        const result = await runLiveHarness(liveTask)
+    for (let runIndex = 1; runIndex <= liveRunCount; runIndex += 1) {
+      it.skipIf(process.env.INTENT_DISCOVERY_RUN_LIVE !== '1')(
+        `live/${liveTask.condition}/${liveTask.fixture}/run-${runIndex}`,
+        async (context) => {
+          const task = liveRunTask(liveTask, runIndex)
+          const result = await runLiveHarness(task)
 
-        attachLiveEvalMetadata({
-          contextTask: context.task,
-          result,
-          task: liveTask,
-        })
+          attachLiveEvalMetadata({
+            contextTask: context.task,
+            result,
+            task,
+          })
 
-        expect(result.artifacts?.runnerStatus).toBe('completed')
-        expect(result.output.runId).toBe(`live:${liveTask.id}`)
-        expect(result.artifacts?.transcriptPath).toEqual(expect.any(String))
-        expect(result.artifacts?.commandsInvoked).toEqual(expect.any(Array))
-        expect(result.artifacts?.loadedSkills).toEqual(expect.any(Array))
-        expect(result.artifacts?.setupFilesWritten).toEqual(expect.any(Array))
-      },
-      300_000,
-    )
+          expect(result.artifacts?.runnerStatus).toBe('completed')
+          expect(result.output.runId).toBe(`live:${task.id}`)
+          expect(result.artifacts?.transcriptPath).toEqual(expect.any(String))
+          expect(result.artifacts?.commandsInvoked).toEqual(expect.any(Array))
+          expect(result.artifacts?.loadedSkills).toEqual(expect.any(Array))
+          expect(result.artifacts?.setupFilesWritten).toEqual(expect.any(Array))
+        },
+        300_000,
+      )
+    }
   }
 })
+
+function liveRunCountFromEnv(): number {
+  const value = Number(process.env.INTENT_DISCOVERY_RUN_COUNT ?? '1')
+
+  if (!Number.isInteger(value) || value < 1) {
+    return 1
+  }
+
+  return value
+}
+
+function liveRunTask(
+  task: IntentDiscoveryTask,
+  runIndex: number,
+): IntentDiscoveryTask {
+  return {
+    ...task,
+    id: `${task.id}-run-${runIndex}`,
+  }
+}
 
 function attachLiveEvalMetadata({
   contextTask,

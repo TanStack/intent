@@ -5,17 +5,20 @@ import type { HarnessRun, ToolCallRecord } from 'vitest-evals'
 export type ParsedIntentCommand = {
   raw: string
   executable:
+    | 'bunx @tanstack/intent@latest'
     | 'intent'
     | 'pnpm exec intent'
+    | 'pnpm dlx @tanstack/intent@latest'
     | 'npx @tanstack/intent'
     | 'npx @tanstack/intent@latest'
+    | 'yarn dlx @tanstack/intent@latest'
   action: 'list' | 'load'
   skillUse?: string
   source: 'tool-call' | 'tool-message'
 }
 
 const commandPattern =
-  /^\s*\$?\s*(?:(?:cd\s+.+?\s+&&\s+))?((?:pnpm\s+exec\s+intent)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i
+  /^\s*\$?\s*(?:(?:cd\s+.+?\s+&&\s+))?((?:bunx\s+@tanstack\/intent@latest)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent@latest)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent@latest)|(?:intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i
 
 export function parseIntentCommand(
   raw: string,

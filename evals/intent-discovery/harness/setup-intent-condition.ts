@@ -1,7 +1,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import {
+  buildIntentSkillGuidanceBlock,
+  buildIntentSkillsBlock,
+} from '../../../packages/intent/src/commands/install-writer.js'
 import type { IntentDiscoveryCondition } from '../corpus/conditions'
 import type { ExpectedSkillArea } from '../corpus/tasks'
+import type { ScanResult } from '../../../packages/intent/src/types.js'
 import {
   expectedSkillUseByArea,
   packageAllowlistByArea,
@@ -121,33 +126,63 @@ function writeAgentsFile({
 }
 
 function loadingGuidanceBlock(): string {
-  return `<!-- intent-skills:start -->
-## Skill Loading
-
-Before substantial work:
-
-- Skill check: run \`npx @tanstack/intent@latest list\`, or use skills already listed in context.
-- Skill guidance: if one local skill clearly matches the task, run \`npx @tanstack/intent@latest load <package>#<skill>\` and follow the returned \`SKILL.md\`.
-- Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.
-- Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
-<!-- intent-skills:end -->`
+  return buildIntentSkillGuidanceBlock('npm').block.trimEnd()
 }
 
 function mappedGuidanceBlock(
   expectedSkillAreas: Array<ExpectedSkillArea>,
 ): string {
-  const mappings = expectedSkillAreas
-    .map((area) => {
+  return buildIntentSkillsBlock(
+    scanResultForAreas(expectedSkillAreas),
+  ).block.trimEnd()
+}
+
+function scanResultForAreas(
+  expectedSkillAreas: Array<ExpectedSkillArea>,
+): ScanResult {
+  return {
+    conflicts: [],
+    nodeModules: {
+      global: { detected: false, exists: false, path: null, scanned: false },
+      local: {
+        detected: true,
+        exists: true,
+        path: 'node_modules',
+        scanned: true,
+      },
+    },
+    notices: [],
+    packageManager: 'npm',
+    packages: expectedSkillAreas.map((area) => {
+      const packageName = packageAllowlistByArea[area]
       const use = expectedSkillUseByArea[area]
+      const skillName = use.split('#')[1]
 
-      return `  - when: "working on ${area} tasks"
-    use: "${use}"`
-    })
-    .join('\n')
+      if (!skillName) {
+        throw new Error(`Invalid expected skill use for ${area}: ${use}`)
+      }
 
-  return `<!-- intent-skills:start -->
-# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
-skills:
-${mappings}
-<!-- intent-skills:end -->`
+      return {
+        intent: {
+          docs: 'docs/',
+          repo: `TanStack/${area}`,
+          version: 1,
+        },
+        kind: 'npm',
+        name: packageName,
+        packageRoot: `node_modules/${packageName}`,
+        skills: [
+          {
+            description: `Guidance for ${area} eval tasks`,
+            name: skillName,
+            path: `node_modules/${packageName}/skills/${skillName}/SKILL.md`,
+          },
+        ],
+        source: 'local',
+        version: '0.0.0-intent-eval',
+      }
+    }),
+    stats: { packageJsonCacheHits: 0, packageJsonReadCount: 0 },
+    warnings: [],
+  }
 }

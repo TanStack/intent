@@ -35,6 +35,38 @@ describe('Intent discovery harness capture', () => {
             'cd /tmp/eval/router-basic && npx @tanstack/intent@latest load @tanstack/router#routing 2>&1',
         },
       },
+      {
+        name: 'shell_command',
+        arguments: {
+          command:
+            'pnpm dlx @tanstack/intent@latest load @tanstack/router#routing',
+        },
+      },
+      {
+        name: 'shell_command',
+        arguments: { command: 'pnpm dlx @tanstack/intent@latest list' },
+      },
+      {
+        name: 'shell_command',
+        arguments: {
+          command:
+            'yarn dlx @tanstack/intent@latest load @tanstack/router#routing',
+        },
+      },
+      {
+        name: 'shell_command',
+        arguments: { command: 'yarn dlx @tanstack/intent@latest list' },
+      },
+      {
+        name: 'shell_command',
+        arguments: {
+          command: 'bunx @tanstack/intent@latest load @tanstack/router#routing',
+        },
+      },
+      {
+        name: 'shell_command',
+        arguments: { command: 'bunx @tanstack/intent@latest list' },
+      },
     ]
 
     expect(intentCommandsFromToolCalls(calls)).toEqual([
@@ -63,6 +95,45 @@ describe('Intent discovery harness capture', () => {
         executable: 'npx @tanstack/intent@latest',
         action: 'load',
         skillUse: '@tanstack/router#routing',
+        source: 'tool-call',
+      },
+      {
+        raw: 'pnpm dlx @tanstack/intent@latest load @tanstack/router#routing',
+        executable: 'pnpm dlx @tanstack/intent@latest',
+        action: 'load',
+        skillUse: '@tanstack/router#routing',
+        source: 'tool-call',
+      },
+      {
+        raw: 'pnpm dlx @tanstack/intent@latest list',
+        executable: 'pnpm dlx @tanstack/intent@latest',
+        action: 'list',
+        source: 'tool-call',
+      },
+      {
+        raw: 'yarn dlx @tanstack/intent@latest load @tanstack/router#routing',
+        executable: 'yarn dlx @tanstack/intent@latest',
+        action: 'load',
+        skillUse: '@tanstack/router#routing',
+        source: 'tool-call',
+      },
+      {
+        raw: 'yarn dlx @tanstack/intent@latest list',
+        executable: 'yarn dlx @tanstack/intent@latest',
+        action: 'list',
+        source: 'tool-call',
+      },
+      {
+        raw: 'bunx @tanstack/intent@latest load @tanstack/router#routing',
+        executable: 'bunx @tanstack/intent@latest',
+        action: 'load',
+        skillUse: '@tanstack/router#routing',
+        source: 'tool-call',
+      },
+      {
+        raw: 'bunx @tanstack/intent@latest list',
+        executable: 'bunx @tanstack/intent@latest',
+        action: 'list',
         source: 'tool-call',
       },
     ])
