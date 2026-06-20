@@ -45,7 +45,10 @@ export function UserTable({ users }: { users: Array<User> }) {
           <tr key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
               <th key={header.id}>
-                {flexRender(header.column.columnDef.header, header.getContext())}
+                {flexRender(
+                  header.column.columnDef.header,
+                  header.getContext(),
+                )}
               </th>
             ))}
           </tr>
