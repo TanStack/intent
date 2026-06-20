@@ -59,6 +59,9 @@ importers:
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.0.9)(happy-dom@20.3.1)(vite@7.3.1(@types/node@25.0.9)(jiti@2.7.0)(yaml@2.9.0))
+      vitest-evals:
+        specifier: ^0.13.1
+        version: 0.13.1(tinyrainbow@3.1.0)(vitest@4.1.8(@types/node@25.0.9)(happy-dom@20.3.1)(vite@7.3.1(@types/node@25.0.9)(jiti@2.7.0)(yaml@2.9.0)))(zod@4.3.5)
 
   benchmarks/intent:
     devDependencies:
@@ -1468,6 +1471,12 @@ packages:
   '@verdaccio/utils@8.1.2':
     resolution: {integrity: sha512-LTV6/Kcr8pS//iDjDitfYi1bp0AlKBUuvNoHAbI8tMnj0PLOUtRWJxId5FwuE+z3oNBeDLeOWPoXVtqKjl277Q==}
     engines: {node: '>=18'}
+
+  '@vitest-evals/core@0.13.1':
+    resolution: {integrity: sha512-YX5bRG+J0GCzwJiNoq7UHJVRrtqx07lF3cYUrHnvfRLrn/R5nfBkFkm9eluAYlMFbWehFw+fFIW7bPuyL+3pMg==}
+
+  '@vitest-evals/report-ui@0.13.1':
+    resolution: {integrity: sha512-uA0OSe8UFhSP8i92hUNSFbdJ7Lwi0b06DVfvPb9lnEADgZrExv8IiHy9mkRuU+aMwo7zQI75ZZz1qx07XzPczA==}
 
   '@vitest/expect@4.1.8':
     resolution: {integrity: sha512-h3nDO677RDLEGlBxyQ5CW8RlMThSKSRLUePLOx09gNIWRL40edgA1GCZSZgf1W55MFAG6/Sw14KeaAnqv0NKdQ==}
@@ -3507,17 +3516,9 @@ packages:
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
 
-  tinyexec@1.0.2:
-    resolution: {integrity: sha512-W/KYk+NFhkmsYpuHq5JykngiOCnxeVL8v8dFnqxSD8qEEdRfXk1SDM6JzNqcERbcGYj9tMrDQBYV9cjgnunFIg==}
-    engines: {node: '>=18'}
-
   tinyexec@1.2.4:
     resolution: {integrity: sha512-SHf/r48b7vOrjve9PxJo3MN5v5yuyjHvdUcrQffT3WXMUfnGmHDVbC4k3sHJaJTgZCwpUplIaAo5ANtMyp3YHg==}
     engines: {node: '>=18'}
-
-  tinyglobby@0.2.15:
-    resolution: {integrity: sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ==}
-    engines: {node: '>=12.0.0'}
 
   tinyglobby@0.2.17:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
@@ -3786,6 +3787,20 @@ packages:
       tsx:
         optional: true
       yaml:
+        optional: true
+
+  vitest-evals@0.13.1:
+    resolution: {integrity: sha512-UCA3drMFVxtYB3F/0AjQEBSp7EPc2Du2Au85kLHtQg4V6p2mpifP4m5VEfwgxVXq8UfrnsMk8SJvOB/5EiDC0g==}
+    hasBin: true
+    peerDependencies:
+      ai: '>=4 <7'
+      tinyrainbow: '>=2 <4'
+      vitest: '>=4 <5'
+      zod: '>=3 <5'
+    peerDependenciesMeta:
+      ai:
+        optional: true
+      zod:
         optional: true
 
   vitest@4.1.8:
@@ -5217,6 +5232,14 @@ snapshots:
       lodash: 4.18.1
       minimatch: 7.4.9
 
+  '@vitest-evals/core@0.13.1':
+    dependencies:
+      zod: 4.3.5
+
+  '@vitest-evals/report-ui@0.13.1':
+    dependencies:
+      '@vitest-evals/core': 0.13.1
+
   '@vitest/expect@4.1.8':
     dependencies:
       '@standard-schema/spec': 1.1.0
@@ -6026,10 +6049,6 @@ snapshots:
   fd-package-json@2.0.0:
     dependencies:
       walk-up-path: 4.0.0
-
-  fdir@6.5.0(picomatch@4.0.3):
-    optionalDependencies:
-      picomatch: 4.0.3
 
   fdir@6.5.0(picomatch@4.0.4):
     optionalDependencies:
@@ -7463,14 +7482,7 @@ snapshots:
 
   tinybench@2.9.0: {}
 
-  tinyexec@1.0.2: {}
-
   tinyexec@1.2.4: {}
-
-  tinyglobby@0.2.15:
-    dependencies:
-      fdir: 6.5.0(picomatch@4.0.3)
-      picomatch: 4.0.3
 
   tinyglobby@0.2.17:
     dependencies:
@@ -7511,7 +7523,7 @@ snapshots:
 
   ts-declaration-location@1.0.7(typescript@6.0.3):
     dependencies:
-      picomatch: 4.0.3
+      picomatch: 4.0.4
       typescript: 6.0.3
 
   tsconfig-paths@4.2.0:
@@ -7749,6 +7761,15 @@ snapshots:
       jiti: 2.7.0
       yaml: 2.9.0
 
+  vitest-evals@0.13.1(tinyrainbow@3.1.0)(vitest@4.1.8(@types/node@25.0.9)(happy-dom@20.3.1)(vite@7.3.1(@types/node@25.0.9)(jiti@2.7.0)(yaml@2.9.0)))(zod@4.3.5):
+    dependencies:
+      '@vitest-evals/core': 0.13.1
+      '@vitest-evals/report-ui': 0.13.1
+      tinyrainbow: 3.1.0
+      vitest: 4.1.8(@types/node@25.0.9)(happy-dom@20.3.1)(vite@7.3.1(@types/node@25.0.9)(jiti@2.7.0)(yaml@2.9.0))
+    optionalDependencies:
+      zod: 4.3.5
+
   vitest@4.1.8(@types/node@25.0.9)(happy-dom@20.3.1)(vite@7.3.1(@types/node@25.0.9)(jiti@2.7.0)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.8
@@ -7763,11 +7784,11 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.1
       pathe: 2.0.3
-      picomatch: 4.0.3
+      picomatch: 4.0.4
       std-env: 4.1.0
       tinybench: 2.9.0
-      tinyexec: 1.0.2
-      tinyglobby: 0.2.15
+      tinyexec: 1.2.4
+      tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
       vite: 7.3.1(@types/node@25.0.9)(jiti@2.7.0)(yaml@2.9.0)
       why-is-node-running: 2.3.0
