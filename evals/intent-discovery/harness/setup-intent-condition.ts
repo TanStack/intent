@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { IntentDiscoveryCondition } from '../corpus/conditions'
 import type { ExpectedSkillArea } from '../corpus/tasks'
@@ -28,9 +28,58 @@ export function applyIntentCondition({
   const filesWritten = [
     writePackageAllowlist(workspacePath, expectedSkillAreas),
     writeAgentsFile({ condition, expectedSkillAreas, workspacePath }),
+    ...writeSkillPackages(workspacePath, expectedSkillAreas),
   ]
 
   return { condition, filesWritten }
+}
+
+function writeSkillPackages(
+  workspacePath: string,
+  expectedSkillAreas: Array<ExpectedSkillArea>,
+): Array<string> {
+  return expectedSkillAreas.flatMap((area) => {
+    const packageName = packageAllowlistByArea[area]
+    const use = expectedSkillUseByArea[area]
+    const skillName = use.split('#')[1]
+
+    if (!skillName) {
+      throw new Error(`Invalid expected skill use for ${area}: ${use}`)
+    }
+
+    const packageRoot = join(
+      workspacePath,
+      'node_modules',
+      ...packageName.split('/'),
+    )
+    const skillDir = join(packageRoot, 'skills', skillName)
+    const packageJsonPath = join(packageRoot, 'package.json')
+    const skillPath = join(skillDir, 'SKILL.md')
+
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      packageJsonPath,
+      `${JSON.stringify(
+        {
+          name: packageName,
+          version: '0.0.0-intent-eval',
+          intent: {
+            version: 1,
+            repo: `TanStack/${area}`,
+            docs: 'docs/',
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    )
+    writeFileSync(
+      skillPath,
+      `---\nname: "${skillName}"\ndescription: "Guidance for ${area} eval tasks"\n---\n\nUse this skill for ${area} eval tasks.\n`,
+    )
+
+    return [packageJsonPath, skillPath]
+  })
 }
 
 function writePackageAllowlist(

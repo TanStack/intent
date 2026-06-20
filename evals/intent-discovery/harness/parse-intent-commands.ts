@@ -1,17 +1,21 @@
-import type { HarnessRun, ToolCallRecord } from 'vitest-evals'
 import { toolCalls } from 'vitest-evals'
 import { jsonToSearchableText } from '../graders/skill-areas'
+import type { HarnessRun, ToolCallRecord } from 'vitest-evals'
 
 export type ParsedIntentCommand = {
   raw: string
-  executable: 'intent' | 'pnpm exec intent' | 'npx @tanstack/intent'
+  executable:
+    | 'intent'
+    | 'pnpm exec intent'
+    | 'npx @tanstack/intent'
+    | 'npx @tanstack/intent@latest'
   action: 'list' | 'load'
   skillUse?: string
   source: 'tool-call' | 'tool-message'
 }
 
 const commandPattern =
-  /^\s*\$?\s*((?:pnpm\s+exec\s+intent)|(?:npx\s+@tanstack\/intent)|(?:intent))\s+(list|load)(?:\s+([^\s]+))?/i
+  /^\s*\$?\s*(?:(?:cd\s+.+?\s+&&\s+))?((?:pnpm\s+exec\s+intent)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i
 
 export function parseIntentCommand(
   raw: string,
@@ -35,7 +39,7 @@ export function parseIntentCommand(
   }
 
   return {
-    raw: match[0].trim().replace(/^\$\s*/, ''),
+    raw: `${executable} ${action}${skillUse ? ` ${skillUse}` : ''}`,
     executable,
     action,
     skillUse,

@@ -28,6 +28,13 @@ describe('Intent discovery harness capture', () => {
           command: 'npx @tanstack/intent load @tanstack/start#routing',
         },
       },
+      {
+        name: 'shell_command',
+        arguments: {
+          command:
+            'cd /tmp/eval/router-basic && npx @tanstack/intent@latest load @tanstack/router#routing 2>&1',
+        },
+      },
     ]
 
     expect(intentCommandsFromToolCalls(calls)).toEqual([
@@ -49,6 +56,13 @@ describe('Intent discovery harness capture', () => {
         executable: 'npx @tanstack/intent',
         action: 'load',
         skillUse: '@tanstack/start#routing',
+        source: 'tool-call',
+      },
+      {
+        raw: 'npx @tanstack/intent@latest load @tanstack/router#routing',
+        executable: 'npx @tanstack/intent@latest',
+        action: 'load',
+        skillUse: '@tanstack/router#routing',
         source: 'tool-call',
       },
     ])
