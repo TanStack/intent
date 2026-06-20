@@ -1,5 +1,17 @@
 # @tanstack/intent
 
+## 0.2.0
+
+### Minor Changes
+
+- [#169](https://github.com/TanStack/intent/pull/169) [`0dbf9d0`](https://github.com/TanStack/intent/commit/0dbf9d05e3aa018461b6b1ffa00db350976f0835) - Add `intent validate --check` and `intent validate --fix` for mechanical `SKILL.md` frontmatter migrations.
+
+  `--check` reports pending migrations without writing files. `--fix` rewrites fixable `name` and metadata scalar migrations, then re-runs validation.
+
+### Patch Changes
+
+- [#168](https://github.com/TanStack/intent/pull/168) [`9eee8a5`](https://github.com/TanStack/intent/commit/9eee8a5f9f98c9d05d14cab3b8e07e68fe494f5c) - Make `SKILL.md` frontmatter spec-compliant. `name` must now be a spec-legal leaf segment matching its parent directory (lowercase letters, numbers, and hyphens; 64 characters max; no slashes), and the Intent-specific scalars `type`, `library`, `library_version`, and `framework` live under the `metadata` map. `intent validate` now errors on a slash/non-leaf `name`, a `name` with non-spec characters or over 64 characters, non-spec top-level scalar keys, and a non-string `metadata` map. Skill identity is derived from the directory path rather than the frontmatter `name`, and the `generate-skill` and `tree-generator` templates emit the new shape.
+
 ## 0.1.1
 
 ### Patch Changes
