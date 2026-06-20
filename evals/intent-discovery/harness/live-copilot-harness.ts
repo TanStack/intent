@@ -32,6 +32,7 @@ export const liveCopilotHarness = createHarness<
       const run = await runCopilotTask({
         task: input,
         runId,
+        sourcePath: prepared.sourcePath,
         workspacePath: prepared.workspacePath,
       })
       const intentCommands = intentCommandsFromToolCalls(run.toolCalls)

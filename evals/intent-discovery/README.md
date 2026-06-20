@@ -14,6 +14,6 @@ This executable slice grades synthetic saved transcripts with Vitest plus `vites
 
 The controlled fixture corpus is limited to current skill-backed surfaces. For this slice, that means TanStack Router, TanStack Start, and TanStack Table v9.
 
-The live Copilot harness is a boundary contract only. Until live capture is wired, it returns a normalized `unsupported` run with no tool calls and an explicit `LiveCopilotRunnerUnavailableError`.
+The live Copilot harness can run an opt-in command backend through `INTENT_DISCOVERY_COPILOT_COMMAND`. When that environment variable is unset, it returns a normalized `unsupported` run with no tool calls and an explicit `LiveCopilotRunnerUnavailableError`. The command runs inside a prepared fixture workspace with task metadata in `INTENT_DISCOVERY_TASK_ID`, `INTENT_DISCOVERY_FIXTURE`, `INTENT_DISCOVERY_PROMPT`, `INTENT_DISCOVERY_RUN_ID`, and `INTENT_DISCOVERY_WORKSPACE`.
 
 Harness integrity failures fail the eval. Product findings such as reference-only behavior, no discovery attempt, or wrong skill selection are recorded as diagnostic failures, not passing scores. The headline success signal is strict Intent invocation plus the expected skill loaded for autonomous cases.

@@ -1,3 +1,7 @@
+import { existsSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { HarnessContext, HarnessRun } from 'vitest-evals'
 import { describe, expect, it } from 'vitest'
 import { failedSpans, toolCalls } from 'vitest-evals'
@@ -35,6 +39,57 @@ describe('Intent discovery live Copilot harness', () => {
       },
     ])
     expect(failedSpans(result)).toHaveLength(1)
+  })
+
+  it('runs an opt-in command backend and captures command, skill, transcript, and diff evidence', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'intent-eval-command-'))
+    const fakeRunnerPath = join(tempDir, 'fake-runner.mjs')
+    const previousCommand = process.env.INTENT_DISCOVERY_COPILOT_COMMAND
+
+    writeFileSync(
+      fakeRunnerPath,
+      [
+        "import { writeFileSync } from 'node:fs'",
+        "writeFileSync('agent-output.txt', process.env.INTENT_DISCOVERY_TASK_ID ?? '')",
+        "console.log('$ intent list')",
+        "console.log('@tanstack/router#routing - Router route guidance')",
+        "console.log('$ intent load @tanstack/router#routing')",
+        "console.log('Loaded @tanstack/router#routing')",
+        "console.log('FINAL_ANSWER: Loaded router guidance and updated the fixture.')",
+      ].join('\n'),
+    )
+    process.env.INTENT_DISCOVERY_COPILOT_COMMAND = `node ${fakeRunnerPath}`
+
+    try {
+      const result = await runLiveHarness(routerTask)
+
+      expect(result.errors).toEqual([])
+      expect(result.output.finalAnswer).toBe(
+        'Loaded router guidance and updated the fixture.',
+      )
+      expect(result.artifacts?.runnerStatus).toBe('completed')
+      expect(result.artifacts?.intentCommandsInvoked).toEqual([
+        'intent list',
+        'intent load @tanstack/router#routing',
+      ])
+      expect(result.artifacts?.loadedSkills).toEqual([
+        '@tanstack/router#routing',
+      ])
+      expect(result.artifacts?.fileDiff).toEqual(
+        expect.stringContaining('agent-output.txt'),
+      )
+      expect(result.artifacts?.transcriptPath).toEqual(expect.any(String))
+      expect(existsSync(String(result.artifacts?.transcriptPath))).toBe(true)
+      expect(toolCalls(result)).toHaveLength(2)
+      expect(failedSpans(result)).toHaveLength(0)
+    } finally {
+      if (previousCommand === undefined) {
+        delete process.env.INTENT_DISCOVERY_COPILOT_COMMAND
+      } else {
+        process.env.INTENT_DISCOVERY_COPILOT_COMMAND = previousCommand
+      }
+      rmSync(tempDir, { recursive: true, force: true })
+    }
   })
 })
 
