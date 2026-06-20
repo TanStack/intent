@@ -1,0 +1,10 @@
+{
+  "name": "intent-eval-router-basic",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@tanstack/react-router": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  }
+}

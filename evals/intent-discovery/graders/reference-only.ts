@@ -5,7 +5,7 @@ import { strictIntentInvocation } from './strict-invocation'
 
 export function referenceOnly(
   run: HarnessRun,
-  expectedSkillAreas: ExpectedSkillArea[],
+  expectedSkillAreas: Array<ExpectedSkillArea>,
 ): boolean {
   if (strictIntentInvocation(run).passed) {
     return false

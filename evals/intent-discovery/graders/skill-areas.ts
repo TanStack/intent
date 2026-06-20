@@ -1,12 +1,10 @@
 import type { JsonValue } from 'vitest-evals'
 import type { ExpectedSkillArea } from '../corpus/tasks'
 
-const skillAreaPatterns: Record<ExpectedSkillArea, RegExp[]> = {
+const skillAreaPatterns: Record<ExpectedSkillArea, Array<RegExp>> = {
   router: [/router/i, /routing/i, /@tanstack\/router/i],
-  query: [/query/i, /mutation/i, /@tanstack\/query/i],
-  table: [/table/i, /column/i, /sorting/i, /@tanstack\/table/i],
-  form: [/form/i, /validation/i, /submit/i, /@tanstack\/form/i],
-  start: [/start/i, /full-stack/i, /@tanstack\/start/i],
+  start: [/tanstack start/i, /react-start/i, /server function/i, /full-stack/i],
+  'table-v9': [/tanstack table/i, /react-table/i, /table v9/i, /v9/i],
 }
 
 export function jsonToSearchableText(value: JsonValue | undefined): string {
@@ -23,7 +21,7 @@ export function jsonToSearchableText(value: JsonValue | undefined): string {
 
 export function textMatchesSkillArea(
   text: string,
-  expectedSkillAreas: ExpectedSkillArea[],
+  expectedSkillAreas: Array<ExpectedSkillArea>,
 ): boolean {
   return expectedSkillAreas.some((area) =>
     skillAreaPatterns[area].some((pattern) => pattern.test(text)),
@@ -31,8 +29,8 @@ export function textMatchesSkillArea(
 }
 
 export function listIncludesExpectedSkillArea(
-  values: string[],
-  expectedSkillAreas: ExpectedSkillArea[],
+  values: Array<string>,
+  expectedSkillAreas: Array<ExpectedSkillArea>,
 ): boolean {
   return values.some((value) => textMatchesSkillArea(value, expectedSkillAreas))
 }

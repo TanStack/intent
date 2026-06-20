@@ -3,23 +3,14 @@ import type {
   PromptExplicitnessLevel,
 } from './conditions'
 
-export const expectedSkillAreas = [
-  'router',
-  'query',
-  'table',
-  'form',
-  'start',
-] as const
+export const expectedSkillAreas = ['router', 'start', 'table-v9'] as const
 
 export type ExpectedSkillArea = (typeof expectedSkillAreas)[number]
 
 export type IntentDiscoveryFixture =
   | 'router-basic'
-  | 'query-basic'
-  | 'table-basic'
-  | 'form-basic'
   | 'start-basic'
-  | 'mixed-app'
+  | 'table-v9-basic'
 
 export type IntentDiscoveryFailureClass =
   | 'strict-success'
@@ -49,11 +40,11 @@ export type IntentDiscoveryTask = {
   condition: IntentDiscoveryCondition
   explicitnessLevel: PromptExplicitnessLevel
   prompt: string
-  expectedSkillAreas: ExpectedSkillArea[]
+  expectedSkillAreas: Array<ExpectedSkillArea>
   expected: IntentDiscoveryExpected
 }
 
-export const tasks: IntentDiscoveryTask[] = [
+export const tasks: Array<IntentDiscoveryTask> = [
   {
     id: 'router-current-intent-loads-router',
     fixture: 'router-basic',
@@ -83,12 +74,12 @@ export const tasks: IntentDiscoveryTask[] = [
     },
   },
   {
-    id: 'query-current-intent-loads-wrong-skill',
-    fixture: 'query-basic',
+    id: 'table-v9-current-intent-loads-wrong-skill',
+    fixture: 'table-v9-basic',
     condition: 'current-intent',
     explicitnessLevel: 2,
-    prompt: 'Add a mutation that invalidates the user list query after save.',
-    expectedSkillAreas: ['query'],
+    prompt: 'Add a TanStack Table v9 column with sortable user roles.',
+    expectedSkillAreas: ['table-v9'],
     expected: {
       strictInvocation: true,
       correctSkillLoaded: false,

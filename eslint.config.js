@@ -73,6 +73,15 @@ const config = [
       ],
     },
   },
+  {
+    name: 'intent/evals',
+    files: ['evals/intent-discovery/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: './evals/intent-discovery/tsconfig.json',
+      },
+    },
+  },
 ]
 
 export default config

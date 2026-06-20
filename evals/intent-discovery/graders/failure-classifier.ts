@@ -9,7 +9,7 @@ import { strictIntentInvocation } from './strict-invocation'
 
 export function classifyFailure(
   run: HarnessRun,
-  expectedSkillAreas: ExpectedSkillArea[],
+  expectedSkillAreas: Array<ExpectedSkillArea>,
 ): IntentDiscoveryFailureClass {
   if (run.errors.length > 0) {
     return 'harness-error'

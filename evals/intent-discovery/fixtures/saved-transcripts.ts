@@ -1,21 +1,21 @@
-import type { NormalizedMessage, SimpleToolCallRecord } from 'vitest-evals'
+import type { NormalizedMessage, ToolCallRecord } from 'vitest-evals'
 import type { IntentDiscoveryTask } from '../corpus/tasks'
 import { tasks } from '../corpus/tasks'
 
 export type SavedTranscriptCase = IntentDiscoveryTask & {
   finalAnswer: string
-  messages: NormalizedMessage[]
-  toolCalls: SimpleToolCallRecord[]
-  commandsInvoked: string[]
-  intentCommandsInvoked: string[]
-  intentCommandOutputs: string[]
-  loadedSkills: string[]
-  agentErrors: string[]
+  messages: Array<NormalizedMessage>
+  toolCalls: Array<ToolCallRecord>
+  commandsInvoked: Array<string>
+  intentCommandsInvoked: Array<string>
+  intentCommandOutputs: Array<string>
+  loadedSkills: Array<string>
+  agentErrors: Array<string>
 }
 
 const taskById = new Map(tasks.map((task) => [task.id, task]))
 
-export const savedTranscriptCases: SavedTranscriptCase[] = [
+export const savedTranscriptCases: Array<SavedTranscriptCase> = [
   savedTranscript('router-current-intent-loads-router', {
     finalAnswer:
       'I loaded @tanstack/router#routing and used its route loader guidance before making the route change.',
@@ -94,19 +94,18 @@ export const savedTranscriptCases: SavedTranscriptCase[] = [
     loadedSkills: [],
     agentErrors: [],
   }),
-  savedTranscript('query-current-intent-loads-wrong-skill', {
+  savedTranscript('table-v9-current-intent-loads-wrong-skill', {
     finalAnswer:
-      'I loaded @tanstack/router#routing, but the task needed TanStack Query mutation guidance.',
+      'I loaded @tanstack/router#routing, but the task needed TanStack Table v9 column guidance.',
     messages: [
       {
         role: 'user',
-        content:
-          'Add a mutation that invalidates the user list query after save.',
+        content: 'Add a TanStack Table v9 column with sortable user roles.',
       },
       {
         role: 'tool',
         content:
-          '$ intent list\n@tanstack/router#routing - Router route and loader guidance\n@tanstack/query#mutations - Query mutation guidance',
+          '$ intent list\n@tanstack/router#routing - Router route and loader guidance\n@tanstack/table#v9-columns - TanStack Table v9 column guidance',
       },
       {
         role: 'tool',
@@ -116,7 +115,7 @@ export const savedTranscriptCases: SavedTranscriptCase[] = [
       {
         role: 'assistant',
         content:
-          'I loaded @tanstack/router#routing, but the task needed TanStack Query mutation guidance.',
+          'I loaded @tanstack/router#routing, but the task needed TanStack Table v9 column guidance.',
       },
     ],
     toolCalls: [
@@ -124,7 +123,7 @@ export const savedTranscriptCases: SavedTranscriptCase[] = [
         name: 'shell_command',
         arguments: { command: 'intent list' },
         result:
-          '@tanstack/router#routing - Router route and loader guidance\n@tanstack/query#mutations - Query mutation guidance',
+          '@tanstack/router#routing - Router route and loader guidance\n@tanstack/table#v9-columns - TanStack Table v9 column guidance',
       },
       {
         name: 'shell_command',
@@ -138,7 +137,7 @@ export const savedTranscriptCases: SavedTranscriptCase[] = [
       'intent load @tanstack/router#routing',
     ],
     intentCommandOutputs: [
-      '@tanstack/router#routing - Router route and loader guidance\n@tanstack/query#mutations - Query mutation guidance',
+      '@tanstack/router#routing - Router route and loader guidance\n@tanstack/table#v9-columns - TanStack Table v9 column guidance',
       'Loaded @tanstack/router#routing',
     ],
     loadedSkills: ['@tanstack/router#routing'],

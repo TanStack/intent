@@ -5,12 +5,12 @@ import { listIncludesExpectedSkillArea } from './skill-areas'
 
 export type CorrectSkillLoadedResult = {
   passed: boolean
-  loadedSkills: string[]
+  loadedSkills: Array<string>
 }
 
 export function correctSkillLoaded(
   run: HarnessRun,
-  expectedSkillAreas: ExpectedSkillArea[],
+  expectedSkillAreas: Array<ExpectedSkillArea>,
 ): CorrectSkillLoadedResult {
   const loadedSkills = loadedSkillsFromRun(run)
 
@@ -20,7 +20,7 @@ export function correctSkillLoaded(
   }
 }
 
-function loadedSkillsFromRun(run: HarnessRun): string[] {
+function loadedSkillsFromRun(run: HarnessRun): Array<string> {
   const artifactSkills = stringArrayArtifact(run.artifacts?.loadedSkills)
   const commandSkills = toolCalls(run)
     .map((call) => commandString(call.arguments?.command))
@@ -31,7 +31,7 @@ function loadedSkillsFromRun(run: HarnessRun): string[] {
   return [...new Set([...artifactSkills, ...commandSkills])]
 }
 
-function stringArrayArtifact(value: unknown): string[] {
+function stringArrayArtifact(value: unknown): Array<string> {
   if (!Array.isArray(value)) {
     return []
   }

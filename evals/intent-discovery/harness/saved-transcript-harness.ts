@@ -1,5 +1,5 @@
 import { createHarness } from 'vitest-evals'
-import type { NormalizedMessage, SimpleToolCallRecord } from 'vitest-evals'
+import type { NormalizedMessage, ToolCallRecord } from 'vitest-evals'
 import type { SavedTranscriptCase } from '../fixtures/saved-transcripts'
 
 export type IntentDiscoveryOutput = {
@@ -70,9 +70,9 @@ export const savedTranscriptHarness = createHarness<
 })
 
 function messagesWithToolCalls(
-  messages: NormalizedMessage[],
-  toolCalls: SimpleToolCallRecord[],
-): NormalizedMessage[] {
+  messages: Array<NormalizedMessage>,
+  toolCalls: Array<ToolCallRecord>,
+): Array<NormalizedMessage> {
   if (toolCalls.length === 0) {
     return messages
   }

@@ -89,7 +89,7 @@ function attachEvalMetadata({
 }: {
   harnessName: string
   run: HarnessRun<IntentDiscoveryOutput>
-  scores: NamedJudgeResult[]
+  scores: Array<NamedJudgeResult>
   task: RuntimeTask
 }): void {
   const avgScore =
