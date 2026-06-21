@@ -73,6 +73,7 @@ let stdoutWriteSpy: ReturnType<typeof vi.spyOn>
 let tempDirs: Array<string>
 let previousGlobalNodeModules: string | undefined
 let previousNoNotices: string | undefined
+let previousIntentAudience: string | undefined
 
 function getHelpOutput(): string {
   return [...infoSpy.mock.calls, ...logSpy.mock.calls]
@@ -85,8 +86,10 @@ beforeEach(() => {
   tempDirs = []
   previousGlobalNodeModules = process.env.INTENT_GLOBAL_NODE_MODULES
   previousNoNotices = process.env.INTENT_NO_NOTICES
+  previousIntentAudience = process.env.INTENT_AUDIENCE
   delete process.env.INTENT_GLOBAL_NODE_MODULES
   delete process.env.INTENT_NO_NOTICES
+  delete process.env.INTENT_AUDIENCE
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
   infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -106,6 +109,11 @@ afterEach(() => {
     delete process.env.INTENT_NO_NOTICES
   } else {
     process.env.INTENT_NO_NOTICES = previousNoNotices
+  }
+  if (previousIntentAudience === undefined) {
+    delete process.env.INTENT_AUDIENCE
+  } else {
+    process.env.INTENT_AUDIENCE = previousIntentAudience
   }
   logSpy.mockRestore()
   infoSpy.mockRestore()
@@ -211,6 +219,7 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('$ intent list [--json]')
     expect(output).toContain('--json')
+    expect(output).toContain('--show-hidden')
   })
 
   it('prints the install prompt', async () => {
@@ -861,6 +870,121 @@ describe('cli commands', () => {
     expect(output).toContain(
       'Load: npx @tanstack/intent@latest load @tanstack/query#query/cache',
     )
+  })
+
+  it('reveals hidden skill sources for human list output when requested', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-hidden-human-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'get-tsconfig',
+      version: '4.0.0',
+      skillName: 'config',
+      description: 'TypeScript config lookup',
+    })
+    process.env.INTENT_AUDIENCE = 'human'
+    process.chdir(root)
+
+    const exitCode = await main(['list', '--show-hidden'])
+    const output = logSpy.mock.calls.flat().join('\n')
+    const stderr = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('Hidden skill sources:')
+    expect(output).toContain('get-tsconfig')
+    expect(output).toContain('1 skill')
+    expect(stderr).toContain('get-tsconfig')
+    expect(stderr).toContain('Add to opt in')
+  })
+
+  it('does not reveal hidden skill sources to agent list output', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-hidden-agent-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'get-tsconfig',
+      version: '4.0.0',
+      skillName: 'config',
+      description: 'TypeScript config lookup',
+    })
+    process.env.INTENT_AUDIENCE = 'agent'
+    process.chdir(root)
+
+    const exitCode = await main(['list', '--show-hidden'])
+    const output = logSpy.mock.calls.flat().join('\n')
+    const stderr = errorSpy.mock.calls.flat().join('\n')
+    const combined = `${output}\n${stderr}`
+
+    expect(exitCode).toBe(0)
+    expect(combined).toContain(
+      'Hidden skill sources are not revealed in agent sessions. Run this command outside the agent session to review candidates.',
+    )
+    expect(combined).toContain(
+      '1 discovered skill source with 1 skill is hidden',
+    )
+    expect(combined).not.toContain('get-tsconfig')
+    expect(combined).not.toContain('Add to opt in')
+  })
+
+  it('does not reveal hidden skill sources in agent JSON output', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-hidden-json-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'get-tsconfig',
+      version: '4.0.0',
+      skillName: 'config',
+      description: 'TypeScript config lookup',
+    })
+    process.env.INTENT_AUDIENCE = 'agent'
+    process.chdir(root)
+
+    const exitCode = await main(['list', '--json'])
+    const output = String(logSpy.mock.calls.at(-1)?.[0] ?? '')
+    const parsed = JSON.parse(output) as {
+      hiddenSourceCount: number
+      hiddenSources: Array<unknown>
+      notices: Array<string>
+    }
+
+    expect(exitCode).toBe(0)
+    expect(parsed.hiddenSourceCount).toBe(1)
+    expect(parsed.hiddenSources).toEqual([])
+    expect(parsed.notices).toEqual([
+      '1 discovered skill source with 1 skill is hidden because it is not listed in intent.skills. Ask the user to run `intent list --show-hidden` outside the agent session to review candidates.',
+    ])
+    expect(output).not.toContain('get-tsconfig')
+    expect(output).not.toContain('Add to opt in')
   })
 
   it.each([

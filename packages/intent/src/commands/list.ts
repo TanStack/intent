@@ -5,6 +5,7 @@ import {
   printNotices,
   printWarnings,
 } from './support.js'
+import { detectIntentAudience } from '../shared/environment.js'
 import { formatIntentCommand } from '../shared/command-runner.js'
 import { listIntentSkills } from '../core/index.js'
 import type { GlobalScanFlags } from './support.js'
@@ -17,6 +18,7 @@ import type { ScanResult } from '../shared/types.js'
 
 export interface ListCommandOptions extends GlobalScanFlags {
   json?: boolean
+  showHidden?: boolean
 }
 
 function printListDebug(result: IntentSkillList): void {
@@ -87,10 +89,32 @@ function formatLoadCommand(
   return formatIntentCommand(packageManager, `load ${skill.use}${scopeFlag}`)
 }
 
+function printHiddenSources(result: IntentSkillList, audience: string): void {
+  if (audience === 'agent') {
+    console.log(
+      'Hidden skill sources are not revealed in agent sessions. Run this command outside the agent session to review candidates.',
+    )
+    return
+  }
+
+  if (result.hiddenSources.length === 0) return
+
+  console.log('\nHidden skill sources:\n')
+  for (const source of result.hiddenSources) {
+    console.log(
+      `  ${source.name} (${source.skillCount} ${source.skillCount === 1 ? 'skill' : 'skills'})`,
+    )
+  }
+}
+
 export async function runListCommand(
   options: ListCommandOptions,
 ): Promise<void> {
-  const result = listIntentSkills(coreOptionsFromGlobalFlags(options))
+  const audience = detectIntentAudience()
+  const result = listIntentSkills({
+    ...coreOptionsFromGlobalFlags(options),
+    audience,
+  })
   const noticeOptions = noticeOptionsFromGlobalFlags(options)
   printListDebug(result)
 
@@ -109,6 +133,9 @@ export async function runListCommand(
 
   if (result.packages.length === 0) {
     console.log('No intent-enabled packages found.')
+    if (options.showHidden && result.hiddenSourceCount > 0) {
+      printHiddenSources(result, audience)
+    }
     if (result.warnings.length > 0) {
       console.log()
       printWarnings(result.warnings)
@@ -130,6 +157,10 @@ export async function runListCommand(
   printTable(['PACKAGE', 'SOURCE', 'VERSION', 'SKILLS'], rows)
 
   printVersionConflicts(result)
+
+  if (options.showHidden) {
+    printHiddenSources(result, audience)
+  }
 
   const skillsByPackageRoot = groupSkillsByPackageRoot(result.skills)
   const allSkills = result.packages.map((pkg) =>

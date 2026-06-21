@@ -6,7 +6,7 @@ id: intent-list
 `intent list` discovers skill-enabled packages and prints available skills.
 
 ```bash
-npx @tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] [--no-notices]
+npx @tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] [--show-hidden] [--no-notices]
 ```
 
 ## Options
@@ -15,6 +15,7 @@ npx @tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] [
 - `--debug`: print discovery debug details to stderr
 - `--global`: include global packages after project packages
 - `--global-only`: list global packages only
+- `--show-hidden`: show unlisted hidden skill sources when run outside an agent session
 - `--no-notices`: suppress non-critical notices on stderr
 
 ## What you get
@@ -60,6 +61,13 @@ When both local and global packages are scanned, local packages take precedence.
       "version": "5.0.0",
       "source": "local",
       "packageRoot": "/path/to/project/node_modules/@tanstack/query",
+      "skillCount": 1
+    }
+  ],
+  "hiddenSourceCount": 1,
+  "hiddenSources": [
+    {
+      "name": "hidden-package",
       "skillCount": 1
     }
   ],
@@ -109,7 +117,7 @@ The list as a whole has three special forms:
 - **Empty** (`"skills": []`): no package is surfaced, with an info notice printed to stderr.
 - **Wildcard** (`"skills": ["*"]`): every discovered package is surfaced, with an acknowledged-risk notice printed to stderr.
 
-A package that ships skills but is not listed is dropped. When packages are dropped this way, Intent prints one summary line naming them so you can opt in. A listed package that was not discovered is reported as well. Matching is currently by package name. See [Configuration](../concepts/configuration) and [Trust model](../concepts/trust-model).
+A package that ships skills but is not listed is dropped. When packages are dropped this way, Intent prints one summary line naming them so you can opt in. In agent sessions, hidden sources are reported by count only; run `intent list --show-hidden` outside the agent session to review candidates. A listed package that was not discovered is reported as well. Matching is currently by package name. See [Configuration](../concepts/configuration) and [Trust model](../concepts/trust-model).
 
 ## Excludes
 

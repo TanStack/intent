@@ -1,4 +1,5 @@
 import { scanForIntents } from '../discovery/scanner.js'
+import { detectIntentAudience } from '../shared/environment.js'
 import {
   compileExcludePatterns,
   getConfigDirs,
@@ -10,12 +11,16 @@ import {
 import { readPackageJson } from './package-json.js'
 import { parseSkillSources } from './skill-sources.js'
 import { resolveProjectContext } from './project-context.js'
+import type { SkillUse } from '../skills/use.js'
+import type { IntentPackage, ScanOptions, ScanResult } from '../shared/types.js'
 import type { ExcludeMatcher } from './excludes.js'
 import type { ProjectContext } from './project-context.js'
 import type { SkillSourcesConfig } from './skill-sources.js'
-import type { SkillUse } from '../skills/use.js'
-import type { IntentCoreOptions } from './types.js'
-import type { IntentPackage, ScanOptions, ScanResult } from '../shared/types.js'
+import type {
+  IntentAudience,
+  IntentCoreOptions,
+  IntentHiddenSourceSummary,
+} from './types.js'
 
 export const ALLOW_ALL_NOTICE =
   'All skill sources allowed (intent.skills: ["*"]) — unvetted skills may be surfaced into agent guidance.'
@@ -27,6 +32,7 @@ export const EMPTY_NOTE =
   'intent.skills is empty — no skill sources are permitted.'
 
 export interface SourcePolicyOptions {
+  audience?: IntentAudience
   config: SkillSourcesConfig
   excludeMatchers: Array<ExcludeMatcher>
 }
@@ -91,13 +97,29 @@ export function checkLoadAllowed(
   return null
 }
 
-function formatUnlistedNotice(names: Array<string>): string {
-  const sorted = [...names].sort()
-  const noun = sorted.length === 1 ? 'package ships' : 'packages ship'
-  return `${sorted.length} discovered ${noun} skills but ${sorted.length === 1 ? 'is' : 'are'} not listed in intent.skills: ${sorted.join(', ')}. Add to opt in.`
+function pluralize(count: number, singular: string, plural: string): string {
+  return count === 1 ? singular : plural
+}
+
+function formatUnlistedNotice(
+  hiddenSources: Array<IntentHiddenSourceSummary>,
+  audience: IntentAudience,
+): string {
+  const sorted = [...hiddenSources].sort((a, b) => a.name.localeCompare(b.name))
+  const sourceCount = sorted.length
+  const skillCount = sorted.reduce((sum, source) => sum + source.skillCount, 0)
+
+  if (audience === 'agent') {
+    return `${sourceCount} discovered ${pluralize(sourceCount, 'skill source', 'skill sources')} with ${skillCount} ${pluralize(skillCount, 'skill', 'skills')} ${pluralize(sourceCount, 'is', 'are')} hidden because ${pluralize(sourceCount, 'it is', 'they are')} not listed in intent.skills. Ask the user to run \`intent list --show-hidden\` outside the agent session to review candidates.`
+  }
+
+  const noun = sourceCount === 1 ? 'package ships' : 'packages ship'
+  return `${sourceCount} discovered ${noun} skills but ${sourceCount === 1 ? 'is' : 'are'} not listed in intent.skills: ${sorted.map((source) => source.name).join(', ')}. Add to opt in.`
 }
 
 export interface SourcePolicyResult {
+  hiddenSourceCount: number
+  hiddenSources: Array<IntentHiddenSourceSummary>
   packages: Array<IntentPackage>
   notices: Array<string>
 }
@@ -107,6 +129,7 @@ export function applySourcePolicy(
   options: SourcePolicyOptions,
 ): SourcePolicyResult {
   const { config, excludeMatchers } = options
+  const audience = options.audience ?? 'human'
   const seen = new Set<string>()
   const notices: Array<string> = []
 
@@ -117,14 +140,14 @@ export function applySourcePolicy(
   }
 
   const packages: Array<IntentPackage> = []
-  const unlistedNames: Array<string> = []
+  const hiddenSources: Array<IntentHiddenSourceSummary> = []
 
   for (const pkg of scanResult.packages) {
     if (isPackageExcluded(pkg.name, excludeMatchers)) continue
 
     if (!isSourcePermitted(config, pkg.name)) {
       if (config.mode === 'explicit') {
-        unlistedNames.push(pkg.name)
+        hiddenSources.push({ name: pkg.name, skillCount: pkg.skills.length })
       }
       continue
     }
@@ -137,8 +160,8 @@ export function applySourcePolicy(
     )
   }
 
-  if (unlistedNames.length > 0) {
-    emit(formatUnlistedNotice(unlistedNames))
+  if (hiddenSources.length > 0) {
+    emit(formatUnlistedNotice(hiddenSources, audience))
   }
 
   if (config.mode === 'explicit') {
@@ -156,7 +179,12 @@ export function applySourcePolicy(
   else if (config.mode === 'allow-all') emit(ALLOW_ALL_NOTICE)
   else if (config.mode === 'empty') emit(EMPTY_NOTE)
 
-  return { packages, notices }
+  return {
+    hiddenSourceCount: hiddenSources.length,
+    hiddenSources,
+    packages,
+    notices,
+  }
 }
 
 // A null/undefined intent.skills is treated as not-declared so it cannot
@@ -180,6 +208,8 @@ export function readSkillSourcesConfig(
 }
 
 export interface PolicedScan {
+  hiddenSourceCount: number
+  hiddenSources: Array<IntentHiddenSourceSummary>
   scan: ScanResult
   excludePatterns: Array<string>
 }
@@ -192,6 +222,7 @@ export function scanForPolicedIntents(params: {
 }): PolicedScan {
   const { cwd, scanOptions, coreOptions } = params
   const context = params.context ?? resolveProjectContext({ cwd })
+  const audience = detectIntentAudience(coreOptions.audience)
 
   const scanResult = scanForIntents(cwd, scanOptions)
   const config = readSkillSourcesConfig(cwd, context)
@@ -199,6 +230,7 @@ export function scanForPolicedIntents(params: {
   const excludeMatchers = compileExcludePatterns(excludePatterns)
 
   const policy = applySourcePolicy(scanResult, {
+    audience,
     config,
     excludeMatchers,
   })
@@ -209,6 +241,8 @@ export function scanForPolicedIntents(params: {
     .filter((name) => !survivingNames.has(name))
 
   return {
+    hiddenSourceCount: policy.hiddenSourceCount,
+    hiddenSources: audience === 'agent' ? [] : policy.hiddenSources,
     scan: {
       ...scanResult,
       packages: policy.packages,

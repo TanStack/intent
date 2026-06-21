@@ -107,7 +107,7 @@ describe('listIntentSkills', () => {
       framework: 'react',
     })
 
-    const result = listIntentSkills({ cwd: root })
+    const result = listIntentSkills({ audience: 'human', cwd: root })
 
     expect(result).toEqual({
       packageManager: 'unknown',
@@ -133,6 +133,8 @@ describe('listIntentSkills', () => {
           skillCount: 1,
         },
       ],
+      hiddenSourceCount: 0,
+      hiddenSources: [],
       warnings: [],
       notices: [],
       conflicts: [],
@@ -193,7 +195,7 @@ describe('listIntentSkills', () => {
       description: 'Devtools panel skill',
     })
 
-    const result = listIntentSkills({ cwd: root })
+    const result = listIntentSkills({ audience: 'human', cwd: root })
 
     expect(result.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
     expect(result.skills.map((skill) => skill.use)).toEqual([
@@ -261,12 +263,47 @@ describe('listIntentSkills', () => {
       description: 'Unlisted skill',
     })
 
-    const result = listIntentSkills({ cwd: root })
+    const result = listIntentSkills({ audience: 'human', cwd: root })
 
     expect(result.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
+    expect(result.hiddenSourceCount).toBe(1)
+    expect(result.hiddenSources).toEqual([
+      { name: '@tanstack/unlisted', skillCount: 1 },
+    ])
     expect(result.notices).toEqual([
       '1 discovered package ships skills but is not listed in intent.skills: @tanstack/unlisted. Add to opt in.',
     ])
+  })
+
+  it('redacts unlisted package names from agent list notices', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/unlisted',
+      version: '1.0.0',
+      skillName: 'panel',
+      description: 'Unlisted skill',
+    })
+
+    const result = listIntentSkills({ audience: 'agent', cwd: root })
+
+    expect(result.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
+    expect(result.hiddenSourceCount).toBe(1)
+    expect(result.hiddenSources).toEqual([])
+    expect(result.notices).toEqual([
+      '1 discovered skill source with 1 skill is hidden because it is not listed in intent.skills. Ask the user to run `intent list --show-hidden` outside the agent session to review candidates.',
+    ])
+    expect(JSON.stringify(result)).not.toContain('@tanstack/unlisted')
+    expect(JSON.stringify(result)).not.toContain('Add to opt in')
   })
 
   it('drops a skill-level excluded skill from an allowlisted package', () => {
