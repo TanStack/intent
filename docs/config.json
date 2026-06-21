@@ -48,6 +48,10 @@
           "to": "cli/intent-install"
         },
         {
+          "label": "intent hooks",
+          "to": "cli/intent-hooks"
+        },
+        {
           "label": "intent exclude",
           "to": "cli/intent-exclude"
         },

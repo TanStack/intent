@@ -14,7 +14,11 @@ import {
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from '../install/guidance.js'
-import { formatHookInstallResult, runInstallHooks } from '../hooks/install.js'
+import {
+  formatHookInstallResult,
+  runInstallHooks,
+  validateHookInstallOptions,
+} from '../hooks/install.js'
 import type { GlobalScanFlags } from '../cli-support.js'
 import type { IntentCoreOptions } from '../core.js'
 import type { ScanResult } from '../types.js'
@@ -123,11 +127,13 @@ tanstackIntent:
    - The verification result`
 
 export interface InstallCommandOptions extends GlobalScanFlags {
-  agents?: string
   dryRun?: boolean
-  hooks?: boolean
   map?: boolean
   printPrompt?: boolean
+}
+
+export interface HooksInstallCommandOptions {
+  agents?: string
   scope?: string
 }
 
@@ -198,10 +204,10 @@ function printWriteResult({
   }
 }
 
-function installHooks(options: InstallCommandOptions): void {
-  if (!options.hooks || options.dryRun) {
-    return
-  }
+export function runHooksInstallCommand(
+  options: HooksInstallCommandOptions,
+): void {
+  validateHookInstallOptions(options)
 
   const results = runInstallHooks({
     agents: options.agents,
@@ -267,7 +273,6 @@ export async function runInstallCommand(
 
     printWriteResult(result)
     printPlacementTip(result.targetPath)
-    installHooks(options)
     return
   }
 
@@ -330,7 +335,6 @@ export async function runInstallCommand(
 
   printWriteResult(result)
   printPlacementTip(result.targetPath)
-  installHooks(options)
 
   printWarnings(scanResult.warnings)
   printNotices(scanResult.notices, noticeOptions)

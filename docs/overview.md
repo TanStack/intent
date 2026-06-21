@@ -54,10 +54,10 @@ npx @tanstack/intent@latest install
 Creates or updates lightweight `intent-skills` guidance in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.). Existing guidance is updated in place; otherwise `AGENTS.md` is the default target. Pass `--map` to opt in to explicit task-to-skill mappings.
 
 ```bash
-npx @tanstack/intent@latest install --hooks
+npx @tanstack/intent@latest hooks install
 ```
 
-Installs hook enforcement for supported agents. Project-scoped hooks are available for Claude Code and Codex. GitHub Copilot CLI hooks are user-scoped. Cursor and generic `AGENTS.md` agents use guidance only.
+Installs hook enforcement for supported agents. Project-scoped hooks are available for Claude Code and Codex. GitHub Copilot CLI project guidance can live in `.github/copilot-instructions.md`, while blocking hooks are user-scoped. Cursor and generic `AGENTS.md` agents use guidance only.
 
 ```bash
 npx @tanstack/intent@latest load @tanstack/query#fetching

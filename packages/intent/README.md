@@ -122,6 +122,7 @@ The real risk with any derived artifact is staleness. `npx @tanstack/intent@late
 | Command                                            | Description                                         |
 | -------------------------------------------------- | --------------------------------------------------- |
 | `npx @tanstack/intent@latest install`              | Set up skill loading guidance in agent config files |
+| `npx @tanstack/intent@latest hooks install`        | Install hook enforcement for supported agents       |
 | `npx @tanstack/intent@latest list [--json]`        | Discover local intent-enabled packages              |
 | `npx @tanstack/intent@latest load <use>`           | Load `<package>#<skill>` SKILL.md content           |
 | `npx @tanstack/intent@latest meta`                 | List meta-skills for library maintainers            |

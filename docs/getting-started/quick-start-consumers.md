@@ -45,13 +45,13 @@ Intent detects the package manager when generating this block, so the runner may
 To enforce loading guidance before edits in supported agents, opt in to hooks:
 
 ```bash
-npx @tanstack/intent@latest install --hooks
+npx @tanstack/intent@latest hooks install
 ```
 
-Project-scoped hooks are installed for Claude Code and Codex. GitHub Copilot CLI hooks are user-scoped, so configure them explicitly:
+Project-scoped hooks are installed for Claude Code and Codex. `intent install` can write project guidance to `.github/copilot-instructions.md`, but GitHub Copilot CLI hook enforcement is user-scoped, so configure it explicitly:
 
 ```bash
-npx @tanstack/intent@latest install --hooks --scope user --agents copilot
+npx @tanstack/intent@latest hooks install --scope user --agents copilot
 ```
 
 Cursor and generic `AGENTS.md` agents use the guidance block only.

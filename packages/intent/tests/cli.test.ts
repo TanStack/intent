@@ -455,56 +455,32 @@ describe('cli commands', () => {
     )
   })
 
-  it('writes skill loading guidance and project hooks with --hooks', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-hooks-'))
+  it('installs hooks with the hooks install command', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-hooks-install-'))
     tempDirs.push(root)
     process.chdir(root)
 
-    const exitCode = await main([
-      'install',
-      '--hooks',
-      '--agents',
-      'claude,codex',
-    ])
+    const exitCode = await main(['hooks', 'install', '--agents', 'claude'])
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
-    expect(output).toContain('Created AGENTS.md with skill loading guidance.')
     expect(output).toContain('Installed Intent hooks for claude (project)')
-    expect(output).toContain('Installed Intent hooks for codex (project)')
     expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(true)
-    expect(existsSync(join(root, '.codex', 'hooks.json'))).toBe(true)
-    expect(
-      existsSync(join(root, '.intent', 'hooks', 'intent-claude-gate.mjs')),
-    ).toBe(true)
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
-  it('fails cleanly for invalid install hook options', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-hooks-bad-'))
+  it('fails cleanly for invalid hooks install options', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-hooks-bad-options-'))
     tempDirs.push(root)
     process.chdir(root)
 
-    const badAgentExitCode = await main([
-      'install',
-      '--hooks',
-      '--agents',
-      'wat',
-    ])
-    const badScopeExitCode = await main([
-      'install',
-      '--hooks',
-      '--scope',
-      'repo',
-    ])
+    const exitCode = await main(['hooks', 'install', '--scope', 'repo'])
 
-    expect(badAgentExitCode).toBe(1)
-    expect(badScopeExitCode).toBe(1)
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Unknown hook agent: wat. Expected copilot, claude, codex, or all.',
-    )
+    expect(exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledWith(
       'Unknown hook scope: repo. Expected project or user.',
     )
+    expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(false)
   })
 
   it('writes install mappings with --map and is idempotent', async () => {
@@ -642,6 +618,41 @@ describe('cli commands', () => {
     expect(output).toContain('Generated 1 mapping for AGENTS.md.')
     expect(output).toContain('for: "Global fetching skill"')
     expect(output).toContain('id: "@tanstack/query#fetching"')
+  })
+
+  it('uses only global packages during install --map --global-only', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-global-only-'))
+    const globalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-global-only-node-modules-'),
+    )
+    tempDirs.push(root, globalRoot)
+
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/local',
+      version: '1.0.0',
+      skillName: 'local-skill',
+      description: 'Local skill',
+    })
+    const globalPkgDir = join(globalRoot, '@tanstack', 'query')
+    writeJson(join(globalPkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(join(globalPkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Global fetching skill',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--map', '--global-only'])
+    const content = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+
+    expect(exitCode).toBe(0)
+    expect(content).toContain('id: "@tanstack/query#fetching"')
+    expect(content).not.toContain('@tanstack/local#local-skill')
   })
 
   it('prints the scaffold prompt', async () => {

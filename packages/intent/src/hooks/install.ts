@@ -48,6 +48,14 @@ export function runInstallHooks({
   )
 }
 
+export function validateHookInstallOptions({
+  agents,
+  scope,
+}: Pick<InstallHooksOptions, 'agents' | 'scope'>): void {
+  parseScope(scope)
+  parseAgents(agents)
+}
+
 export function buildHookRunnerScript(agent: HookAgent): string {
   const editTools = [...EDIT_TOOLS_BY_AGENT[agent]].sort()
 
