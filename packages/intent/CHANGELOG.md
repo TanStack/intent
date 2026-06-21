@@ -1,5 +1,13 @@
 # @tanstack/intent
 
+## 0.3.0
+
+### Minor Changes
+
+- [#174](https://github.com/TanStack/intent/pull/174) [`089a355`](https://github.com/TanStack/intent/commit/089a3551467a428e2994633dc79ef47ef6b0d838) - Add `intent hooks install` for supported AI coding agents.
+
+  This adds lifecycle-hook installation for supported agents, including project/user scope handling, generated hook runner scripts, and agent-specific enforcement policy. It also documents the hook setup flow and adds eval/test coverage for hooked intent discovery.
+
 ## 0.2.1
 
 ### Patch Changes
