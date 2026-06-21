@@ -469,8 +469,8 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Created AGENTS.md with 1 mapping.')
-    expect(content).toContain('when: "Query data fetching patterns"')
-    expect(content).toContain('use: "@tanstack/query#fetching"')
+    expect(content).toContain('for: "Query data fetching patterns"')
+    expect(content).toContain('id: "@tanstack/query#fetching"')
     expect(content).toContain(
       'run: "npx @tanstack/intent@latest load @tanstack/query#fetching"',
     )
@@ -520,7 +520,7 @@ describe('cli commands', () => {
     const content = readFileSync(join(root, 'AGENTS.md'), 'utf8')
 
     expect(exitCode).toBe(0)
-    expect(content).toContain('use: "@tanstack/query#fetching"')
+    expect(content).toContain('id: "@tanstack/query#fetching"')
     expect(content).not.toContain('@tanstack/unlisted')
   })
 
@@ -579,8 +579,8 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Generated 1 mapping for AGENTS.md.')
-    expect(output).toContain('when: "Global fetching skill"')
-    expect(output).toContain('use: "@tanstack/query#fetching"')
+    expect(output).toContain('for: "Global fetching skill"')
+    expect(output).toContain('id: "@tanstack/query#fetching"')
   })
 
   it('prints the scaffold prompt', async () => {

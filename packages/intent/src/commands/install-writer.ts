@@ -98,7 +98,7 @@ function readManagedBlock(content: string): {
 
 function parseSkillsList(block: string): {
   errors: Array<string>
-  skills: Array<unknown>
+  mappings: Array<unknown>
 } {
   const yamlBody = normalizeBlock(block)
     .split('\n')
@@ -108,21 +108,23 @@ function parseSkillsList(block: string): {
     .join('\n')
 
   try {
-    const parsed = parseYaml(yamlBody) as { skills?: unknown } | null
-    if (!parsed || !Array.isArray(parsed.skills)) {
+    const parsed = parseYaml(yamlBody) as {
+      tanstackIntent?: unknown
+    } | null
+    if (!parsed || !Array.isArray(parsed.tanstackIntent)) {
       return {
-        errors: ['Managed block must contain a skills list.'],
-        skills: [],
+        errors: ['Managed block must contain a tanstackIntent list.'],
+        mappings: [],
       }
     }
 
-    return { errors: [], skills: parsed.skills }
+    return { errors: [], mappings: parsed.tanstackIntent }
   } catch (err) {
     return {
       errors: [
         `Managed block contains invalid YAML: ${err instanceof Error ? err.message : String(err)}`,
       ],
-      skills: [],
+      mappings: [],
     }
   }
 }
@@ -166,47 +168,52 @@ export function verifyIntentSkillsBlockFile({
     }
   }
 
-  const { skills, errors: parseErrors } = parseSkillsList(block)
+  const { mappings, errors: parseErrors } = parseSkillsList(block)
   errors.push(...parseErrors)
-  if (skills.length !== expectedMappingCount) {
+  if (mappings.length !== expectedMappingCount) {
     errors.push(
-      `Expected ${expectedMappingCount} skill mappings, found ${skills.length}.`,
+      `Expected ${expectedMappingCount} skill mappings, found ${mappings.length}.`,
     )
   }
 
-  for (const skill of skills) {
-    if (!skill || typeof skill !== 'object') {
+  for (const mappingValue of mappings) {
+    if (!mappingValue || typeof mappingValue !== 'object') {
       errors.push('Each skill mapping must be an object.')
       continue
     }
 
-    const mapping = skill as {
-      load?: unknown
+    const mapping = mappingValue as {
+      for?: unknown
+      id?: unknown
       run?: unknown
       use?: unknown
       when?: unknown
     }
 
-    if (mapping.load !== undefined) {
-      errors.push('Skill mappings must use compact `use` entries, not `load`.')
+    if (mapping.use !== undefined) {
+      errors.push('Skill mappings must use `id` entries, not `use`.')
     }
 
-    if (typeof mapping.when !== 'string' || mapping.when.trim() === '') {
-      errors.push('Each skill mapping must include a non-empty `when` field.')
+    if (mapping.when !== undefined) {
+      errors.push('Skill mappings must use compact `for` entries, not `when`.')
     }
 
-    if (typeof mapping.use !== 'string') {
-      errors.push('Each skill mapping must include a `use` field.')
+    if (typeof mapping.id !== 'string') {
+      errors.push('Each skill mapping must include an `id` field.')
     } else {
       try {
-        parseSkillUse(mapping.use)
+        parseSkillUse(mapping.id)
       } catch (err) {
         errors.push(err instanceof Error ? err.message : String(err))
       }
     }
 
-    if (mapping.run !== undefined && typeof mapping.run !== 'string') {
-      errors.push('Skill mapping `run` fields must be strings.')
+    if (typeof mapping.run !== 'string' || mapping.run.trim() === '') {
+      errors.push('Each skill mapping must include a non-empty `run` field.')
+    }
+
+    if (typeof mapping.for !== 'string' || mapping.for.trim() === '') {
+      errors.push('Each skill mapping must include a non-empty `for` field.')
     }
   }
 
@@ -250,8 +257,8 @@ export function buildIntentSkillsBlock(
 ): IntentSkillsBlockResult {
   const lines = [
     INTENT_SKILLS_START,
-    '# Skill mappings - before editing files, choose the matching skill and run its `run` command.',
-    'skills:',
+    '# TanStack Intent - before editing files, run the matching guidance command.',
+    'tanstackIntent:',
   ]
   let mappingCount = 0
 
@@ -260,9 +267,8 @@ export function buildIntentSkillsBlock(
       if (!isActionableSkill(skill)) continue
 
       mappingCount++
-      lines.push(`  - when: ${quoteYamlString(formatWhen(pkg.name, skill))}`)
       lines.push(
-        `    use: ${quoteYamlString(formatSkillUse(pkg.name, skill.name))}`,
+        `  - id: ${quoteYamlString(formatSkillUse(pkg.name, skill.name))}`,
       )
       lines.push(
         `    run: ${quoteYamlString(
@@ -272,11 +278,12 @@ export function buildIntentSkillsBlock(
           ),
         )}`,
       )
+      lines.push(`    for: ${quoteYamlString(formatWhen(pkg.name, skill))}`)
     }
   }
 
   if (mappingCount === 0) {
-    lines[2] = 'skills: []'
+    lines[2] = 'tanstackIntent: []'
   }
 
   lines.push(INTENT_SKILLS_END)

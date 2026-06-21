@@ -82,11 +82,11 @@ function scanResult(packages: Array<IntentPackage>): ScanResult {
 }
 
 const exampleBlock = `<!-- intent-skills:start -->
-# Skill mappings - before editing files, choose the matching skill and run its \`run\` command.
-skills:
-  - when: "Query data fetching"
-    use: "@tanstack/query#fetching"
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - id: "@tanstack/query#fetching"
     run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#fetching"
+    for: "Query data fetching"
 <!-- intent-skills:end -->
 `
 
@@ -149,17 +149,17 @@ describe('install writer block builder', () => {
 
     expect(generated.mappingCount).toBe(3)
     expect(generated.block).toBe(`<!-- intent-skills:start -->
-# Skill mappings - before editing files, choose the matching skill and run its \`run\` command.
-skills:
-  - when: "Query data fetching patterns"
-    use: "@tanstack/query#fetching"
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - id: "@tanstack/query#fetching"
     run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#fetching"
-  - when: "Mutation patterns"
-    use: "@tanstack/query#mutations"
+    for: "Query data fetching patterns"
+  - id: "@tanstack/query#mutations"
     run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#mutations"
-  - when: "Routing patterns"
-    use: "@tanstack/router#routing"
+    for: "Mutation patterns"
+  - id: "@tanstack/router#routing"
     run: "pnpm dlx @tanstack/intent@latest load @tanstack/router#routing"
+    for: "Routing patterns"
 <!-- intent-skills:end -->
 `)
   })
@@ -186,8 +186,8 @@ skills:
     const generated = buildIntentSkillsBlock(result)
 
     expect(generated.mappingCount).toBe(2)
-    expect(generated.block).toContain('use: "@tanstack/query#global-fetching"')
-    expect(generated.block).toContain('use: "@tanstack/query#pnpm-fetching"')
+    expect(generated.block).toContain('id: "@tanstack/query#global-fetching"')
+    expect(generated.block).toContain('id: "@tanstack/query#pnpm-fetching"')
     expect(generated.block).toContain(
       'run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#global-fetching"',
     )
@@ -225,13 +225,13 @@ skills:
     const generated = buildIntentSkillsBlock(result)
 
     expect(generated.mappingCount).toBe(2)
-    expect(generated.block).toContain('when: "Core skill"')
-    expect(generated.block).toContain('use: "@tanstack/query#core"')
+    expect(generated.block).toContain('for: "Core skill"')
+    expect(generated.block).toContain('id: "@tanstack/query#core"')
     expect(generated.block).toContain(
       'run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#core"',
     )
-    expect(generated.block).toContain('when: "Sub-skill"')
-    expect(generated.block).toContain('use: "@tanstack/query#core/fetching"')
+    expect(generated.block).toContain('for: "Sub-skill"')
+    expect(generated.block).toContain('id: "@tanstack/query#core/fetching"')
     expect(generated.block).toContain(
       'run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#core/fetching"',
     )
@@ -256,8 +256,8 @@ skills:
 
     const generated = buildIntentSkillsBlock(result)
 
-    expect(generated.block).toContain('when: "Use \\"quoted\\" names"')
-    expect(generated.block).toContain('use: "@tanstack/query#quotes"')
+    expect(generated.block).toContain('for: "Use \\"quoted\\" names"')
+    expect(generated.block).toContain('id: "@tanstack/query#quotes"')
   })
 
   it('collapses whitespace in skill descriptions including newlines', () => {
@@ -276,7 +276,7 @@ skills:
 
     const generated = buildIntentSkillsBlock(result)
 
-    expect(generated.block).toContain('when: "Line one Line two tabbed"')
+    expect(generated.block).toContain('for: "Line one Line two tabbed"')
   })
 
   it('uses fallback when description for skills with empty descriptions', () => {
@@ -295,7 +295,7 @@ skills:
 
     const generated = buildIntentSkillsBlock(result)
 
-    expect(generated.block).toContain('when: "Use @tanstack/query fetching"')
+    expect(generated.block).toContain('for: "Use @tanstack/query fetching"')
   })
 })
 
@@ -468,11 +468,11 @@ describe('install writer verification', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - before editing files, choose the matching skill and run its \`run\` command.
-skills:
-  - when: "Query data fetching"
-    use: "@tanstack/query#fetching"
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - id: "@tanstack/query#fetching"
     run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
+    for: "Query data fetching"
 <!-- intent-skills:end -->
 `
     writeFileSync(agentsPath, block)
@@ -503,7 +503,7 @@ skills:
   it('rejects missing managed block markers', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
-    writeFileSync(agentsPath, 'skills: []\n')
+    writeFileSync(agentsPath, 'tanstackIntent: []\n')
 
     const result = verifyIntentSkillsBlockFile({
       expectedBlock: exampleBlock,
@@ -536,7 +536,7 @@ skills:
     )
   })
 
-  it('rejects legacy load paths', () => {
+  it('rejects legacy skills lists', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
@@ -556,20 +556,18 @@ skills:
 
     expect(result.ok).toBe(false)
     expect(result.errors).toContain(
-      'Skill mappings must use compact `use` entries, not `load`.',
-    )
-    expect(result.errors).toContain(
-      'Each skill mapping must include a `use` field.',
+      'Managed block must contain a tanstackIntent list.',
     )
   })
 
-  it('rejects mappings without when', () => {
+  it('rejects mappings without for', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
-skills:
-  - use: "@tanstack/query#fetching"
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - id: "@tanstack/query#fetching"
+    run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
 <!-- intent-skills:end -->
 `
     writeFileSync(agentsPath, block)
@@ -582,17 +580,18 @@ skills:
 
     expect(result.ok).toBe(false)
     expect(result.errors).toContain(
-      'Each skill mapping must include a non-empty `when` field.',
+      'Each skill mapping must include a non-empty `for` field.',
     )
   })
 
-  it('rejects mappings without use', () => {
+  it('rejects mappings without id', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
-skills:
-  - when: "Query data fetching"
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
+    for: "Query data fetching"
 <!-- intent-skills:end -->
 `
     writeFileSync(agentsPath, block)
@@ -605,18 +604,19 @@ skills:
 
     expect(result.ok).toBe(false)
     expect(result.errors).toContain(
-      'Each skill mapping must include a `use` field.',
+      'Each skill mapping must include an `id` field.',
     )
   })
 
-  it('rejects invalid use values', () => {
+  it('rejects invalid id values', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
-skills:
-  - when: "Query data fetching"
-    use: "@tanstack/query"
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - id: "@tanstack/query"
+    run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
+    for: "Query data fetching"
 <!-- intent-skills:end -->
 `
     writeFileSync(agentsPath, block)
