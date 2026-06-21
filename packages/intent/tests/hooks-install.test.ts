@@ -244,6 +244,50 @@ describe('hook installer', () => {
     )
   })
 
+  it('preserves hooks that only mention an Intent gate outside command fields', () => {
+    const root = tempRoot('intent-hooks-copilot-preserve-root-')
+    const homeDir = tempRoot('intent-hooks-copilot-preserve-home-')
+    const copilotHome = join(homeDir, '.copilot')
+    const hooksPath = join(copilotHome, 'hooks', 'hooks.json')
+    mkdirSync(join(copilotHome, 'hooks'), { recursive: true })
+    writeFileSync(
+      hooksPath,
+      JSON.stringify(
+        {
+          hooks: {
+            PreToolUse: [
+              {
+                command: 'echo keep',
+                note: 'mentions intent-copilot-gate.mjs in documentation',
+              },
+              { command: 'node /tmp/old-intent-copilot-gate.mjs' },
+            ],
+          },
+        },
+        null,
+        2,
+      ) + '\n',
+    )
+
+    runInstallHooks({
+      agents: 'copilot',
+      copilotHome,
+      homeDir,
+      root,
+      scope: 'user',
+    })
+
+    const config = readJson(hooksPath)
+    expect(config.hooks.PreToolUse).toHaveLength(2)
+    expect(config.hooks.PreToolUse[0]).toMatchObject({
+      command: 'echo keep',
+      note: 'mentions intent-copilot-gate.mjs in documentation',
+    })
+    expect(config.hooks.PreToolUse[1].command).toContain(
+      'intent-copilot-gate.mjs',
+    )
+  })
+
   it('builds a runner script with command-free denial text', () => {
     const script = buildHookRunnerScript('claude')
 
@@ -315,6 +359,34 @@ describe('hook installer', () => {
     expect(JSON.parse(afterEcho.stdout)).toMatchObject({
       hookSpecificOutput: { permissionDecision: 'deny' },
     })
+  })
+
+  it('unlocks edits after a load in an or-chain command', () => {
+    const root = tempRoot('intent-hooks-runner-or-chain-')
+    const scriptPath = join(root, 'intent-claude-gate.mjs')
+    writeFileSync(scriptPath, buildHookRunnerScript('claude'))
+
+    const load = runHookScript(scriptPath, {
+      cwd: root,
+      hook_event_name: 'PreToolUse',
+      session_id: 'session-a',
+      tool_name: 'Bash',
+      tool_input: {
+        command: 'npm test || intent load @tanstack/router#routing',
+      },
+    })
+    const afterLoad = runHookScript(scriptPath, {
+      cwd: root,
+      hook_event_name: 'PreToolUse',
+      session_id: 'session-a',
+      tool_name: 'Edit',
+      tool_input: { file_path: join(root, 'src.ts') },
+    })
+
+    expect(load.status).toBe(0)
+    expect(load.stdout).toBe('')
+    expect(afterLoad.status).toBe(0)
+    expect(afterLoad.stdout).toBe('')
   })
 
   it('formats skipped install results', () => {

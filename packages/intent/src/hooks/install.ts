@@ -68,7 +68,7 @@ import { createHash } from 'node:crypto'
 const AGENT = ${JSON.stringify(agent)}
 const EDIT_TOOLS = new Set(${JSON.stringify(editTools)})
 const GATE_DENY_REASON = ${JSON.stringify(GATE_DENY_REASON)}
-  const INTENT_COMMAND_PATTERN = /(?:^|&&|\\|\\||;|\\|)\\s*((?:bunx\\s+@tanstack\\/intent(?:@latest)?)|(?:pnpm\\s+exec\\s+intent)|(?:pnpm\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:npx\\s+@tanstack\\/intent(?:@latest)?)|(?:yarn\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:intent))\\s+(list|load)(?:\\s+([^\\s|;&]+))?/i
+const INTENT_COMMAND_PATTERN = /(?:^|&&|\\|\\||;|\\|)\\s*((?:bunx\\s+@tanstack\\/intent(?:@latest)?)|(?:pnpm\\s+exec\\s+intent)|(?:pnpm\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:npx\\s+@tanstack\\/intent(?:@latest)?)|(?:yarn\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:intent))\\s+(list|load)(?:\\s+([^\\s|;&]+))?/i
 
 try {
   const event = readEventFromStdin()
@@ -379,8 +379,19 @@ function withoutIntentHooks(value: unknown): Array<unknown> {
 
 function isIntentHook(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false
-  const serialized = JSON.stringify(value)
-  return serialized.includes('intent-') && serialized.includes('-gate.mjs')
+  const entry = value as Record<string, unknown>
+  const command = typeof entry.command === 'string' ? entry.command : ''
+  const args = Array.isArray(entry.args)
+    ? entry.args.filter((arg): arg is string => typeof arg === 'string')
+    : []
+
+  return [command, ...args].some(isIntentGateScriptReference)
+}
+
+function isIntentGateScriptReference(value: string): boolean {
+  return /(?:^|[\s"'\\/])(?:old-)?intent-(claude|codex|copilot)-gate\.mjs(?:$|[?#\s"'])/i.test(
+    value,
+  )
 }
 
 function updateJsonConfig(

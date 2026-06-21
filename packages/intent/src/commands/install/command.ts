@@ -100,7 +100,7 @@ tanstackIntent:
    - Include a \`run\` command that loads the matching \`id\`
    - Do not include machine-specific directories such as \`/Users/...\`, \`/home/...\`, \`/private/...\`,
      drive letters, temp workspace paths, \`.pnpm/\`, \`.bun/\`, or \`.yarn/\`.
-    - Agents should run the \`run\` command before editing matching files
+   - Agents should run the \`run\` command before editing matching files
    - Keep entries concise - this block is read on every agent task
    - Preserve all content outside the block tags unchanged
    - If the user is on Deno, note that this setup is best-effort today and relies on npm interop
@@ -109,9 +109,9 @@ tanstackIntent:
    Before reporting completion:
    - Confirm the target file exists
    - Confirm it contains both managed block markers
-    - Confirm every mapping has \`id\`, \`run\`, and \`for\`
-    - Confirm every \`id\` parses as \`<package>#<skill>\`
-    - Confirm no mapping includes local file paths
+  - Confirm every mapping has \`id\`, \`run\`, and \`for\`
+  - Confirm every \`id\` parses as \`<package>#<skill>\`
+  - Confirm every \`run\` command loads the matching \`id\`
    - Confirm no path-like machine-specific values are stored in the managed block
    - Confirm every discovered actionable skill is mapped, skipped by rule, or deferred by user choice
 

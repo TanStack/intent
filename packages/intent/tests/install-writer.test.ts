@@ -634,4 +634,57 @@ tanstackIntent:
       'Invalid skill use "@tanstack/query": expected <package>#<skill>.',
     )
   })
+
+  it('rejects mappings whose run command loads a different skill use', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    const block = `<!-- intent-skills:start -->
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - id: "@tanstack/query#fetching"
+    run: "npx @tanstack/intent@latest load @tanstack/router#routing"
+    for: "Query data fetching"
+<!-- intent-skills:end -->
+`
+    writeFileSync(agentsPath, block)
+
+    const result = verifyIntentSkillsBlockFile({
+      expectedBlock: block,
+      expectedMappingCount: 1,
+      targetPath: agentsPath,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors).toContain(
+      'Skill mapping `run` must load matching `id` @tanstack/query#fetching.',
+    )
+  })
+
+  it('rejects mappings with local paths in managed values', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    const block = `<!-- intent-skills:start -->
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - id: "@tanstack/query#fetching"
+    run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
+    for: "Edit /Users/sarah/project/src files"
+<!-- intent-skills:end -->
+`
+    writeFileSync(agentsPath, block)
+
+    const result = verifyIntentSkillsBlockFile({
+      expectedBlock: block,
+      expectedMappingCount: 1,
+      targetPath: agentsPath,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        'Managed block must not include local file paths.',
+        'Skill mapping `for` must not include local file paths.',
+      ]),
+    )
+  })
 })

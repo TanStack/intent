@@ -23,10 +23,19 @@ describe('intent hook core', () => {
     expect(
       parseIntentInvocation('cd packages/app && intent load @tanstack/x#y'),
     ).toEqual({ action: 'load', skillUse: '@tanstack/x#y' })
+    expect(
+      parseIntentInvocation('npm test || intent load @tanstack/x#y'),
+    ).toEqual({ action: 'load', skillUse: '@tanstack/x#y' })
   })
 
   it('ignores non-intent commands and load without a skill use', () => {
     expect(parseIntentInvocation('npm run build')).toBeUndefined()
+    expect(
+      parseIntentInvocation('echo intent load @tanstack/router#routing'),
+    ).toBeUndefined()
+    expect(
+      parseIntentInvocation('# intent load @tanstack/router#routing'),
+    ).toBeUndefined()
     expect(parseIntentInvocation('intent load')).toBeUndefined()
     expect(parseIntentInvocation(undefined)).toBeUndefined()
   })

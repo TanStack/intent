@@ -1,12 +1,12 @@
 import { fail } from '../shared/cli-error.js'
-import { coreOptionsFromGlobalFlags, printDebugInfo } from './support.js'
 import {
   IntentCoreError,
   loadIntentSkill,
   resolveIntentSkill,
 } from '../core/index.js'
-import type { GlobalScanFlags } from './support.js'
+import { coreOptionsFromGlobalFlags, printDebugInfo } from './support.js'
 import type { LoadedIntentSkill, ResolvedIntentSkill } from '../core/index.js'
+import type { GlobalScanFlags } from './support.js'
 
 export interface LoadCommandOptions extends GlobalScanFlags {
   json?: boolean

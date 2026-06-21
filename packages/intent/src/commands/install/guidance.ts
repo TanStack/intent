@@ -3,11 +3,13 @@ import { dirname, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { formatIntentCommand } from '../../shared/command-runner.js'
 import { isGeneratedMappingSkill } from '../../skills/categories.js'
-import type { ScanResult, SkillEntry } from '../../shared/types.js'
 import { formatSkillUse, parseSkillUse } from '../../skills/use.js'
+import type { ScanResult, SkillEntry } from '../../shared/types.js'
 
 const INTENT_SKILLS_START = '<!-- intent-skills:start -->'
 const INTENT_SKILLS_END = '<!-- intent-skills:end -->'
+const LOCAL_PATH_VALUE_PATTERN =
+  /(?:^|[\s"'])(?:\.{1,2}[\\/]|~[\\/]|[A-Za-z]:[\\/]|\/(?:Users|home|private|tmp|var\/folders)[\\/]|[^\s"']*(?:node_modules|\.pnpm|\.bun|\.yarn|\.intent)[\\/])/i
 
 const SUPPORTED_AGENT_CONFIG_FILES = [
   'AGENTS.md',
@@ -123,6 +125,17 @@ function parseSkillsList(block: string): {
   }
 }
 
+function containsLocalPathValue(value: string): boolean {
+  return LOCAL_PATH_VALUE_PATTERN.test(value)
+}
+
+function parseLoadedSkillUse(command: string): string | null {
+  const match = command.match(
+    /(?:^|&&|\|\||;|\|)\s*(?:bunx\s+@tanstack\/intent(?:@latest)?|pnpm\s+exec\s+intent|pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?|npx\s+@tanstack\/intent(?:@latest)?|yarn\s+dlx\s+@tanstack\/intent(?:@latest)?|intent)\s+load\s+([^\s|;&]+)/i,
+  )
+  return match?.[1] ?? null
+}
+
 export function verifyIntentSkillsBlockFile({
   expectedBlock,
   expectedMappingCount,
@@ -153,6 +166,10 @@ export function verifyIntentSkillsBlockFile({
   const block = managedBlock.text
   if (normalizeBlock(block) !== normalizeBlock(expectedBlock)) {
     errors.push('Managed block does not match generated mappings.')
+  }
+
+  if (containsLocalPathValue(block)) {
+    errors.push('Managed block must not include local file paths.')
   }
 
   if (expectedMappingCount === undefined) {
@@ -192,22 +209,49 @@ export function verifyIntentSkillsBlockFile({
       errors.push('Skill mappings must use compact `for` entries, not `when`.')
     }
 
+    let parsedId: ReturnType<typeof parseSkillUse> | null = null
+
     if (typeof mapping.id !== 'string') {
       errors.push('Each skill mapping must include an `id` field.')
     } else {
       try {
-        parseSkillUse(mapping.id)
+        parsedId = parseSkillUse(mapping.id)
       } catch (err) {
         errors.push(err instanceof Error ? err.message : String(err))
+      }
+
+      if (containsLocalPathValue(mapping.id)) {
+        errors.push('Skill mapping `id` must not include local file paths.')
       }
     }
 
     if (typeof mapping.run !== 'string' || mapping.run.trim() === '') {
       errors.push('Each skill mapping must include a non-empty `run` field.')
+    } else {
+      const loadedSkillUse = parseLoadedSkillUse(mapping.run)
+      if (!loadedSkillUse) {
+        errors.push('Each skill mapping `run` must load its `id`.')
+      } else if (parsedId) {
+        const expectedSkillUse = formatSkillUse(
+          parsedId.packageName,
+          parsedId.skillName,
+        )
+        if (loadedSkillUse !== expectedSkillUse) {
+          errors.push(
+            `Skill mapping \`run\` must load matching \`id\` ${expectedSkillUse}.`,
+          )
+        }
+      }
+
+      if (containsLocalPathValue(mapping.run)) {
+        errors.push('Skill mapping `run` must not include local file paths.')
+      }
     }
 
     if (typeof mapping.for !== 'string' || mapping.for.trim() === '') {
       errors.push('Each skill mapping must include a non-empty `for` field.')
+    } else if (containsLocalPathValue(mapping.for)) {
+      errors.push('Skill mapping `for` must not include local file paths.')
     }
   }
 

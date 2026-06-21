@@ -6,12 +6,12 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { basename, join, relative } from 'node:path'
+import { resolveProjectContext } from '../core/project-context.js'
 import {
   findPackagesWithSkills,
   findWorkspaceRoot,
   readWorkspacePatterns,
 } from './workspace-patterns.js'
-import { resolveProjectContext } from '../core/project-context.js'
 
 export {
   findPackagesWithSkills,
@@ -137,6 +137,14 @@ function normalizePattern(pattern: string): string {
   return pattern.endsWith('**') ? pattern : pattern.replace(/\/$/, '') + '/**'
 }
 
+function isRemoteUrl(value: string): boolean {
+  return value.startsWith('http://') || value.startsWith('https://')
+}
+
+function localDocsPattern(value: string): string | null {
+  return isRemoteUrl(value) ? null : normalizePattern(value)
+}
+
 function buildWatchPaths(root: string, packageDirs: Array<string>): string {
   const paths = new Set<string>()
 
@@ -153,8 +161,11 @@ function buildWatchPaths(root: string, packageDirs: Array<string>): string {
     const pkgJson = readPackageJson(packageDir)
     const intent = pkgJson.intent as Record<string, unknown> | undefined
     const docs = typeof intent?.docs === 'string' ? intent.docs : 'docs/'
-    if (!docs.startsWith('http://') && !docs.startsWith('https://')) {
-      paths.add(normalizePattern(join(relDir, docs).split('\\').join('/')))
+    const docsPattern = localDocsPattern(docs)
+    if (docsPattern) {
+      paths.add(
+        normalizePattern(join(relDir, docsPattern).split('\\').join('/')),
+      )
     }
   }
 
@@ -200,20 +211,22 @@ function detectVars(root: string, packageDirs?: Array<string>): TemplateVars {
     srcPath = 'src/**'
   }
 
-  const docsPath = isMonorepo ? 'packages/*/docs/**' : docs
+  const docsPath = isMonorepo ? 'packages/*/docs/**' : localDocsPattern(docs)
+  const watchPaths = isMonorepo
+    ? buildWatchPaths(root, packageDirs)
+    : [docsPath, srcPath]
+        .filter((path): path is string => Boolean(path))
+        .map((path) => `      - '${path}'`)
+        .join('\n')
 
   return {
     PACKAGE_NAME: packageName,
     PACKAGE_LABEL: packageName,
     PAYLOAD_PACKAGE: packageName,
     REPO: repo,
-    DOCS_PATH: docsPath.endsWith('**')
-      ? docsPath
-      : docsPath.replace(/\/$/, '') + '/**',
+    DOCS_PATH: docsPath ?? 'docs/**',
     SRC_PATH: srcPath,
-    WATCH_PATHS: isMonorepo
-      ? buildWatchPaths(root, packageDirs)
-      : `      - '${docs.endsWith('**') ? docs : docs.replace(/\/$/, '') + '/**'}'\n      - '${srcPath}'`,
+    WATCH_PATHS: watchPaths,
   }
 }
 
@@ -258,7 +271,7 @@ function copyTemplates(
     }
 
     let content = readFileSync(srcPath, 'utf8')
-    if (vars.WATCH_PATHS.includes('\n')) {
+    if (vars.WATCH_PATHS) {
       content = content.replace(
         /\s+- '?\{\{DOCS_PATH\}\}'?\n\s+- '?\{\{SRC_PATH\}\}'?/,
         vars.WATCH_PATHS,

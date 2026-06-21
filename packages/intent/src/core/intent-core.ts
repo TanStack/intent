@@ -1,9 +1,11 @@
 import { isAbsolute, relative, resolve } from 'node:path'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
+import { ResolveSkillUseError, resolveSkillUse } from '../skills/resolver.js'
+import { formatSkillUse, parseSkillUse } from '../skills/use.js'
 import {
   compileExcludePatterns,
   getEffectiveExcludePatterns,
 } from './excludes.js'
-import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { rewriteLoadedSkillMarkdownDestinations } from './markdown.js'
 import { resolveSkillUseFastPath } from './load-resolution.js'
 import { resolveProjectContext } from './project-context.js'
@@ -12,8 +14,6 @@ import {
   readSkillSourcesConfig,
   scanForPolicedIntents,
 } from './source-policy.js'
-import { ResolveSkillUseError, resolveSkillUse } from '../skills/resolver.js'
-import { formatSkillUse, parseSkillUse } from '../skills/use.js'
 import type { ResolveSkillResult } from '../skills/resolver.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { ReadFs } from '../shared/utils.js'

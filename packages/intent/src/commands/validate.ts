@@ -6,9 +6,9 @@ import {
 } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fail, isCliFailure } from '../shared/cli-error.js'
-import { printWarnings } from './support.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
+import { printWarnings } from './support.js'
 import type { ProjectContext } from '../core/project-context.js'
 
 interface ValidationError {
