@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { formatIntentCommand } from '../command-runner.js'
 import { formatSkillUse, parseSkillUse } from '../skill-use.js'
+import { isGeneratedMappingSkill } from '../skill-categories.js'
 import type { ScanResult, SkillEntry } from '../types.js'
 
 const INTENT_SKILLS_START = '<!-- intent-skills:start -->'
@@ -14,13 +15,6 @@ const SUPPORTED_AGENT_CONFIG_FILES = [
   '.cursorrules',
   '.github/copilot-instructions.md',
 ]
-
-const NON_ACTIONABLE_SKILL_TYPES = new Set([
-  'maintainer',
-  'maintainer-only',
-  'meta',
-  'reference',
-])
 
 export interface IntentSkillsBlockResult {
   block: string
@@ -242,11 +236,6 @@ function quoteYamlString(value: string): string {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')}"`
 }
 
-function isActionableSkill(skill: SkillEntry): boolean {
-  const type = skill.type?.trim().toLowerCase()
-  return !type || !NON_ACTIONABLE_SKILL_TYPES.has(type)
-}
-
 function formatWhen(packageName: string, skill: SkillEntry): string {
   const description = skill.description.replace(/\s+/g, ' ').trim()
   return description || `Use ${packageName} ${skill.name}`
@@ -264,7 +253,7 @@ export function buildIntentSkillsBlock(
 
   for (const pkg of [...scanResult.packages].sort(compareNames)) {
     for (const skill of [...pkg.skills].sort(compareNames)) {
-      if (!isActionableSkill(skill)) continue
+      if (!isGeneratedMappingSkill(skill)) continue
 
       mappingCount++
       lines.push(

@@ -60,7 +60,7 @@ import { createHash } from 'node:crypto'
 const AGENT = ${JSON.stringify(agent)}
 const EDIT_TOOLS = new Set(${JSON.stringify(editTools)})
 const GATE_DENY_REASON = ${JSON.stringify(GATE_DENY_REASON)}
-const INTENT_COMMAND_PATTERN = /(?:^|\\s|&&|;|\\|)\\s*((?:bunx\\s+@tanstack\\/intent(?:@latest)?)|(?:pnpm\\s+exec\\s+intent)|(?:pnpm\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:npx\\s+@tanstack\\/intent(?:@latest)?)|(?:yarn\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:intent))\\s+(list|load)(?:\\s+([^\\s|;&]+))?/i
+  const INTENT_COMMAND_PATTERN = /(?:^|&&|\\|\\||;|\\|)\\s*((?:bunx\\s+@tanstack\\/intent(?:@latest)?)|(?:pnpm\\s+exec\\s+intent)|(?:pnpm\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:npx\\s+@tanstack\\/intent(?:@latest)?)|(?:yarn\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:intent))\\s+(list|load)(?:\\s+([^\\s|;&]+))?/i
 
 try {
   const event = readEventFromStdin()
@@ -353,17 +353,26 @@ function upsertHookGroup(
   groups: Array<unknown>,
   nextGroup: Record<string, unknown>,
 ): Array<unknown> {
-  return [...groups.filter((group) => !containsIntentHook(group)), nextGroup]
+  return [...groups.flatMap(withoutIntentHooks), nextGroup]
 }
 
-function containsIntentHook(value: unknown): boolean {
-  if (!value || typeof value !== 'object') return false
+function withoutIntentHooks(value: unknown): Array<unknown> {
+  if (!value || typeof value !== 'object') return [value]
+
   const hooks = arrayValue((value as { hooks?: unknown }).hooks)
-  return hooks.some(
-    (hook) =>
-      JSON.stringify(hook).includes('intent-') &&
-      JSON.stringify(hook).includes('-gate.mjs'),
-  )
+  if (hooks.length === 0) return isIntentHook(value) ? [] : [value]
+
+  const nextHooks = hooks.filter((hook) => !isIntentHook(hook))
+  if (nextHooks.length === hooks.length) return [value]
+  if (nextHooks.length === 0) return []
+
+  return [{ ...(value as Record<string, unknown>), hooks: nextHooks }]
+}
+
+function isIntentHook(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const serialized = JSON.stringify(value)
+  return serialized.includes('intent-') && serialized.includes('-gate.mjs')
 }
 
 function updateJsonConfig(

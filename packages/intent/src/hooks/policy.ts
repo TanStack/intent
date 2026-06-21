@@ -7,7 +7,7 @@ import type {
 } from './types.js'
 
 const INTENT_COMMAND_PATTERN =
-  /(?:^|\s|&&|;|\|)\s*((?:bunx\s+@tanstack\/intent(?:@latest)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i
+  /(?:^|&&|\|\||;|\|)\s*((?:bunx\s+@tanstack\/intent(?:@latest)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i
 
 export const EDIT_TOOLS_BY_AGENT: Record<HookAgent, ReadonlySet<string>> = {
   claude: new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']),
@@ -16,7 +16,7 @@ export const EDIT_TOOLS_BY_AGENT: Record<HookAgent, ReadonlySet<string>> = {
 }
 
 export const GATE_DENY_REASON =
-  'Blocked: load the matching TanStack guidance before editing. Use the guidance command from the AGENTS.md tanstackIntent block, then retry the edit.'
+  'Blocked: load matching TanStack guidance before editing. Follow this repo\'s TanStack guidance setup, then retry the edit.'
 
 export function parseIntentInvocation(
   command: unknown,

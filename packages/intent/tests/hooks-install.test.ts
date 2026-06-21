@@ -166,6 +166,84 @@ describe('hook installer', () => {
     expect(second[0]).toMatchObject({ status: 'unchanged' })
   })
 
+  it('preserves sibling hooks when replacing an Intent hook entry', () => {
+    const root = tempRoot('intent-hooks-sibling-')
+    const settingsPath = join(root, '.claude', 'settings.json')
+    mkdirSync(join(root, '.claude'), { recursive: true })
+    writeFileSync(
+      settingsPath,
+      JSON.stringify(
+        {
+          hooks: {
+            PreToolUse: [
+              {
+                matcher: 'Edit',
+                hooks: [
+                  {
+                    type: 'command',
+                    command: 'node old-intent-claude-gate.mjs',
+                  },
+                  { type: 'command', command: 'echo keep' },
+                ],
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      ) + '\n',
+    )
+
+    runInstallHooks({ agents: 'claude', root, scope: 'project' })
+
+    const config = readJson(settingsPath)
+    expect(config.hooks.PreToolUse).toHaveLength(2)
+    expect(config.hooks.PreToolUse[0].hooks).toEqual([
+      { type: 'command', command: 'echo keep' },
+    ])
+    expect(config.hooks.PreToolUse[1].hooks[0].args[0]).toContain(
+      'intent-claude-gate.mjs',
+    )
+  })
+
+  it('replaces direct Copilot Intent hook entries on reinstall', () => {
+    const root = tempRoot('intent-hooks-copilot-replace-root-')
+    const homeDir = tempRoot('intent-hooks-copilot-replace-home-')
+    const copilotHome = join(homeDir, '.copilot')
+    const hooksPath = join(copilotHome, 'hooks', 'hooks.json')
+    mkdirSync(join(copilotHome, 'hooks'), { recursive: true })
+    writeFileSync(
+      hooksPath,
+      JSON.stringify(
+        {
+          hooks: {
+            PreToolUse: [
+              { command: 'node /tmp/old-intent-copilot-gate.mjs' },
+              { command: 'echo keep' },
+            ],
+          },
+        },
+        null,
+        2,
+      ) + '\n',
+    )
+
+    runInstallHooks({
+      agents: 'copilot',
+      copilotHome,
+      homeDir,
+      root,
+      scope: 'user',
+    })
+
+    const config = readJson(hooksPath)
+    expect(config.hooks.PreToolUse).toHaveLength(2)
+    expect(config.hooks.PreToolUse[0]).toEqual({ command: 'echo keep' })
+    expect(config.hooks.PreToolUse[1].command).toContain(
+      'intent-copilot-gate.mjs',
+    )
+  })
+
   it('builds a runner script with command-free denial text', () => {
     const script = buildHookRunnerScript('claude')
 
@@ -209,6 +287,34 @@ describe('hook installer', () => {
     expect(load.stdout).toBe('')
     expect(afterLoad.status).toBe(0)
     expect(afterLoad.stdout).toBe('')
+  })
+
+  it('does not unlock edits after non-executed load text', () => {
+    const root = tempRoot('intent-hooks-non-executed-load-')
+    const scriptPath = join(root, 'intent-claude-gate.mjs')
+    writeFileSync(scriptPath, buildHookRunnerScript('claude'))
+
+    const echoLoad = runHookScript(scriptPath, {
+      cwd: root,
+      hook_event_name: 'PreToolUse',
+      session_id: 'session-a',
+      tool_name: 'Bash',
+      tool_input: { command: 'echo intent load @tanstack/router#routing' },
+    })
+    const afterEcho = runHookScript(scriptPath, {
+      cwd: root,
+      hook_event_name: 'PreToolUse',
+      session_id: 'session-a',
+      tool_name: 'Edit',
+      tool_input: { file_path: join(root, 'src.ts') },
+    })
+
+    expect(echoLoad.status).toBe(0)
+    expect(echoLoad.stdout).toBe('')
+    expect(afterEcho.status).toBe(0)
+    expect(JSON.parse(afterEcho.stdout)).toMatchObject({
+      hookSpecificOutput: { permissionDecision: 'deny' },
+    })
   })
 
   it('formats skipped install results', () => {

@@ -215,9 +215,18 @@ describe('cli commands', () => {
 
   it('prints the install prompt', async () => {
     const exitCode = await main(['install', '--print-prompt'])
+    const output = String(logSpy.mock.calls[0]?.[0])
 
     expect(exitCode).toBe(0)
     expect(logSpy).toHaveBeenCalledWith(INSTALL_PROMPT)
+    expect(output).toContain('tanstackIntent:')
+    expect(output).toContain('  - id: "@scope/package#skill-name"')
+    expect(output).toContain(
+      '    run: "npx @tanstack/intent@latest load @scope/package#skill-name"',
+    )
+    expect(output).toContain('    for: "describe the task or code area here"')
+    expect(output).not.toContain('skills:\n  - when:')
+    expect(output).not.toContain('use: "@scope/package#skill-name"')
   })
 
   it('lists excludes when none are configured', async () => {
