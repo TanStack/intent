@@ -22,11 +22,17 @@ function createCli(): CAC {
       'list',
       'Discover intent-enabled packages from the project or workspace',
     )
-    .usage('list [--json] [--debug] [--global] [--global-only] [--no-notices]')
+    .usage(
+      'list [--json] [--debug] [--global] [--global-only] [--show-hidden] [--no-notices]',
+    )
     .option('--json', 'Output JSON')
     .option('--debug', 'Print discovery debug details to stderr')
     .option('--global', 'Include global packages after project packages')
     .option('--global-only', 'List global packages only')
+    .option(
+      '--show-hidden',
+      'Show hidden skill sources not listed in intent.skills',
+    )
     .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('list')
     .example('list --json')

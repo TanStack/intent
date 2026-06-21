@@ -99,12 +99,13 @@ export function listIntentSkills(
   const scanOptions = toScanOptions(options)
   const fsCache = createIntentFsCache()
   const projectContext = resolveProjectContext({ cwd })
-  const { scan, excludePatterns } = scanForPolicedIntents({
-    cwd,
-    scanOptions: withFsCache(scanOptions, fsCache),
-    coreOptions: options,
-    context: projectContext,
-  })
+  const { hiddenSourceCount, hiddenSources, scan, excludePatterns } =
+    scanForPolicedIntents({
+      cwd,
+      scanOptions: withFsCache(scanOptions, fsCache),
+      coreOptions: options,
+      context: projectContext,
+    })
   const packages = scan.packages
   const skills = packages.flatMap((pkg) =>
     pkg.skills.map((skill): IntentSkillSummary => {
@@ -132,6 +133,8 @@ export function listIntentSkills(
       packageRoot: pkg.packageRoot,
       skillCount: pkg.skills.length,
     })),
+    hiddenSourceCount,
+    hiddenSources,
     warnings: scan.warnings,
     notices: scan.notices,
     conflicts: scan.conflicts,

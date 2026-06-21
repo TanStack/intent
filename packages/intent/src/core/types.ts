@@ -7,11 +7,19 @@ import type {
 } from '../shared/types.js'
 
 export interface IntentCoreOptions {
+  audience?: IntentAudience
   cwd?: string
   debug?: boolean
   global?: boolean
   globalOnly?: boolean
   exclude?: Array<string>
+}
+
+export type IntentAudience = 'agent' | 'human'
+
+export interface IntentHiddenSourceSummary {
+  name: string
+  skillCount: number
 }
 
 export interface IntentSkillSummary {
@@ -38,6 +46,8 @@ export interface IntentSkillList {
   packageManager: PackageManager
   skills: Array<IntentSkillSummary>
   packages: Array<IntentPackageSummary>
+  hiddenSourceCount: number
+  hiddenSources: Array<IntentHiddenSourceSummary>
   warnings: Array<string>
   notices: Array<string>
   conflicts: Array<VersionConflict>
