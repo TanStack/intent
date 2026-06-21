@@ -127,7 +127,6 @@ describe.concurrent('Intent discovery live runs', () => {
   }
 })
 
-
 function liveRunCountFromEnv(): number {
   const value = Number(process.env.INTENT_DISCOVERY_RUN_COUNT ?? '1')
 

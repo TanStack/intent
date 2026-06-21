@@ -14,7 +14,10 @@ import {
   runEditPackageJsonAll,
   runSetupGithubActions,
 } from '../src/setup/index.js'
-import type { EditPackageJsonResult, MonorepoResult } from '../src/setup/index.js'
+import type {
+  EditPackageJsonResult,
+  MonorepoResult,
+} from '../src/setup/index.js'
 
 const repoRoot = join(import.meta.dirname, '..', '..', '..')
 

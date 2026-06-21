@@ -16,7 +16,7 @@ export const EDIT_TOOLS_BY_AGENT: Record<HookAgent, ReadonlySet<string>> = {
 }
 
 export const GATE_DENY_REASON =
-  'Blocked: load matching TanStack guidance before editing. Follow this repo\'s TanStack guidance setup, then retry the edit.'
+  "Blocked: load matching TanStack guidance before editing. Follow this repo's TanStack guidance setup, then retry the edit."
 
 export function parseIntentInvocation(
   command: unknown,

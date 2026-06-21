@@ -6,10 +6,7 @@ import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import semver from 'semver'
-import {
-  createDependencyWalker,
-  createPackageRegistrar,
-} from './index.js'
+import { createDependencyWalker, createPackageRegistrar } from './index.js'
 import {
   detectGlobalNodeModules,
   nodeReadFs,

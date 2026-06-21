@@ -4,7 +4,9 @@ export type SkillCategory = 'maintainer' | 'meta' | 'reference' | 'task'
 
 const MAINTAINER_TYPES = new Set(['maintainer', 'maintainer-only'])
 
-export function getSkillCategory(skill: Pick<SkillEntry, 'type'>): SkillCategory {
+export function getSkillCategory(
+  skill: Pick<SkillEntry, 'type'>,
+): SkillCategory {
   const type = skill.type?.trim().toLowerCase()
 
   if (type === 'reference') return 'reference'
@@ -14,6 +16,8 @@ export function getSkillCategory(skill: Pick<SkillEntry, 'type'>): SkillCategory
   return 'task'
 }
 
-export function isGeneratedMappingSkill(skill: Pick<SkillEntry, 'type'>): boolean {
+export function isGeneratedMappingSkill(
+  skill: Pick<SkillEntry, 'type'>,
+): boolean {
   return getSkillCategory(skill) === 'task'
 }

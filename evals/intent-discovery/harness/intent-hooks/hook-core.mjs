@@ -1,7 +1,12 @@
 const INTENT_COMMAND_PATTERN =
   /(?:^|\s|&&|;|\|)\s*((?:bunx\s+@tanstack\/intent(?:@latest)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i
 
-export const EDIT_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
+export const EDIT_TOOLS = new Set([
+  'Write',
+  'Edit',
+  'MultiEdit',
+  'NotebookEdit',
+])
 
 export const GATE_DENY_REASON =
   'Blocked: load the matching TanStack guidance before editing. Use the guidance command from the AGENTS.md tanstackIntent block, then retry the edit.'

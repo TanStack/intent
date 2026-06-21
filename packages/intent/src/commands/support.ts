@@ -4,7 +4,11 @@ import { fileURLToPath } from 'node:url'
 import { fail } from '../shared/cli-error.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import type { IntentCoreOptions } from '../core/index.js'
-import type { ScanOptions, ScanResult, StalenessReport } from '../shared/types.js'
+import type {
+  ScanOptions,
+  ScanResult,
+  StalenessReport,
+} from '../shared/types.js'
 
 export { printNotices, printWarnings } from '../shared/cli-output.js'
 
@@ -168,9 +172,8 @@ export async function resolveStaleTargets(
         ),
       ),
     )
-    const { readIntentArtifacts } = await import(
-      '../staleness/artifact-coverage.js'
-    )
+    const { readIntentArtifacts } =
+      await import('../staleness/artifact-coverage.js')
     const artifacts = existsSync(join(workspaceInfo.root, '_artifacts'))
       ? readIntentArtifacts(workspaceInfo.root)
       : null

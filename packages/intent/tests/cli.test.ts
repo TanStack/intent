@@ -621,7 +621,9 @@ describe('cli commands', () => {
   })
 
   it('uses only global packages during install --map --global-only', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-global-only-'))
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-global-only-'),
+    )
     const globalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-install-global-only-node-modules-'),
     )

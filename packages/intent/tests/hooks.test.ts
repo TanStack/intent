@@ -72,7 +72,11 @@ describe('intent hook policy', () => {
       gateDecision({ agent: 'claude', toolName: 'Write', hasLoaded: false }),
     ).toEqual({ decision: 'deny', reason: GATE_DENY_REASON })
     expect(
-      gateDecision({ agent: 'codex', toolName: 'apply_patch', hasLoaded: false }),
+      gateDecision({
+        agent: 'codex',
+        toolName: 'apply_patch',
+        hasLoaded: false,
+      }),
     ).toEqual({ decision: 'deny', reason: GATE_DENY_REASON })
     expect(
       gateDecision({ agent: 'copilot', toolName: 'Edit', hasLoaded: true }),

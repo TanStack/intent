@@ -152,9 +152,8 @@ function createCli(): CAC {
           fail('Unknown hooks action: expected install.')
         }
 
-        const { runHooksInstallCommand } = await import(
-          './commands/hooks/command.js'
-        )
+        const { runHooksInstallCommand } =
+          await import('./commands/hooks/command.js')
         runHooksInstallCommand(options)
       },
     )

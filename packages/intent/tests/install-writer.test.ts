@@ -15,7 +15,11 @@ import {
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from '../src/commands/install/guidance.js'
-import type { IntentPackage, ScanResult, SkillEntry } from '../src/shared/types.js'
+import type {
+  IntentPackage,
+  ScanResult,
+  SkillEntry,
+} from '../src/shared/types.js'
 
 const tempDirs: Array<string> = []
 
@@ -97,9 +101,7 @@ describe('install writer block builder', () => {
     expect(generated.mappingCount).toBe(0)
     expect(generated.block).toContain('## Skill Loading')
     expect(generated.block).toContain('npx @tanstack/intent@latest list')
-    expect(generated.block).toContain(
-      'If a listed skill matches the task',
-    )
+    expect(generated.block).toContain('If a listed skill matches the task')
     expect(generated.block).toContain('before changing files')
     expect(generated.block).toContain('Monorepos:')
     expect(generated.block).toContain('Multiple matches:')

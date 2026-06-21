@@ -1,9 +1,4 @@
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-} from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 const ATTRIB_FILE = process.env.INTENT_DISCOVERY_GATE_STATE
