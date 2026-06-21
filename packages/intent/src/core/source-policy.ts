@@ -1,4 +1,5 @@
 import { scanForIntents } from '../discovery/scanner.js'
+import { detectIntentAudience } from '../shared/environment.js'
 import {
   compileExcludePatterns,
   getConfigDirs,
@@ -10,17 +11,16 @@ import {
 import { readPackageJson } from './package-json.js'
 import { parseSkillSources } from './skill-sources.js'
 import { resolveProjectContext } from './project-context.js'
-import { detectIntentAudience } from '../shared/environment.js'
+import type { SkillUse } from '../skills/use.js'
+import type { IntentPackage, ScanOptions, ScanResult } from '../shared/types.js'
 import type { ExcludeMatcher } from './excludes.js'
 import type { ProjectContext } from './project-context.js'
 import type { SkillSourcesConfig } from './skill-sources.js'
-import type { SkillUse } from '../skills/use.js'
 import type {
   IntentAudience,
   IntentCoreOptions,
   IntentHiddenSourceSummary,
 } from './types.js'
-import type { IntentPackage, ScanOptions, ScanResult } from '../shared/types.js'
 
 export const ALLOW_ALL_NOTICE =
   'All skill sources allowed (intent.skills: ["*"]) — unvetted skills may be surfaced into agent guidance.'
