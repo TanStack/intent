@@ -1,12 +1,12 @@
 import { join } from 'node:path'
 import type { HookAgent, HookInstallScope } from './types.js'
 
-export type HookAdapterPaths = {
+type HookAdapterPaths = {
   configPath: string
   scriptPath: string
 }
 
-export type HookAdapterContext = {
+type HookAdapterContext = {
   copilotHome?: string
   homeDir: string
   root: string
@@ -22,7 +22,7 @@ export type HookAgentAdapter = {
   ) => HookAdapterPaths
 }
 
-export const HOOK_SCRIPT_DIR = '.intent/hooks'
+const HOOK_SCRIPT_DIR = '.intent/hooks'
 
 export const HOOK_AGENT_ADAPTERS: Record<HookAgent, HookAgentAdapter> = {
   claude: {

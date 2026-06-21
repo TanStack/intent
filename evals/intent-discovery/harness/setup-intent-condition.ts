@@ -3,14 +3,14 @@ import { join } from 'node:path'
 import {
   buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
-} from '../../../packages/intent/src/commands/install-writer.js'
+} from '../../../packages/intent/src/commands/install/guidance.js'
 import {
   expectedSkillUseByArea,
   packageAllowlistByArea,
 } from '../corpus/skill-uses'
 import type { IntentDiscoveryCondition } from '../corpus/conditions'
 import type { ExpectedSkillArea } from '../corpus/tasks'
-import type { ScanResult } from '../../../packages/intent/src/types.js'
+import type { ScanResult } from '../../../packages/intent/src/shared/types.js'
 
 export type AppliedIntentCondition = {
   condition: IntentDiscoveryCondition

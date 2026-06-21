@@ -6,7 +6,7 @@ import { ALL_HOOK_AGENTS, HOOK_AGENT_ADAPTERS } from './adapters.js'
 import { EDIT_TOOLS_BY_AGENT, GATE_DENY_REASON } from './policy.js'
 import type { HookAgent, HookInstallScope } from './types.js'
 
-export type HookInstallStatus = 'created' | 'skipped' | 'unchanged' | 'updated'
+type HookInstallStatus = 'created' | 'skipped' | 'unchanged' | 'updated'
 
 export type HookInstallResult = {
   agent: HookAgent
