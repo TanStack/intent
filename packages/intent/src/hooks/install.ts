@@ -1,11 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join, relative } from 'node:path'
+import { dirname, relative } from 'node:path'
 import { fail } from '../cli-error.js'
+import { ALL_HOOK_AGENTS, HOOK_AGENT_ADAPTERS } from './adapters.js'
 import { EDIT_TOOLS_BY_AGENT, GATE_DENY_REASON } from './policy.js'
-import type { HookAgent } from './types.js'
-
-export type HookInstallScope = 'project' | 'user'
+import type { HookAgent, HookInstallScope } from './types.js'
 
 export type HookInstallStatus = 'created' | 'skipped' | 'unchanged' | 'updated'
 
@@ -26,9 +25,6 @@ export type InstallHooksOptions = {
   scope?: string
 }
 
-const ALL_HOOK_AGENTS: Array<HookAgent> = ['copilot', 'claude', 'codex']
-const PROJECT_HOOK_AGENTS = new Set<HookAgent>(['claude', 'codex'])
-const HOOK_SCRIPT_DIR = '.intent/hooks'
 const STATUS_MESSAGE = 'Checking Intent guidance'
 
 export function runInstallHooks({
@@ -207,7 +203,9 @@ function installAgentHook({
   root: string
   scope: HookInstallScope
 }): HookInstallResult {
-  if (scope === 'project' && !PROJECT_HOOK_AGENTS.has(agent)) {
+  const adapter = HOOK_AGENT_ADAPTERS[agent]
+
+  if (!adapter.supportedScopes.has(scope)) {
     return {
       agent,
       configPath: null,
@@ -218,106 +216,19 @@ function installAgentHook({
     }
   }
 
-  switch (agent) {
-    case 'claude':
-      return installClaudeHook({ agent, homeDir, root, scope })
-    case 'codex':
-      return installCodexHook({ agent, homeDir, root, scope })
-    case 'copilot':
-      return installCopilotHook({ agent, copilotHome, homeDir, scope })
-  }
-}
-
-function installClaudeHook({
-  agent,
-  homeDir,
-  root,
-  scope,
-}: {
-  agent: HookAgent
-  homeDir: string
-  root: string
-  scope: HookInstallScope
-}): HookInstallResult {
-  const project = scope === 'project'
-  const scriptPath = project
-    ? join(root, HOOK_SCRIPT_DIR, 'intent-claude-gate.mjs')
-    : join(homeDir, '.tanstack', 'intent', 'hooks', 'intent-claude-gate.mjs')
-  const configPath = project
-    ? join(root, '.claude', 'settings.json')
-    : join(homeDir, '.claude', 'settings.json')
-  const scriptStatus = writeIfChanged(scriptPath, buildHookRunnerScript(agent))
-  const configStatus = updateJsonConfig(configPath, (config) =>
-    upsertClaudePreToolUseHook(config, project, scriptPath),
-  )
-
-  return hookInstallResult({
-    agent,
-    configPath,
-    scope,
-    scriptPath,
-    scriptStatus,
-    configStatus,
-  })
-}
-
-function installCodexHook({
-  agent,
-  homeDir,
-  root,
-  scope,
-}: {
-  agent: HookAgent
-  homeDir: string
-  root: string
-  scope: HookInstallScope
-}): HookInstallResult {
-  const project = scope === 'project'
-  const scriptPath = project
-    ? join(root, HOOK_SCRIPT_DIR, 'intent-codex-gate.mjs')
-    : join(homeDir, '.tanstack', 'intent', 'hooks', 'intent-codex-gate.mjs')
-  const configPath = project
-    ? join(root, '.codex', 'hooks.json')
-    : join(homeDir, '.codex', 'hooks.json')
-  const scriptStatus = writeIfChanged(scriptPath, buildHookRunnerScript(agent))
-  const configStatus = updateJsonConfig(configPath, (config) =>
-    upsertCodexPreToolUseHook(config, project, scriptPath),
-  )
-
-  return hookInstallResult({
-    agent,
-    configPath,
-    scope,
-    scriptPath,
-    scriptStatus,
-    configStatus,
-  })
-}
-
-function installCopilotHook({
-  agent,
-  copilotHome,
-  homeDir,
-  scope,
-}: {
-  agent: HookAgent
-  copilotHome?: string
-  homeDir: string
-  scope: HookInstallScope
-}): HookInstallResult {
-  const resolvedCopilotHome =
-    copilotHome ?? process.env.COPILOT_HOME ?? join(homeDir, '.copilot')
-  const scriptPath = join(
+  const { configPath, scriptPath } = adapter.paths(scope, {
+    copilotHome: copilotHome ?? process.env.COPILOT_HOME,
     homeDir,
-    '.tanstack',
-    'intent',
-    'hooks',
-    'intent-copilot-gate.mjs',
-  )
-  const configPath = join(resolvedCopilotHome, 'hooks', 'hooks.json')
+    root,
+  })
   const scriptStatus = writeIfChanged(scriptPath, buildHookRunnerScript(agent))
   const configStatus = updateJsonConfig(configPath, (config) =>
-    upsertCopilotPreToolUseHook(config, scriptPath),
+    upsertAdapterPreToolUseHook({
+      config,
+      configKind: adapter.configKind,
+      project: scope === 'project',
+      scriptPath,
+    }),
   )
 
   return hookInstallResult({
@@ -356,6 +267,27 @@ function hookInstallResult({
         : scriptStatus === 'updated' || configStatus === 'updated'
           ? 'updated'
           : 'unchanged',
+  }
+}
+
+function upsertAdapterPreToolUseHook({
+  config,
+  configKind,
+  project,
+  scriptPath,
+}: {
+  config: Record<string, unknown>
+  configKind: (typeof HOOK_AGENT_ADAPTERS)[HookAgent]['configKind']
+  project: boolean
+  scriptPath: string
+}): Record<string, unknown> {
+  switch (configKind) {
+    case 'claude-settings':
+      return upsertClaudePreToolUseHook(config, project, scriptPath)
+    case 'codex-hooks':
+      return upsertCodexPreToolUseHook(config, project, scriptPath)
+    case 'copilot-hooks':
+      return upsertCopilotPreToolUseHook(config, scriptPath)
   }
 }
 

@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
+import { HOOK_AGENT_ADAPTERS } from '../src/hooks/adapters.js'
 import {
   buildHookRunnerScript,
   formatHookInstallResult,
@@ -35,6 +36,15 @@ function readJson(filePath: string): Record<string, any> {
 }
 
 describe('hook installer', () => {
+  it('declares supported scopes in the adapter registry', () => {
+    expect(HOOK_AGENT_ADAPTERS.claude.supportedScopes.has('project')).toBe(true)
+    expect(HOOK_AGENT_ADAPTERS.codex.supportedScopes.has('project')).toBe(true)
+    expect(HOOK_AGENT_ADAPTERS.copilot.supportedScopes.has('project')).toBe(
+      false,
+    )
+    expect(HOOK_AGENT_ADAPTERS.copilot.supportedScopes.has('user')).toBe(true)
+  })
+
   it('installs project-scoped Claude and Codex hooks and skips Copilot', () => {
     const root = tempRoot('intent-hooks-project-')
 
