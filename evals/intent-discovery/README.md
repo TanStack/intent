@@ -22,6 +22,14 @@ pnpm eval:intent-discovery:report
 
 Set `INTENT_DISCOVERY_RUN_COUNT=3` with the live commands to run each live condition three times and include `pass@k` / `pass^k` in the generated summary.
 
+## Live eval speed
+
+Only the live `copilot -p` subprocess runs are slow; the saved-transcript suite (`pnpm eval:intent-discovery`) is unaffected.
+
+- `INTENT_DISCOVERY_LIVE_CONCURRENCY` bounds how many live runs execute at once (default `1`, clamped to an integer `>= 1`). Values above `1` measured slower here: concurrent `copilot -p` calls on one account contend upstream (a run with its own isolated `COPILOT_HOME` still slowed ~2x), so raise it only with separate accounts or dedicated infrastructure.
+- `COPILOT_MODEL` selects the Copilot model end-to-end. The adapter passes the process environment through to `copilot -p`, and the CLI honors `COPILOT_MODEL`. `INTENT_DISCOVERY_COPILOT_MODEL` only sets the model label recorded in report metadata; it does not change the model the CLI runs.
+- `INTENT_DISCOVERY_RUN_COUNT` stays `1` by default for iteration. Set it to `3` only when measuring `pass@k` / `pass^k`.
+
 The optional LLM judge is secondary. It can annotate whether final answers appear to apply loaded guidance, but it never changes deterministic scores such as `StrictIntentInvocation`, `CorrectSkillLoaded`, or `AutonomousDiscoverySuccess`.
 
 ## Current scope

@@ -1,22 +1,22 @@
 import { relative } from 'node:path'
-import { fail } from '../cli-error.js'
-import { detectIntentCommandPackageManager } from '../command-runner.js'
+import { fail } from '../../shared/cli-error.js'
+import { detectIntentCommandPackageManager } from '../../shared/command-runner.js'
 import {
   coreOptionsFromGlobalFlags,
   noticeOptionsFromGlobalFlags,
   printNotices,
   printWarnings,
-} from '../cli-support.js'
+} from '../support.js'
 import {
   buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
   resolveIntentSkillsBlockTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
-} from './install-writer.js'
-import type { GlobalScanFlags } from '../cli-support.js'
-import type { IntentCoreOptions } from '../core.js'
-import type { ScanResult } from '../types.js'
+} from './guidance.js'
+import type { GlobalScanFlags } from '../support.js'
+import type { IntentCoreOptions } from '../../core/index.js'
+import type { ScanResult } from '../../shared/types.js'
 
 export const INSTALL_PROMPT = `You are an AI assistant helping a developer set up skill-to-task mappings for their project.
 
@@ -27,7 +27,7 @@ Hard rules:
 - If skills are discovered and no mapping block exists, create AGENTS.md unless the user asks for another supported config file.
 - If a mapping block already exists in a supported config file, update that file.
 - Preserve all content outside the managed block unchanged.
-- Store compact \`use\` values in the managed block; do not write \`load\` paths.
+- Store compact \`id\` values and runnable \`run\` commands in the managed block; do not write local paths.
 - Never write absolute local file paths, node_modules paths, or package-manager-internal paths in the managed block.
 - Verify the target file before your final response.
 
@@ -87,19 +87,20 @@ Follow these steps in order:
    Use this exact block:
 
 <!-- intent-skills:start -->
-# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
-skills:
-  - when: "describe the task or code area here"
-    use: "@scope/package#skill-name"
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - id: "@scope/package#skill-name"
+    run: "npx @tanstack/intent@latest load @scope/package#skill-name"
+    for: "describe the task or code area here"
 <!-- intent-skills:end -->
 
    Rules:
-   - Use the user's own words for \`when\` descriptions
-   - Use compact \`use\` values in \`<package>#<skill>\` format
-   - Do not include \`load\`
+   - Use the user's own words for \`for\` descriptions
+   - Use compact \`id\` values in \`<package>#<skill>\` format
+   - Include a \`run\` command that loads the matching \`id\`
    - Do not include machine-specific directories such as \`/Users/...\`, \`/home/...\`, \`/private/...\`,
      drive letters, temp workspace paths, \`.pnpm/\`, \`.bun/\`, or \`.yarn/\`.
-   - Agents should load \`use\` at runtime with \`npx @tanstack/intent@latest load <use>\`
+   - Agents should run the \`run\` command before editing matching files
    - Keep entries concise - this block is read on every agent task
    - Preserve all content outside the block tags unchanged
    - If the user is on Deno, note that this setup is best-effort today and relies on npm interop
@@ -108,9 +109,9 @@ skills:
    Before reporting completion:
    - Confirm the target file exists
    - Confirm it contains both managed block markers
-   - Confirm every mapping has \`when\` and \`use\`
-   - Confirm every \`use\` parses as \`<package>#<skill>\`
-   - Confirm no mapping includes \`load\`
+  - Confirm every mapping has \`id\`, \`run\`, and \`for\`
+  - Confirm every \`id\` parses as \`<package>#<skill>\`
+  - Confirm every \`run\` command loads the matching \`id\`
    - Confirm no path-like machine-specific values are stored in the managed block
    - Confirm every discovered actionable skill is mapped, skipped by rule, or deferred by user choice
 

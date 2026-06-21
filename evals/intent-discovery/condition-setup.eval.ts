@@ -47,7 +47,7 @@ describe('Intent discovery condition setup', () => {
       expect(result.filesWritten).toHaveLength(4)
       expect(agents).toContain('Skill Loading')
       expect(agents).toContain('npx @tanstack/intent@latest list')
-      expect(agents).not.toContain('\nskills:\n')
+      expect(agents).not.toContain('\ntanstackIntent:\n')
       expect(packageJson).toContain('"@tanstack/router"')
       expect(
         existsSync(
@@ -81,8 +81,11 @@ describe('Intent discovery condition setup', () => {
         'utf8',
       )
 
-      expect(agents).toContain('skills:')
-      expect(agents).toContain('use: "@tanstack/router#routing"')
+      expect(agents).toContain('tanstackIntent:')
+      expect(agents).toContain('id: "@tanstack/router#routing"')
+      expect(agents).toContain(
+        'run: "npx @tanstack/intent@latest load @tanstack/router#routing"',
+      )
     } finally {
       prepared.cleanup()
     }

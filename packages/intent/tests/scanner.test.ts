@@ -11,7 +11,10 @@ import { createRequire } from 'node:module'
 import { join, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { scanForIntents, scanIntentPackageAtRoot } from '../src/scanner.js'
+import {
+  scanForIntents,
+  scanIntentPackageAtRoot,
+} from '../src/discovery/scanner.js'
 
 // ── Helpers ──
 

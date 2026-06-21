@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   INTENT_CHECK_SKILLS_WORKFLOW_VERSION,
   getCheckSkillsWorkflowAdvisories,
-} from '../src/cli-support.js'
+} from '../src/commands/support.js'
 import { runStaleCommand } from '../src/commands/stale.js'
 
 describe('runStaleCommand', () => {

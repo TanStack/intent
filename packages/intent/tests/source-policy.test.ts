@@ -17,7 +17,7 @@ import {
   readSkillSourcesConfig,
 } from '../src/core/source-policy.js'
 import { parseSkillSources } from '../src/core/skill-sources.js'
-import type { IntentPackage, SkillEntry } from '../src/types.js'
+import type { IntentPackage, SkillEntry } from '../src/shared/types.js'
 
 const realTmpdir = realpathSync(tmpdir())
 

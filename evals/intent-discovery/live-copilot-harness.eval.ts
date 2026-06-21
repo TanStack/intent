@@ -97,17 +97,19 @@ describe('Intent discovery live Copilot harness', () => {
       rmSync(tempDir, { recursive: true, force: true })
     }
   })
+})
 
+describe.concurrent('Intent discovery live runs', () => {
   for (const liveTask of liveTasks) {
     for (let runIndex = 1; runIndex <= liveRunCount; runIndex += 1) {
       it.skipIf(process.env.INTENT_DISCOVERY_RUN_LIVE !== '1')(
         `live/${liveTask.condition}/${liveTask.fixture}/run-${runIndex}`,
-        async (context) => {
+        async ({ task: contextTask, expect }) => {
           const task = liveRunTask(liveTask, runIndex)
           const result = await runLiveHarness(task)
 
           attachLiveEvalMetadata({
-            contextTask: context.task,
+            contextTask,
             result,
             task,
           })

@@ -4,7 +4,7 @@ import type {
   ScanScope,
   ScanStats,
   VersionConflict,
-} from '../types.js'
+} from '../shared/types.js'
 
 export interface IntentCoreOptions {
   cwd?: string

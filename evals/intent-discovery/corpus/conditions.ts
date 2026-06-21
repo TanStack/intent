@@ -16,6 +16,10 @@ const intentDiscoveryConditions = [
     countsTowardAutonomousScore: true,
   },
   {
+    id: 'hooked-intent',
+    countsTowardAutonomousScore: true,
+  },
+  {
     id: 'explicit-intent-control',
     countsTowardAutonomousScore: false,
   },

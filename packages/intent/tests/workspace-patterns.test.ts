@@ -15,7 +15,7 @@ import {
   getWorkspaceInfo,
   readWorkspacePatterns,
   resolveWorkspacePackages,
-} from '../src/workspace-patterns.js'
+} from '../src/setup/workspace-patterns.js'
 
 const roots: Array<string> = []
 const cwdStack: Array<string> = []

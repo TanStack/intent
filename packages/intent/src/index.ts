@@ -1,18 +1,18 @@
-export { scanForIntents } from './scanner.js'
-export { checkStaleness } from './staleness.js'
-export { readIntentArtifacts } from './artifact-coverage.js'
+export { scanForIntents } from './discovery/scanner.js'
+export { checkStaleness } from './staleness/index.js'
+export { readIntentArtifacts } from './staleness/artifact-coverage.js'
 export {
   buildStaleReviewBody,
   collectStaleReviewItems,
   createFailedStaleReviewItem,
   type StaleReviewItem,
-} from './workflow-review.js'
+} from './staleness/workflow-review.js'
 export {
   findSkillFiles,
   getDeps,
   parseFrontmatter,
   resolveDepDir,
-} from './utils.js'
+} from './shared/utils.js'
 export {
   formatSkillUse,
   isSkillUseParseError,
@@ -20,19 +20,19 @@ export {
   SkillUseParseError,
   type SkillUse,
   type SkillUseParseErrorCode,
-} from './skill-use.js'
+} from './skills/use.js'
 export {
   isResolveSkillUseError,
   resolveSkillUse,
   ResolveSkillUseError,
   type ResolveSkillResult,
   type ResolveSkillUseErrorCode,
-} from './resolver.js'
-export { runEditPackageJson, runSetupGithubActions } from './setup.js'
+} from './skills/resolver.js'
+export { runEditPackageJson, runSetupGithubActions } from './setup/index.js'
 export type {
   EditPackageJsonResult,
   SetupGithubActionsResult,
-} from './setup.js'
+} from './setup/index.js'
 export type {
   IntentConfig,
   IntentArtifactCoverageIgnore,
@@ -47,4 +47,4 @@ export type {
   StalenessReport,
   SkillStaleness,
   StalenessSignal,
-} from './types.js'
+} from './shared/types.js'

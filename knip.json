@@ -4,15 +4,18 @@
     ".": {
       "entry": [
         "scripts/*.ts",
-        "evals/intent-discovery/*.eval.ts",
-        "evals/intent-discovery/bin/*.mjs"
+        "evals/intent-discovery/**/*.ts",
+        "evals/intent-discovery/**/*.mjs",
+        "evals/intent-discovery/harness/intent-hooks/gate.mjs"
       ],
       "ignoreBinaries": ["copilot", "diff"],
-      "ignoreFiles": ["evals/intent-discovery/fixtures/**/src/**/*"]
+      "ignoreFiles": [
+        "evals/intent-discovery/fixtures/**/src/**/*",
+        "evals/intent-discovery/harness/intent-hooks/hook-core.d.mts"
+      ]
     },
     "packages/intent": {
       "entry": ["src/index.ts", "src/cli.ts", "src/core.ts", "src/setup.ts"],
-      "ignore": ["meta/**"],
       "ignoreDependencies": ["verdaccio"]
     }
   }

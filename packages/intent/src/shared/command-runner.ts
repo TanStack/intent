@@ -1,4 +1,4 @@
-import { detectPackageManager } from './package-manager.js'
+import { detectPackageManager } from '../discovery/package-manager.js'
 import type { PackageManager } from './types.js'
 
 export { detectPackageManager as detectIntentCommandPackageManager }

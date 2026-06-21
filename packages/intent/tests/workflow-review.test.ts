@@ -8,8 +8,8 @@ import {
   createFailedStaleReviewItem,
   createWorkflowAdvisoryReviewItems,
   writeStaleReviewWorkflowFiles,
-} from '../src/workflow-review.js'
-import type { StalenessReport } from '../src/types.js'
+} from '../src/staleness/workflow-review.js'
+import type { StalenessReport } from '../src/shared/types.js'
 
 const repoRoot = join(import.meta.dirname, '..', '..', '..')
 

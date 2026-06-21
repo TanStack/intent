@@ -1,5 +1,5 @@
 import { appendFileSync, writeFileSync } from 'node:fs'
-import type { StalenessReport } from './types.js'
+import type { StalenessReport } from '../shared/types.js'
 
 export interface StaleReviewItem {
   type: string

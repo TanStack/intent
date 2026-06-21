@@ -3,10 +3,11 @@
 import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { cac } from 'cac'
-import { fail, isCliFailure } from './cli-error.js'
+import { fail, isCliFailure } from './shared/cli-error.js'
 import type { CAC } from 'cac'
 import type { ExcludeCommandOptions } from './commands/exclude.js'
-import type { InstallCommandOptions } from './commands/install.js'
+import type { HooksInstallCommandOptions } from './commands/hooks/command.js'
+import type { InstallCommandOptions } from './commands/install/command.js'
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
 import type { StaleCommandOptions } from './commands/stale.js'
@@ -79,7 +80,7 @@ function createCli(): CAC {
     .example('meta domain-discovery')
     .action(async (name?: string) => {
       const [{ getMetaDir }, { runMetaCommand }] = await Promise.all([
-        import('./cli-support.js'),
+        import('./commands/support.js'),
         import('./commands/meta.js'),
       ])
       await runMetaCommand(name, getMetaDir())
@@ -127,18 +128,42 @@ function createCli(): CAC {
     .example('install --global')
     .action(async (options: InstallCommandOptions) => {
       const [{ scanIntentsOrFail }, { runInstallCommand }] = await Promise.all([
-        import('./cli-support.js'),
-        import('./commands/install.js'),
+        import('./commands/support.js'),
+        import('./commands/install/command.js'),
       ])
       await runInstallCommand(options, scanIntentsOrFail)
     })
+
+  cli
+    .command('hooks [action]', 'Manage agent hooks that enforce skill loading')
+    .usage(
+      'hooks install [--scope project|user] [--agents copilot,claude,codex|all]',
+    )
+    .option('--scope <scope>', 'Hook install scope: project or user')
+    .option('--agents <agents>', 'Hook agents: copilot,claude,codex, or all')
+    .example('hooks install')
+    .example('hooks install --scope user --agents copilot')
+    .action(
+      async (
+        action: string | undefined,
+        options: HooksInstallCommandOptions,
+      ) => {
+        if (action !== 'install') {
+          fail('Unknown hooks action: expected install.')
+        }
+
+        const { runHooksInstallCommand } =
+          await import('./commands/hooks/command.js')
+        runHooksInstallCommand(options)
+      },
+    )
 
   cli
     .command('scaffold', 'Print maintainer scaffold prompt')
     .usage('scaffold')
     .action(async () => {
       const [{ getMetaDir }, { runScaffoldCommand }] = await Promise.all([
-        import('./cli-support.js'),
+        import('./commands/support.js'),
         import('./commands/scaffold.js'),
       ])
       runScaffoldCommand(getMetaDir())
@@ -160,7 +185,7 @@ function createCli(): CAC {
       async (targetDir: string | undefined, options: StaleCommandOptions) => {
         const [{ resolveStaleTargets }, { runStaleCommand }] =
           await Promise.all([
-            import('./cli-support.js'),
+            import('./commands/support.js'),
             import('./commands/stale.js'),
           ])
         await runStaleCommand(targetDir, options, resolveStaleTargets)
@@ -175,7 +200,7 @@ function createCli(): CAC {
     .usage('edit-package-json')
     .action(async () => {
       const { runEditPackageJsonCommand } =
-        await import('./commands/edit-package-json.js')
+        await import('./commands/setup/edit-package-json.js')
       await runEditPackageJsonCommand(process.cwd())
     })
 
@@ -188,8 +213,8 @@ function createCli(): CAC {
     .action(async () => {
       const [{ getMetaDir }, { runSetupGithubActionsCommand }] =
         await Promise.all([
-          import('./cli-support.js'),
-          import('./commands/setup-github-actions.js'),
+          import('./commands/support.js'),
+          import('./commands/setup/github-actions.js'),
         ])
       await runSetupGithubActionsCommand(process.cwd(), getMetaDir())
     })
@@ -203,8 +228,8 @@ function createCli(): CAC {
     .action(async () => {
       const [{ getMetaDir }, { runSetupGithubActionsCommand }] =
         await Promise.all([
-          import('./cli-support.js'),
-          import('./commands/setup-github-actions.js'),
+          import('./commands/support.js'),
+          import('./commands/setup/github-actions.js'),
         ])
       await runSetupGithubActionsCommand(process.cwd(), getMetaDir())
     })

@@ -14,7 +14,7 @@ import {
   listIntentSkills,
   loadIntentSkill,
   resolveIntentSkill,
-} from '../src/core.js'
+} from '../src/core/index.js'
 
 const realTmpdir = realpathSync(tmpdir())
 

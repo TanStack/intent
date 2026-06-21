@@ -1,13 +1,13 @@
 import { existsSync } from 'node:fs'
 import { join, sep } from 'node:path'
-import { rewriteSkillLoadPaths } from '../skill-paths.js'
-import { listNodeModulesPackageDirs } from '../utils.js'
+import { rewriteSkillLoadPaths } from '../skills/paths.js'
+import { listNodeModulesPackageDirs } from '../shared/utils.js'
 import type {
   IntentConfig,
   IntentPackage,
   NodeModulesScanTarget,
   SkillEntry,
-} from '../types.js'
+} from '../shared/types.js'
 
 type PackageJson = Record<string, unknown>
 

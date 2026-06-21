@@ -8,7 +8,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { listIntentSkills, loadIntentSkill } from '../../src/core.js'
+import { listIntentSkills, loadIntentSkill } from '../../src/core/index.js'
 import { main } from '../../src/cli.js'
 
 const realTmpdir = realpathSync(tmpdir())
@@ -113,9 +113,9 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
-    expect(output).toContain(`use: "${LISTED}#core"`)
-    expect(output).not.toContain(`use: "${UNLISTED}#core"`)
-    expect(output).not.toContain(`use: "${EXCLUDED}#core"`)
+    expect(output).toContain(`id: "${LISTED}#core"`)
+    expect(output).not.toContain(`id: "${UNLISTED}#core"`)
+    expect(output).not.toContain(`id: "${EXCLUDED}#core"`)
 
     rmSync(isolatedGlobalRoot, { recursive: true, force: true })
   })

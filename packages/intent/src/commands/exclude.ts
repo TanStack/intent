@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { fail } from '../cli-error.js'
+import { fail } from '../shared/cli-error.js'
 import { compileExcludePatterns } from '../core/excludes.js'
 
 export interface ExcludeCommandOptions {

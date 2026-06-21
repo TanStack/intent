@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { ResolveSkillUseError, resolveSkillUse } from '../src/resolver.js'
+import {
+  ResolveSkillUseError,
+  resolveSkillUse,
+} from '../src/skills/resolver.js'
 import type {
   IntentPackage,
   ScanResult,
   SkillEntry,
   VersionConflict,
-} from '../src/types.js'
+} from '../src/shared/types.js'
 
 function skill(
   name: string,

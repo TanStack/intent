@@ -47,6 +47,20 @@ export const liveTasks: Array<IntentDiscoveryTask> = [
     },
   },
   {
+    id: 'live-router-hooked-intent',
+    fixture: 'router-basic',
+    condition: 'hooked-intent',
+    explicitnessLevel: 2,
+    prompt: routerPrompt,
+    expectedSkillAreas: ['router'],
+    expected: {
+      strictInvocation: true,
+      correctSkillLoaded: true,
+      referenceOnly: false,
+      failureClass: 'strict-success',
+    },
+  },
+  {
     id: 'live-router-explicit-intent-control',
     fixture: 'router-basic',
     condition: 'explicit-intent-control',

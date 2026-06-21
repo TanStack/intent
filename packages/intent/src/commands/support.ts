@@ -1,12 +1,16 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { fail } from './cli-error.js'
-import { resolveProjectContext } from './core/project-context.js'
-import type { IntentCoreOptions } from './core.js'
-import type { ScanOptions, ScanResult, StalenessReport } from './types.js'
+import { fail } from '../shared/cli-error.js'
+import { resolveProjectContext } from '../core/project-context.js'
+import type { IntentCoreOptions } from '../core/index.js'
+import type {
+  ScanOptions,
+  ScanResult,
+  StalenessReport,
+} from '../shared/types.js'
 
-export { printNotices, printWarnings } from './cli-output.js'
+export { printNotices, printWarnings } from '../shared/cli-output.js'
 
 export interface GlobalScanFlags {
   debug?: boolean
@@ -25,7 +29,7 @@ export const INTENT_CHECK_SKILLS_WORKFLOW_VERSION = 3
 
 export function getMetaDir(): string {
   const thisDir = dirname(fileURLToPath(import.meta.url))
-  return join(thisDir, '..', 'meta')
+  return join(thisDir, '..', '..', 'meta')
 }
 
 export function getCheckSkillsWorkflowAdvisories(root: string): Array<string> {
@@ -51,7 +55,7 @@ export function getCheckSkillsWorkflowAdvisories(root: string): Array<string> {
 export async function scanIntentsOrFail(
   coreOptions: IntentCoreOptions = {},
 ): Promise<ScanResult> {
-  const { scanForPolicedIntents } = await import('./core/source-policy.js')
+  const { scanForPolicedIntents } = await import('../core/source-policy.js')
 
   try {
     const { scan } = scanForPolicedIntents({
@@ -133,7 +137,7 @@ export async function resolveStaleTargets(
     context.workspaceRoot ?? context.packageRoot ?? resolvedRoot
   const workflowAdvisories = getCheckSkillsWorkflowAdvisories(advisoryRoot)
   const { buildWorkspaceCoverageSignals, checkStaleness, readPackageName } =
-    await import('./staleness.js')
+    await import('../staleness/index.js')
   const isWorkspaceRootTarget =
     context.workspaceRoot !== null && resolvedRoot === context.workspaceRoot
 
@@ -155,7 +159,7 @@ export async function resolveStaleTargets(
   }
 
   const { findWorkspaceRoot, getWorkspaceInfo } =
-    await import('./workspace-patterns.js')
+    await import('../setup/workspace-patterns.js')
   const workspaceRoot = findWorkspaceRoot(resolvedRoot)
   const workspaceInfo = workspaceRoot ? getWorkspaceInfo(workspaceRoot) : null
   if (workspaceInfo) {
@@ -168,7 +172,8 @@ export async function resolveStaleTargets(
         ),
       ),
     )
-    const { readIntentArtifacts } = await import('./artifact-coverage.js')
+    const { readIntentArtifacts } =
+      await import('../staleness/artifact-coverage.js')
     const artifacts = existsSync(join(workspaceInfo.root, '_artifacts'))
       ? readIntentArtifacts(workspaceInfo.root)
       : null

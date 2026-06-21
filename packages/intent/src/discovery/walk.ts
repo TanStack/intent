@@ -3,10 +3,10 @@ import {
   getDeps,
   listNestedNodeModulesPackageDirs,
   resolveDepDir,
-} from '../utils.js'
-import { findWorkspacePackages } from '../workspace-patterns.js'
-import type { IntentFsCache } from '../fs-cache.js'
-import type { IntentPackage } from '../types.js'
+} from '../shared/utils.js'
+import { findWorkspacePackages } from '../setup/workspace-patterns.js'
+import type { IntentFsCache } from './fs-cache.js'
+import type { IntentPackage } from '../shared/types.js'
 
 type PackageJson = Record<string, unknown>
 

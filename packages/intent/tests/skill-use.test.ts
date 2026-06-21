@@ -3,7 +3,7 @@ import {
   SkillUseParseError,
   formatSkillUse,
   parseSkillUse,
-} from '../src/skill-use.js'
+} from '../src/skills/use.js'
 
 describe('skill use helpers', () => {
   it('formats scoped packages and slash-named skills', () => {

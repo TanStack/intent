@@ -31,15 +31,30 @@ Intent creates guidance like:
 <!-- intent-skills:start -->
 ## Skill Loading
 
-Before substantial work:
-- Skill check: run `pnpm dlx @tanstack/intent@latest list`, or use skills already listed in context.
-- Skill guidance: if one local skill clearly matches the task, run `pnpm dlx @tanstack/intent@latest load <package>#<skill>` and follow the returned `SKILL.md`.
+Before editing files for a substantial task:
+- Run `pnpm dlx @tanstack/intent@latest list` from the workspace root to see available local skills.
+- If a listed skill matches the task, run `pnpm dlx @tanstack/intent@latest load <package>#<skill>` before changing files.
+- Use the loaded `SKILL.md` guidance while making the change.
 - Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.
 - Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
 <!-- intent-skills:end -->
 ```
 
 Intent detects the package manager when generating this block, so the runner may be `npx`, `pnpm dlx`, `yarn dlx`, or `bunx`.
+
+To enforce loading guidance before edits in supported agents, opt in to hooks:
+
+```bash
+npx @tanstack/intent@latest hooks install
+```
+
+Project-scoped hooks are installed for Claude Code and Codex. `intent install` can write project guidance to `.github/copilot-instructions.md`, but GitHub Copilot CLI hook enforcement is user-scoped, so configure it explicitly:
+
+```bash
+npx @tanstack/intent@latest hooks install --scope user --agents copilot
+```
+
+Cursor and generic `AGENTS.md` agents use the guidance block only.
 
 ## 2. Choose which packages' skills to use
 
@@ -106,4 +121,3 @@ You can also check if any skills reference outdated source documentation:
 ```bash
 npx @tanstack/intent@latest stale
 ```
-

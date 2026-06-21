@@ -13,8 +13,11 @@ import {
   runEditPackageJson,
   runEditPackageJsonAll,
   runSetupGithubActions,
-} from '../src/setup.js'
-import type { EditPackageJsonResult, MonorepoResult } from '../src/setup.js'
+} from '../src/setup/index.js'
+import type {
+  EditPackageJsonResult,
+  MonorepoResult,
+} from '../src/setup/index.js'
 
 const repoRoot = join(import.meta.dirname, '..', '..', '..')
 
@@ -271,6 +274,34 @@ describe('runSetupGithubActions', () => {
     expect(checkContent).toContain(
       'gh pr edit "$PR_URL" --body-file pr-body.md',
     )
+  })
+
+  it('keeps remote docs URLs out of single-package watch globs', () => {
+    writePkg({
+      name: '@tanstack/query',
+      intent: { repo: 'TanStack/query', docs: 'https://tanstack.com/query' },
+    })
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(
+      join(metaDir, 'templates', 'workflows', 'check-skills.yml'),
+      [
+        'docs: {{DOCS_PATH}}',
+        'watch:',
+        "      - '{{DOCS_PATH}}'",
+        "      - '{{SRC_PATH}}'",
+      ].join('\n'),
+    )
+
+    runSetupGithubActions(root, metaDir)
+
+    const checkContent = readFileSync(
+      join(root, '.github', 'workflows', 'check-skills.yml'),
+      'utf8',
+    )
+    expect(checkContent).toContain('docs: docs/**')
+    expect(checkContent).toContain("      - 'src/**'")
+    expect(checkContent).not.toContain('https://tanstack.com/query/**')
+    expect(checkContent).not.toContain("      - 'docs/**'\n      - 'src/**'")
   })
 
   it('ships one workflow that validates skills through the CLI', () => {

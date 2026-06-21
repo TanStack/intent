@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import type { PackageManager } from './types.js'
+import type { PackageManager } from '../shared/types.js'
 
 function readPackageManagerField(dir: string): PackageManager | null {
   try {

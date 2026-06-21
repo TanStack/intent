@@ -1,5 +1,5 @@
-import { isCliFailure } from '../cli-error.js'
-import type { StalenessReport } from '../types.js'
+import { isCliFailure } from '../shared/cli-error.js'
+import type { StalenessReport } from '../shared/types.js'
 
 export interface StaleCommandOptions {
   json?: boolean
@@ -87,7 +87,7 @@ async function runGithubReview(
     createFailedStaleReviewItem,
     createWorkflowAdvisoryReviewItems,
     writeStaleReviewWorkflowFiles,
-  } = await import('../workflow-review.js')
+  } = await import('../staleness/workflow-review.js')
   const packageLabel = options.packageLabel ?? 'workspace'
 
   try {

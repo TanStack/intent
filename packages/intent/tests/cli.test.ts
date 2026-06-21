@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { INSTALL_PROMPT } from '../src/commands/install.js'
+import { INSTALL_PROMPT } from '../src/commands/install/command.js'
 import { isMainModule, main } from '../src/cli.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
@@ -215,9 +215,18 @@ describe('cli commands', () => {
 
   it('prints the install prompt', async () => {
     const exitCode = await main(['install', '--print-prompt'])
+    const output = String(logSpy.mock.calls[0]?.[0])
 
     expect(exitCode).toBe(0)
     expect(logSpy).toHaveBeenCalledWith(INSTALL_PROMPT)
+    expect(output).toContain('tanstackIntent:')
+    expect(output).toContain('  - id: "@scope/package#skill-name"')
+    expect(output).toContain(
+      '    run: "npx @tanstack/intent@latest load @scope/package#skill-name"',
+    )
+    expect(output).toContain('    for: "describe the task or code area here"')
+    expect(output).not.toContain('skills:\n  - when:')
+    expect(output).not.toContain('use: "@scope/package#skill-name"')
   })
 
   it('lists excludes when none are configured', async () => {
@@ -356,7 +365,8 @@ describe('cli commands', () => {
     expect(output).toContain('Created AGENTS.md with skill loading guidance.')
     expect(content).toContain('## Skill Loading')
     expect(content).toContain('npx @tanstack/intent@latest list')
-    expect(content).toContain('if one local skill clearly matches the task')
+    expect(content).toContain('If a listed skill matches the task')
+    expect(content).toContain('before changing files')
     expect(content).toContain('Monorepos:')
     expect(content).toContain('Multiple matches:')
     expect(content).not.toContain('--global')
@@ -445,6 +455,34 @@ describe('cli commands', () => {
     )
   })
 
+  it('installs hooks with the hooks install command', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-hooks-install-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main(['hooks', 'install', '--agents', 'claude'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('Installed Intent hooks for claude (project)')
+    expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(true)
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('fails cleanly for invalid hooks install options', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-hooks-bad-options-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main(['hooks', 'install', '--scope', 'repo'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Unknown hook scope: repo. Expected project or user.',
+    )
+    expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(false)
+  })
+
   it('writes install mappings with --map and is idempotent', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-map-'))
     const isolatedGlobalRoot = mkdtempSync(
@@ -468,8 +506,11 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Created AGENTS.md with 1 mapping.')
-    expect(content).toContain('when: "Query data fetching patterns"')
-    expect(content).toContain('use: "@tanstack/query#fetching"')
+    expect(content).toContain('for: "Query data fetching patterns"')
+    expect(content).toContain('id: "@tanstack/query#fetching"')
+    expect(content).toContain(
+      'run: "npx @tanstack/intent@latest load @tanstack/query#fetching"',
+    )
     expect(content).not.toContain('load:')
     expect(content).not.toContain(root)
 
@@ -516,7 +557,7 @@ describe('cli commands', () => {
     const content = readFileSync(join(root, 'AGENTS.md'), 'utf8')
 
     expect(exitCode).toBe(0)
-    expect(content).toContain('use: "@tanstack/query#fetching"')
+    expect(content).toContain('id: "@tanstack/query#fetching"')
     expect(content).not.toContain('@tanstack/unlisted')
   })
 
@@ -575,8 +616,45 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Generated 1 mapping for AGENTS.md.')
-    expect(output).toContain('when: "Global fetching skill"')
-    expect(output).toContain('use: "@tanstack/query#fetching"')
+    expect(output).toContain('for: "Global fetching skill"')
+    expect(output).toContain('id: "@tanstack/query#fetching"')
+  })
+
+  it('uses only global packages during install --map --global-only', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-global-only-'),
+    )
+    const globalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-global-only-node-modules-'),
+    )
+    tempDirs.push(root, globalRoot)
+
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/local',
+      version: '1.0.0',
+      skillName: 'local-skill',
+      description: 'Local skill',
+    })
+    const globalPkgDir = join(globalRoot, '@tanstack', 'query')
+    writeJson(join(globalPkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(join(globalPkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Global fetching skill',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--map', '--global-only'])
+    const content = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+
+    expect(exitCode).toBe(0)
+    expect(content).toContain('id: "@tanstack/query#fetching"')
+    expect(content).not.toContain('@tanstack/local#local-skill')
   })
 
   it('prints the scaffold prompt', async () => {

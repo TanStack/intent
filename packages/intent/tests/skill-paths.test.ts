@@ -10,8 +10,8 @@ import {
   isRuntimeSkillLookupComment,
   isStableLoadPath,
   rewriteSkillLoadPaths,
-} from '../src/skill-paths.js'
-import type { SkillEntry } from '../src/types.js'
+} from '../src/skills/paths.js'
+import type { SkillEntry } from '../src/shared/types.js'
 
 const tempDirs: Array<string> = []
 
