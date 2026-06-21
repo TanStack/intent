@@ -3,6 +3,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { parseIntentCommand } from './parse-intent-commands'
+import { prepareGateRun } from './prepare-copilot-home'
+import type { GateRun } from './prepare-copilot-home'
 import type { IntentDiscoveryTask } from '../corpus/tasks'
 import type {
   NormalizedMessage,
@@ -56,7 +58,12 @@ export async function runCopilotTask(
     throw new LiveCopilotRunnerUnavailableError()
   }
 
-  const result = await runCommand({ command, input })
+  const gateState =
+    input.task.condition === 'hooked-intent'
+      ? prepareGateRun(sanitizeFileName(input.runId))
+      : undefined
+
+  const result = await runCommand({ command, input, gateState })
   const transcript = transcriptFromCommandResult(result)
   const transcriptPath = writeTranscript(input.runId, transcript)
   const intentCommandCaptures = captureIntentCommands(transcript)
@@ -123,9 +130,11 @@ type IntentCommandCapture = {
 async function runCommand({
   command,
   input,
+  gateState,
 }: {
   command: string
   input: RunCopilotTaskInput
+  gateState?: GateRun
 }): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     let settled = false
@@ -134,6 +143,12 @@ async function runCommand({
       shell: true,
       env: {
         ...process.env,
+        ...(gateState
+          ? {
+              COPILOT_HOME: gateState.copilotHome,
+              INTENT_DISCOVERY_GATE_STATE: gateState.stateFile,
+            }
+          : {}),
         INTENT_DISCOVERY_TASK_ID: input.task.id,
         INTENT_DISCOVERY_FIXTURE: input.task.fixture,
         INTENT_DISCOVERY_PROMPT: input.task.prompt,

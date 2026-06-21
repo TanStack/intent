@@ -5,6 +5,7 @@ export default defineConfig({
     include: ['evals/intent-discovery/**/*.eval.ts'],
     testTimeout: 120_000,
     hookTimeout: 120_000,
+    maxConcurrency: liveConcurrencyFromEnv(),
     reporters: ['default'],
     env: {
       VITEST_EVALS_REPLAY_DIR:
@@ -13,3 +14,13 @@ export default defineConfig({
     },
   },
 })
+
+function liveConcurrencyFromEnv(): number {
+  const raw = Number(process.env.INTENT_DISCOVERY_LIVE_CONCURRENCY ?? '1')
+
+  if (!Number.isFinite(raw)) {
+    return 1
+  }
+
+  return Math.max(1, Math.trunc(raw))
+}

@@ -116,7 +116,7 @@ function writeAgentsFile({
 }): string {
   const agentsPath = join(workspacePath, 'AGENTS.md')
   const block =
-    condition === 'mapped-intent'
+    condition === 'mapped-intent' || condition === 'hooked-intent'
       ? mappedGuidanceBlock(expectedSkillAreas)
       : loadingGuidanceBlock()
 
