@@ -180,7 +180,12 @@ export function verifyIntentSkillsBlockFile({
       continue
     }
 
-    const mapping = skill as { load?: unknown; use?: unknown; when?: unknown }
+    const mapping = skill as {
+      load?: unknown
+      run?: unknown
+      use?: unknown
+      when?: unknown
+    }
 
     if (mapping.load !== undefined) {
       errors.push('Skill mappings must use compact `use` entries, not `load`.')
@@ -198,6 +203,10 @@ export function verifyIntentSkillsBlockFile({
       } catch (err) {
         errors.push(err instanceof Error ? err.message : String(err))
       }
+    }
+
+    if (mapping.run !== undefined && typeof mapping.run !== 'string') {
+      errors.push('Skill mapping `run` fields must be strings.')
     }
   }
 
@@ -241,10 +250,7 @@ export function buildIntentSkillsBlock(
 ): IntentSkillsBlockResult {
   const lines = [
     INTENT_SKILLS_START,
-    `# Skill mappings - load \`use\` with \`${formatIntentCommand(
-      scanResult.packageManager,
-      'load <use>',
-    )}\`.`,
+    '# Skill mappings - before editing files, choose the matching skill and run its `run` command.',
     'skills:',
   ]
   let mappingCount = 0
@@ -257,6 +263,14 @@ export function buildIntentSkillsBlock(
       lines.push(`  - when: ${quoteYamlString(formatWhen(pkg.name, skill))}`)
       lines.push(
         `    use: ${quoteYamlString(formatSkillUse(pkg.name, skill.name))}`,
+      )
+      lines.push(
+        `    run: ${quoteYamlString(
+          formatIntentCommand(
+            scanResult.packageManager,
+            `load ${formatSkillUse(pkg.name, skill.name)}`,
+          ),
+        )}`,
       )
     }
   }
@@ -286,9 +300,10 @@ export function buildIntentSkillGuidanceBlock(
       INTENT_SKILLS_START,
       '## Skill Loading',
       '',
-      'Before substantial work:',
-      `- Skill check: run \`${listCommand}\`, or use skills already listed in context.`,
-      `- Skill guidance: if one local skill clearly matches the task, run \`${loadCommand}\` and follow the returned \`SKILL.md\`.`,
+      'Before editing files for a substantial task:',
+      `- Run \`${listCommand}\` from the workspace root to see available local skills.`,
+      `- If a listed skill matches the task, run \`${loadCommand}\` before changing files.`,
+      '- Use the loaded `SKILL.md` guidance while making the change.',
       '- Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.',
       '- Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.',
       INTENT_SKILLS_END,

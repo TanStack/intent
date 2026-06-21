@@ -356,7 +356,8 @@ describe('cli commands', () => {
     expect(output).toContain('Created AGENTS.md with skill loading guidance.')
     expect(content).toContain('## Skill Loading')
     expect(content).toContain('npx @tanstack/intent@latest list')
-    expect(content).toContain('if one local skill clearly matches the task')
+    expect(content).toContain('If a listed skill matches the task')
+    expect(content).toContain('before changing files')
     expect(content).toContain('Monorepos:')
     expect(content).toContain('Multiple matches:')
     expect(content).not.toContain('--global')
@@ -470,6 +471,9 @@ describe('cli commands', () => {
     expect(output).toContain('Created AGENTS.md with 1 mapping.')
     expect(content).toContain('when: "Query data fetching patterns"')
     expect(content).toContain('use: "@tanstack/query#fetching"')
+    expect(content).toContain(
+      'run: "npx @tanstack/intent@latest load @tanstack/query#fetching"',
+    )
     expect(content).not.toContain('load:')
     expect(content).not.toContain(root)
 

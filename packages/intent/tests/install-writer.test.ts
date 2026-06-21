@@ -82,10 +82,11 @@ function scanResult(packages: Array<IntentPackage>): ScanResult {
 }
 
 const exampleBlock = `<!-- intent-skills:start -->
-# Skill mappings - load \`use\` with \`pnpm dlx @tanstack/intent@latest load <use>\`.
+# Skill mappings - before editing files, choose the matching skill and run its \`run\` command.
 skills:
   - when: "Query data fetching"
     use: "@tanstack/query#fetching"
+    run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#fetching"
 <!-- intent-skills:end -->
 `
 
@@ -97,8 +98,9 @@ describe('install writer block builder', () => {
     expect(generated.block).toContain('## Skill Loading')
     expect(generated.block).toContain('npx @tanstack/intent@latest list')
     expect(generated.block).toContain(
-      'if one local skill clearly matches the task',
+      'If a listed skill matches the task',
     )
+    expect(generated.block).toContain('before changing files')
     expect(generated.block).toContain('Monorepos:')
     expect(generated.block).toContain('Multiple matches:')
     expect(generated.block).not.toContain('install --map')
@@ -147,14 +149,17 @@ describe('install writer block builder', () => {
 
     expect(generated.mappingCount).toBe(3)
     expect(generated.block).toBe(`<!-- intent-skills:start -->
-# Skill mappings - load \`use\` with \`pnpm dlx @tanstack/intent@latest load <use>\`.
+# Skill mappings - before editing files, choose the matching skill and run its \`run\` command.
 skills:
   - when: "Query data fetching patterns"
     use: "@tanstack/query#fetching"
+    run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#fetching"
   - when: "Mutation patterns"
     use: "@tanstack/query#mutations"
+    run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#mutations"
   - when: "Routing patterns"
     use: "@tanstack/router#routing"
+    run: "pnpm dlx @tanstack/intent@latest load @tanstack/router#routing"
 <!-- intent-skills:end -->
 `)
   })
@@ -183,6 +188,9 @@ skills:
     expect(generated.mappingCount).toBe(2)
     expect(generated.block).toContain('use: "@tanstack/query#global-fetching"')
     expect(generated.block).toContain('use: "@tanstack/query#pnpm-fetching"')
+    expect(generated.block).toContain(
+      'run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#global-fetching"',
+    )
     expect(generated.block).not.toContain('/home/sarah')
     expect(generated.block).not.toContain('node_modules/.pnpm')
     expect(generated.block).not.toContain('load:')
@@ -219,8 +227,14 @@ skills:
     expect(generated.mappingCount).toBe(2)
     expect(generated.block).toContain('when: "Core skill"')
     expect(generated.block).toContain('use: "@tanstack/query#core"')
+    expect(generated.block).toContain(
+      'run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#core"',
+    )
     expect(generated.block).toContain('when: "Sub-skill"')
     expect(generated.block).toContain('use: "@tanstack/query#core/fetching"')
+    expect(generated.block).toContain(
+      'run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#core/fetching"',
+    )
     expect(generated.block).not.toContain('Reference material')
     expect(generated.block).not.toContain('Maintainer task')
     expect(generated.block).not.toContain('Maintainer-only task')
@@ -454,10 +468,11 @@ describe('install writer verification', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
+# Skill mappings - before editing files, choose the matching skill and run its \`run\` command.
 skills:
   - when: "Query data fetching"
     use: "@tanstack/query#fetching"
+    run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
 <!-- intent-skills:end -->
 `
     writeFileSync(agentsPath, block)
