@@ -3,7 +3,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import {
   findWorkspaceRoot,
   readWorkspacePatterns,
-} from '../workspace-patterns.js'
+} from '../setup/workspace-patterns.js'
 
 export type ProjectContext = {
   cwd: string

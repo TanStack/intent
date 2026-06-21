@@ -7,7 +7,7 @@ import type {
   IntentArtifactSet,
   IntentArtifactSkill,
   IntentArtifactWarning,
-} from './types.js'
+} from '../shared/types.js'
 
 type ArtifactKind = IntentArtifactFile['kind']
 

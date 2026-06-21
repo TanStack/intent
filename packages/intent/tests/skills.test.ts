@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
-import { findSkillFiles } from '../src/utils.js'
+import { findSkillFiles } from '../src/shared/utils.js'
 
 // ── Types ──
 

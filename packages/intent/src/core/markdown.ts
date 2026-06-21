@@ -1,5 +1,5 @@
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
-import { toPosixPath } from '../utils.js'
+import { toPosixPath } from '../shared/utils.js'
 
 function resolveFromCwd(path: string): string {
   return resolve(process.cwd(), path)

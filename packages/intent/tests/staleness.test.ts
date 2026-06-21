@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { checkStaleness } from '../src/staleness.js'
+import { checkStaleness } from '../src/staleness/index.js'
 
 // ---------------------------------------------------------------------------
 // Fixture helpers

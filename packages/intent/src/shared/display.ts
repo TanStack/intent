@@ -5,7 +5,7 @@
 import {
   formatRuntimeSkillLookupHint,
   isStableLoadPath,
-} from './skill-paths.js'
+} from '../skills/paths.js'
 
 export interface SkillDisplay {
   name: string

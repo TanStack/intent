@@ -8,7 +8,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { listIntentSkills, loadIntentSkill } from '../../src/core.js'
+import { listIntentSkills, loadIntentSkill } from '../../src/core/index.js'
 import { main } from '../../src/cli.js'
 
 const realTmpdir = realpathSync(tmpdir())

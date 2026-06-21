@@ -1,11 +1,11 @@
-import { warningMentionsPackage } from './core/excludes.js'
-import { parseSkillUse } from './skill-use.js'
+import { warningMentionsPackage } from '../core/excludes.js'
+import { parseSkillUse } from './use.js'
 import type {
   IntentPackage,
   ScanResult,
   SkillEntry,
   VersionConflict,
-} from './types.js'
+} from '../shared/types.js'
 
 export interface ResolveSkillResult {
   packageName: string

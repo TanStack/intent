@@ -1,22 +1,22 @@
 import { relative } from 'node:path'
-import { fail } from '../cli-error.js'
-import { detectIntentCommandPackageManager } from '../command-runner.js'
+import { fail } from '../../shared/cli-error.js'
+import { detectIntentCommandPackageManager } from '../../shared/command-runner.js'
 import {
   coreOptionsFromGlobalFlags,
   noticeOptionsFromGlobalFlags,
   printNotices,
   printWarnings,
-} from '../cli-support.js'
+} from '../support.js'
 import {
   buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
   resolveIntentSkillsBlockTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
-} from './install-guidance.js'
-import type { GlobalScanFlags } from '../cli-support.js'
-import type { IntentCoreOptions } from '../core.js'
-import type { ScanResult } from '../types.js'
+} from './guidance.js'
+import type { GlobalScanFlags } from '../support.js'
+import type { IntentCoreOptions } from '../../core/index.js'
+import type { ScanResult } from '../../shared/types.js'
 
 export const INSTALL_PROMPT = `You are an AI assistant helping a developer set up skill-to-task mappings for their project.
 

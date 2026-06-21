@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { toPosixPath } from './utils.js'
-import type { SkillUse } from './skill-use.js'
-import type { SkillEntry } from './types.js'
+import { toPosixPath } from '../shared/utils.js'
+import type { SkillUse } from './use.js'
+import type { SkillEntry } from '../shared/types.js'
 
 const RUNTIME_SKILL_LOOKUP_COMMENT_PATTERN =
   /^Runtime lookup only: run `npx @tanstack\/intent@latest load [^`]+ --path`, and load its reported path for this session\. Do not copy the resolved path into this file\.$/

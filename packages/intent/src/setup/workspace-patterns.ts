@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { parse as parseJsonc } from 'jsonc-parser'
 import { parse as parseYaml } from 'yaml'
-import { findSkillFiles } from './utils.js'
+import { findSkillFiles } from '../shared/utils.js'
 import type { ParseError } from 'jsonc-parser'
 
 function normalizeWorkspacePattern(pattern: string): string {

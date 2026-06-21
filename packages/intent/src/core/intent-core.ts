@@ -2,22 +2,22 @@ import { isAbsolute, relative, resolve } from 'node:path'
 import {
   compileExcludePatterns,
   getEffectiveExcludePatterns,
-} from './core/excludes.js'
-import { createIntentFsCache } from './fs-cache.js'
-import { rewriteLoadedSkillMarkdownDestinations } from './core/markdown.js'
-import { resolveSkillUseFastPath } from './core/load-resolution.js'
-import { resolveProjectContext } from './core/project-context.js'
+} from './excludes.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
+import { rewriteLoadedSkillMarkdownDestinations } from './markdown.js'
+import { resolveSkillUseFastPath } from './load-resolution.js'
+import { resolveProjectContext } from './project-context.js'
 import {
   checkLoadAllowed,
   readSkillSourcesConfig,
   scanForPolicedIntents,
-} from './core/source-policy.js'
-import { ResolveSkillUseError, resolveSkillUse } from './resolver.js'
-import { formatSkillUse, parseSkillUse } from './skill-use.js'
-import type { ResolveSkillResult } from './resolver.js'
-import type { IntentFsCache } from './fs-cache.js'
-import type { ReadFs } from './utils.js'
-import type { ScanOptions, ScanScope } from './types.js'
+} from './source-policy.js'
+import { ResolveSkillUseError, resolveSkillUse } from '../skills/resolver.js'
+import { formatSkillUse, parseSkillUse } from '../skills/use.js'
+import type { ResolveSkillResult } from '../skills/resolver.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
+import type { ReadFs } from '../shared/utils.js'
+import type { ScanOptions, ScanScope } from '../shared/types.js'
 import type {
   IntentCoreErrorCode,
   IntentCoreOptions,
@@ -26,7 +26,7 @@ import type {
   LoadedIntentSkill,
   LoadedIntentSkillDebug,
   ResolvedIntentSkill,
-} from './core/types.js'
+} from './types.js'
 
 export type {
   IntentCoreErrorCode,
@@ -38,7 +38,7 @@ export type {
   LoadedIntentSkillDebug,
   LoadedIntentSkill,
   ResolvedIntentSkill,
-} from './core/types.js'
+} from './types.js'
 
 export class IntentCoreError extends Error {
   readonly code: IntentCoreErrorCode

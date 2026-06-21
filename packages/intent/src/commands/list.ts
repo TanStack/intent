@@ -4,16 +4,16 @@ import {
   printDebugInfo,
   printNotices,
   printWarnings,
-} from '../cli-support.js'
-import { formatIntentCommand } from '../command-runner.js'
-import { listIntentSkills } from '../core.js'
-import type { GlobalScanFlags } from '../cli-support.js'
+} from './support.js'
+import { formatIntentCommand } from '../shared/command-runner.js'
+import { listIntentSkills } from '../core/index.js'
+import type { GlobalScanFlags } from './support.js'
 import type {
   IntentPackageSummary,
   IntentSkillList,
   IntentSkillSummary,
-} from '../core.js'
-import type { ScanResult } from '../types.js'
+} from '../core/index.js'
+import type { ScanResult } from '../shared/types.js'
 
 export interface ListCommandOptions extends GlobalScanFlags {
   json?: boolean
@@ -105,7 +105,7 @@ export async function runListCommand(
   }
 
   const { computeSkillNameWidth, printSkillTree, printTable } =
-    await import('../display.js')
+    await import('../shared/display.js')
 
   if (result.packages.length === 0) {
     console.log('No intent-enabled packages found.')

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getSkillCategory,
   isGeneratedMappingSkill,
-} from '../src/skill-categories.js'
+} from '../src/skills/categories.js'
 
 describe('skill categories', () => {
   it('treats empty and unknown types as task skills', () => {

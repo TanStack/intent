@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { readIntentArtifacts } from '../src/artifact-coverage.js'
+import { readIntentArtifacts } from '../src/staleness/artifact-coverage.js'
 
 let root: string
 

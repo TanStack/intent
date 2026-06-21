@@ -3,8 +3,8 @@ import {
   createFsIdentityCache,
   findSkillFiles as findSkillFilesUncached,
   nodeReadFs,
-} from './utils.js'
-import type { ReadFs } from './utils.js'
+} from '../shared/utils.js'
+import type { ReadFs } from '../shared/utils.js'
 
 type PackageJsonReadResult = {
   packageJson: Record<string, unknown> | null

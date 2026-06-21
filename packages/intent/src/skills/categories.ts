@@ -1,4 +1,4 @@
-import type { SkillEntry } from './types.js'
+import type { SkillEntry } from '../shared/types.js'
 
 export type SkillCategory = 'maintainer' | 'meta' | 'reference' | 'task'
 

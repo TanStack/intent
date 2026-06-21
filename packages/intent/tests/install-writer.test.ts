@@ -14,8 +14,8 @@ import {
   resolveIntentSkillsBlockTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
-} from '../src/install/guidance.js'
-import type { IntentPackage, ScanResult, SkillEntry } from '../src/types.js'
+} from '../src/commands/install/guidance.js'
+import type { IntentPackage, ScanResult, SkillEntry } from '../src/shared/types.js'
 
 const tempDirs: Array<string> = []
 

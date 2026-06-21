@@ -9,22 +9,22 @@ import semver from 'semver'
 import {
   createDependencyWalker,
   createPackageRegistrar,
-} from './discovery/index.js'
+} from './index.js'
 import {
   detectGlobalNodeModules,
   nodeReadFs,
   parseFrontmatter,
   readScalarField,
   toPosixPath,
-} from './utils.js'
+} from '../shared/utils.js'
 import { createIntentFsCache } from './fs-cache.js'
 import { detectPackageManager } from './package-manager.js'
 import {
   findWorkspacePackages,
   findWorkspaceRoot,
-} from './workspace-patterns.js'
+} from '../setup/workspace-patterns.js'
 import type { IntentFsCache } from './fs-cache.js'
-import type { ReadFs } from './utils.js'
+import type { ReadFs } from '../shared/utils.js'
 import type {
   InstalledVariant,
   IntentConfig,
@@ -34,7 +34,7 @@ import type {
   ScanScope,
   SkillEntry,
   VersionConflict,
-} from './types.js'
+} from '../shared/types.js'
 
 type ScanOptionsWithFsCache = ScanOptions & {
   fsCache?: IntentFsCache

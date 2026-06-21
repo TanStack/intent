@@ -7,14 +7,14 @@ import {
   parseFrontmatter,
   readScalarField,
   toPosixPath,
-} from './utils.js'
+} from '../shared/utils.js'
 import type {
   IntentArtifactSet,
   IntentArtifactSkill,
   SkillStaleness,
   StalenessReport,
   StalenessSignal,
-} from './types.js'
+} from '../shared/types.js'
 
 // ---------------------------------------------------------------------------
 // Helpers

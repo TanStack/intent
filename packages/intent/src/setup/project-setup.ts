@@ -11,7 +11,7 @@ import {
   findWorkspaceRoot,
   readWorkspacePatterns,
 } from './workspace-patterns.js'
-import { resolveProjectContext } from './core/project-context.js'
+import { resolveProjectContext } from '../core/project-context.js'
 
 export {
   findPackagesWithSkills,
