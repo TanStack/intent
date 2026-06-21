@@ -13,7 +13,7 @@ import {
   resolveIntentSkillsBlockTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
-} from './install-writer.js'
+} from '../install/guidance.js'
 import type { GlobalScanFlags } from '../cli-support.js'
 import type { IntentCoreOptions } from '../core.js'
 import type { ScanResult } from '../types.js'

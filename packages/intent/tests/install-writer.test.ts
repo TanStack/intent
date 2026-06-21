@@ -14,7 +14,7 @@ import {
   resolveIntentSkillsBlockTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
-} from '../src/commands/install-writer.js'
+} from '../src/install/guidance.js'
 import type { IntentPackage, ScanResult, SkillEntry } from '../src/types.js'
 
 const tempDirs: Array<string> = []
