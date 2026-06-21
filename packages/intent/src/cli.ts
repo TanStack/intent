@@ -109,9 +109,12 @@ function createCli(): CAC {
       'Create or update skill loading guidance in an agent config file',
     )
     .usage(
-      'install [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]',
+      'install [--map] [--hooks] [--scope project|user] [--agents copilot,claude,codex|all] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]',
     )
     .option('--map', 'Write explicit skill-to-task mappings')
+    .option('--hooks', 'Install agent hooks that enforce skill loading')
+    .option('--scope <scope>', 'Hook install scope: project or user')
+    .option('--agents <agents>', 'Hook agents: copilot,claude,codex, or all')
     .option('--dry-run', 'Print the generated block without writing')
     .option(
       '--print-prompt',
@@ -122,6 +125,8 @@ function createCli(): CAC {
     .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('install')
     .example('install --map')
+    .example('install --hooks')
+    .example('install --hooks --scope user --agents copilot')
     .example('install --dry-run')
     .example('install --print-prompt')
     .example('install --global')

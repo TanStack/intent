@@ -14,6 +14,7 @@ import {
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from '../install/guidance.js'
+import { formatHookInstallResult, runInstallHooks } from '../hooks/install.js'
 import type { GlobalScanFlags } from '../cli-support.js'
 import type { IntentCoreOptions } from '../core.js'
 import type { ScanResult } from '../types.js'
@@ -121,9 +122,12 @@ skills:
    - The verification result`
 
 export interface InstallCommandOptions extends GlobalScanFlags {
+  agents?: string
   dryRun?: boolean
+  hooks?: boolean
   map?: boolean
   printPrompt?: boolean
+  scope?: string
 }
 
 function formatTargetPath(targetPath: string): string {
@@ -193,6 +197,22 @@ function printWriteResult({
   }
 }
 
+function installHooks(options: InstallCommandOptions): void {
+  if (!options.hooks || options.dryRun) {
+    return
+  }
+
+  const results = runInstallHooks({
+    agents: options.agents,
+    root: process.cwd(),
+    scope: options.scope,
+  })
+
+  for (const result of results) {
+    console.log(formatHookInstallResult(result))
+  }
+}
+
 export async function runInstallCommand(
   options: InstallCommandOptions,
   scanIntentsOrFail: (coreOptions?: IntentCoreOptions) => Promise<ScanResult>,
@@ -246,6 +266,7 @@ export async function runInstallCommand(
 
     printWriteResult(result)
     printPlacementTip(result.targetPath)
+    installHooks(options)
     return
   }
 
@@ -308,6 +329,7 @@ export async function runInstallCommand(
 
   printWriteResult(result)
   printPlacementTip(result.targetPath)
+  installHooks(options)
 
   printWarnings(scanResult.warnings)
   printNotices(scanResult.notices, noticeOptions)

@@ -446,6 +446,58 @@ describe('cli commands', () => {
     )
   })
 
+  it('writes skill loading guidance and project hooks with --hooks', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-hooks-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main([
+      'install',
+      '--hooks',
+      '--agents',
+      'claude,codex',
+    ])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('Created AGENTS.md with skill loading guidance.')
+    expect(output).toContain('Installed Intent hooks for claude (project)')
+    expect(output).toContain('Installed Intent hooks for codex (project)')
+    expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(true)
+    expect(existsSync(join(root, '.codex', 'hooks.json'))).toBe(true)
+    expect(
+      existsSync(join(root, '.intent', 'hooks', 'intent-claude-gate.mjs')),
+    ).toBe(true)
+  })
+
+  it('fails cleanly for invalid install hook options', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-hooks-bad-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const badAgentExitCode = await main([
+      'install',
+      '--hooks',
+      '--agents',
+      'wat',
+    ])
+    const badScopeExitCode = await main([
+      'install',
+      '--hooks',
+      '--scope',
+      'repo',
+    ])
+
+    expect(badAgentExitCode).toBe(1)
+    expect(badScopeExitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Unknown hook agent: wat. Expected copilot, claude, codex, or all.',
+    )
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Unknown hook scope: repo. Expected project or user.',
+    )
+  })
+
   it('writes install mappings with --map and is idempotent', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-map-'))
     const isolatedGlobalRoot = mkdtempSync(
