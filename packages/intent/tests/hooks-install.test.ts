@@ -316,6 +316,8 @@ describe('hook installer', () => {
     expect(script).toContain('const AGENT = "claude"')
     expect(script).toContain('permissionDecision')
     expect(script).not.toMatch(/Blocked:.*intent\s+(list|load)/i)
+    expect(script).not.toContain('@tanstack/intent/core')
+    expect(script).not.toContain('createRequire')
   })
 
   it('runs the generated gate script through the load then edit cycle', () => {
@@ -359,7 +361,7 @@ describe('hook installer', () => {
     'emits session catalog context for %s',
     (agent) => {
       const root = tempRoot(`intent-hooks-session-catalog-${agent}-`)
-      writeFakeIntentCore(root)
+      const catalogCommand = writeFakeIntentListCommand(root)
       const scriptPath = join(
         root,
         '.intent',
@@ -367,7 +369,7 @@ describe('hook installer', () => {
         `intent-${agent}-gate.mjs`,
       )
       mkdirSync(join(root, '.intent', 'hooks'), { recursive: true })
-      writeFileSync(scriptPath, buildHookRunnerScript(agent))
+      writeFileSync(scriptPath, buildHookRunnerScript(agent, catalogCommand))
 
       const result = runHookScript(scriptPath, {
         cwd: root,
@@ -386,7 +388,8 @@ describe('hook installer', () => {
       expect(context).toContain(
         '- @tanstack/router#routing: Router routing guidance',
       )
-      expect(context).toContain('intent load <skill-id>')
+      expect(context).toContain('load that full skill guidance')
+      expect(context).not.toContain('intent load <skill-id>')
       if (agent !== 'copilot') {
         expect(output.hookSpecificOutput.hookEventName).toBe('SessionStart')
       }
@@ -395,10 +398,10 @@ describe('hook installer', () => {
 
   it('does not unlock edits after session catalog context', () => {
     const root = tempRoot('intent-hooks-session-catalog-gate-')
-    writeFakeIntentCore(root)
+    const catalogCommand = writeFakeIntentListCommand(root)
     const scriptPath = join(root, '.intent', 'hooks', 'intent-claude-gate.mjs')
     mkdirSync(join(root, '.intent', 'hooks'), { recursive: true })
-    writeFileSync(scriptPath, buildHookRunnerScript('claude'))
+    writeFileSync(scriptPath, buildHookRunnerScript('claude', catalogCommand))
 
     const sessionStart = runHookScript(scriptPath, {
       cwd: root,
@@ -428,7 +431,13 @@ describe('hook installer', () => {
     const root = tempRoot('intent-hooks-session-catalog-missing-')
     const scriptPath = join(root, '.intent', 'hooks', 'intent-claude-gate.mjs')
     mkdirSync(join(root, '.intent', 'hooks'), { recursive: true })
-    writeFileSync(scriptPath, buildHookRunnerScript('claude'))
+    writeFileSync(
+      scriptPath,
+      buildHookRunnerScript(
+        'claude',
+        `${quoteShell(process.execPath)} ${quoteShell(join(root, 'missing.mjs'))}`,
+      ),
+    )
 
     const result = runHookScript(scriptPath, {
       cwd: root,
@@ -520,26 +529,15 @@ function runHookScript(scriptPath: string, event: Record<string, unknown>) {
   })
 }
 
-function writeFakeIntentCore(root: string): void {
-  const packageRoot = join(root, 'node_modules', '@tanstack', 'intent')
-  mkdirSync(packageRoot, { recursive: true })
-  writeFileSync(join(root, 'package.json'), '{"type":"module"}\n')
+function writeFakeIntentListCommand(root: string): string {
+  const scriptPath = join(root, 'fake-intent-list.mjs')
   writeFileSync(
-    join(packageRoot, 'package.json'),
-    JSON.stringify(
-      {
-        exports: { './core': './core.mjs' },
-        name: '@tanstack/intent',
-        type: 'module',
-      },
-      null,
-      2,
-    ) + '\n',
-  )
-  writeFileSync(
-    join(packageRoot, 'core.mjs'),
-    `export function listIntentSkills() {
-  return {
+    scriptPath,
+    `if (process.env.INTENT_AUDIENCE !== 'agent') {
+  process.exit(1)
+}
+
+console.log(JSON.stringify({
     conflicts: [],
     debug: { scan: { packageJsonReadCount: 3 } },
     packages: [{ name: '@tanstack/router' }],
@@ -550,8 +548,12 @@ function writeFakeIntentCore(root: string): void {
       },
     ],
     warnings: [],
-  }
-}
+  }))
 `,
   )
+  return `${quoteShell(process.execPath)} ${quoteShell(scriptPath)}`
+}
+
+function quoteShell(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
 }

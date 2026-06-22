@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, relative } from 'node:path'
+import { detectPackageManager } from '../discovery/package-manager.js'
 import { fail } from '../shared/cli-error.js'
+import { formatIntentCommand } from '../shared/command-runner.js'
 import { ALL_HOOK_AGENTS, HOOK_AGENT_ADAPTERS } from './adapters.js'
 import { EDIT_TOOLS_BY_AGENT, GATE_DENY_REASON } from './policy.js'
 import type { HookAgent, HookInstallScope } from './types.js'
@@ -57,18 +59,25 @@ export function validateHookInstallOptions({
   parseAgents(agents)
 }
 
-export function buildHookRunnerScript(agent: HookAgent): string {
+export function buildHookRunnerScript(
+  agent: HookAgent,
+  catalogCommand = formatIntentCommand(
+    detectPackageManager(),
+    'list --json --no-notices',
+  ),
+): string {
   const editTools = [...EDIT_TOOLS_BY_AGENT[agent]].sort()
 
   return `#!/usr/bin/env node
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createHash } from 'node:crypto'
-import { createRequire } from 'node:module'
 import { performance } from 'node:perf_hooks'
 
 const AGENT = ${JSON.stringify(agent)}
+const CATALOG_COMMAND = ${JSON.stringify(catalogCommand)}
 const EDIT_TOOLS = new Set(${JSON.stringify(editTools)})
 const GATE_DENY_REASON = ${JSON.stringify(GATE_DENY_REASON)}
 const INTENT_COMMAND_PATTERN = /(?:^|&&|\\|\\||;|\\|)\\s*((?:bunx\\s+@tanstack\\/intent(?:@latest)?)|(?:pnpm\\s+exec\\s+intent)|(?:pnpm\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:npx\\s+@tanstack\\/intent(?:@latest)?)|(?:yarn\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:intent))\\s+(list|load)(?:\\s+([^\\s|;&]+))?/i
@@ -121,12 +130,9 @@ function rootForEvent(event) {
 }
 
 async function createSessionCatalogContext(root) {
-  const intentCore = await importIntentCore(root)
-  if (!intentCore) return ''
-
   try {
     const start = performance.now()
-    const result = intentCore.listIntentSkills({ cwd: root, debug: true, audience: 'agent' })
+    const result = readIntentList(root)
     const durationMs = performance.now() - start
     console.error(
       \`[intent-\${AGENT}-session-catalog] listIntentSkills found \${result.skills.length} skills from \${result.packages.length} packages in \${formatDuration(durationMs)} (packageJsonReadCount=\${result.debug?.scan.packageJsonReadCount ?? 'unknown'})\`,
@@ -137,17 +143,17 @@ async function createSessionCatalogContext(root) {
   }
 }
 
-async function importIntentCore(root) {
-  try {
-    const requireFromRoot = createRequire(join(root, 'package.json'))
-    return await import(requireFromRoot.resolve('@tanstack/intent/core'))
-  } catch {
-    try {
-      return await import('@tanstack/intent/core')
-    } catch {
-      return null
-    }
-  }
+function readIntentList(root) {
+  const output = execFileSync(CATALOG_COMMAND, {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, INTENT_AUDIENCE: 'agent' },
+    maxBuffer: 1024 * 1024,
+    shell: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 9000,
+  })
+  return JSON.parse(output)
 }
 
 function formatDuration(durationMs) {
@@ -160,9 +166,7 @@ function formatSessionCatalog(result) {
   return [
     'TanStack Intent skills are available in this repository.',
     '',
-    'Before substantial work, check whether one listed skill clearly matches the user task. If one clearly matches, load it before proceeding with:',
-    '',
-    'intent load <skill-id>',
+    'Before substantial work, check whether one listed skill clearly matches the user task. If one clearly matches, load that full skill guidance with the Intent CLI before proceeding.',
     '',
     'If no skill clearly matches, continue normally. Do not load a skill just to improve phrasing or gather nonessential context.',
     '',
@@ -345,7 +349,14 @@ function installAgentHook({
     homeDir,
     root,
   })
-  const scriptStatus = writeIfChanged(scriptPath, buildHookRunnerScript(agent))
+  const catalogCommand = formatIntentCommand(
+    detectPackageManager(root),
+    'list --json --no-notices',
+  )
+  const scriptStatus = writeIfChanged(
+    scriptPath,
+    buildHookRunnerScript(agent, catalogCommand),
+  )
   const configStatus = updateJsonConfig(configPath, (config) =>
     upsertAdapterHooks({
       config,
