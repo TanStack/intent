@@ -141,7 +141,10 @@ function createCli(): CAC {
     })
 
   cli
-    .command('hooks [action]', 'Manage agent hooks that enforce skill loading')
+    .command(
+      'hooks [action]',
+      'Manage agent hooks that surface and enforce skill loading',
+    )
     .usage(
       'hooks install [--scope project|user] [--agents copilot,claude,codex|all]',
     )

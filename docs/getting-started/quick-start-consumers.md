@@ -56,6 +56,8 @@ npx @tanstack/intent@latest hooks install --scope user --agents copilot
 
 Cursor and generic `AGENTS.md` agents use the guidance block only.
 
+Hooks add the available Intent skill catalog to supported agent sessions and keep the edit gate active until the agent loads matching full guidance. To tailor what appears in the session catalog, configure `intent.skills` and `intent.exclude` in `package.json`.
+
 ## 2. Choose which packages' skills to use
 
 `package.json#intent.skills` is an allowlist of the packages whose skills you want surfaced.

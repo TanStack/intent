@@ -25,7 +25,8 @@ export type InstallHooksOptions = {
   scope?: string
 }
 
-const STATUS_MESSAGE = 'Checking Intent guidance'
+const GATE_STATUS_MESSAGE = 'Checking Intent guidance'
+const CATALOG_STATUS_MESSAGE = 'Loading Intent skill catalog'
 
 export function runInstallHooks({
   agents,
@@ -64,6 +65,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createHash } from 'node:crypto'
+import { createRequire } from 'node:module'
+import { performance } from 'node:perf_hooks'
 
 const AGENT = ${JSON.stringify(agent)}
 const EDIT_TOOLS = new Set(${JSON.stringify(editTools)})
@@ -71,7 +74,23 @@ const GATE_DENY_REASON = ${JSON.stringify(GATE_DENY_REASON)}
 const INTENT_COMMAND_PATTERN = /(?:^|&&|\\|\\||;|\\|)\\s*((?:bunx\\s+@tanstack\\/intent(?:@latest)?)|(?:pnpm\\s+exec\\s+intent)|(?:pnpm\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:npx\\s+@tanstack\\/intent(?:@latest)?)|(?:yarn\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:intent))\\s+(list|load)(?:\\s+([^\\s|;&]+))?/i
 
 try {
+  await main()
+} catch {
+}
+
+process.exit(0)
+
+async function main() {
   const event = readEventFromStdin()
+
+  if (isSessionStartEvent(event)) {
+    const additionalContext = await createSessionCatalogContext(rootForEvent(event))
+    if (additionalContext) {
+      process.stdout.write(JSON.stringify(sessionStartOutput(additionalContext)))
+    }
+    return
+  }
+
   const stateFile = stateFileForEvent(event)
   const observation = observationFromEvent(event)
 
@@ -83,16 +102,113 @@ try {
   if (typeof toolName === 'string' && EDIT_TOOLS.has(toolName) && !hasLoad(stateFile)) {
     process.stdout.write(JSON.stringify(denyOutput()))
   }
-} catch {
 }
-
-process.exit(0)
 
 function readEventFromStdin() {
   try {
     return JSON.parse(readFileSync(0, 'utf8'))
   } catch {
     return {}
+  }
+}
+
+function isSessionStartEvent(event) {
+  return (event?.hook_event_name ?? event?.hookEventName) === 'SessionStart'
+}
+
+function rootForEvent(event) {
+  return typeof event?.cwd === 'string' ? event.cwd : process.cwd()
+}
+
+async function createSessionCatalogContext(root) {
+  const intentCore = await importIntentCore(root)
+  if (!intentCore) return ''
+
+  try {
+    const start = performance.now()
+    const result = intentCore.listIntentSkills({ cwd: root, debug: true, audience: 'agent' })
+    const durationMs = performance.now() - start
+    console.error(
+      \`[intent-\${AGENT}-session-catalog] listIntentSkills found \${result.skills.length} skills from \${result.packages.length} packages in \${formatDuration(durationMs)} (packageJsonReadCount=\${result.debug?.scan.packageJsonReadCount ?? 'unknown'})\`,
+    )
+    return formatSessionCatalog(result)
+  } catch {
+    return ''
+  }
+}
+
+async function importIntentCore(root) {
+  try {
+    const requireFromRoot = createRequire(join(root, 'package.json'))
+    return await import(requireFromRoot.resolve('@tanstack/intent/core'))
+  } catch {
+    try {
+      return await import('@tanstack/intent/core')
+    } catch {
+      return null
+    }
+  }
+}
+
+function formatDuration(durationMs) {
+  return \`\${durationMs.toFixed(1)}ms\`
+}
+
+function formatSessionCatalog(result) {
+  if (!Array.isArray(result.skills) || result.skills.length === 0) return ''
+
+  return [
+    'TanStack Intent skills are available in this repository.',
+    '',
+    'Before substantial work, check whether one listed skill clearly matches the user task. If one clearly matches, load it before proceeding with:',
+    '',
+    'intent load <skill-id>',
+    '',
+    'If no skill clearly matches, continue normally. Do not load a skill just to improve phrasing or gather nonessential context.',
+    '',
+    'Available local Intent skills:',
+    formatSkillCatalog(result.skills),
+    formatWarnings(result),
+  ]
+    .filter(Boolean)
+    .join('\\n')
+}
+
+function formatSkillCatalog(skills) {
+  return skills
+    .map((skill) => \`- \${skill.use}: \${normalizeDescription(skill.description)}\`)
+    .join('\\n')
+}
+
+function normalizeDescription(description) {
+  return typeof description === 'string' ? description.replace(/\\s+/g, ' ').trim() : ''
+}
+
+function formatWarnings(result) {
+  const warnings = [
+    ...(Array.isArray(result.warnings) ? result.warnings : []),
+    ...(Array.isArray(result.conflicts)
+      ? result.conflicts.map(
+          (conflict) =>
+            \`Version conflict for \${conflict.packageName}; using \${conflict.chosen.version}\`,
+        )
+      : []),
+  ]
+
+  if (warnings.length === 0) return ''
+  return \`\\nWarnings:\\n\${warnings.map((warning) => \`- \${warning}\`).join('\\n')}\`
+}
+
+function sessionStartOutput(additionalContext) {
+  if (AGENT === 'copilot') {
+    return { additionalContext }
+  }
+
+  return {
+    hookSpecificOutput: {
+      hookEventName: 'SessionStart',
+      additionalContext,
+    },
   }
 }
 
@@ -231,7 +347,7 @@ function installAgentHook({
   })
   const scriptStatus = writeIfChanged(scriptPath, buildHookRunnerScript(agent))
   const configStatus = updateJsonConfig(configPath, (config) =>
-    upsertAdapterPreToolUseHook({
+    upsertAdapterHooks({
       config,
       configKind: adapter.configKind,
       project: scope === 'project',
@@ -278,7 +394,7 @@ function hookInstallResult({
   }
 }
 
-function upsertAdapterPreToolUseHook({
+function upsertAdapterHooks({
   config,
   configKind,
   project,
@@ -291,20 +407,36 @@ function upsertAdapterPreToolUseHook({
 }): Record<string, unknown> {
   switch (configKind) {
     case 'claude-settings':
-      return upsertClaudePreToolUseHook(config, project, scriptPath)
+      return upsertClaudeHooks(config, project, scriptPath)
     case 'codex-hooks':
-      return upsertCodexPreToolUseHook(config, project, scriptPath)
+      return upsertCodexHooks(config, project, scriptPath)
     case 'copilot-hooks':
-      return upsertCopilotPreToolUseHook(config, scriptPath)
+      return upsertCopilotHooks(config, scriptPath)
   }
 }
 
-function upsertClaudePreToolUseHook(
+function upsertClaudeHooks(
   config: Record<string, unknown>,
   project: boolean,
   scriptPath: string,
 ): Record<string, unknown> {
   const hooks = objectValue(config.hooks)
+  hooks.SessionStart = upsertHookGroup(arrayValue(hooks.SessionStart), {
+    matcher: 'startup|resume|clear|compact',
+    hooks: [
+      {
+        type: 'command',
+        command: 'node',
+        args: [
+          project
+            ? '${CLAUDE_PROJECT_DIR}/.intent/hooks/intent-claude-gate.mjs'
+            : scriptPath,
+        ],
+        timeout: 10,
+        statusMessage: CATALOG_STATUS_MESSAGE,
+      },
+    ],
+  })
   hooks.PreToolUse = upsertHookGroup(arrayValue(hooks.PreToolUse), {
     matcher: 'Bash|Write|Edit|MultiEdit|NotebookEdit',
     hooks: [
@@ -317,19 +449,32 @@ function upsertClaudePreToolUseHook(
             : scriptPath,
         ],
         timeout: 10,
-        statusMessage: STATUS_MESSAGE,
+        statusMessage: GATE_STATUS_MESSAGE,
       },
     ],
   })
   return { ...config, hooks }
 }
 
-function upsertCodexPreToolUseHook(
+function upsertCodexHooks(
   config: Record<string, unknown>,
   project: boolean,
   scriptPath: string,
 ): Record<string, unknown> {
   const hooks = objectValue(config.hooks)
+  hooks.SessionStart = upsertHookGroup(arrayValue(hooks.SessionStart), {
+    matcher: 'startup|resume|clear|compact',
+    hooks: [
+      {
+        type: 'command',
+        command: project
+          ? 'node "$(git rev-parse --show-toplevel)/.intent/hooks/intent-codex-gate.mjs"'
+          : `node ${quoteShell(scriptPath)}`,
+        timeout: 10,
+        statusMessage: CATALOG_STATUS_MESSAGE,
+      },
+    ],
+  })
   hooks.PreToolUse = upsertHookGroup(arrayValue(hooks.PreToolUse), {
     matcher: 'Bash|apply_patch|Edit|Write',
     hooks: [
@@ -339,18 +484,21 @@ function upsertCodexPreToolUseHook(
           ? 'node "$(git rev-parse --show-toplevel)/.intent/hooks/intent-codex-gate.mjs"'
           : `node ${quoteShell(scriptPath)}`,
         timeout: 10,
-        statusMessage: STATUS_MESSAGE,
+        statusMessage: GATE_STATUS_MESSAGE,
       },
     ],
   })
   return { ...config, hooks }
 }
 
-function upsertCopilotPreToolUseHook(
+function upsertCopilotHooks(
   config: Record<string, unknown>,
   scriptPath: string,
 ): Record<string, unknown> {
   const hooks = objectValue(config.hooks)
+  hooks.SessionStart = upsertHookGroup(arrayValue(hooks.SessionStart), {
+    command: `node ${quoteShell(scriptPath)}`,
+  })
   hooks.PreToolUse = upsertHookGroup(arrayValue(hooks.PreToolUse), {
     command: `node ${quoteShell(scriptPath)}`,
   })
@@ -389,7 +537,7 @@ function isIntentHook(value: unknown): boolean {
 }
 
 function isIntentGateScriptReference(value: string): boolean {
-  return /(?:^|[\s"'\\/])(?:old-)?intent-(claude|codex|copilot)-gate\.mjs(?:$|[?#\s"'])/i.test(
+  return /(?:^|[\s"'\/])(?:old-)?intent-(claude|codex|copilot)-gate\.mjs(?:$|[?#\s"'])/i.test(
     value,
   )
 }
