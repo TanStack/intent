@@ -28,14 +28,14 @@
   "dependencies": {
     "cac": "^6.7.14",
     "jsonc-parser": "^3.3.1",
-    "semver": "^7.8.4",
+    "semver": "^7.8.5",
     "std-env": "^4.1.0",
     "yaml": "2.9.0"
   },
   "devDependencies": {
     "@types/semver": "^7.7.1",
-    "tsdown": "^0.22.2",
-    "verdaccio": "^6.7.2"
+    "tsdown": "^0.22.3",
+    "verdaccio": "^6.7.4"
   },
   "scripts": {
     "prepack": "npm run build",
