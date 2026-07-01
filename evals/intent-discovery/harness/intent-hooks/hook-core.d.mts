@@ -12,8 +12,7 @@ export type IntentObservation = {
 }
 
 export type GateDecision =
-  | { decision: 'allow' }
-  | { decision: 'deny'; reason: string }
+  { decision: 'allow' } | { decision: 'deny'; reason: string }
 
 export const EDIT_TOOLS: Set<string>
 export const GATE_DENY_REASON: string

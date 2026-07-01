@@ -12,8 +12,7 @@ export type IntentObservation = IntentInvocation & {
 }
 
 export type HookDecision =
-  | { decision: 'allow' }
-  | { decision: 'deny'; reason: string }
+  { decision: 'allow' } | { decision: 'deny'; reason: string }
 
 export type ToolEvent = {
   tool_name?: unknown
