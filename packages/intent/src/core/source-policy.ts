@@ -38,9 +38,7 @@ export interface SourcePolicyOptions {
 }
 
 type LoadRefusalCode =
-  | 'package-excluded'
-  | 'package-not-listed'
-  | 'skill-excluded'
+  'package-excluded' | 'package-not-listed' | 'skill-excluded'
 
 export interface LoadRefusal {
   code: LoadRefusalCode

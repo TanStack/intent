@@ -8,9 +8,7 @@ const expectedSkillAreas = ['router', 'start', 'table-v9'] as const
 export type ExpectedSkillArea = (typeof expectedSkillAreas)[number]
 
 export type IntentDiscoveryFixture =
-  | 'router-basic'
-  | 'start-basic'
-  | 'table-v9-basic'
+  'router-basic' | 'start-basic' | 'table-v9-basic'
 
 export type IntentDiscoveryFailureClass =
   | 'strict-success'

@@ -41,8 +41,7 @@ interface WriteIntentSkillsBlockSkippedResult {
 }
 
 export type WriteIntentSkillsBlockResult =
-  | WriteIntentSkillsBlockFileResult
-  | WriteIntentSkillsBlockSkippedResult
+  WriteIntentSkillsBlockFileResult | WriteIntentSkillsBlockSkippedResult
 
 interface ManagedBlock {
   end: number

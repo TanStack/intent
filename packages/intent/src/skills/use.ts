@@ -4,9 +4,7 @@ export interface SkillUse {
 }
 
 export type SkillUseParseErrorCode =
-  | 'missing-separator'
-  | 'empty-package'
-  | 'empty-skill'
+  'missing-separator' | 'empty-package' | 'empty-skill'
 
 export class SkillUseParseError extends Error {
   readonly code: SkillUseParseErrorCode
