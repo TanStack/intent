@@ -1,5 +1,6 @@
 import { scanForIntents } from '../discovery/scanner.js'
 import { detectIntentAudience } from '../shared/environment.js'
+import { ALLOW_ALL_NOTICE } from '../shared/cli-output.js'
 import {
   compileExcludePatterns,
   getConfigDirs,
@@ -22,8 +23,7 @@ import type {
   IntentHiddenSourceSummary,
 } from './types.js'
 
-export const ALLOW_ALL_NOTICE =
-  'All skill sources allowed (intent.skills: ["*"]) — unvetted skills may be surfaced into agent guidance.'
+export { ALLOW_ALL_NOTICE }
 
 export const MIGRATION_NOTICE =
   'intent.skills is not set — all discovered skill sources are surfaced. A future version will require an explicit intent.skills allowlist; add one to opt in to specific sources.'

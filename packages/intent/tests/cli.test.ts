@@ -1108,6 +1108,38 @@ describe('cli commands', () => {
     expect(stderr).not.toContain('Notices:')
   })
 
+  it('does not suppress the allow-all risk banner under --no-notices', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-list-allow-all-no-notices-'),
+    )
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-list-allow-all-no-notices-empty-global-'),
+    )
+    tempDirs.push(root, isolatedGlobalRoot)
+    writeJson(join(root, 'package.json'), {
+      name: 'consumer',
+      intent: { skills: ['*'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['list', '--no-notices'])
+    const stdout = logSpy.mock.calls.flat().join('\n')
+    const stderr = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('@tanstack/query')
+    expect(stderr).toContain('Notices:')
+    expect(stderr).toContain('All skill sources allowed')
+  })
+
   it('suppresses notices when INTENT_NO_NOTICES=1 is set', async () => {
     const root = mkdtempSync(
       join(realTmpdir, 'intent-cli-list-env-no-notices-'),
@@ -2728,7 +2760,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -2781,7 +2813,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -2849,7 +2881,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -2916,7 +2948,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -2986,7 +3018,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -3044,7 +3076,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -3133,7 +3165,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
@@ -3177,7 +3209,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -3223,7 +3255,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -3267,7 +3299,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(join(root, 'packages', 'router'))
@@ -3300,7 +3332,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     const elsewhere = mkdtempSync(join(realTmpdir, 'intent-cli-stale-abs-cwd-'))

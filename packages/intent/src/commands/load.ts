@@ -32,10 +32,10 @@ function printLoadDebug(loaded: LoadedIntentSkill | ResolvedIntentSkill): void {
   ])
 }
 
-export async function runLoadCommand(
+export function runLoadCommand(
   use: string | undefined,
   options: LoadCommandOptions,
-): Promise<void> {
+): void {
   if (!use) {
     fail('Missing skill use. Expected: intent load <package>#<skill>')
   }

@@ -43,6 +43,7 @@
     "test:smoke": "pnpm run build && node dist/cli.mjs --help > /dev/null && node dist/cli.mjs load --help > /dev/null",
     "test:lib": "vitest run --exclude 'tests/integration/**'",
     "test:integration": "vitest run tests/integration/",
-    "test:types": "tsc --noEmit"
+    "test:types": "tsc --noEmit",
+    "test:eslint": "eslint ."
   }
 }

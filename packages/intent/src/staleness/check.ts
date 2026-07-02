@@ -1,13 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import semver from 'semver'
-import { readIntentArtifacts } from './artifact-coverage.js'
 import {
   findSkillFiles,
   parseFrontmatter,
   readScalarField,
   toPosixPath,
 } from '../shared/utils.js'
+import { readIntentArtifacts } from './artifact-coverage.js'
 import type {
   IntentArtifactSet,
   IntentArtifactSkill,
