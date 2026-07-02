@@ -26,7 +26,9 @@ describe('printNotices — ALLOW_ALL_NOTICE is non-suppressible', () => {
   })
 
   function stderr(): string {
-    return errorSpy.mock.calls.map((call) => call.join(' ')).join('\n')
+    return errorSpy.mock.calls
+      .map((call: Array<unknown>) => call.join(' '))
+      .join('\n')
   }
 
   it('prints the permit-all banner even when noNotices is set, and suppresses the rest', () => {
@@ -72,7 +74,9 @@ describe('printNotices — ALLOW_ALL_NOTICE is non-suppressible', () => {
     printWarnings([])
 
     expect(stderr()).toContain(ALLOW_ALL_NOTICE)
-    const stdout = logSpy.mock.calls.map((call) => call.join(' ')).join('\n')
+    const stdout = logSpy.mock.calls
+      .map((call: Array<unknown>) => call.join(' '))
+      .join('\n')
     expect(stdout).not.toContain(ALLOW_ALL_NOTICE)
   })
 })
