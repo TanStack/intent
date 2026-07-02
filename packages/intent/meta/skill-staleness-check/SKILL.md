@@ -58,32 +58,28 @@ file.
 
 If no skills match, exit silently.
 
-### Using sync-skills.mjs
+### Using `intent stale`
 
-The repo includes `scripts/sync-skills.mjs` for programmatic staleness
-detection. For a given library:
-
-```bash
-node scripts/sync-skills.mjs <library>
-```
-
-This checks:
-
-- Source file SHA drift (compares stored SHAs in `sync-state.json` against
-  current remote SHAs via GitHub API)
-- Library version drift (frontmatter `library_version` vs current published
-  version)
-- Tree-generator changes (whether the meta skill has been updated since
-  last sync)
-
-Use `--report` to write a structured `staleness_report.yaml`:
+There is no separate sync script — `intent stale [dir] [--json]` is the real,
+existing staleness signal (see `docs/cli/intent-stale.md`). It is **read-only**:
+it reports drift, it does not write anything. For a given library:
 
 ```bash
-node scripts/sync-skills.mjs <library> --report
+intent stale packages/query --json
 ```
 
-The report classifies skills as needing regeneration (source changed) or
-version bump only.
+This reports:
+
+- Library version drift (`library_version` in a skill's frontmatter vs the
+  currently published version), classified `major`/`minor`/`patch`.
+- Missing source SHAs recorded in that package's `skills/sync-state.json`
+  (a conservative signal — it flags gaps in the stored SHA record, not
+  actual remote content differences; see the doc's Notes section).
+
+`intent stale` does not classify "needs regeneration" vs "version bump only"
+the way a dedicated sync tool might — that classification is this skill's own
+job, done in Step 2 below using the actual source diff, not `intent stale`'s
+output alone.
 
 ---
 
@@ -130,12 +126,10 @@ For skills classified as needing content updates:
 
 For version bump only:
 
-```bash
-node scripts/sync-skills.mjs <library> --bump-version <new-version>
-```
-
-This updates `library_version` in all frontmatter for the library and
-records the new version in `sync-state.json`.
+There is no write-capable script for this. Edit `library_version` directly
+in each affected skill's frontmatter, then update the recorded SHA(s) for
+that library in its `skills/sync-state.json` (see Step 5) to reflect the new
+synced state.
 
 ---
 
@@ -158,19 +152,13 @@ second-order dependency are not automatically re-checked.
 
 ## Step 5 — Mark skills as synced
 
-After updating, mark the affected skills as synced so future staleness
-checks have a clean baseline:
-
-```bash
-# Mark specific skills
-node scripts/sync-skills.mjs <library> --mark-synced <skill1> <skill2>
-
-# Mark all skills for a library
-node scripts/sync-skills.mjs <library> --mark-synced --all
-```
-
-This updates `sync-state.json` with current source file SHAs, the
-tree-generator SHA, and the sync timestamp.
+There is no write-capable script for this either. After updating a skill,
+edit that library's `skills/sync-state.json` directly: update
+`library_version` and the affected skill's `skills[skillName].sources_sha`
+map with the new source file SHA(s) from the commit that triggered this run.
+(That is the real current shape read by `intent stale` — it has no separate
+tree-generator SHA or sync-timestamp field, despite what an earlier version
+of this doc implied.)
 
 ---
 
@@ -229,7 +217,8 @@ Exit silently (no PR, no notification, no issue) when ANY of these are true:
 
 - No changed files match any skill's `sources`
 - All matched diffs are classified as "no impact" in Step 2
-- The sync-skills.mjs report shows all skills are current
+- `intent stale` reports all skills up-to-date (`All skills up-to-date`, per
+  `docs/cli/intent-stale.md`)
 
 ---
 
@@ -237,7 +226,8 @@ Exit silently (no PR, no notification, no issue) when ANY of these are true:
 
 ### GitHub API usage
 
-The `sync-skills.mjs` script uses the `gh` CLI for GitHub API access. It
+This skill (not a separate script) uses the `gh` CLI directly for GitHub API
+access — fetching source diffs in Step 2 and opening PRs in Step 6. It
 requires:
 
 - `gh` CLI installed and authenticated
@@ -247,26 +237,28 @@ requires:
 
 ### Rate limiting
 
-When checking multiple libraries or many source files, the script makes
-one API call per source file per skill. For large batches, the GitHub API
-rate limit (5000 requests/hour for authenticated users) may apply. The
-script does not currently batch or cache API responses — if this becomes
-an issue, add caching at the `getRemoteFileSha` level.
+When checking multiple libraries or many source files, this makes one API
+call per source file per skill during Step 2's diff fetch. For large
+batches, the GitHub API rate limit (5000 requests/hour for authenticated
+users) may apply. There is no batching or response caching in place — if
+this becomes an issue, add caching around the diff-fetch step.
 
 ### Manual triggering
 
-Maintainers can run staleness detection manually:
+Maintainers can run the read-only staleness signal manually, outside the
+webhook-triggered flow:
 
 ```bash
 # Check a specific library
-node scripts/sync-skills.mjs db
+intent stale packages/db
 
-# Check and write a report
-node scripts/sync-skills.mjs db --report
-
-# After reviewing and regenerating, mark as synced
-node scripts/sync-skills.mjs db --mark-synced --all
+# JSON output
+intent stale packages/db --json
 ```
+
+This only reports drift (version drift, missing source SHAs) — it does not
+update `sync-state.json` or open PRs; those remain Step 5 and Step 6 of this
+skill's own workflow, done manually as described above.
 
 ---
 
