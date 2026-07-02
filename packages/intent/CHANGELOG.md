@@ -1,5 +1,19 @@
 # @tanstack/intent
 
+## 0.3.3
+
+### Patch Changes
+
+- [#185](https://github.com/TanStack/intent/pull/185) [`b7920e9`](https://github.com/TanStack/intent/commit/b7920e9a8cee1f15ee373651b40daae0c1977120) - Fix `intent list` suppressing the allow-all risk warning.
+
+  When `intent.skills` is set to allow-all (`"*"`), `intent list --no-notices` and `INTENT_NO_NOTICES=1` no longer hide the warning that all skill sources are permitted. This banner is a security-relevant signal, not a migration tip, so it's now excluded from suppression while other notices remain suppressible as before.
+
+- [#187](https://github.com/TanStack/intent/pull/187) [`fb3c08b`](https://github.com/TanStack/intent/commit/fb3c08b9ff1332295e838a18b056673f59c99c2d) - Fix potential hangs on slow or large environments:
+
+  - Bound the npm registry staleness check with a request timeout so `intent list` and other staleness checks can't hang indefinitely on a slow or unreachable registry.
+  - Bound global package-manager detection with a command timeout so it can't hang indefinitely when the environment's global `node_modules` is slow to resolve.
+  - Avoid enumerating a workspace package's entire skill tree just to check whether it has any skills, reducing filesystem work in large monorepos.
+
 ## 0.3.2
 
 ### Patch Changes
