@@ -51,10 +51,11 @@ below with their chosen directory.
 SKILL.md into that package's skills directory (e.g.
 `packages/client/skills/core/SKILL.md`), not a shared root.
 
-1. **Skill name** — format `library-group/skill-name` (e.g. `tanstack-query/core`,
+1. **Skill path** — format `library-group/skill-name` (e.g. `tanstack-query/core`,
    `tanstack-router/loaders`, `db/core/live-queries`). This is the skill's
-   directory path: its **last segment** becomes the frontmatter `name` (a
-   spec-legal leaf), and the full path is where the `SKILL.md` lives.
+   directory path, and it is where the `SKILL.md` lives. Only its **last
+   segment** becomes the frontmatter `name` (a spec-legal leaf): the full path
+   is never written into `name`, and `name` must contain no slashes.
 2. **Skill description** — what the skill covers and when an agent should load it
 3. **Source documentation** — the docs, guides, API references, and/or source
    files to distill from
@@ -172,7 +173,7 @@ domain-discovery — use those directly.
 
 ```yaml
 ---
-name: '[skill-name]'
+name: '[leaf-segment]' # last path segment only — no slashes, must equal the parent dir (skills/tanstack-query/core/ → core)
 description: >
   [1–3 sentences. What this skill covers and exactly when an agent should
   load it. Written for the agent — include the keywords an agent would
@@ -191,7 +192,7 @@ sources:
 
 ```yaml
 ---
-name: '[skill-name]'
+name: '[leaf-segment]' # last path segment only — no slashes, must equal the parent dir (skills/tanstack-query/loaders/ → loaders)
 description: >
   [1–3 sentences. What this sub-topic covers and when to load it.]
 metadata:
@@ -207,7 +208,7 @@ sources:
 
 ```yaml
 ---
-name: '[framework]'
+name: '[framework]' # leaf segment (the framework name) — no slashes, must equal the parent dir (skills/tanstack-query/react/ → react)
 description: >
   [1–3 sentences. Framework-specific bindings. Name the hooks, components,
   providers.]
@@ -375,7 +376,7 @@ Run every check before outputting. Fix any failures.
 | Common Mistakes are silent | Not obvious compile errors |
 | Common Mistakes are library-specific | Not generic TS/React mistakes |
 | Common Mistakes are sourced | Traceable to doc or source |
-| `name` matches expected directory path | `db/core/live-queries` → `db/core/live-queries/SKILL.md` |
+| `name` is the leaf, matches parent dir | `db/core/live-queries/SKILL.md` → name: `live-queries` (no slashes) |
 | `sources` filled for sub-skills | At least one Owner/repo:path |
 | Framework skills have `requires` | Lists core dependency |
 | Framework skills open with dependency note | First prose line references core |
