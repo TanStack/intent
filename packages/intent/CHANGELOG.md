@@ -1,5 +1,16 @@
 # @tanstack/intent
 
+## 0.3.4
+
+### Patch Changes
+
+- [#190](https://github.com/TanStack/intent/pull/190) [`45c863d`](https://github.com/TanStack/intent/commit/45c863d2389d203862b7b2f9f9f81316fab5207d) - Improve the maintainer skill-authoring workflow:
+
+      - Add `validate --set-version <version>`, which stamps `metadata.library_version` across matched skills via YAML surgery (preserving comments, line endings, and body) and then re-validates.
+      - Correct the `generate-skill` meta-skill so it no longer emits slash-path `name` values that fail validation, and the `skill-staleness-check` meta-skill so it points at the real `intent stale` command instead of a non-existent script.
+
+- [#188](https://github.com/TanStack/intent/pull/188) [`2a25b36`](https://github.com/TanStack/intent/commit/2a25b360843801848a01af7b21b39646e6a5a53b) - Refuse to load a Yarn PnP runtime resolved from within node_modules; only a project root or ancestor .pnp.cjs is trusted.
+
 ## 0.3.3
 
 ### Patch Changes
