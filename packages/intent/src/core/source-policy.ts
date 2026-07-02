@@ -122,6 +122,7 @@ export interface SourcePolicyResult {
   hiddenSources: Array<IntentHiddenSourceSummary>
   packages: Array<IntentPackage>
   notices: Array<string>
+  warnings: Array<string>
 }
 
 export function applySourcePolicy(
@@ -132,6 +133,7 @@ export function applySourcePolicy(
   const audience = options.audience ?? 'human'
   const seen = new Set<string>()
   const notices: Array<string> = []
+  const warnings: Array<string> = []
 
   const emit = (notice: string): void => {
     if (seen.has(notice)) return
@@ -176,7 +178,9 @@ export function applySourcePolicy(
   }
 
   if (config.mode === 'absent') emit(MIGRATION_NOTICE)
-  else if (config.mode === 'allow-all') emit(ALLOW_ALL_NOTICE)
+  // Pushed to warnings, not emit()/notices: this risk banner must survive
+  // --no-notices/INTENT_NO_NOTICES since it's a safety signal, not a tip.
+  else if (config.mode === 'allow-all') warnings.push(ALLOW_ALL_NOTICE)
   else if (config.mode === 'empty') emit(EMPTY_NOTE)
 
   return {
@@ -184,6 +188,7 @@ export function applySourcePolicy(
     hiddenSources,
     packages,
     notices,
+    warnings,
   }
 }
 
@@ -246,10 +251,13 @@ export function scanForPolicedIntents(params: {
     scan: {
       ...scanResult,
       packages: policy.packages,
-      warnings: scanResult.warnings.filter(
-        (warning) =>
-          !droppedNames.some((name) => warningMentionsPackage(warning, name)),
-      ),
+      warnings: [
+        ...policy.warnings,
+        ...scanResult.warnings.filter(
+          (warning) =>
+            !droppedNames.some((name) => warningMentionsPackage(warning, name)),
+        ),
+      ],
       notices: policy.notices,
       conflicts: scanResult.conflicts.filter((conflict) =>
         survivingNames.has(conflict.packageName),

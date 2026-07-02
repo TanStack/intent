@@ -141,13 +141,14 @@ describe('applySourcePolicy — allowlist matrix', () => {
 })
 
 describe('applySourcePolicy — permit-all and empty modes', () => {
-  it('permits every discovered source under allow-all with a loud notice', () => {
+  it('permits every discovered source under allow-all with a non-suppressible warning', () => {
     const result = applySourcePolicy(
       { packages: [pkg('@scope/a', ['x']), pkg('@scope/b', ['y'])] },
       { config: config(['*']), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual(['@scope/a', '@scope/b'])
-    expect(result.notices).toEqual([ALLOW_ALL_NOTICE])
+    expect(result.warnings).toEqual([ALLOW_ALL_NOTICE])
+    expect(result.notices).toEqual([])
   })
 
   it('permits every discovered source under absent config with a migration warning', () => {
