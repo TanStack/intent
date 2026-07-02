@@ -126,11 +126,11 @@ function printExcludes(excludes: Array<string>, json?: boolean): void {
   }
 }
 
-export async function runExcludeCommand(
+export function runExcludeCommand(
   actionArg: string | undefined,
   patternArg: string | undefined,
   options: ExcludeCommandOptions,
-): Promise<void> {
+): void {
   const action = normalizeAction(actionArg)
   const cwd = process.cwd()
   const pkg = readPackageJson(cwd)

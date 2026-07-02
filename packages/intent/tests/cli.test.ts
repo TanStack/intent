@@ -2728,7 +2728,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -2781,7 +2781,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -2849,7 +2849,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -2916,7 +2916,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -2986,7 +2986,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -3044,7 +3044,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -3133,7 +3133,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
@@ -3177,7 +3177,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -3223,7 +3223,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(root)
@@ -3267,7 +3267,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     process.chdir(join(root, 'packages', 'router'))
@@ -3300,7 +3300,7 @@ describe('cli commands', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
 
     const elsewhere = mkdtempSync(join(realTmpdir, 'intent-cli-stale-abs-cwd-'))
