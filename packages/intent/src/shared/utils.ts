@@ -115,6 +115,30 @@ function collectSkillFiles(
 }
 
 /**
+ * Like `findSkillFiles`, but stops at the first SKILL.md found instead of
+ * enumerating the whole tree.
+ */
+export function hasAnySkillFile(dir: string, fs: ReadFs = nodeReadFs): boolean {
+  let entries: Array<Dirent<string>>
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
+  } catch {
+    return false
+  }
+
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      if (hasAnySkillFile(fullPath, fs)) return true
+    } else if (entry.name === 'SKILL.md') {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
  * Read dependencies and peerDependencies (and optionally devDependencies) from
  * a parsed package.json object.
  */
