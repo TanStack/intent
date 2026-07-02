@@ -1136,9 +1136,8 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(stdout).toContain('@tanstack/query')
-    expect(stdout).toContain('Warnings:')
-    expect(stdout).toContain('All skill sources allowed')
-    expect(stderr).not.toContain('Notices:')
+    expect(stderr).toContain('Notices:')
+    expect(stderr).toContain('All skill sources allowed')
   })
 
   it('suppresses notices when INTENT_NO_NOTICES=1 is set', async () => {

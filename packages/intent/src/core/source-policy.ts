@@ -1,5 +1,6 @@
 import { scanForIntents } from '../discovery/scanner.js'
 import { detectIntentAudience } from '../shared/environment.js'
+import { ALLOW_ALL_NOTICE } from '../shared/cli-output.js'
 import {
   compileExcludePatterns,
   getConfigDirs,
@@ -22,8 +23,7 @@ import type {
   IntentHiddenSourceSummary,
 } from './types.js'
 
-export const ALLOW_ALL_NOTICE =
-  'All skill sources allowed (intent.skills: ["*"]) — unvetted skills may be surfaced into agent guidance.'
+export { ALLOW_ALL_NOTICE }
 
 export const MIGRATION_NOTICE =
   'intent.skills is not set — all discovered skill sources are surfaced. A future version will require an explicit intent.skills allowlist; add one to opt in to specific sources.'
@@ -122,7 +122,6 @@ export interface SourcePolicyResult {
   hiddenSources: Array<IntentHiddenSourceSummary>
   packages: Array<IntentPackage>
   notices: Array<string>
-  warnings: Array<string>
 }
 
 export function applySourcePolicy(
@@ -133,7 +132,6 @@ export function applySourcePolicy(
   const audience = options.audience ?? 'human'
   const seen = new Set<string>()
   const notices: Array<string> = []
-  const warnings: Array<string> = []
 
   const emit = (notice: string): void => {
     if (seen.has(notice)) return
@@ -178,9 +176,7 @@ export function applySourcePolicy(
   }
 
   if (config.mode === 'absent') emit(MIGRATION_NOTICE)
-  // Pushed to warnings, not emit()/notices: this risk banner must survive
-  // --no-notices/INTENT_NO_NOTICES since it's a safety signal, not a tip.
-  else if (config.mode === 'allow-all') warnings.push(ALLOW_ALL_NOTICE)
+  else if (config.mode === 'allow-all') emit(ALLOW_ALL_NOTICE)
   else if (config.mode === 'empty') emit(EMPTY_NOTE)
 
   return {
@@ -188,7 +184,6 @@ export function applySourcePolicy(
     hiddenSources,
     packages,
     notices,
-    warnings,
   }
 }
 
@@ -251,13 +246,10 @@ export function scanForPolicedIntents(params: {
     scan: {
       ...scanResult,
       packages: policy.packages,
-      warnings: [
-        ...policy.warnings,
-        ...scanResult.warnings.filter(
-          (warning) =>
-            !droppedNames.some((name) => warningMentionsPackage(warning, name)),
-        ),
-      ],
+      warnings: scanResult.warnings.filter(
+        (warning) =>
+          !droppedNames.some((name) => warningMentionsPackage(warning, name)),
+      ),
       notices: policy.notices,
       conflicts: scanResult.conflicts.filter((conflict) =>
         survivingNames.has(conflict.packageName),
