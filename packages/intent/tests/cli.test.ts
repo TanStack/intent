@@ -2279,6 +2279,196 @@ describe('cli commands', () => {
     expect(errorSpy).toHaveBeenCalledWith('Cannot combine --fix and --check')
   })
 
+  it('sets metadata.library_version on a skill and re-validates', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-set-version-'))
+    tempDirs.push(root)
+
+    const skillPath = join(root, 'skills', 'db-core', 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    writeFileSync(
+      skillPath,
+      [
+        '---',
+        'name: db-core',
+        'description: Core database concepts',
+        'metadata:',
+        '  type: core',
+        '  library: db',
+        '  library_version: 1.0.0',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--set-version', '2.5.0'])
+    const output = logSpy.mock.calls.flat().join('\n')
+    const fixed = readFileSync(skillPath, 'utf8')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain(
+      '✅ Set library_version to "2.5.0" on 1 skill files',
+    )
+    expect(output).toContain('✅ Validated 1 skill files — all passed')
+    expect(fixed).toContain('library_version: 2.5.0')
+    expect(fixed).not.toContain('library_version: 1.0.0')
+    expect(fixed).toContain('\nSkill content here.\n')
+  })
+
+  it('adds metadata.library_version when the key is absent', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-set-version-add-'))
+    tempDirs.push(root)
+
+    const skillPath = join(root, 'skills', 'db-core', 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    writeFileSync(
+      skillPath,
+      [
+        '---',
+        'name: db-core',
+        'description: Core database concepts',
+        'metadata:',
+        '  type: core',
+        '  library: db',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--set-version', '3.0.0-beta.1'])
+    const fixed = readFileSync(skillPath, 'utf8')
+
+    expect(exitCode).toBe(0)
+    expect(fixed).toContain('library_version: 3.0.0-beta.1')
+  })
+
+  it('is idempotent when the version already matches', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-set-version-idem-'))
+    tempDirs.push(root)
+
+    const skillPath = join(root, 'skills', 'db-core', 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    writeFileSync(
+      skillPath,
+      [
+        '---',
+        'name: db-core',
+        'description: Core database concepts',
+        'metadata:',
+        '  library_version: 4.1.0',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const firstExitCode = await main(['validate', '--set-version', '4.1.0'])
+    const afterFirst = readFileSync(skillPath, 'utf8')
+    const secondExitCode = await main(['validate', '--set-version', '4.1.0'])
+
+    expect(firstExitCode).toBe(0)
+    expect(secondExitCode).toBe(0)
+    expect(readFileSync(skillPath, 'utf8')).toBe(afterFirst)
+  })
+
+  it('preserves CRLF line endings and body bytes when setting version', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-set-version-crlf-'))
+    tempDirs.push(root)
+
+    const skillPath = join(root, 'skills', 'db-core', 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    const body = 'First body line.\r\n\r\nSecond body line.\r\n'
+    writeFileSync(
+      skillPath,
+      [
+        '---',
+        'name: db-core',
+        'description: Core database concepts',
+        'metadata:',
+        '  library_version: 1.0.0',
+        '---',
+        '',
+      ].join('\r\n') + body,
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--set-version', '2.0.0'])
+    const fixed = readFileSync(skillPath, 'utf8')
+    const fixedBody = fixed.slice(fixed.indexOf(body))
+
+    expect(exitCode).toBe(0)
+    expect(fixed).toContain('library_version: 2.0.0\r\n')
+    expect(fixedBody).toBe(body)
+  })
+
+  it('fails cleanly when set-version and check are combined', async () => {
+    const exitCode = await main([
+      'validate',
+      '--set-version',
+      '2.0.0',
+      '--check',
+    ])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Cannot combine --set-version and --check',
+    )
+  })
+
+  it('fails when set-version is passed an empty value', async () => {
+    const exitCode = await main(['validate', '--set-version', '   '])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      '--set-version requires a non-empty version value',
+    )
+  })
+
+  it('does not set version on a skill whose metadata is not a mapping', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-set-version-non-map-'),
+    )
+    tempDirs.push(root)
+
+    const skillPath = join(root, 'skills', 'db-core', 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    writeFileSync(
+      skillPath,
+      [
+        '---',
+        'name: db-core',
+        'description: Core database concepts',
+        'metadata: nope',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--set-version', '2.0.0'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+    const after = readFileSync(skillPath, 'utf8')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain('metadata must be a mapping')
+    expect(after).toContain('metadata: nope')
+    expect(after).not.toContain('library_version')
+  })
+
   it('fails when a non-spec scalar field is emitted at the top level', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-scalar-'))
     tempDirs.push(root)
