@@ -232,6 +232,8 @@ export function listNestedNodeModulesPackageDirs(
   return packageDirs
 }
 
+const GLOBAL_NODE_MODULES_COMMAND_TIMEOUT_MS = 5_000
+
 export function detectGlobalNodeModules(packageManager: string): {
   path: string | null
   source?: string
@@ -267,6 +269,7 @@ export function detectGlobalNodeModules(packageManager: string): {
       const output = execFileSync(candidate.command, candidate.args, {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: GLOBAL_NODE_MODULES_COMMAND_TIMEOUT_MS,
       }).trim()
       if (!output) continue
 
