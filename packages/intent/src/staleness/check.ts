@@ -90,10 +90,13 @@ function readLocalVersion(packageDir: string): string | null {
   }
 }
 
+const NPM_REGISTRY_FETCH_TIMEOUT_MS = 5_000
+
 async function fetchNpmVersion(packageName: string): Promise<string | null> {
   try {
     const res = await fetch(
       `https://registry.npmjs.org/${encodeURIComponent(packageName)}/latest`,
+      { signal: AbortSignal.timeout(NPM_REGISTRY_FETCH_TIMEOUT_MS) },
     )
     if (!res.ok) return null
     const data = (await res.json()) as Record<string, unknown>
