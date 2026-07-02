@@ -12,7 +12,10 @@ const coldStartBenchOptions = {
 }
 
 function runNode(args: Array<string>): void {
-  const result = spawnSync(process.execPath, args, { stdio: 'ignore' })
+  const result = spawnSync(process.execPath, args, {
+    stdio: 'ignore',
+    timeout: 10_000,
+  })
   if (result.status !== 0) {
     throw new Error(
       `spawn ${[process.execPath, ...args].join(' ')} exited with code ${result.status}`,
