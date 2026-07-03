@@ -28,8 +28,31 @@ export interface StaleTargetResult {
 export const INTENT_CHECK_SKILLS_WORKFLOW_VERSION = 3
 
 export function getMetaDir(): string {
-  const thisDir = dirname(fileURLToPath(import.meta.url))
-  return join(thisDir, '..', '..', 'meta')
+  return findMetaDir(dirname(fileURLToPath(import.meta.url)))
+}
+
+/**
+ * Resolve the package `meta/` directory by walking up from `startDir`.
+ *
+ * The CLI module sits at `src/commands/` in source but is bundled flat into
+ * `dist/` in the published package, so the depth from the module to the
+ * package root differs between the two layouts. A hardcoded `..` count is
+ * correct for only one of them and breaks `setup` / `meta` / `scaffold` in the
+ * other. Walking up to the first `meta/` directory handles both layouts (and
+ * symlinked installs such as pnpm) without depending on the build output
+ * depth. Falls back to the historical `../../meta` resolution if no `meta/`
+ * is found, so behaviour is never worse than before.
+ */
+export function findMetaDir(startDir: string): string {
+  let dir = startDir
+  for (let limit = 0; limit < 10; limit++) {
+    const candidate = join(dir, 'meta')
+    if (existsSync(candidate)) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return join(startDir, '..', '..', 'meta')
 }
 
 export function getCheckSkillsWorkflowAdvisories(root: string): Array<string> {
