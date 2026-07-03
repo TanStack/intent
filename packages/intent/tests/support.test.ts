@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
@@ -54,6 +55,39 @@ describe('findMetaDir', () => {
     mkdirSync(startDir, { recursive: true })
     expect(findMetaDir(startDir)).toBe(join(startDir, '..', '..', 'meta'))
     expect(existsSync(findMetaDir(startDir))).toBe(false)
+  })
+
+  it('skips a stray file named meta and keeps walking', () => {
+    const pkgDir = join(root, 'pkg')
+    const metaDir = seedMeta(pkgDir)
+    const startDir = join(pkgDir, 'dist')
+    mkdirSync(startDir, { recursive: true })
+    // A file (not a directory) named `meta` next to startDir must not short-circuit.
+    writeFileSync(join(startDir, 'meta'), '')
+    expect(findMetaDir(startDir)).toBe(metaDir)
+  })
+
+  it('resolves through a symlinked install path (pnpm-style)', () => {
+    // Real package lives in a pnpm-style store; the consumer reaches it via a symlink.
+    const storePkg = join(
+      root,
+      'store',
+      '@tanstack+intent',
+      'node_modules',
+      '@tanstack',
+      'intent',
+    )
+    seedMeta(storePkg)
+    mkdirSync(join(storePkg, 'dist'), { recursive: true })
+
+    const consumerTanstack = join(root, 'consumer', 'node_modules', '@tanstack')
+    mkdirSync(consumerTanstack, { recursive: true })
+    symlinkSync(storePkg, join(consumerTanstack, 'intent'), 'dir')
+
+    const startDir = join(consumerTanstack, 'intent', 'dist')
+    const resolved = findMetaDir(startDir)
+    expect(resolved).toBe(join(consumerTanstack, 'intent', 'meta'))
+    expect(existsSync(resolved)).toBe(true)
   })
 })
 

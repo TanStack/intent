@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fail } from '../shared/cli-error.js'
@@ -45,9 +45,14 @@ export function getMetaDir(): string {
  */
 export function findMetaDir(startDir: string): string {
   let dir = startDir
+  // Sanity cap: a package is never this many dirs deep; the root check below
+  // also stops the walk at the filesystem root.
   for (let limit = 0; limit < 10; limit++) {
     const candidate = join(dir, 'meta')
-    if (existsSync(candidate)) return candidate
+    // Check it's a directory, not just that something named `meta` exists — a
+    // stray file named `meta` in an ancestor must not short-circuit the walk.
+    if (existsSync(candidate) && statSync(candidate).isDirectory())
+      return candidate
     const parent = dirname(dir)
     if (parent === dir) break
     dir = parent
