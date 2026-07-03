@@ -95,6 +95,9 @@ export function checkLoadAllowed(
     }
   }
 
+  // Name-only pre-check: kind isn't known yet at this point in the load path.
+  // A late, kind-aware isSourcePermitted call happens once resolution reveals
+  // the actual kind (see intent-core.ts).
   if (!isSourcePermitted(config, packageName)) {
     return packageNotListedRefusal(use, packageName)
   }
@@ -183,9 +186,14 @@ export function applySourcePolicy(
       ),
     )
     for (const source of config.sources) {
+      // git sources can't appear in config yet (parseSkillSources rejects them),
+      // and IntentPackage.kind excludes 'git', so treat as always-not-discovered
+      // until git discovery lands — revisit this line then.
       const notDiscovered =
         source.kind === 'git' ||
-        !discoveredKeys.has(sourceIdentityKey({ kind: source.kind, id: source.id }))
+        !discoveredKeys.has(
+          sourceIdentityKey({ kind: source.kind, id: source.id }),
+        )
       if (notDiscovered) {
         emit(
           `"${source.raw}" is declared in intent.skills but was not discovered.`,
@@ -255,6 +263,8 @@ export function scanForPolicedIntents(params: {
     excludeMatchers,
   })
 
+  // Name-only Sets, correct because the scanner guarantees at most one
+  // package per name (createPackageRegistrar dedups before this runs).
   const survivingNames = new Set(policy.packages.map((pkg) => pkg.name))
   const droppedNames = scanResult.packages
     .map((pkg) => pkg.name)
