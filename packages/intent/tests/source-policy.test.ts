@@ -25,14 +25,18 @@ function skill(name: string): SkillEntry {
   return { name, path: `/pkg/skills/${name}/SKILL.md`, description: name }
 }
 
-function pkg(name: string, skillNames: Array<string>): IntentPackage {
+function pkg(
+  name: string,
+  skillNames: Array<string>,
+  kind: IntentPackage['kind'] = 'npm',
+): IntentPackage {
   return {
     name,
     version: '1.0.0',
     intent: { version: 1, repo: 'owner/repo', docs: '' },
     skills: skillNames.map(skill),
     packageRoot: `/root/node_modules/${name}`,
-    kind: 'npm',
+    kind,
     source: 'local',
   }
 }
@@ -93,9 +97,21 @@ describe('applySourcePolicy — allowlist matrix', () => {
     ])
   })
 
-  it('matches by name only, so workspace:foo authorizes an npm-discovered foo (M1 baseline)', () => {
+  it('does not authorize an npm-discovered foo via workspace:foo', () => {
     const result = applySourcePolicy(
       { packages: [pkg('foo', ['x'])] },
+      { config: config(['workspace:foo']), excludeMatchers: [] },
+    )
+    expect(names(result.packages)).toEqual([])
+    expect(result.notices).toEqual([
+      '1 discovered package ships skills but is not listed in intent.skills: foo. Add to opt in.',
+      '"workspace:foo" is declared in intent.skills but was not discovered.',
+    ])
+  })
+
+  it('authorizes a workspace-discovered foo via workspace:foo', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('foo', ['x'], 'workspace')] },
       { config: config(['workspace:foo']), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual(['foo'])
@@ -141,6 +157,19 @@ describe('applySourcePolicy — allowlist matrix', () => {
 })
 
 describe('applySourcePolicy — permit-all and empty modes', () => {
+  it('unqualified exclude hides both an npm and a workspace package of the same name (kind-agnostic, deliberate)', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [pkg('foo', ['x'], 'npm'), pkg('foo', ['y'], 'workspace')],
+      },
+      {
+        config: config(['*']),
+        excludeMatchers: compileExcludePatterns(['foo']),
+      },
+    )
+    expect(names(result.packages)).toEqual([])
+  })
+
   it('permits every discovered source under allow-all with a loud notice', () => {
     const result = applySourcePolicy(
       { packages: [pkg('@scope/a', ['x']), pkg('@scope/b', ['y'])] },
