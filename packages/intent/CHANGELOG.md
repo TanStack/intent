@@ -1,5 +1,13 @@
 # @tanstack/intent
 
+## 0.3.5
+
+### Patch Changes
+
+- [#194](https://github.com/TanStack/intent/pull/194) [`e885566`](https://github.com/TanStack/intent/commit/e8855664ff7eeb37a8ee4fed3c01a0dbded14dc6) - Fix `setup`, `setup-github-actions`, `meta`, and `scaffold` failing with "No templates directory found" / "Meta-skills directory not found" in the published package. `getMetaDir` hardcoded `../../meta`, which is correct for the `src/commands/` source layout but overshoots to `@tanstack/meta` from the flat `dist/` layout the build ships. Walk up to the first `meta/` directory instead so resolution works in both layouts (and symlinked installs).
+
+- [#191](https://github.com/TanStack/intent/pull/191) [`3620cca`](https://github.com/TanStack/intent/commit/3620ccad89eeca310b6f72e64cbea0280eef37f3) - Tighten skill-source identity to `(kind, id)` instead of name alone: `workspace:foo` no longer authorizes an npm-installed `foo` (and vice versa) in `intent.skills`, the "declared but not discovered" notice, and skill loading via `intent load`.
+
 ## 0.3.4
 
 ### Patch Changes
