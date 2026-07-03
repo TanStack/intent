@@ -12,6 +12,7 @@ import {
 import { readPackageJson } from './package-json.js'
 import { parseSkillSources } from './skill-sources.js'
 import { resolveProjectContext } from './project-context.js'
+import { sourceIdentityKey } from './types.js'
 import type { SkillUse } from '../skills/use.js'
 import type { IntentPackage, ScanOptions, ScanResult } from '../shared/types.js'
 import type { ExcludeMatcher } from './excludes.js'
@@ -50,6 +51,7 @@ export interface LoadRefusal {
 function isSourcePermitted(
   config: SkillSourcesConfig,
   packageName: string,
+  packageKind?: 'npm' | 'workspace',
 ): boolean {
   switch (config.mode) {
     case 'absent':
@@ -58,7 +60,10 @@ function isSourcePermitted(
     case 'empty':
       return false
     case 'explicit':
-      return config.sources.some((source) => source.id === packageName)
+      return config.sources.some((source) => {
+        if (source.id !== packageName) return false
+        return packageKind === undefined || source.kind === packageKind
+      })
   }
 }
 
@@ -145,7 +150,7 @@ export function applySourcePolicy(
   for (const pkg of scanResult.packages) {
     if (isPackageExcluded(pkg.name, excludeMatchers)) continue
 
-    if (!isSourcePermitted(config, pkg.name)) {
+    if (!isSourcePermitted(config, pkg.name, pkg.kind)) {
       if (config.mode === 'explicit') {
         hiddenSources.push({ name: pkg.name, skillCount: pkg.skills.length })
       }
@@ -165,9 +170,16 @@ export function applySourcePolicy(
   }
 
   if (config.mode === 'explicit') {
-    const discoveredNames = new Set(scanResult.packages.map((pkg) => pkg.name))
+    const discoveredKeys = new Set(
+      scanResult.packages.map((pkg) =>
+        sourceIdentityKey({ kind: pkg.kind, id: pkg.name }),
+      ),
+    )
     for (const source of config.sources) {
-      if (!discoveredNames.has(source.id)) {
+      const notDiscovered =
+        source.kind === 'git' ||
+        !discoveredKeys.has(sourceIdentityKey({ kind: source.kind, id: source.id }))
+      if (notDiscovered) {
         emit(
           `"${source.raw}" is declared in intent.skills but was not discovered.`,
         )
