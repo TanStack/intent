@@ -48,7 +48,7 @@ export interface LoadRefusal {
   message: string
 }
 
-function isSourcePermitted(
+export function isSourcePermitted(
   config: SkillSourcesConfig,
   packageName: string,
   packageKind?: 'npm' | 'workspace',
@@ -64,6 +64,16 @@ function isSourcePermitted(
         if (source.id !== packageName) return false
         return packageKind === undefined || source.kind === packageKind
       })
+  }
+}
+
+export function packageNotListedRefusal(
+  use: string,
+  packageName: string,
+): LoadRefusal {
+  return {
+    code: 'package-not-listed',
+    message: `Cannot load skill use "${use}": package "${packageName}" is not listed in intent.skills.`,
   }
 }
 
@@ -86,10 +96,7 @@ export function checkLoadAllowed(
   }
 
   if (!isSourcePermitted(config, packageName)) {
-    return {
-      code: 'package-not-listed',
-      message: `Cannot load skill use "${use}": package "${packageName}" is not listed in intent.skills.`,
-    }
+    return packageNotListedRefusal(use, packageName)
   }
 
   if (isSkillExcluded(packageName, skillName, excludeMatchers)) {
@@ -224,6 +231,7 @@ export interface PolicedScan {
   hiddenSources: Array<IntentHiddenSourceSummary>
   scan: ScanResult
   excludePatterns: Array<string>
+  droppedNames: Array<string>
 }
 
 export function scanForPolicedIntents(params: {
@@ -268,5 +276,6 @@ export function scanForPolicedIntents(params: {
       ),
     },
     excludePatterns,
+    droppedNames,
   }
 }
