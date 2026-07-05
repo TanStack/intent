@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { parse as parseJsonc } from 'jsonc-parser'
 import { parse as parseYaml } from 'yaml'
-import { findSkillFiles } from '../shared/utils.js'
+import { hasAnySkillFile } from '../shared/utils.js'
 import type { ParseError } from 'jsonc-parser'
 
 function normalizeWorkspacePattern(pattern: string): string {
@@ -227,7 +227,7 @@ export function getWorkspaceInfo(root: string): WorkspaceInfo | null {
   const packageDirs = readWorkspacePackageDirs(root) ?? []
   const packageDirsWithSkills = packageDirs.filter((dir) => {
     const skillsDir = join(dir, 'skills')
-    return existsSync(skillsDir) && findSkillFiles(skillsDir).length > 0
+    return existsSync(skillsDir) && hasAnySkillFile(skillsDir)
   })
   const info = {
     root,

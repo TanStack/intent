@@ -27,10 +27,16 @@ interface FrontmatterFixPlan {
   changes: Array<string>
 }
 
+interface SetVersionPlan {
+  file: string
+  filePath: string
+}
+
 export interface ValidateCommandOptions {
   check?: boolean
   fix?: boolean
   githubSummary?: boolean
+  setVersion?: string
 }
 
 const agentSkillNamePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -247,6 +253,48 @@ async function applyFrontmatterFixes(
   }
 }
 
+async function applySetVersion(
+  plans: Array<SetVersionPlan>,
+  version: string,
+): Promise<void> {
+  const { parseDocument } = await import('yaml')
+
+  for (const plan of plans) {
+    const content = readFileSync(plan.filePath, 'utf8')
+    const match = content.match(
+      /^---(\r?\n)([\s\S]*?)(\r?\n)---(\r?\n?)([\s\S]*)/,
+    )
+    if (!match) continue
+
+    const openingLineEnding = match[1]
+    const frontmatter = match[2]
+    const closingLineEnding = match[3]
+    const afterClose = match[4]
+    const body = match[5]
+    if (
+      openingLineEnding === undefined ||
+      frontmatter === undefined ||
+      closingLineEnding === undefined ||
+      afterClose === undefined ||
+      body === undefined
+    ) {
+      continue
+    }
+
+    const doc = parseDocument(frontmatter)
+    if (doc.errors.length > 0) continue
+
+    doc.setIn(['metadata', 'library_version'], version)
+
+    const nextFrontmatter = normalizeLineEndings(
+      doc.toString().replace(/\r?\n$/, ''),
+      openingLineEnding,
+    )
+    const nextContent = `---${openingLineEnding}${nextFrontmatter}${closingLineEnding}---${afterClose}${body}`
+    writeFileSync(plan.filePath, nextContent)
+  }
+}
+
 function collectAgentSkillSpecWarnings({
   fm,
   rel,
@@ -307,6 +355,18 @@ export async function runValidateCommand(
     fail('Cannot combine --fix and --check')
   }
 
+  if (options.setVersion !== undefined) {
+    if (options.check) {
+      fail('Cannot combine --set-version and --check')
+    }
+    if (
+      typeof options.setVersion !== 'string' ||
+      options.setVersion.trim().length === 0
+    ) {
+      fail('--set-version requires a non-empty version value')
+    }
+  }
+
   if (!options.githubSummary) {
     await runValidateCommandInternal(dir, options)
     return
@@ -346,6 +406,7 @@ async function runValidateCommandInternal(
   const errors: Array<ValidationError> = []
   const warnings: Array<string> = []
   const fixPlans: Array<FrontmatterFixPlan> = []
+  const setVersionPlans: Array<SetVersionPlan> = []
   let validatedCount = 0
 
   if (explicitDir && findSkillFiles(skillsDirs[0]!).length === 0) {
@@ -393,6 +454,16 @@ async function runValidateCommandInternal(
 
       const fixPlan = collectFrontmatterFixPlan({ filePath, fm, rel })
       if (fixPlan) fixPlans.push(fixPlan)
+
+      // Only target files whose metadata is a mapping (or absent); a
+      // non-mapping metadata scalar is rejected by validation below, and
+      // setIn cannot safely graft a key onto it.
+      if (options.setVersion !== undefined) {
+        const meta = fm.metadata
+        if (meta === undefined || isRecord(meta)) {
+          setVersionPlans.push({ file: rel, filePath })
+        }
+      }
 
       if (!fm.name) {
         errors.push({ file: rel, message: 'Missing required field: name' })
@@ -547,10 +618,26 @@ async function runValidateCommandInternal(
     }
   }
 
-  if (options.fix && fixPlans.length > 0) {
-    await applyFrontmatterFixes(fixPlans)
-    console.log(`✅ Fixed ${fixPlans.length} skill files`)
-    await runValidateCommandInternal(dir, { ...options, fix: false })
+  const willSetVersion =
+    options.setVersion !== undefined && setVersionPlans.length > 0
+  const willFix = options.fix === true && fixPlans.length > 0
+
+  if (willSetVersion || willFix) {
+    if (willSetVersion) {
+      await applySetVersion(setVersionPlans, options.setVersion!)
+      console.log(
+        `✅ Set library_version to "${options.setVersion}" on ${setVersionPlans.length} skill files`,
+      )
+    }
+    if (willFix) {
+      await applyFrontmatterFixes(fixPlans)
+      console.log(`✅ Fixed ${fixPlans.length} skill files`)
+    }
+    await runValidateCommandInternal(dir, {
+      ...options,
+      fix: false,
+      setVersion: undefined,
+    })
     return
   }
 

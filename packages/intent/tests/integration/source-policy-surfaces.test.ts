@@ -136,7 +136,7 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: () => Promise.resolve({ version: '1.0.0' }),
     } as Response)
     process.chdir(root)
 

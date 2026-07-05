@@ -91,6 +91,10 @@ function findPnpFile(start: string): string | null {
   return null
 }
 
+export function isPnpRuntimeWithinNodeModules(pnpPath: string): boolean {
+  return resolve(pnpPath).split(sep).includes('node_modules')
+}
+
 function assertLocalNodeModulesSupported(root: string): void {
   if (
     existsSync(join(root, 'deno.json')) &&
@@ -105,6 +109,12 @@ function assertLocalNodeModulesSupported(root: string): void {
 function loadPnpApi(root: string): LoadedPnp | null {
   const pnpPath = findPnpFile(root)
   if (!pnpPath) return null
+
+  if (isPnpRuntimeWithinNodeModules(pnpPath)) {
+    throw new Error(
+      `Refusing to load a Yarn PnP runtime resolved from within node_modules: ${pnpPath}. Only a project root or ancestor .pnp.cjs is trusted.`,
+    )
+  }
 
   const moduleApi = requireFromHere('node:module') as NodeModuleInternals
   const originalResolveFilename = moduleApi._resolveFilename

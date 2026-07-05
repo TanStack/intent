@@ -548,7 +548,7 @@ function isIntentHook(value: unknown): boolean {
 }
 
 function isIntentGateScriptReference(value: string): boolean {
-  return /(?:^|[\s"'\/])(?:old-)?intent-(claude|codex|copilot)-gate\.mjs(?:$|[?#\s"'])/i.test(
+  return /(?:^|[\s"'/])(?:old-)?intent-(claude|codex|copilot)-gate\.mjs(?:$|[?#\s"'])/i.test(
     value,
   )
 }

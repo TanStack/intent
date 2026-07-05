@@ -126,6 +126,7 @@ export function compileExcludePatterns(
   })
 }
 
+// Deliberately kind-agnostic, unlike the allowlist/lockfile — not a gap to close later.
 export function isPackageExcluded(
   packageName: string,
   matchers: Array<ExcludeMatcher>,

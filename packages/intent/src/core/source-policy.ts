@@ -1,5 +1,6 @@
 import { scanForIntents } from '../discovery/scanner.js'
 import { detectIntentAudience } from '../shared/environment.js'
+import { ALLOW_ALL_NOTICE } from '../shared/cli-output.js'
 import {
   compileExcludePatterns,
   getConfigDirs,
@@ -11,6 +12,7 @@ import {
 import { readPackageJson } from './package-json.js'
 import { parseSkillSources } from './skill-sources.js'
 import { resolveProjectContext } from './project-context.js'
+import { sourceIdentityKey } from './types.js'
 import type { SkillUse } from '../skills/use.js'
 import type { IntentPackage, ScanOptions, ScanResult } from '../shared/types.js'
 import type { ExcludeMatcher } from './excludes.js'
@@ -22,8 +24,7 @@ import type {
   IntentHiddenSourceSummary,
 } from './types.js'
 
-export const ALLOW_ALL_NOTICE =
-  'All skill sources allowed (intent.skills: ["*"]) — unvetted skills may be surfaced into agent guidance.'
+export { ALLOW_ALL_NOTICE }
 
 export const MIGRATION_NOTICE =
   'intent.skills is not set — all discovered skill sources are surfaced. A future version will require an explicit intent.skills allowlist; add one to opt in to specific sources.'
@@ -47,9 +48,10 @@ export interface LoadRefusal {
   message: string
 }
 
-function isSourcePermitted(
+export function isSourcePermitted(
   config: SkillSourcesConfig,
   packageName: string,
+  packageKind?: 'npm' | 'workspace',
 ): boolean {
   switch (config.mode) {
     case 'absent':
@@ -58,7 +60,20 @@ function isSourcePermitted(
     case 'empty':
       return false
     case 'explicit':
-      return config.sources.some((source) => source.id === packageName)
+      return config.sources.some((source) => {
+        if (source.id !== packageName) return false
+        return packageKind === undefined || source.kind === packageKind
+      })
+  }
+}
+
+export function packageNotListedRefusal(
+  use: string,
+  packageName: string,
+): LoadRefusal {
+  return {
+    code: 'package-not-listed',
+    message: `Cannot load skill use "${use}": package "${packageName}" is not listed in intent.skills.`,
   }
 }
 
@@ -80,11 +95,11 @@ export function checkLoadAllowed(
     }
   }
 
+  // Name-only pre-check: kind isn't known yet at this point in the load path.
+  // A late, kind-aware isSourcePermitted call happens once resolution reveals
+  // the actual kind (see intent-core.ts).
   if (!isSourcePermitted(config, packageName)) {
-    return {
-      code: 'package-not-listed',
-      message: `Cannot load skill use "${use}": package "${packageName}" is not listed in intent.skills.`,
-    }
+    return packageNotListedRefusal(use, packageName)
   }
 
   if (isSkillExcluded(packageName, skillName, excludeMatchers)) {
@@ -145,7 +160,7 @@ export function applySourcePolicy(
   for (const pkg of scanResult.packages) {
     if (isPackageExcluded(pkg.name, excludeMatchers)) continue
 
-    if (!isSourcePermitted(config, pkg.name)) {
+    if (!isSourcePermitted(config, pkg.name, pkg.kind)) {
       if (config.mode === 'explicit') {
         hiddenSources.push({ name: pkg.name, skillCount: pkg.skills.length })
       }
@@ -165,9 +180,21 @@ export function applySourcePolicy(
   }
 
   if (config.mode === 'explicit') {
-    const discoveredNames = new Set(scanResult.packages.map((pkg) => pkg.name))
+    const discoveredKeys = new Set(
+      scanResult.packages.map((pkg) =>
+        sourceIdentityKey({ kind: pkg.kind, id: pkg.name }),
+      ),
+    )
     for (const source of config.sources) {
-      if (!discoveredNames.has(source.id)) {
+      // git sources can't appear in config yet (parseSkillSources rejects them),
+      // and IntentPackage.kind excludes 'git', so treat as always-not-discovered
+      // until git discovery lands — revisit this line then.
+      const notDiscovered =
+        source.kind === 'git' ||
+        !discoveredKeys.has(
+          sourceIdentityKey({ kind: source.kind, id: source.id }),
+        )
+      if (notDiscovered) {
         emit(
           `"${source.raw}" is declared in intent.skills but was not discovered.`,
         )
@@ -212,6 +239,7 @@ export interface PolicedScan {
   hiddenSources: Array<IntentHiddenSourceSummary>
   scan: ScanResult
   excludePatterns: Array<string>
+  droppedNames: Array<string>
 }
 
 export function scanForPolicedIntents(params: {
@@ -235,6 +263,8 @@ export function scanForPolicedIntents(params: {
     excludeMatchers,
   })
 
+  // Name-only Sets, correct because the scanner guarantees at most one
+  // package per name (createPackageRegistrar dedups before this runs).
   const survivingNames = new Set(policy.packages.map((pkg) => pkg.name))
   const droppedNames = scanResult.packages
     .map((pkg) => pkg.name)
@@ -256,5 +286,6 @@ export function scanForPolicedIntents(params: {
       ),
     },
     excludePatterns,
+    droppedNames,
   }
 }

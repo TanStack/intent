@@ -49,7 +49,7 @@ const config = [
   {
     name: 'intent/static-discovery',
     files: [
-      'packages/intent/src/scanner.ts',
+      'packages/intent/src/discovery/scanner.ts',
       'packages/intent/src/lockfile.ts',
       'packages/intent/src/manifest.ts',
       'packages/intent/src/mcp/**/*.ts',

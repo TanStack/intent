@@ -1,5 +1,38 @@
 # @tanstack/intent
 
+## 0.3.5
+
+### Patch Changes
+
+- [#194](https://github.com/TanStack/intent/pull/194) [`e885566`](https://github.com/TanStack/intent/commit/e8855664ff7eeb37a8ee4fed3c01a0dbded14dc6) - Fix `setup`, `setup-github-actions`, `meta`, and `scaffold` failing with "No templates directory found" / "Meta-skills directory not found" in the published package. `getMetaDir` hardcoded `../../meta`, which is correct for the `src/commands/` source layout but overshoots to `@tanstack/meta` from the flat `dist/` layout the build ships. Walk up to the first `meta/` directory instead so resolution works in both layouts (and symlinked installs).
+
+- [#191](https://github.com/TanStack/intent/pull/191) [`3620cca`](https://github.com/TanStack/intent/commit/3620ccad89eeca310b6f72e64cbea0280eef37f3) - Tighten skill-source identity to `(kind, id)` instead of name alone: `workspace:foo` no longer authorizes an npm-installed `foo` (and vice versa) in `intent.skills`, the "declared but not discovered" notice, and skill loading via `intent load`.
+
+## 0.3.4
+
+### Patch Changes
+
+- [#190](https://github.com/TanStack/intent/pull/190) [`45c863d`](https://github.com/TanStack/intent/commit/45c863d2389d203862b7b2f9f9f81316fab5207d) - Improve the maintainer skill-authoring workflow:
+
+      - Add `validate --set-version <version>`, which stamps `metadata.library_version` across matched skills via YAML surgery (preserving comments, line endings, and body) and then re-validates.
+      - Correct the `generate-skill` meta-skill so it no longer emits slash-path `name` values that fail validation, and the `skill-staleness-check` meta-skill so it points at the real `intent stale` command instead of a non-existent script.
+
+- [#188](https://github.com/TanStack/intent/pull/188) [`2a25b36`](https://github.com/TanStack/intent/commit/2a25b360843801848a01af7b21b39646e6a5a53b) - Refuse to load a Yarn PnP runtime resolved from within node_modules; only a project root or ancestor .pnp.cjs is trusted.
+
+## 0.3.3
+
+### Patch Changes
+
+- [#185](https://github.com/TanStack/intent/pull/185) [`b7920e9`](https://github.com/TanStack/intent/commit/b7920e9a8cee1f15ee373651b40daae0c1977120) - Fix `intent list` suppressing the allow-all risk warning.
+
+  When `intent.skills` is set to allow-all (`"*"`), `intent list --no-notices` and `INTENT_NO_NOTICES=1` no longer hide the warning that all skill sources are permitted. This banner is a security-relevant signal, not a migration tip, so it's now excluded from suppression while other notices remain suppressible as before.
+
+- [#187](https://github.com/TanStack/intent/pull/187) [`fb3c08b`](https://github.com/TanStack/intent/commit/fb3c08b9ff1332295e838a18b056673f59c99c2d) - Fix potential hangs on slow or large environments:
+
+  - Bound the npm registry staleness check with a request timeout so `intent list` and other staleness checks can't hang indefinitely on a slow or unreachable registry.
+  - Bound global package-manager detection with a command timeout so it can't hang indefinitely when the environment's global `node_modules` is slow to resolve.
+  - Avoid enumerating a workspace package's entire skill tree just to check whether it has any skills, reducing filesystem work in large monorepos.
+
 ## 0.3.2
 
 ### Patch Changes
