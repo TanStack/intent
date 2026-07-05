@@ -102,15 +102,15 @@ function collectFileEntries(
           )
         }
         ancestors.add(realEntryPath)
-        files.push(
-          ...collectFileEntries(
-            realEntryPath,
-            logicalRelativePath,
-            realRoot,
-            ancestors,
-            excludeDirs,
-          ),
-        )
+        for (const nested of collectFileEntries(
+          realEntryPath,
+          logicalRelativePath,
+          realRoot,
+          ancestors,
+          excludeDirs,
+        )) {
+          files.push(nested)
+        }
         ancestors.delete(realEntryPath)
       } else if (stats.isFile()) {
         files.push({ physicalPath: realEntryPath, logicalRelativePath })
@@ -120,15 +120,15 @@ function collectFileEntries(
 
     if (entry.isDirectory()) {
       if (excludeDirs.has(physicalEntryPath)) continue
-      files.push(
-        ...collectFileEntries(
-          physicalEntryPath,
-          logicalRelativePath,
-          realRoot,
-          ancestors,
-          excludeDirs,
-        ),
-      )
+      for (const nested of collectFileEntries(
+        physicalEntryPath,
+        logicalRelativePath,
+        realRoot,
+        ancestors,
+        excludeDirs,
+      )) {
+        files.push(nested)
+      }
     } else if (entry.isFile()) {
       files.push({ physicalPath: physicalEntryPath, logicalRelativePath })
     }
@@ -243,7 +243,7 @@ function hashEntries(
   entries: ReadonlyArray<{ key: string; value: Buffer }>,
 ): string {
   const hash = createHash('sha256')
-  const sorted = [...entries].sort((a, b) => compareStrings(a.key, b.key))
+  const sorted = entries.toSorted((a, b) => compareStrings(a.key, b.key))
 
   for (const entry of sorted) {
     if (entry.key.includes('\0')) {

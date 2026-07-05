@@ -166,7 +166,7 @@ function compareStrings(a: string, b: string): number {
 }
 
 function sortedStrings(values: Array<string>): Array<string> {
-  return [...values].sort(compareStrings)
+  return values.toSorted(compareStrings)
 }
 
 function canonicalJsonValue(value: unknown, label: string): JsonValue {

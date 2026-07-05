@@ -43,7 +43,7 @@ function compareStrings(a: string, b: string): number {
 function sortBySourceIdentity<T extends SourceIdentity>(
   items: Array<T>,
 ): Array<T> {
-  return [...items].sort((a, b) =>
+  return items.toSorted((a, b) =>
     compareStrings(sourceIdentityKey(a), sourceIdentityKey(b)),
   )
 }
@@ -56,7 +56,19 @@ function diffFields(
   const currentCanonical = canonicalSource(current)
   const changes: Array<LockfileFieldChange> = []
 
-  const compareField = (field: LockfileChangeField): void => {
+  const comparePrimitiveField = (
+    field: 'version' | 'resolution' | 'contentHash' | 'manifestHash',
+  ): void => {
+    const from = lockedCanonical[field]
+    const to = currentCanonical[field]
+    if (from !== to) {
+      changes.push({ field, from, to })
+    }
+  }
+
+  const compareStructuredField = (
+    field: 'capabilities' | 'declaredSecrets' | 'mcpTools' | 'mcpPolicy',
+  ): void => {
     const from = lockedCanonical[field]
     const to = currentCanonical[field]
     if (JSON.stringify(from) !== JSON.stringify(to)) {
@@ -64,14 +76,14 @@ function diffFields(
     }
   }
 
-  compareField('version')
-  compareField('resolution')
-  compareField('contentHash')
-  compareField('manifestHash')
-  compareField('capabilities')
-  compareField('declaredSecrets')
-  compareField('mcpTools')
-  compareField('mcpPolicy')
+  comparePrimitiveField('version')
+  comparePrimitiveField('resolution')
+  comparePrimitiveField('contentHash')
+  comparePrimitiveField('manifestHash')
+  compareStructuredField('capabilities')
+  compareStructuredField('declaredSecrets')
+  compareStructuredField('mcpTools')
+  compareStructuredField('mcpPolicy')
 
   return changes
 }

@@ -120,7 +120,7 @@ function formatUnlistedNotice(
   hiddenSources: Array<IntentHiddenSourceSummary>,
   audience: IntentAudience,
 ): string {
-  const sorted = [...hiddenSources].sort((a, b) => a.name.localeCompare(b.name))
+  const sorted = hiddenSources.toSorted((a, b) => a.name.localeCompare(b.name))
   const sourceCount = sorted.length
   const skillCount = sorted.reduce((sum, source) => sum + source.skillCount, 0)
 

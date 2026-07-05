@@ -295,8 +295,8 @@ export function buildIntentSkillsBlock(
   ]
   let mappingCount = 0
 
-  for (const pkg of [...scanResult.packages].sort(compareNames)) {
-    for (const skill of [...pkg.skills].sort(compareNames)) {
+  for (const pkg of scanResult.packages.toSorted(compareNames)) {
+    for (const skill of pkg.skills.toSorted(compareNames)) {
       if (!isGeneratedMappingSkill(skill)) continue
 
       mappingCount++
