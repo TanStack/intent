@@ -1,6 +1,14 @@
 import { createHash } from 'node:crypto'
 import { isAbsolute, join, relative } from 'node:path'
-import { readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
+import {
+  closeSync,
+  fstatSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+} from 'node:fs'
 
 export interface SkillFile {
   relativePath: string
@@ -124,6 +132,34 @@ function collectFileEntries(
   return files
 }
 
+// Opens once and reads/verifies-type from that same fd rather than
+// stat-by-path-then-open-by-path: the fd is bound to a specific inode, so a
+// path swap after this call can't produce a torn read mixing old/new bytes.
+function readRegularFile(
+  physicalPath: string,
+  logicalRelativePath: string,
+): Buffer {
+  let fd: number
+  try {
+    fd = openSync(physicalPath, 'r')
+  } catch (err) {
+    throw new Error(
+      `Failed to read skill file "${logicalRelativePath}": ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
+
+  try {
+    if (!fstatSync(fd).isFile()) {
+      throw new Error(
+        `Failed to read skill file "${logicalRelativePath}": not a regular file.`,
+      )
+    }
+    return readFileSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+}
+
 export function readSkillFolderFiles(skillDir: string): Array<SkillFile> {
   const realRoot = realpathSync(skillDir)
   const entries = collectFileEntries(
@@ -135,14 +171,7 @@ export function readSkillFolderFiles(skillDir: string): Array<SkillFile> {
 
   const files = entries.map(
     ({ physicalPath, logicalRelativePath }): SkillFile => {
-      let raw: Buffer
-      try {
-        raw = readFileSync(physicalPath)
-      } catch (err) {
-        throw new Error(
-          `Failed to read skill file "${logicalRelativePath}": ${err instanceof Error ? err.message : String(err)}`,
-        )
-      }
+      const raw = readRegularFile(physicalPath, logicalRelativePath)
 
       return {
         relativePath: logicalRelativePath,
