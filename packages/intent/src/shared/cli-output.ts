@@ -1,3 +1,5 @@
+import { isEnvFlagSet } from './env-flag.js'
+
 // Lives here (not core/source-policy.ts) so printNotices can enforce
 // non-suppressibility by identity without core importing this module.
 export const ALLOW_ALL_NOTICE =
@@ -16,11 +18,8 @@ export interface NoticeOutputOptions {
   noNotices?: boolean
 }
 
-const TRUE_LIKE_VALUES = new Set(['1', 'true', 'yes', 'on'])
-
 function envSuppressesNotices(): boolean {
-  const value = process.env.INTENT_NO_NOTICES?.trim().toLowerCase()
-  return value ? TRUE_LIKE_VALUES.has(value) : false
+  return isEnvFlagSet('INTENT_NO_NOTICES')
 }
 
 function shouldSuppressNotices(options: NoticeOutputOptions = {}): boolean {

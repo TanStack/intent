@@ -3541,6 +3541,111 @@ describe('cli commands', () => {
   })
 })
 
+describe('intent skills', () => {
+  let previousCi: string | undefined
+  let previousIntentFrozen: string | undefined
+
+  beforeEach(() => {
+    previousCi = process.env.CI
+    previousIntentFrozen = process.env.INTENT_FROZEN
+    delete process.env.CI
+    delete process.env.INTENT_FROZEN
+  })
+
+  afterEach(() => {
+    if (previousCi === undefined) {
+      delete process.env.CI
+    } else {
+      process.env.CI = previousCi
+    }
+    if (previousIntentFrozen === undefined) {
+      delete process.env.INTENT_FROZEN
+    } else {
+      process.env.INTENT_FROZEN = previousIntentFrozen
+    }
+  })
+
+  function makeSkillsProject(): string {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-skills-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), { name: 'app', private: true })
+    return root
+  }
+
+  it('reports no lockfile for `skills scan` with no flags', async () => {
+    const root = makeSkillsProject()
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'scan'])
+
+    expect(exitCode).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('No intent.lock found')
+  })
+
+  // Regression test: cac's --no-x negation convention gives the "frozen" key
+  // a default of `true` whenever --no-frozen is *registered*, even when
+  // neither --frozen nor --no-frozen is passed on the command line. Confirms
+  // frozenOptionsFromGlobalFlags reads raw argv instead of cac's options.
+  it('does not force frozen mode when neither --frozen nor --no-frozen is passed', async () => {
+    const root = makeSkillsProject()
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'scan', '--json'])
+
+    expect(exitCode).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(JSON.parse(output)).toMatchObject({ frozen: false })
+  })
+
+  it('forces frozen mode with --frozen and fails on a missing lockfile', async () => {
+    const root = makeSkillsProject()
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'scan', '--frozen'])
+
+    expect(exitCode).not.toBe(0)
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Frozen mode requires intent.lock'),
+    )
+  })
+
+  it('--no-frozen disables CI auto-detection', async () => {
+    const root = makeSkillsProject()
+    process.chdir(root)
+    process.env.CI = 'true'
+
+    const exitCode = await main(['skills', 'scan', '--no-frozen', '--json'])
+
+    expect(exitCode).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(JSON.parse(output)).toMatchObject({ frozen: false })
+  })
+
+  it('reports no lockfile for `skills diff` with no flags', async () => {
+    const root = makeSkillsProject()
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'diff'])
+
+    expect(exitCode).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('No intent.lock found')
+  })
+
+  it('fails on an unknown skills action', async () => {
+    const root = makeSkillsProject()
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'nope'])
+
+    expect(exitCode).not.toBe(0)
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Unknown skills action'),
+    )
+  })
+})
+
 describe('package metadata', () => {
   it('uses a package-manager-neutral prepack script', () => {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {

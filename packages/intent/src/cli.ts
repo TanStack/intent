@@ -10,6 +10,7 @@ import type { HooksInstallCommandOptions } from './commands/hooks/command.js'
 import type { InstallCommandOptions } from './commands/install/command.js'
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
+import type { SkillsScanCommandOptions } from './commands/skills/scan.js'
 import type { StaleCommandOptions } from './commands/stale.js'
 import type { ValidateCommandOptions } from './commands/validate.js'
 
@@ -205,6 +206,48 @@ function createCli(): CAC {
             import('./commands/stale.js'),
           ])
         await runStaleCommand(targetDir, options, resolveStaleTargets)
+      },
+    )
+
+  cli
+    .command('skills [action]', 'Scan or diff skills against intent.lock')
+    .usage('skills <scan|diff> [--json] [--frozen] [--no-frozen]')
+    .option('--json', 'Output JSON')
+    .option(
+      '--frozen',
+      'Force frozen mode (fail if intent.lock is missing or stale)',
+    )
+    .option('--no-frozen', 'Disable CI auto-detection of frozen mode')
+    .example('skills scan')
+    .example('skills diff')
+    .example('skills scan --json')
+    .action(
+      async (action: string | undefined, options: SkillsScanCommandOptions) => {
+        const { scanIntentsOrFail, frozenOptionsFromGlobalFlags } =
+          await import('./commands/support.js')
+        const frozenOptions = frozenOptionsFromGlobalFlags(cli.rawArgs)
+
+        if (action === 'scan') {
+          const { runSkillsScanCommand } =
+            await import('./commands/skills/scan.js')
+          await runSkillsScanCommand(
+            { ...options, ...frozenOptions },
+            scanIntentsOrFail,
+          )
+          return
+        }
+
+        if (action === 'diff') {
+          const { runSkillsDiffCommand } =
+            await import('./commands/skills/diff.js')
+          await runSkillsDiffCommand(
+            { ...options, ...frozenOptions },
+            scanIntentsOrFail,
+          )
+          return
+        }
+
+        fail('Unknown skills action: expected scan or diff.')
       },
     )
 

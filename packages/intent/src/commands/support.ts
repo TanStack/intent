@@ -133,6 +133,20 @@ export function noticeOptionsFromGlobalFlags(options: GlobalScanFlags): {
   return { noNotices: options.noNotices || options.notices === false }
 }
 
+// cac's --no-x negation convention collapses --frozen/--no-frozen onto a
+// single "frozen" key that defaults to true (see cac's Option constructor),
+// which can't represent our third state (neither flag passed => auto-detect).
+// Read the raw argv instead so "nothing passed" stays distinguishable.
+export function frozenOptionsFromGlobalFlags(argv: ReadonlyArray<string>): {
+  frozen: boolean
+  noFrozen: boolean
+} {
+  return {
+    frozen: argv.includes('--frozen'),
+    noFrozen: argv.includes('--no-frozen'),
+  }
+}
+
 function formatDebugValue(value: string | number | Array<string>): string {
   if (Array.isArray(value)) {
     return value.length > 0 ? value.join(', ') : '(none)'
