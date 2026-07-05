@@ -66,6 +66,7 @@ function collectFileEntries(
   logicalPrefix: string,
   realRoot: string,
   ancestors: Set<string>,
+  excludeDirs: ReadonlySet<string>,
 ): Array<FileEntry> {
   const entries = readDirEntries(physicalDir, logicalPrefix)
   const files: Array<FileEntry> = []
@@ -94,6 +95,7 @@ function collectFileEntries(
 
       const stats = statSync(realEntryPath)
       if (stats.isDirectory()) {
+        if (excludeDirs.has(realEntryPath)) continue
         if (ancestors.has(realEntryPath)) {
           throw new Error(
             `Refusing to hash skill folder: "${logicalRelativePath}" is a symlink cycle.`,
@@ -106,6 +108,7 @@ function collectFileEntries(
             logicalRelativePath,
             realRoot,
             ancestors,
+            excludeDirs,
           ),
         )
         ancestors.delete(realEntryPath)
@@ -116,12 +119,14 @@ function collectFileEntries(
     }
 
     if (entry.isDirectory()) {
+      if (excludeDirs.has(physicalEntryPath)) continue
       files.push(
         ...collectFileEntries(
           physicalEntryPath,
           logicalRelativePath,
           realRoot,
           ancestors,
+          excludeDirs,
         ),
       )
     } else if (entry.isFile()) {
@@ -160,13 +165,28 @@ function readRegularFile(
   }
 }
 
-export function readSkillFolderFiles(skillDir: string): Array<SkillFile> {
+export function readSkillFolderFiles(
+  skillDir: string,
+  excludeDirs: ReadonlyArray<string> = [],
+): Array<SkillFile> {
   const realRoot = realpathSync(skillDir)
+  const realExcludeDirs = new Set(
+    excludeDirs
+      .map((dir) => {
+        try {
+          return realpathSync(dir)
+        } catch {
+          return null
+        }
+      })
+      .filter((dir): dir is string => dir !== null),
+  )
   const entries = collectFileEntries(
     realRoot,
     '',
     realRoot,
     new Set([realRoot]),
+    realExcludeDirs,
   )
 
   const files = entries.map(
@@ -256,8 +276,11 @@ export function hashSkillFolderFiles(files: ReadonlyArray<SkillFile>): string {
   )
 }
 
-export function hashSkillFolder(skillDir: string): string {
-  return hashSkillFolderFiles(readSkillFolderFiles(skillDir))
+export function hashSkillFolder(
+  skillDir: string,
+  excludeDirs: ReadonlyArray<string> = [],
+): string {
+  return hashSkillFolderFiles(readSkillFolderFiles(skillDir, excludeDirs))
 }
 
 export function hashSourceContent(

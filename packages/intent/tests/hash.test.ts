@@ -13,7 +13,7 @@ import {
   hashSkillFolderFiles,
   hashSourceContent,
   readSkillFolderFiles,
-} from '../src/core/hash.js'
+} from '../src/core/lockfile/hash.js'
 
 const roots: Array<string> = []
 
@@ -308,5 +308,41 @@ describe('hashSkillFolder', () => {
     writeSkillFolder(rootB, files)
 
     expect(hashSkillFolder(rootA)).toBe(hashSkillFolder(rootB))
+  })
+
+  it('includes a nested skill folder by default (no exclusion)', () => {
+    const root = createRoot()
+    const nestedDir = join(root, 'nested-skill')
+    writeSkillFolder(root, { 'SKILL.md': 'parent body' })
+    writeSkillFolder(nestedDir, { 'SKILL.md': 'nested body' })
+
+    const before = hashSkillFolder(root)
+    writeFileSync(join(nestedDir, 'SKILL.md'), 'nested body changed')
+
+    expect(hashSkillFolder(root)).not.toBe(before)
+  })
+
+  it('excludes a nested skill folder when passed as excludeDirs', () => {
+    const root = createRoot()
+    const nestedDir = join(root, 'nested-skill')
+    writeSkillFolder(root, { 'SKILL.md': 'parent body' })
+    writeSkillFolder(nestedDir, { 'SKILL.md': 'nested body' })
+
+    const before = hashSkillFolder(root, [nestedDir])
+    writeFileSync(join(nestedDir, 'SKILL.md'), 'nested body changed')
+
+    expect(hashSkillFolder(root, [nestedDir])).toBe(before)
+  })
+
+  it("still changes when the parent's own content changes despite an exclusion", () => {
+    const root = createRoot()
+    const nestedDir = join(root, 'nested-skill')
+    writeSkillFolder(root, { 'SKILL.md': 'parent body' })
+    writeSkillFolder(nestedDir, { 'SKILL.md': 'nested body' })
+
+    const before = hashSkillFolder(root, [nestedDir])
+    writeFileSync(join(root, 'SKILL.md'), 'parent body changed')
+
+    expect(hashSkillFolder(root, [nestedDir])).not.toBe(before)
   })
 })

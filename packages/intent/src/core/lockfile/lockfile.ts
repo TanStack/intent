@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { sourceIdentityKey } from '../types.js'
 
 export const INTENT_LOCKFILE_VERSION = 1
 
@@ -198,7 +199,9 @@ function canonicalJsonValue(value: unknown, label: string): JsonValue {
   throw new Error(`Invalid intent.lock: ${label} must be JSON-serializable.`)
 }
 
-function canonicalSource(source: IntentLockfileSource): IntentLockfileSource {
+export function canonicalSource(
+  source: IntentLockfileSource,
+): IntentLockfileSource {
   return {
     id: source.id,
     kind: source.kind,
@@ -238,7 +241,7 @@ function canonicalLockfile(lockfile: IntentLockfile): IntentLockfile {
     ...(lockfile.staleness ? { staleness: lockfile.staleness } : {}),
     sources: [...lockfile.sources]
       .sort((a, b) =>
-        compareStrings(`${a.kind}\u0000${a.id}`, `${b.kind}\u0000${b.id}`),
+        compareStrings(sourceIdentityKey(a), sourceIdentityKey(b)),
       )
       .map(canonicalSource),
     policy: {

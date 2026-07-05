@@ -7,8 +7,8 @@ import {
   readIntentLockfile,
   serializeIntentLockfile,
   writeIntentLockfile,
-} from '../src/core/lockfile.js'
-import type { IntentLockfile } from '../src/core/lockfile.js'
+} from '../src/core/lockfile/lockfile.js'
+import type { IntentLockfile } from '../src/core/lockfile/lockfile.js'
 
 const roots: Array<string> = []
 
