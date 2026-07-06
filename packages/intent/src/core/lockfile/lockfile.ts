@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { sourceIdentityKey } from '../types.js'
 
-export const INTENT_LOCKFILE_VERSION = 1
+const INTENT_LOCKFILE_VERSION = 1
 
 export interface IntentLockfile {
   lockfileVersion: 1
@@ -12,11 +12,11 @@ export interface IntentLockfile {
   policy: IntentLockfilePolicy
 }
 
-export interface IntentLockfileStaleness {
+interface IntentLockfileStaleness {
   baseline: IntentLockfileStalenessBaseline
 }
 
-export interface IntentLockfileStalenessBaseline {
+interface IntentLockfileStalenessBaseline {
   kind: 'tag'
   ref: string
   commit: string
@@ -35,11 +35,11 @@ export interface IntentLockfileSource {
   mcpPolicy: Record<string, unknown>
 }
 
-export interface IntentLockfilePolicy {
+interface IntentLockfilePolicy {
   ignores: Array<IntentLockfilePolicyIgnore>
 }
 
-export interface IntentLockfilePolicyIgnore {
+interface IntentLockfilePolicyIgnore {
   id: string
   scope: {
     source: string

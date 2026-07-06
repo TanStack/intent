@@ -86,7 +86,7 @@ function describeChange(change: PendingChange): string {
   }
 }
 
-export async function defaultConfirm(question: string): Promise<boolean> {
+async function defaultConfirm(question: string): Promise<boolean> {
   const rl = createInterface({ input: process.stdin, output: process.stdout })
   try {
     const answer = await rl.question(`${question} (y/N) `)

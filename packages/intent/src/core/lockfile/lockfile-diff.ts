@@ -6,7 +6,7 @@ import type {
 } from './lockfile.js'
 import type { SourceIdentity } from '../types.js'
 
-export type LockfileChangeField =
+type LockfileChangeField =
   | 'version'
   | 'resolution'
   | 'contentHash'
