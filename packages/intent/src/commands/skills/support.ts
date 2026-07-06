@@ -22,13 +22,18 @@ export function buildSkillsDiff(
   return diffLockfileSources(current, lockedResult)
 }
 
-// Frozen mode never mutates intent.lock — a missing or stale lockfile is a
-// hard failure so CI can't silently drift from what was approved.
 export function enforceFrozenMode(
   diff: LockfileDiffResult,
   frozen: boolean,
+  hiddenSourceCount: number,
 ): void {
   if (!frozen) return
+
+  if (hiddenSourceCount > 0) {
+    fail(
+      `Frozen mode found ${hiddenSourceCount} unlisted skill-bearing source(s) not in intent.skills. Add them to intent.skills or intent.exclude, then re-run outside frozen mode.`,
+    )
+  }
 
   if (!diff.hasLockfile) {
     fail(

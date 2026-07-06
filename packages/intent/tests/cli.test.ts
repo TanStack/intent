@@ -3633,6 +3633,39 @@ describe('intent skills', () => {
     expect(output).toContain('No intent.lock found')
   })
 
+  // Regression test: scanIntentsOrFail discards hiddenSourceCount/hiddenSources
+  // from PolicedScan, so an unlisted skill-bearing package never reached
+  // enforceFrozenMode — it silently passed `--frozen` even though the RFC
+  // requires unlisted sources to hard-fail independently of lockfile drift.
+  it('fails `skills scan --frozen` when a discovered package is not in intent.skills', async () => {
+    const root = makeSkillsProject()
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'get-tsconfig',
+      version: '4.0.0',
+      skillName: 'config',
+      description: 'TypeScript config lookup',
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'scan', '--frozen'])
+
+    expect(exitCode).not.toBe(0)
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('unlisted skill-bearing source'),
+    )
+  })
+
   it('fails on an unknown skills action', async () => {
     const root = makeSkillsProject()
     process.chdir(root)

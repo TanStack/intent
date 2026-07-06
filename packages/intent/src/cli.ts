@@ -223,7 +223,7 @@ function createCli(): CAC {
     .example('skills scan --json')
     .action(
       async (action: string | undefined, options: SkillsScanCommandOptions) => {
-        const { scanIntentsOrFail, frozenOptionsFromGlobalFlags } =
+        const { scanPolicedIntentsOrFail, frozenOptionsFromGlobalFlags } =
           await import('./commands/support.js')
         const frozenOptions = frozenOptionsFromGlobalFlags(cli.rawArgs)
 
@@ -232,7 +232,7 @@ function createCli(): CAC {
             await import('./commands/skills/scan.js')
           await runSkillsScanCommand(
             { ...options, ...frozenOptions },
-            scanIntentsOrFail,
+            scanPolicedIntentsOrFail,
           )
           return
         }
@@ -242,7 +242,7 @@ function createCli(): CAC {
             await import('./commands/skills/diff.js')
           await runSkillsDiffCommand(
             { ...options, ...frozenOptions },
-            scanIntentsOrFail,
+            scanPolicedIntentsOrFail,
           )
           return
         }

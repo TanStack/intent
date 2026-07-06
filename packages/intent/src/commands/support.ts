@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { fail } from '../shared/cli-error.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import type { IntentCoreOptions } from '../core/index.js'
+import type { PolicedScan } from '../core/source-policy.js'
 import type {
   ScanOptions,
   ScanResult,
@@ -83,15 +84,24 @@ export function getCheckSkillsWorkflowAdvisories(root: string): Array<string> {
 export async function scanIntentsOrFail(
   coreOptions: IntentCoreOptions = {},
 ): Promise<ScanResult> {
+  const { scan } = await scanPolicedIntentsOrFail(coreOptions)
+  return scan
+}
+
+// scanIntentsOrFail discards hiddenSourceCount/hiddenSources; frozen-mode
+// callers need them, hence this separate function instead of changing
+// scanIntentsOrFail's return type.
+export async function scanPolicedIntentsOrFail(
+  coreOptions: IntentCoreOptions = {},
+): Promise<PolicedScan> {
   const { scanForPolicedIntents } = await import('../core/source-policy.js')
 
   try {
-    const { scan } = scanForPolicedIntents({
+    return scanForPolicedIntents({
       cwd: process.cwd(),
       scanOptions: scanOptionsFromGlobalFlags(coreOptions),
       coreOptions,
     })
-    return scan
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err))
   }

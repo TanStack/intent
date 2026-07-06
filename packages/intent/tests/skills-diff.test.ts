@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { writeIntentLockfile } from '../src/core/lockfile/lockfile.js'
 import { runSkillsDiffCommand } from '../src/commands/skills/diff.js'
 import type { IntentLockfile } from '../src/core/lockfile/lockfile.js'
+import type { PolicedScan } from '../src/core/source-policy.js'
 import type { ScanResult } from '../src/shared/types.js'
 
 function emptyScanResult(): ScanResult {
@@ -23,6 +24,17 @@ function emptyScanResult(): ScanResult {
       packageJsonCacheHits: 0,
     },
   } as unknown as ScanResult
+}
+
+function policedScan(overrides: Partial<PolicedScan> = {}): PolicedScan {
+  return {
+    scan: emptyScanResult(),
+    hiddenSourceCount: 0,
+    hiddenSources: [],
+    excludePatterns: [],
+    droppedNames: [],
+    ...overrides,
+  }
 }
 
 function baseLockfile(): IntentLockfile {
@@ -73,44 +85,55 @@ describe('runSkillsDiffCommand', () => {
       ],
     })
 
-    await runSkillsDiffCommand(
-      {},
-      () => Promise.resolve(emptyScanResult()),
-      cwd,
-    )
+    await runSkillsDiffCommand({}, () => Promise.resolve(policedScan()), cwd)
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(output).toContain('Removed:')
     expect(output).toContain('npm:foo@1.0.0')
   })
 
-  it('reports up to date when nothing has changed', async () => {
+  it('reports hidden (unlisted) sources even when nothing else has changed', async () => {
     const cwd = makeTempProject()
     writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
 
     await runSkillsDiffCommand(
       {},
-      () => Promise.resolve(emptyScanResult()),
+      () => Promise.resolve(policedScan({ hiddenSourceCount: 3 })),
       cwd,
     )
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(output).toContain('3 discovered skill-bearing source(s)')
+    expect(output).toContain('intent.lock is up to date')
+  })
+
+  it('reports up to date when nothing has changed', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
+
+    await runSkillsDiffCommand({}, () => Promise.resolve(policedScan()), cwd)
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(output).toContain('intent.lock is up to date')
   })
 
-  it('outputs JSON with a frozen field when --json is passed', async () => {
+  it('outputs JSON with frozen and hiddenSourceCount fields when --json is passed', async () => {
     const cwd = makeTempProject()
     writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
 
     await runSkillsDiffCommand(
       { json: true },
-      () => Promise.resolve(emptyScanResult()),
+      () => Promise.resolve(policedScan()),
       cwd,
     )
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     const parsed = JSON.parse(output)
-    expect(parsed).toMatchObject({ frozen: false, isClean: true })
+    expect(parsed).toMatchObject({
+      frozen: false,
+      hiddenSourceCount: 0,
+      isClean: true,
+    })
   })
 
   it('throws in frozen mode when intent.lock is missing', async () => {
@@ -119,7 +142,7 @@ describe('runSkillsDiffCommand', () => {
     await expect(
       runSkillsDiffCommand(
         { frozen: true },
-        () => Promise.resolve(emptyScanResult()),
+        () => Promise.resolve(policedScan()),
         cwd,
       ),
     ).rejects.toMatchObject({
@@ -134,9 +157,24 @@ describe('runSkillsDiffCommand', () => {
     await expect(
       runSkillsDiffCommand(
         { frozen: true },
-        () => Promise.resolve(emptyScanResult()),
+        () => Promise.resolve(policedScan()),
         cwd,
       ),
     ).resolves.toBeUndefined()
+  })
+
+  it('throws in frozen mode when there are unlisted skill-bearing sources, even with a clean lockfile', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
+
+    await expect(
+      runSkillsDiffCommand(
+        { frozen: true },
+        () => Promise.resolve(policedScan({ hiddenSourceCount: 1 })),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('unlisted skill-bearing source'),
+    })
   })
 })

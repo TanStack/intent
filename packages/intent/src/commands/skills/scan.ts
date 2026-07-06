@@ -1,7 +1,7 @@
 import { isFrozenMode } from '../../shared/mode.js'
 import { buildSkillsDiff, enforceFrozenMode } from './support.js'
 import type { LockfileDiffResult } from '../../core/lockfile/lockfile-diff.js'
-import type { ScanResult } from '../../shared/types.js'
+import type { PolicedScan } from '../../core/source-policy.js'
 
 export interface SkillsScanCommandOptions {
   json?: boolean
@@ -9,7 +9,16 @@ export interface SkillsScanCommandOptions {
   noFrozen?: boolean
 }
 
-function printScanSummary(diff: LockfileDiffResult): void {
+function printScanSummary(
+  diff: LockfileDiffResult,
+  hiddenSourceCount: number,
+): void {
+  if (hiddenSourceCount > 0) {
+    console.log(
+      `${hiddenSourceCount} discovered skill-bearing source(s) are not listed in intent.skills. Add them to intent.skills or intent.exclude.`,
+    )
+  }
+
   if (!diff.hasLockfile) {
     console.log(
       'No intent.lock found. Run `intent skills approve --all` to create one.',
@@ -32,21 +41,21 @@ function printScanSummary(diff: LockfileDiffResult): void {
 
 export async function runSkillsScanCommand(
   options: SkillsScanCommandOptions,
-  scanIntents: () => Promise<ScanResult>,
+  scanPolicedIntents: () => Promise<PolicedScan>,
   cwd: string = process.cwd(),
 ): Promise<void> {
   const frozen = isFrozenMode({
     frozen: options.frozen,
     noFrozen: options.noFrozen,
   })
-  const scan = await scanIntents()
+  const { scan, hiddenSourceCount } = await scanPolicedIntents()
   const diff = buildSkillsDiff(scan, cwd)
 
   if (options.json) {
-    console.log(JSON.stringify({ frozen, ...diff }, null, 2))
+    console.log(JSON.stringify({ frozen, hiddenSourceCount, ...diff }, null, 2))
   } else {
-    printScanSummary(diff)
+    printScanSummary(diff, hiddenSourceCount)
   }
 
-  enforceFrozenMode(diff, frozen)
+  enforceFrozenMode(diff, frozen, hiddenSourceCount)
 }
