@@ -85,9 +85,7 @@ export async function runSkillsDiffCommand(
   const diff = buildSkillsDiff(scan, cwd)
 
   if (options.json) {
-    console.log(
-      JSON.stringify({ frozen, hiddenSourceCount, ...diff }, null, 2),
-    )
+    console.log(JSON.stringify({ frozen, hiddenSourceCount, ...diff }, null, 2))
   } else {
     printDiffDetails(diff, hiddenSourceCount)
   }

@@ -32,6 +32,14 @@ export function getMetaDir(): string {
   return findMetaDir(dirname(fileURLToPath(import.meta.url)))
 }
 
+export function getIntentPackageVersion(): string {
+  const packageJsonPath = join(dirname(getMetaDir()), 'package.json')
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+    version?: string
+  }
+  return packageJson.version ?? '0.0.0'
+}
+
 /**
  * Resolve the package `meta/` directory by walking up from `startDir`.
  *

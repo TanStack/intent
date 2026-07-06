@@ -10,6 +10,7 @@ import type { HooksInstallCommandOptions } from './commands/hooks/command.js'
 import type { InstallCommandOptions } from './commands/install/command.js'
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
+import type { SkillsApproveCommandOptions } from './commands/skills/approve.js'
 import type { SkillsScanCommandOptions } from './commands/skills/scan.js'
 import type { StaleCommandOptions } from './commands/stale.js'
 import type { ValidateCommandOptions } from './commands/validate.js'
@@ -210,9 +211,18 @@ function createCli(): CAC {
     )
 
   cli
-    .command('skills [action]', 'Scan or diff skills against intent.lock')
-    .usage('skills <scan|diff> [--json] [--frozen] [--no-frozen]')
+    .command(
+      'skills [action] [source]',
+      'Scan, diff, or approve skills against intent.lock',
+    )
+    .usage(
+      'skills <scan|diff|approve> [source] [--json] [--all] [--frozen] [--no-frozen]',
+    )
     .option('--json', 'Output JSON')
+    .option(
+      '--all',
+      'With `approve`, accept all pending changes without prompting',
+    )
     .option(
       '--frozen',
       'Force frozen mode (fail if intent.lock is missing or stale)',
@@ -221,8 +231,14 @@ function createCli(): CAC {
     .example('skills scan')
     .example('skills diff')
     .example('skills scan --json')
+    .example('skills approve --all')
+    .example('skills approve npm:@tanstack/query')
     .action(
-      async (action: string | undefined, options: SkillsScanCommandOptions) => {
+      async (
+        action: string | undefined,
+        source: string | undefined,
+        options: SkillsScanCommandOptions & SkillsApproveCommandOptions,
+      ) => {
         const { scanPolicedIntentsOrFail, frozenOptionsFromGlobalFlags } =
           await import('./commands/support.js')
         const frozenOptions = frozenOptionsFromGlobalFlags(cli.rawArgs)
@@ -247,7 +263,18 @@ function createCli(): CAC {
           return
         }
 
-        fail('Unknown skills action: expected scan or diff.')
+        if (action === 'approve') {
+          const { runSkillsApproveCommand } =
+            await import('./commands/skills/approve.js')
+          await runSkillsApproveCommand(
+            source,
+            { ...options, ...frozenOptions },
+            scanPolicedIntentsOrFail,
+          )
+          return
+        }
+
+        fail('Unknown skills action: expected scan, diff, or approve.')
       },
     )
 

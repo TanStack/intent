@@ -3666,6 +3666,42 @@ describe('intent skills', () => {
     )
   })
 
+  it('`skills approve --all` writes intent.lock from currently-installed listed sources', async () => {
+    const root = makeSkillsProject()
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'approve', '--all'])
+
+    expect(exitCode).toBe(0)
+    const lockfile = JSON.parse(
+      readFileSync(join(root, 'intent.lock'), 'utf8'),
+    ) as { sources: Array<{ id: string }> }
+    expect(lockfile.sources.map((s) => s.id)).toEqual(['@tanstack/query'])
+  })
+
+  it('`skills approve` refuses to run in frozen mode', async () => {
+    const root = makeSkillsProject()
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'approve', '--all', '--frozen'])
+
+    expect(exitCode).not.toBe(0)
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('cannot run in frozen mode'),
+    )
+  })
+
   it('fails on an unknown skills action', async () => {
     const root = makeSkillsProject()
     process.chdir(root)

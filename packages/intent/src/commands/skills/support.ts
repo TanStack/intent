@@ -5,6 +5,10 @@ import { readIntentLockfile } from '../../core/lockfile/lockfile.js'
 import { resolveProjectContext } from '../../core/project-context.js'
 import { fail } from '../../shared/cli-error.js'
 import type { LockfileDiffResult } from '../../core/lockfile/lockfile-diff.js'
+import type {
+  IntentLockfileSource,
+  ReadIntentLockfileResult,
+} from '../../core/lockfile/lockfile.js'
 import type { ScanResult } from '../../shared/types.js'
 
 export function resolveLockfilePath(cwd: string): string {
@@ -13,13 +17,27 @@ export function resolveLockfilePath(cwd: string): string {
   return join(root, 'intent.lock')
 }
 
+export interface LockfileState {
+  current: Array<IntentLockfileSource>
+  lockedResult: ReadIntentLockfileResult
+  diff: LockfileDiffResult
+}
+
+export function computeLockfileState(
+  scan: ScanResult,
+  cwd: string,
+): LockfileState {
+  const current = buildCurrentLockfileSources(scan.packages)
+  const lockedResult = readIntentLockfile(resolveLockfilePath(cwd))
+  const diff = diffLockfileSources(current, lockedResult)
+  return { current, lockedResult, diff }
+}
+
 export function buildSkillsDiff(
   scan: ScanResult,
   cwd: string,
 ): LockfileDiffResult {
-  const current = buildCurrentLockfileSources(scan.packages)
-  const lockedResult = readIntentLockfile(resolveLockfilePath(cwd))
-  return diffLockfileSources(current, lockedResult)
+  return computeLockfileState(scan, cwd).diff
 }
 
 export function enforceFrozenMode(
