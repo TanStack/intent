@@ -78,9 +78,20 @@ export function computeLockfileState(
   cwd: string,
 ): LockfileState {
   const current = buildCurrentLockfileSources(scan.packages)
-  const lockedResult = readIntentLockfile(resolveLockfilePath(cwd))
+  const lockedResult = readLockfileOrFail(cwd)
   const diff = diffLockfileSources(current, lockedResult)
   return { current, lockedResult, diff }
+}
+
+function readLockfileOrFail(cwd: string): ReadIntentLockfileResult {
+  try {
+    return readIntentLockfile(resolveLockfilePath(cwd))
+  } catch (err) {
+    fail(
+      `Malformed intent.lock: ${err instanceof Error ? err.message : String(err)}`,
+      6,
+    )
+  }
 }
 
 export function buildSkillsDiff(
@@ -100,17 +111,20 @@ export function enforceFrozenMode(
   if (hiddenSourceCount > 0) {
     fail(
       `Frozen mode found ${hiddenSourceCount} unlisted skill-bearing source(s) not in intent.skills. Add them to intent.skills or intent.exclude, then re-run outside frozen mode.`,
+      3,
     )
   }
 
   if (!diff.hasLockfile) {
     fail(
       'Frozen mode requires intent.lock. Run `intent skills scan` outside frozen mode first.',
+      4,
     )
   }
   if (!diff.isClean) {
     fail(
       'intent.lock is out of date. Run `intent skills diff` outside frozen mode, then `intent skills approve`.',
+      2,
     )
   }
 }

@@ -217,12 +217,16 @@ function createCli(): CAC {
       'Scan, diff, approve, or update skills against intent.lock',
     )
     .usage(
-      'skills <scan|diff|approve|update> [source] [--json] [--all] [--frozen] [--no-frozen]',
+      'skills <scan|diff|approve|update> [source] [--json] [--all] [--yes] [--frozen] [--no-frozen]',
     )
     .option('--json', 'Output JSON')
     .option(
       '--all',
       'With `approve`/`update`, act on all pending changes without prompting',
+    )
+    .option(
+      '--yes',
+      'With `approve`, accept all pending changes non-interactively (scripted first-run)',
     )
     .option(
       '--frozen',
@@ -233,6 +237,7 @@ function createCli(): CAC {
     .example('skills diff')
     .example('skills scan --json')
     .example('skills approve --all')
+    .example('skills approve --yes')
     .example('skills approve npm:@tanstack/query')
     .example('skills update --all')
     .action(

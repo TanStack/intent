@@ -44,7 +44,7 @@ export async function runSkillsUpdateCommand(
     noFrozen: options.noFrozen,
   })
   if (frozen) {
-    fail('`intent skills update` cannot run in frozen mode.')
+    fail('`intent skills update` cannot run in frozen mode.', 5)
   }
 
   if (sourceArg && options.all) {

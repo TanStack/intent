@@ -12,12 +12,10 @@ function createSource(
   return {
     version: '1.0.0',
     resolution: null,
+    skills: [],
     manifestHash: null,
     contentHash: 'sha256-aaa',
-    capabilities: [],
-    declaredSecrets: [],
-    mcpTools: [],
-    mcpPolicy: {},
+    capabilities: null,
     ...overrides,
   }
 }

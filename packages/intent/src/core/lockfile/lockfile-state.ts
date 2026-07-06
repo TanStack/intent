@@ -1,6 +1,7 @@
-import { dirname, relative, sep } from 'node:path'
+import { relative, sep } from 'node:path'
 import { sourceIdentityKey } from '../types.js'
-import { hashSkillFolder, hashSourceContent } from './hash.js'
+import { computeSourceContentHash } from './hash.js'
+import type { SourceContentHash } from './hash.js'
 import type { IntentLockfileSource } from './lockfile.js'
 import type { IntentPackage } from '../../shared/types.js'
 
@@ -12,21 +13,13 @@ function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }
 
-// A nested SKILL.md is its own skill root, not part of the parent's content,
-// so the parent's hash must exclude it or double-count its bytes.
-function buildSourceContentHash(pkg: IntentPackage): string {
-  const skillDirs = pkg.skills.map((skill) => dirname(skill.path))
+function buildSourceContent(pkg: IntentPackage): SourceContentHash {
+  const entries = pkg.skills.map((skill) => ({
+    relativePath: toPosixPath(relative(pkg.packageRoot, skill.path)),
+    absolutePath: skill.path,
+  }))
 
-  const skillHashes = skillDirs.map((skillDir, index) => {
-    const otherSkillDirs = skillDirs.filter((_, i) => i !== index)
-
-    return {
-      skillPath: toPosixPath(relative(pkg.packageRoot, skillDir)),
-      hash: hashSkillFolder(skillDir, otherSkillDirs),
-    }
-  })
-
-  return hashSourceContent(skillHashes)
+  return computeSourceContentHash(pkg.packageRoot, entries)
 }
 
 function buildResolution(pkg: IntentPackage): string | null {
@@ -52,20 +45,19 @@ export function buildCurrentLockfileSources(
   packages: ReadonlyArray<IntentPackage>,
 ): Array<IntentLockfileSource> {
   const sources = packages
-    .map(
-      (pkg): IntentLockfileSource => ({
+    .map((pkg): IntentLockfileSource => {
+      const { skills, contentHash } = buildSourceContent(pkg)
+      return {
         id: pkg.name,
         kind: pkg.kind,
         version: pkg.version,
         resolution: buildResolution(pkg),
+        skills,
+        contentHash,
         manifestHash: null,
-        contentHash: buildSourceContentHash(pkg),
-        capabilities: [],
-        declaredSecrets: [],
-        mcpTools: [],
-        mcpPolicy: {},
-      }),
-    )
+        capabilities: null,
+      }
+    })
     .sort((a, b) => compareStrings(sourceIdentityKey(a), sourceIdentityKey(b)))
 
   assertUniqueIdentities(sources)

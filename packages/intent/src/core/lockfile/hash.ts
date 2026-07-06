@@ -1,23 +1,21 @@
 import { createHash } from 'node:crypto'
-import { isAbsolute, join, relative } from 'node:path'
+import { isAbsolute, relative } from 'node:path'
 import {
   closeSync,
   fstatSync,
   openSync,
   readFileSync,
-  readdirSync,
   realpathSync,
-  statSync,
 } from 'node:fs'
 
-export interface SkillFile {
+export interface SkillContentEntry {
   relativePath: string
-  content: Buffer
+  absolutePath: string
 }
 
-export interface SkillFolderHash {
-  skillPath: string
-  hash: string
+export interface SourceContentHash {
+  skills: Array<string>
+  contentHash: string
 }
 
 const RECORD_SEPARATOR = Buffer.from([0])
@@ -42,165 +40,6 @@ function normalizeLineEndings(content: Buffer): Buffer {
 function isWithinDir(candidate: string, dir: string): boolean {
   const rel = relative(dir, candidate)
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
-}
-
-interface FileEntry {
-  physicalPath: string
-  logicalRelativePath: string
-}
-
-function readDirEntries(dir: string, logicalRelativePath: string) {
-  try {
-    return readdirSync(dir, { withFileTypes: true })
-  } catch (err) {
-    throw new Error(
-      `Failed to list skill folder "${logicalRelativePath || '.'}": ${err instanceof Error ? err.message : String(err)}`,
-    )
-  }
-}
-
-// Recurses through the resolved real path once validated, not the original
-// symlink, to avoid a TOCTOU window between the check and the read.
-function collectFileEntries(
-  physicalDir: string,
-  logicalPrefix: string,
-  realRoot: string,
-  ancestors: Set<string>,
-  excludeDirs: ReadonlySet<string>,
-): Array<FileEntry> {
-  const entries = readDirEntries(physicalDir, logicalPrefix)
-  const files: Array<FileEntry> = []
-
-  for (const entry of entries) {
-    const physicalEntryPath = join(physicalDir, entry.name)
-    const logicalRelativePath = logicalPrefix
-      ? `${logicalPrefix}/${entry.name}`
-      : entry.name
-
-    if (entry.isSymbolicLink()) {
-      let realEntryPath: string
-      try {
-        realEntryPath = realpathSync(physicalEntryPath)
-      } catch (err) {
-        throw new Error(
-          `Failed to resolve skill folder symlink "${logicalRelativePath}": ${err instanceof Error ? err.message : String(err)}`,
-        )
-      }
-
-      if (!isWithinDir(realEntryPath, realRoot)) {
-        throw new Error(
-          `Refusing to hash skill folder: "${logicalRelativePath}" escapes the skill folder via a symlink.`,
-        )
-      }
-
-      const stats = statSync(realEntryPath)
-      if (stats.isDirectory()) {
-        if (excludeDirs.has(realEntryPath)) continue
-        if (ancestors.has(realEntryPath)) {
-          throw new Error(
-            `Refusing to hash skill folder: "${logicalRelativePath}" is a symlink cycle.`,
-          )
-        }
-        ancestors.add(realEntryPath)
-        for (const nested of collectFileEntries(
-          realEntryPath,
-          logicalRelativePath,
-          realRoot,
-          ancestors,
-          excludeDirs,
-        )) {
-          files.push(nested)
-        }
-        ancestors.delete(realEntryPath)
-      } else if (stats.isFile()) {
-        files.push({ physicalPath: realEntryPath, logicalRelativePath })
-      }
-      continue
-    }
-
-    if (entry.isDirectory()) {
-      if (excludeDirs.has(physicalEntryPath)) continue
-      for (const nested of collectFileEntries(
-        physicalEntryPath,
-        logicalRelativePath,
-        realRoot,
-        ancestors,
-        excludeDirs,
-      )) {
-        files.push(nested)
-      }
-    } else if (entry.isFile()) {
-      files.push({ physicalPath: physicalEntryPath, logicalRelativePath })
-    }
-  }
-
-  return files
-}
-
-// Opens once and reads/verifies-type from that same fd rather than
-// stat-by-path-then-open-by-path: the fd is bound to a specific inode, so a
-// path swap after this call can't produce a torn read mixing old/new bytes.
-function readRegularFile(
-  physicalPath: string,
-  logicalRelativePath: string,
-): Buffer {
-  let fd: number
-  try {
-    fd = openSync(physicalPath, 'r')
-  } catch (err) {
-    throw new Error(
-      `Failed to read skill file "${logicalRelativePath}": ${err instanceof Error ? err.message : String(err)}`,
-    )
-  }
-
-  try {
-    if (!fstatSync(fd).isFile()) {
-      throw new Error(
-        `Failed to read skill file "${logicalRelativePath}": not a regular file.`,
-      )
-    }
-    return readFileSync(fd)
-  } finally {
-    closeSync(fd)
-  }
-}
-
-export function readSkillFolderFiles(
-  skillDir: string,
-  excludeDirs: ReadonlyArray<string> = [],
-): Array<SkillFile> {
-  const realRoot = realpathSync(skillDir)
-  const realExcludeDirs = new Set(
-    excludeDirs
-      .map((dir) => {
-        try {
-          return realpathSync(dir)
-        } catch {
-          return null
-        }
-      })
-      .filter((dir): dir is string => dir !== null),
-  )
-  const entries = collectFileEntries(
-    realRoot,
-    '',
-    realRoot,
-    new Set([realRoot]),
-    realExcludeDirs,
-  )
-
-  const files = entries.map(
-    ({ physicalPath, logicalRelativePath }): SkillFile => {
-      const raw = readRegularFile(physicalPath, logicalRelativePath)
-
-      return {
-        relativePath: logicalRelativePath,
-        content: isBinaryContent(raw) ? raw : normalizeLineEndings(raw),
-      }
-    },
-  )
-
-  return files.sort((a, b) => compareStrings(a.relativePath, b.relativePath))
 }
 
 function assertValidRelativePath(path: string, label: string): void {
@@ -237,7 +76,7 @@ function assertNoDuplicateKeys(keys: Array<string>, label: string): void {
 }
 
 // Values are length-prefixed because content can contain NUL bytes. Keys
-// (real filesystem paths) never can, but a JS string could, so that
+// (package-relative paths) never can, but a JS string could, so that
 // assumption is enforced here rather than just relied on.
 function hashEntries(
   entries: ReadonlyArray<{ key: string; value: Buffer }>,
@@ -262,39 +101,86 @@ function hashEntries(
   return `sha256-${hash.digest('hex')}`
 }
 
-export function hashSkillFolderFiles(files: ReadonlyArray<SkillFile>): string {
-  for (const file of files) {
-    assertValidRelativePath(file.relativePath, 'skill file path')
+// Opens once and reads/verifies-type from that same fd rather than
+// stat-by-path-then-open-by-path: the fd is bound to a specific inode, so a
+// path swap after this call can't produce a torn read mixing old/new bytes.
+function readRegularFile(
+  physicalPath: string,
+  logicalRelativePath: string,
+): Buffer {
+  let fd: number
+  try {
+    fd = openSync(physicalPath, 'r')
+  } catch (err) {
+    throw new Error(
+      `Failed to read skill file "${logicalRelativePath}": ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
+
+  try {
+    if (!fstatSync(fd).isFile()) {
+      throw new Error(
+        `Failed to read skill file "${logicalRelativePath}": not a regular file.`,
+      )
+    }
+    return readFileSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+}
+
+// Resolves through symlinks once, validated against the package root, not the
+// original path, to avoid a TOCTOU window between the check and the read.
+function readSkillMdContent(
+  absolutePath: string,
+  realPackageRoot: string,
+  logicalRelativePath: string,
+): Buffer {
+  let realPath: string
+  try {
+    realPath = realpathSync(absolutePath)
+  } catch (err) {
+    throw new Error(
+      `Failed to resolve skill file "${logicalRelativePath}": ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
+
+  if (!isWithinDir(realPath, realPackageRoot)) {
+    throw new Error(
+      `Refusing to hash skill file: "${logicalRelativePath}" escapes the package root via a symlink.`,
+    )
+  }
+
+  const raw = readRegularFile(realPath, logicalRelativePath)
+  return isBinaryContent(raw) ? raw : normalizeLineEndings(raw)
+}
+
+// M2 hashes only SKILL.md files (M2-SPEC §6.5); other files under skills/
+// are out of scope until a later milestone opts in.
+export function computeSourceContentHash(
+  packageRoot: string,
+  entries: ReadonlyArray<SkillContentEntry>,
+): SourceContentHash {
+  for (const entry of entries) {
+    assertValidRelativePath(entry.relativePath, 'skill path')
   }
   assertNoDuplicateKeys(
-    files.map((file) => file.relativePath),
-    'skill file path',
+    entries.map((entry) => entry.relativePath),
+    'skill path',
   )
 
-  return hashEntries(
-    files.map((file) => ({ key: file.relativePath, value: file.content })),
-  )
-}
+  const realPackageRoot = realpathSync(packageRoot)
+  const hashed = entries.map((entry) => ({
+    key: entry.relativePath,
+    value: readSkillMdContent(
+      entry.absolutePath,
+      realPackageRoot,
+      entry.relativePath,
+    ),
+  }))
 
-export function hashSkillFolder(
-  skillDir: string,
-  excludeDirs: ReadonlyArray<string> = [],
-): string {
-  return hashSkillFolderFiles(readSkillFolderFiles(skillDir, excludeDirs))
-}
-
-export function hashSourceContent(
-  skillHashes: ReadonlyArray<SkillFolderHash>,
-): string {
-  assertNoDuplicateKeys(
-    skillHashes.map((entry) => entry.skillPath),
-    'source skill path',
-  )
-
-  return hashEntries(
-    skillHashes.map((entry) => ({
-      key: entry.skillPath,
-      value: Buffer.from(entry.hash, 'utf8'),
-    })),
-  )
+  return {
+    skills: entries.map((entry) => entry.relativePath).toSorted(compareStrings),
+    contentHash: hashEntries(hashed),
+  }
 }

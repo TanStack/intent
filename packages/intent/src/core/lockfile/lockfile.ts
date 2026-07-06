@@ -25,14 +25,15 @@ interface IntentLockfileStalenessBaseline {
 export interface IntentLockfileSource {
   id: string
   kind: 'npm' | 'workspace'
-  version: string
+  version: string | null
   resolution: string | null
-  manifestHash: string | null
+  skills: Array<string>
   contentHash: string
-  capabilities: Array<string>
-  declaredSecrets: Array<string>
-  mcpTools: Array<string>
-  mcpPolicy: Record<string, unknown>
+  manifestHash: string | null
+  capabilities: Array<string> | null
+  declaredSecrets?: Array<string>
+  mcpTools?: Array<string>
+  mcpPolicy?: Record<string, unknown>
 }
 
 interface IntentLockfilePolicy {
@@ -90,6 +91,45 @@ function assertStringArray(value: unknown, label: string): Array<string> {
   return value
 }
 
+function assertNullableStringArray(
+  value: unknown,
+  label: string,
+): Array<string> | null {
+  if (value === null) return null
+  return assertStringArray(value, label)
+}
+
+function assertOptionalStringArray(
+  value: unknown,
+  label: string,
+): Array<string> | undefined {
+  if (value === undefined) return undefined
+  return assertStringArray(value, label)
+}
+
+function assertOptionalRecord(
+  value: unknown,
+  label: string,
+): Record<string, unknown> | undefined {
+  if (value === undefined) return undefined
+  return assertRecord(value, label)
+}
+
+function assertNoDuplicateSourceIdentities(
+  sources: ReadonlyArray<IntentLockfileSource>,
+): void {
+  const seen = new Set<string>()
+  for (const source of sources) {
+    const key = sourceIdentityKey(source)
+    if (seen.has(key)) {
+      throw new Error(
+        `Invalid intent.lock: duplicate source identity "${source.kind}:${source.id}".`,
+      )
+    }
+    seen.add(key)
+  }
+}
+
 function parseSource(value: unknown): IntentLockfileSource {
   const source = assertRecord(value, 'source')
   const kind = source.kind
@@ -102,20 +142,24 @@ function parseSource(value: unknown): IntentLockfileSource {
   return {
     id: assertString(source.id, 'source.id'),
     kind,
-    version: assertString(source.version, 'source.version'),
+    version: assertNullableString(source.version, 'source.version'),
     resolution: assertNullableString(source.resolution, 'source.resolution'),
+    skills: assertStringArray(source.skills, 'source.skills'),
+    contentHash: assertString(source.contentHash, 'source.contentHash'),
     manifestHash: assertNullableString(
       source.manifestHash,
       'source.manifestHash',
     ),
-    contentHash: assertString(source.contentHash, 'source.contentHash'),
-    capabilities: assertStringArray(source.capabilities, 'source.capabilities'),
-    declaredSecrets: assertStringArray(
+    capabilities: assertNullableStringArray(
+      source.capabilities,
+      'source.capabilities',
+    ),
+    declaredSecrets: assertOptionalStringArray(
       source.declaredSecrets,
       'source.declaredSecrets',
     ),
-    mcpTools: assertStringArray(source.mcpTools, 'source.mcpTools'),
-    mcpPolicy: assertRecord(source.mcpPolicy, 'source.mcpPolicy'),
+    mcpTools: assertOptionalStringArray(source.mcpTools, 'source.mcpTools'),
+    mcpPolicy: assertOptionalRecord(source.mcpPolicy, 'source.mcpPolicy'),
   }
 }
 
@@ -207,15 +251,26 @@ export function canonicalSource(
     kind: source.kind,
     version: source.version,
     resolution: source.resolution,
-    manifestHash: source.manifestHash,
+    skills: sortedStrings(source.skills),
     contentHash: source.contentHash,
-    capabilities: sortedStrings(source.capabilities),
-    declaredSecrets: sortedStrings(source.declaredSecrets),
-    mcpTools: sortedStrings(source.mcpTools),
-    mcpPolicy: canonicalJsonValue(
-      source.mcpPolicy,
-      'source.mcpPolicy',
-    ) as Record<string, unknown>,
+    manifestHash: source.manifestHash,
+    capabilities: source.capabilities
+      ? sortedStrings(source.capabilities)
+      : null,
+    ...(source.declaredSecrets !== undefined
+      ? { declaredSecrets: sortedStrings(source.declaredSecrets) }
+      : {}),
+    ...(source.mcpTools !== undefined
+      ? { mcpTools: sortedStrings(source.mcpTools) }
+      : {}),
+    ...(source.mcpPolicy !== undefined
+      ? {
+          mcpPolicy: canonicalJsonValue(
+            source.mcpPolicy,
+            'source.mcpPolicy',
+          ) as Record<string, unknown>,
+        }
+      : {}),
   }
 }
 
@@ -276,13 +331,16 @@ export function parseIntentLockfile(content: string): IntentLockfile {
     throw new Error('Invalid intent.lock: sources must be an array.')
   }
 
+  const sources = lockfile.sources.map(parseSource)
+  assertNoDuplicateSourceIdentities(sources)
+
   return canonicalLockfile({
     lockfileVersion: INTENT_LOCKFILE_VERSION,
     intentVersion: assertString(lockfile.intentVersion, 'intentVersion'),
     ...(lockfile.staleness !== undefined
       ? { staleness: parseStaleness(lockfile.staleness) }
       : {}),
-    sources: lockfile.sources.map(parseSource),
+    sources,
     policy: parsePolicy(lockfile.policy),
   })
 }

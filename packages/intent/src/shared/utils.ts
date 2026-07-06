@@ -249,7 +249,10 @@ export function listNestedNodeModulesPackageDirs(
 
 const GLOBAL_NODE_MODULES_COMMAND_TIMEOUT_MS = 5_000
 
-export function detectGlobalNodeModules(packageManager: string): {
+export function detectGlobalNodeModules(
+  packageManager: string,
+  frozen?: boolean,
+): {
   path: string | null
   source?: string
 } {
@@ -261,9 +264,8 @@ export function detectGlobalNodeModules(packageManager: string): {
     }
   }
 
-  // Frozen mode forbids shelling out to a package manager; fail closed to
-  // "not found" rather than threading a frozen flag through every caller.
-  if (isFrozenMode()) return { path: null }
+  // An explicit caller decision takes precedence over env-based detection.
+  if (frozen ?? isFrozenMode()) return { path: null }
 
   const commands: Array<{
     command: string

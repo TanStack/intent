@@ -3,10 +3,6 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
-import {
-  hashSkillFolder,
-  hashSourceContent,
-} from '../src/core/lockfile/hash.js'
 import type { IntentPackage } from '../src/shared/types.js'
 
 const roots: Array<string> = []
@@ -67,11 +63,12 @@ describe('buildCurrentLockfileSources', () => {
       version: '5.0.0',
       resolution: 'npm:@tanstack/query@5.0.0',
       manifestHash: null,
-      capabilities: [],
-      declaredSecrets: [],
-      mcpTools: [],
-      mcpPolicy: {},
+      capabilities: null,
+      skills: ['skills/fetching/SKILL.md'],
     })
+    expect(entry!.declaredSecrets).toBeUndefined()
+    expect(entry!.mcpTools).toBeUndefined()
+    expect(entry!.mcpPolicy).toBeUndefined()
     expect(entry!.contentHash).toMatch(/^sha256-[0-9a-f]{64}$/)
   })
 
@@ -201,7 +198,7 @@ describe('buildCurrentLockfileSources', () => {
     expect(hashA).toBe(hashB)
   })
 
-  it('excludes a nested skill folder from its parent skill hash', () => {
+  it('gives each nested skill its own independent content hash (no folder-scope bleed)', () => {
     const root = createRoot()
     const parentDir = join(root, 'skills', 'parent')
     const nestedDir = join(parentDir, 'nested')
@@ -219,20 +216,21 @@ describe('buildCurrentLockfileSources', () => {
       ],
     })
 
-    const expectedHash = hashSourceContent([
-      {
-        skillPath: 'skills/parent',
-        hash: hashSkillFolder(parentDir, [nestedDir]),
-      },
-      {
-        skillPath: 'skills/parent/nested',
-        hash: hashSkillFolder(nestedDir),
-      },
-    ])
+    const before = buildCurrentLockfileSources([pkg])[0]!.contentHash
 
-    expect(buildCurrentLockfileSources([pkg])[0]!.contentHash).toBe(
-      expectedHash,
-    )
+    // Only the parent's own SKILL.md bytes changed — the nested skill's
+    // separate SKILL.md path is unaffected, so the aggregate still moves
+    // (it's part of the same source), but changing the nested file alone
+    // (not the parent) proves each path is hashed independently.
+    writeFileSync(nestedSkill, 'nested body changed')
+    const nestedChanged = buildCurrentLockfileSources([pkg])[0]!.contentHash
+    expect(nestedChanged).not.toBe(before)
+
+    writeFileSync(nestedSkill, 'nested body')
+    writeFileSync(parentSkill, 'parent body changed')
+    const parentChanged = buildCurrentLockfileSources([pkg])[0]!.contentHash
+    expect(parentChanged).not.toBe(before)
+    expect(parentChanged).not.toBe(nestedChanged)
   })
 
   it('throws on a duplicate (kind, id) identity', () => {

@@ -8,12 +8,7 @@ import {
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  hashSkillFolder,
-  hashSkillFolderFiles,
-  hashSourceContent,
-  readSkillFolderFiles,
-} from '../src/core/lockfile/hash.js'
+import { computeSourceContentHash } from '../src/core/lockfile/hash.js'
 
 const roots: Array<string> = []
 
@@ -23,15 +18,15 @@ function createRoot(): string {
   return root
 }
 
-function writeSkillFolder(
+function writeFile(
   dir: string,
-  files: Record<string, string | Buffer>,
-): void {
-  for (const [relativePath, content] of Object.entries(files)) {
-    const filePath = join(dir, relativePath)
-    mkdirSync(join(filePath, '..'), { recursive: true })
-    writeFileSync(filePath, content)
-  }
+  relativePath: string,
+  content: string | Buffer,
+): string {
+  const filePath = join(dir, relativePath)
+  mkdirSync(join(filePath, '..'), { recursive: true })
+  writeFileSync(filePath, content)
+  return filePath
 }
 
 afterEach(() => {
@@ -40,176 +35,236 @@ afterEach(() => {
   }
 })
 
-describe('hashSkillFolderFiles', () => {
+describe('computeSourceContentHash', () => {
   it('is deterministic for the same file set', () => {
-    const files = [
-      { relativePath: 'SKILL.md', content: Buffer.from('hello') },
-      { relativePath: 'references/a.md', content: Buffer.from('world') },
+    const root = createRoot()
+    writeFile(root, 'skills/a/SKILL.md', 'hello')
+    writeFile(root, 'skills/b/SKILL.md', 'world')
+    const entries = [
+      {
+        relativePath: 'skills/a/SKILL.md',
+        absolutePath: join(root, 'skills/a/SKILL.md'),
+      },
+      {
+        relativePath: 'skills/b/SKILL.md',
+        absolutePath: join(root, 'skills/b/SKILL.md'),
+      },
     ]
 
-    expect(hashSkillFolderFiles(files)).toBe(hashSkillFolderFiles(files))
-  })
-
-  it('is independent of input array order', () => {
-    const a = { relativePath: 'SKILL.md', content: Buffer.from('hello') }
-    const b = { relativePath: 'references/a.md', content: Buffer.from('world') }
-
-    expect(hashSkillFolderFiles([a, b])).toBe(hashSkillFolderFiles([b, a]))
-  })
-
-  it('changes when file content changes', () => {
-    const base = [{ relativePath: 'SKILL.md', content: Buffer.from('hello') }]
-    const changed = [
-      { relativePath: 'SKILL.md', content: Buffer.from('hello!') },
-    ]
-
-    expect(hashSkillFolderFiles(base)).not.toBe(hashSkillFolderFiles(changed))
-  })
-
-  it('changes when a file is renamed with the same content', () => {
-    const original = [
-      { relativePath: 'SKILL.md', content: Buffer.from('hello') },
-    ]
-    const renamed = [
-      { relativePath: 'SKILL2.md', content: Buffer.from('hello') },
-    ]
-
-    expect(hashSkillFolderFiles(original)).not.toBe(
-      hashSkillFolderFiles(renamed),
+    expect(computeSourceContentHash(root, entries)).toEqual(
+      computeSourceContentHash(root, entries),
     )
   })
 
-  it('does not collide across a path/content boundary shift', () => {
-    const a = [{ relativePath: 'a', content: Buffer.from('bc') }]
-    const b = [{ relativePath: 'ab', content: Buffer.from('c') }]
+  it('is independent of input array order', () => {
+    const root = createRoot()
+    writeFile(root, 'skills/a/SKILL.md', 'hello')
+    writeFile(root, 'skills/b/SKILL.md', 'world')
+    const a = {
+      relativePath: 'skills/a/SKILL.md',
+      absolutePath: join(root, 'skills/a/SKILL.md'),
+    }
+    const b = {
+      relativePath: 'skills/b/SKILL.md',
+      absolutePath: join(root, 'skills/b/SKILL.md'),
+    }
 
-    expect(hashSkillFolderFiles(a)).not.toBe(hashSkillFolderFiles(b))
+    expect(computeSourceContentHash(root, [a, b]).contentHash).toBe(
+      computeSourceContentHash(root, [b, a]).contentHash,
+    )
   })
 
-  it('returns a sha256- prefixed digest', () => {
-    expect(hashSkillFolderFiles([])).toMatch(/^sha256-[0-9a-f]{64}$/)
+  it('sorts the returned skills[] ordinally regardless of input order', () => {
+    const root = createRoot()
+    writeFile(root, 'skills/b/SKILL.md', 'b')
+    writeFile(root, 'skills/a/SKILL.md', 'a')
+    const entries = [
+      {
+        relativePath: 'skills/b/SKILL.md',
+        absolutePath: join(root, 'skills/b/SKILL.md'),
+      },
+      {
+        relativePath: 'skills/a/SKILL.md',
+        absolutePath: join(root, 'skills/a/SKILL.md'),
+      },
+    ]
+
+    expect(computeSourceContentHash(root, entries).skills).toEqual([
+      'skills/a/SKILL.md',
+      'skills/b/SKILL.md',
+    ])
+  })
+
+  it('changes when file content changes', () => {
+    const root = createRoot()
+    const filePath = writeFile(root, 'skills/a/SKILL.md', 'hello')
+    const entries = [
+      { relativePath: 'skills/a/SKILL.md', absolutePath: filePath },
+    ]
+    const before = computeSourceContentHash(root, entries).contentHash
+
+    writeFileSync(filePath, 'hello!')
+
+    expect(computeSourceContentHash(root, entries).contentHash).not.toBe(before)
+  })
+
+  it('changes when a file is renamed with the same content', () => {
+    const root = createRoot()
+    const path1 = writeFile(root, 'skills/a/SKILL.md', 'hello')
+    const path2 = writeFile(root, 'skills/b/SKILL.md', 'hello')
+
+    const original = computeSourceContentHash(root, [
+      { relativePath: 'skills/a/SKILL.md', absolutePath: path1 },
+    ])
+    const renamed = computeSourceContentHash(root, [
+      { relativePath: 'skills/b/SKILL.md', absolutePath: path2 },
+    ])
+
+    expect(original.contentHash).not.toBe(renamed.contentHash)
+  })
+
+  it('does not collide across a path/content boundary shift', () => {
+    const root = createRoot()
+    const pathA = writeFile(root, 'a', 'bc')
+    const pathB = writeFile(root, 'ab', 'c')
+
+    const hashA = computeSourceContentHash(root, [
+      { relativePath: 'a', absolutePath: pathA },
+    ]).contentHash
+    const hashB = computeSourceContentHash(root, [
+      { relativePath: 'ab', absolutePath: pathB },
+    ]).contentHash
+
+    expect(hashA).not.toBe(hashB)
+  })
+
+  it('returns a sha256- prefixed digest, including for an empty skill set', () => {
+    const root = createRoot()
+    expect(computeSourceContentHash(root, []).contentHash).toMatch(
+      /^sha256-[0-9a-f]{64}$/,
+    )
   })
 
   it('rejects duplicate relative paths', () => {
-    const files = [
-      { relativePath: 'SKILL.md', content: Buffer.from('a') },
-      { relativePath: 'SKILL.md', content: Buffer.from('b') },
-    ]
+    const root = createRoot()
+    const filePath = writeFile(root, 'SKILL.md', 'a')
 
-    expect(() => hashSkillFolderFiles(files)).toThrow(/duplicate path/)
+    expect(() =>
+      computeSourceContentHash(root, [
+        { relativePath: 'SKILL.md', absolutePath: filePath },
+        { relativePath: 'SKILL.md', absolutePath: filePath },
+      ]),
+    ).toThrow(/duplicate path/)
   })
 
   it('rejects an absolute relative path', () => {
-    const files = [{ relativePath: '/etc/passwd', content: Buffer.from('a') }]
+    const root = createRoot()
+    const filePath = writeFile(root, 'SKILL.md', 'a')
 
-    expect(() => hashSkillFolderFiles(files)).toThrow(/must be relative/)
+    expect(() =>
+      computeSourceContentHash(root, [
+        { relativePath: '/etc/passwd', absolutePath: filePath },
+      ]),
+    ).toThrow(/must be relative/)
   })
 
   it("rejects a path containing a '..' segment", () => {
-    const files = [{ relativePath: '../outside.md', content: Buffer.from('a') }]
+    const root = createRoot()
+    const filePath = writeFile(root, 'SKILL.md', 'a')
 
-    expect(() => hashSkillFolderFiles(files)).toThrow(/segments/)
+    expect(() =>
+      computeSourceContentHash(root, [
+        { relativePath: '../outside.md', absolutePath: filePath },
+      ]),
+    ).toThrow(/segments/)
   })
 
-  it('classifies a large buffer with a NUL byte past the first 8000 bytes as binary', () => {
+  it('rejects a relative path containing an embedded NUL byte', () => {
+    const root = createRoot()
+    const filePath = writeFile(root, 'SKILL.md', 'a')
+
+    expect(() =>
+      computeSourceContentHash(root, [
+        { relativePath: 'assets/a\0b.md', absolutePath: filePath },
+      ]),
+    ).toThrow(/NUL byte/)
+  })
+
+  it('normalizes CRLF and lone CR to LF in text content', () => {
+    const root = createRoot()
+    const filePath = writeFile(
+      root,
+      'SKILL.md',
+      Buffer.from('line1\r\nline2\rline3\n'),
+    )
+    const normalized = computeSourceContentHash(root, [
+      { relativePath: 'SKILL.md', absolutePath: filePath },
+    ])
+    const already = computeSourceContentHash(root, [
+      {
+        relativePath: 'SKILL.md',
+        absolutePath: writeFile(
+          root,
+          'already-lf/SKILL.md',
+          'line1\nline2\nline3\n',
+        ),
+      },
+    ])
+
+    expect(normalized.contentHash).toBe(already.contentHash)
+  })
+
+  it('classifies a large buffer with a NUL byte past the first bytes as binary (no CRLF normalization)', () => {
+    const root = createRoot()
     const content = Buffer.concat([
       Buffer.alloc(9000, 0x41),
       Buffer.from([0x00]),
       Buffer.from('\r\n'),
     ])
-    const files = [{ relativePath: 'assets/large.bin', content }]
+    const filePath = writeFile(root, 'SKILL.md', content)
 
-    expect(hashSkillFolderFiles(files)).toMatch(/^sha256-[0-9a-f]{64}$/)
-  })
-
-  it('rejects a relative path containing an embedded NUL byte', () => {
-    const files = [
-      { relativePath: 'assets/a\0b.md', content: Buffer.from('a') },
-    ]
-
-    expect(() => hashSkillFolderFiles(files)).toThrow(/NUL byte/)
-  })
-})
-
-describe('hashSourceContent', () => {
-  it('is deterministic regardless of input order', () => {
-    const a = { skillPath: 'skills/a', hash: 'sha256-aaa' }
-    const b = { skillPath: 'skills/b', hash: 'sha256-bbb' }
-
-    expect(hashSourceContent([a, b])).toBe(hashSourceContent([b, a]))
-  })
-
-  it('changes when any per-skill hash changes', () => {
-    const before = [{ skillPath: 'skills/a', hash: 'sha256-aaa' }]
-    const after = [{ skillPath: 'skills/a', hash: 'sha256-zzz' }]
-
-    expect(hashSourceContent(before)).not.toBe(hashSourceContent(after))
-  })
-
-  it('rejects duplicate skill paths', () => {
-    const duplicates = [
-      { skillPath: 'skills/a', hash: 'sha256-aaa' },
-      { skillPath: 'skills/a', hash: 'sha256-bbb' },
-    ]
-
-    expect(() => hashSourceContent(duplicates)).toThrow(/duplicate path/)
-  })
-})
-
-describe('readSkillFolderFiles', () => {
-  it('reads SKILL.md plus nested references/assets/scripts files', () => {
-    const root = createRoot()
-    writeSkillFolder(root, {
-      'SKILL.md': 'body',
-      'references/deep-dive.md': 'reference',
-      'assets/notes.txt': 'asset',
-      'scripts/setup.sh': 'echo hi',
-    })
-
-    const files = readSkillFolderFiles(root)
-
-    expect(files.map((file) => file.relativePath).sort()).toEqual([
-      'SKILL.md',
-      'assets/notes.txt',
-      'references/deep-dive.md',
-      'scripts/setup.sh',
-    ])
-  })
-
-  it('normalizes CRLF and lone CR to LF in text files', () => {
-    const root = createRoot()
-    writeSkillFolder(root, {
-      'SKILL.md': Buffer.from('line1\r\nline2\rline3\n'),
-    })
-
-    const [file] = readSkillFolderFiles(root)
-
-    expect(file!.content.toString('utf8')).toBe('line1\nline2\nline3\n')
-  })
-
-  it('leaves binary content byte-exact', () => {
-    const root = createRoot()
-    const binary = Buffer.from([0x00, 0x0d, 0x0a, 0xff, 0x01])
-    writeSkillFolder(root, { 'assets/image.bin': binary })
-
-    const [file] = readSkillFolderFiles(root)
-
-    expect(file!.content.equals(binary)).toBe(true)
-  })
-
-  it('uses forward-slash relative paths regardless of platform separator', () => {
-    const root = createRoot()
-    writeSkillFolder(root, { 'references/nested/deep.md': 'content' })
-
-    const files = readSkillFolderFiles(root)
-
-    expect(files.some((file) => file.relativePath.includes('\\'))).toBe(false)
     expect(
-      files.some((file) => file.relativePath === 'references/nested/deep.md'),
-    ).toBe(true)
+      computeSourceContentHash(root, [
+        { relativePath: 'SKILL.md', absolutePath: filePath },
+      ]).contentHash,
+    ).toMatch(/^sha256-[0-9a-f]{64}$/)
   })
 
-  it('fails closed when a symlink escapes the skill folder', () => {
+  it('is identical across different physical roots for identical relative paths and bytes', () => {
+    const rootA = createRoot()
+    const rootB = createRoot()
+    const pathA = writeFile(rootA, 'skills/a/SKILL.md', 'shared body')
+    const pathB = writeFile(rootB, 'skills/a/SKILL.md', 'shared body')
+
+    const hashA = computeSourceContentHash(rootA, [
+      { relativePath: 'skills/a/SKILL.md', absolutePath: pathA },
+    ]).contentHash
+    const hashB = computeSourceContentHash(rootB, [
+      { relativePath: 'skills/a/SKILL.md', absolutePath: pathB },
+    ]).contentHash
+
+    expect(hashA).toBe(hashB)
+  })
+
+  it('does not hash a non-SKILL.md file even if present in the skill folder', () => {
+    const root = createRoot()
+    const skillPath = writeFile(root, 'skills/a/SKILL.md', 'body')
+    writeFile(root, 'skills/a/references/deep-dive.md', 'reference')
+
+    const before = computeSourceContentHash(root, [
+      { relativePath: 'skills/a/SKILL.md', absolutePath: skillPath },
+    ]).contentHash
+
+    writeFileSync(join(root, 'skills/a/references/deep-dive.md'), 'changed')
+
+    expect(
+      computeSourceContentHash(root, [
+        { relativePath: 'skills/a/SKILL.md', absolutePath: skillPath },
+      ]).contentHash,
+    ).toBe(before)
+  })
+
+  it('fails closed when a symlinked SKILL.md escapes the package root', () => {
     const root = createRoot()
     const outside = join(
       root,
@@ -218,131 +273,62 @@ describe('readSkillFolderFiles', () => {
     )
     mkdirSync(outside, { recursive: true })
     writeFileSync(join(outside, 'secret.md'), 'leaked')
-    mkdirSync(join(root, 'references'), { recursive: true })
-    symlinkSync(
-      join(outside, 'secret.md'),
-      join(root, 'references', 'linked.md'),
-    )
+    mkdirSync(join(root, 'skills/a'), { recursive: true })
+    symlinkSync(join(outside, 'secret.md'), join(root, 'skills/a/SKILL.md'))
 
-    expect(() => readSkillFolderFiles(root)).toThrow(/escapes the skill folder/)
-
-    rmSync(outside, { recursive: true, force: true })
-  })
-
-  it('fails closed when a symlinked directory escapes the skill folder', () => {
-    const root = createRoot()
-    const outside = join(
-      root,
-      '..',
-      'outside-dir-' + Math.random().toString(36).slice(2),
-    )
-    mkdirSync(outside, { recursive: true })
-    writeFileSync(join(outside, 'secret.md'), 'leaked')
-    symlinkSync(outside, join(root, 'linked-dir'), 'dir')
-
-    expect(() => readSkillFolderFiles(root)).toThrow(/escapes the skill folder/)
+    expect(() =>
+      computeSourceContentHash(root, [
+        {
+          relativePath: 'skills/a/SKILL.md',
+          absolutePath: join(root, 'skills/a/SKILL.md'),
+        },
+      ]),
+    ).toThrow(/escapes the package root/)
 
     rmSync(outside, { recursive: true, force: true })
   })
 
   it('fails closed on a dangling symlink', () => {
     const root = createRoot()
-    symlinkSync(join(root, 'missing-target.md'), join(root, 'broken.md'))
-
-    expect(() => readSkillFolderFiles(root)).toThrow(
-      /Failed to resolve skill folder symlink/,
+    mkdirSync(join(root, 'skills/a'), { recursive: true })
+    symlinkSync(
+      join(root, 'skills/a', 'missing-target.md'),
+      join(root, 'skills/a', 'SKILL.md'),
     )
-  })
 
-  it('fails closed on a symlink cycle', () => {
-    const root = createRoot()
-    mkdirSync(join(root, 'a'))
-    symlinkSync(root, join(root, 'a', 'back-to-root'), 'dir')
-
-    expect(() => readSkillFolderFiles(root)).toThrow(/symlink cycle/)
+    expect(() =>
+      computeSourceContentHash(root, [
+        {
+          relativePath: 'skills/a/SKILL.md',
+          absolutePath: join(root, 'skills/a/SKILL.md'),
+        },
+      ]),
+    ).toThrow(/Failed to resolve skill file/)
   })
 
   it('follows an in-bounds symlink and hashes its target content', () => {
     const root = createRoot()
-    writeFileSync(join(root, 'canonical.md'), 'shared content')
-    symlinkSync(join(root, 'canonical.md'), join(root, 'link.md'))
+    writeFile(root, 'skills/a/canonical.md', 'shared content')
+    symlinkSync(
+      join(root, 'skills/a/canonical.md'),
+      join(root, 'skills/a/SKILL.md'),
+    )
 
-    const files = readSkillFolderFiles(root)
-
-    expect(files).toEqual([
-      { relativePath: 'canonical.md', content: Buffer.from('shared content') },
-      { relativePath: 'link.md', content: Buffer.from('shared content') },
+    const direct = computeSourceContentHash(root, [
+      {
+        relativePath: 'skills/a/canonical.md',
+        absolutePath: join(root, 'skills/a/canonical.md'),
+      },
     ])
-  })
-})
+    const viaLink = computeSourceContentHash(root, [
+      {
+        relativePath: 'skills/a/SKILL.md',
+        absolutePath: join(root, 'skills/a/SKILL.md'),
+      },
+    ])
 
-describe('hashSkillFolder', () => {
-  it('is stable across two calls', () => {
-    const root = createRoot()
-    writeSkillFolder(root, { 'SKILL.md': 'body' })
-
-    expect(hashSkillFolder(root)).toBe(hashSkillFolder(root))
-  })
-
-  it('changes when a nested reference file changes', () => {
-    const root = createRoot()
-    writeSkillFolder(root, {
-      'SKILL.md': 'body',
-      'references/a.md': 'version 1',
-    })
-    const before = hashSkillFolder(root)
-
-    writeFileSync(join(root, 'references', 'a.md'), 'version 2')
-
-    expect(hashSkillFolder(root)).not.toBe(before)
-  })
-
-  it('is identical across different physical roots for identical relative structure and bytes', () => {
-    const rootA = createRoot()
-    const rootB = createRoot()
-    const files = {
-      'SKILL.md': 'shared body',
-      'references/a.md': 'shared reference',
-    }
-    writeSkillFolder(rootA, files)
-    writeSkillFolder(rootB, files)
-
-    expect(hashSkillFolder(rootA)).toBe(hashSkillFolder(rootB))
-  })
-
-  it('includes a nested skill folder by default (no exclusion)', () => {
-    const root = createRoot()
-    const nestedDir = join(root, 'nested-skill')
-    writeSkillFolder(root, { 'SKILL.md': 'parent body' })
-    writeSkillFolder(nestedDir, { 'SKILL.md': 'nested body' })
-
-    const before = hashSkillFolder(root)
-    writeFileSync(join(nestedDir, 'SKILL.md'), 'nested body changed')
-
-    expect(hashSkillFolder(root)).not.toBe(before)
-  })
-
-  it('excludes a nested skill folder when passed as excludeDirs', () => {
-    const root = createRoot()
-    const nestedDir = join(root, 'nested-skill')
-    writeSkillFolder(root, { 'SKILL.md': 'parent body' })
-    writeSkillFolder(nestedDir, { 'SKILL.md': 'nested body' })
-
-    const before = hashSkillFolder(root, [nestedDir])
-    writeFileSync(join(nestedDir, 'SKILL.md'), 'nested body changed')
-
-    expect(hashSkillFolder(root, [nestedDir])).toBe(before)
-  })
-
-  it("still changes when the parent's own content changes despite an exclusion", () => {
-    const root = createRoot()
-    const nestedDir = join(root, 'nested-skill')
-    writeSkillFolder(root, { 'SKILL.md': 'parent body' })
-    writeSkillFolder(nestedDir, { 'SKILL.md': 'nested body' })
-
-    const before = hashSkillFolder(root, [nestedDir])
-    writeFileSync(join(root, 'SKILL.md'), 'parent body changed')
-
-    expect(hashSkillFolder(root, [nestedDir])).not.toBe(before)
+    // Same bytes, different (path-included) identity — a rename/symlink
+    // through a different logical path is a real content-set change (§6.4).
+    expect(direct.contentHash).not.toBe(viaLink.contentHash)
   })
 })

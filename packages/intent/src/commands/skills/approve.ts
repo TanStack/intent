@@ -15,6 +15,7 @@ import type { PolicedScan } from '../../core/source-policy.js'
 
 export interface SkillsApproveCommandOptions {
   all?: boolean
+  yes?: boolean
   frozen?: boolean
   noFrozen?: boolean
 }
@@ -37,13 +38,13 @@ function compareStrings(a: string, b: string): number {
 
 function formatDisclosures(source: IntentLockfileSource): string {
   const parts: Array<string> = []
-  if (source.capabilities.length > 0) {
+  if (source.capabilities && source.capabilities.length > 0) {
     parts.push(`capabilities: ${source.capabilities.join(', ')}`)
   }
-  if (source.declaredSecrets.length > 0) {
+  if (source.declaredSecrets && source.declaredSecrets.length > 0) {
     parts.push(`declaredSecrets: ${source.declaredSecrets.join(', ')}`)
   }
-  if (source.mcpTools.length > 0) {
+  if (source.mcpTools && source.mcpTools.length > 0) {
     parts.push(`mcpTools: ${source.mcpTools.join(', ')}`)
   }
   return parts.length > 0 ? ` [${parts.join('; ')}]` : ''
@@ -90,7 +91,7 @@ export async function runSkillsApproveCommand(
     noFrozen: options.noFrozen,
   })
   if (frozen) {
-    fail('`intent skills approve` cannot run in frozen mode.')
+    fail('`intent skills approve` cannot run in frozen mode.', 5)
   }
 
   if (sourceArg && options.all) {
@@ -176,7 +177,7 @@ export async function runSkillsApproveCommand(
   } else if (changes.length === 0) {
     console.log('intent.lock is up to date. Nothing to approve.')
     return
-  } else if (options.all) {
+  } else if (options.all || options.yes) {
     toApply = changes
   } else {
     if (confirm === defaultConfirm && process.stdin.isTTY !== true) {

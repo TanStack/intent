@@ -33,6 +33,23 @@ describe('detectGlobalNodeModules', () => {
     expect(result).toEqual({ path: null })
   })
 
+  it('honors an explicit frozen=true override even when no env signal is set', () => {
+    const result = detectGlobalNodeModules('pnpm', true)
+
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+    expect(result).toEqual({ path: null })
+  })
+
+  it('honors an explicit frozen=false override even when CI env would auto-detect frozen', () => {
+    vi.stubEnv('CI', 'true')
+    execFileSyncMock.mockReturnValue('/global/pnpm/node_modules')
+
+    const result = detectGlobalNodeModules('pnpm', false)
+
+    expect(execFileSyncMock).toHaveBeenCalled()
+    expect(result.path).toBe('/global/pnpm/node_modules')
+  })
+
   it('still honors INTENT_GLOBAL_NODE_MODULES override in frozen mode', () => {
     vi.stubEnv('INTENT_FROZEN', '1')
     process.env.INTENT_GLOBAL_NODE_MODULES = '/override/node_modules'

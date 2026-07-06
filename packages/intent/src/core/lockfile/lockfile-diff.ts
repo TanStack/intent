@@ -9,6 +9,7 @@ import type { SourceIdentity } from '../types.js'
 type LockfileChangeField =
   | 'version'
   | 'resolution'
+  | 'skills'
   | 'contentHash'
   | 'manifestHash'
   | 'capabilities'
@@ -67,7 +68,12 @@ function diffFields(
   }
 
   const compareStructuredField = (
-    field: 'capabilities' | 'declaredSecrets' | 'mcpTools' | 'mcpPolicy',
+    field:
+      | 'skills'
+      | 'capabilities'
+      | 'declaredSecrets'
+      | 'mcpTools'
+      | 'mcpPolicy',
   ): void => {
     const from = lockedCanonical[field]
     const to = currentCanonical[field]
@@ -80,6 +86,7 @@ function diffFields(
   comparePrimitiveField('resolution')
   comparePrimitiveField('contentHash')
   comparePrimitiveField('manifestHash')
+  compareStructuredField('skills')
   compareStructuredField('capabilities')
   compareStructuredField('declaredSecrets')
   compareStructuredField('mcpTools')

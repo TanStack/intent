@@ -109,12 +109,10 @@ describe('runSkillsScanCommand', () => {
           kind: 'npm',
           version: '1.0.0',
           resolution: 'npm:foo@1.0.0',
+          skills: [],
           manifestHash: null,
           contentHash: 'sha256-aaa',
-          capabilities: [],
-          declaredSecrets: [],
-          mcpTools: [],
-          mcpPolicy: {},
+          capabilities: null,
         },
       ],
     })
@@ -156,6 +154,7 @@ describe('runSkillsScanCommand', () => {
       ),
     ).rejects.toMatchObject({
       message: expect.stringContaining('Frozen mode requires intent.lock'),
+      exitCode: 4,
     })
   })
 
@@ -169,12 +168,10 @@ describe('runSkillsScanCommand', () => {
           kind: 'npm',
           version: '1.0.0',
           resolution: 'npm:foo@1.0.0',
+          skills: [],
           manifestHash: null,
           contentHash: 'sha256-aaa',
-          capabilities: [],
-          declaredSecrets: [],
-          mcpTools: [],
-          mcpPolicy: {},
+          capabilities: null,
         },
       ],
     })
@@ -185,7 +182,10 @@ describe('runSkillsScanCommand', () => {
         () => Promise.resolve(policedScan()),
         cwd,
       ),
-    ).rejects.toMatchObject({ message: expect.stringContaining('out of date') })
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('out of date'),
+      exitCode: 2,
+    })
   })
 
   it('throws in frozen mode when there are unlisted skill-bearing sources, even with a clean lockfile', async () => {
@@ -200,6 +200,7 @@ describe('runSkillsScanCommand', () => {
       ),
     ).rejects.toMatchObject({
       message: expect.stringContaining('unlisted skill-bearing source'),
+      exitCode: 3,
     })
   })
 
@@ -214,5 +215,20 @@ describe('runSkillsScanCommand', () => {
         cwd,
       ),
     ).resolves.toBeUndefined()
+  })
+
+  it('fails with exit code 6 when intent.lock is malformed', async () => {
+    const cwd = makeTempProject()
+    writeFileSync(
+      join(cwd, 'intent.lock'),
+      JSON.stringify({ lockfileVersion: 2 }),
+    )
+
+    await expect(
+      runSkillsScanCommand({}, () => Promise.resolve(policedScan()), cwd),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('Malformed intent.lock'),
+      exitCode: 6,
+    })
   })
 })

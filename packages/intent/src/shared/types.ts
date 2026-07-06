@@ -33,6 +33,8 @@ export type ScanScope = 'local' | 'local-and-global' | 'global'
 export interface ScanOptions {
   includeGlobal?: boolean
   scope?: ScanScope
+  // Omitted falls back to bare env-based isFrozenMode() detection.
+  frozen?: boolean
 }
 
 export interface ScanStats {

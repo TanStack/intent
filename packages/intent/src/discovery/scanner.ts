@@ -562,7 +562,7 @@ export function scanForIntents(
 
   function ensureGlobalNodeModules(): void {
     if (!nodeModules.global.path && !explicitGlobalNodeModules) {
-      const detected = detectGlobalNodeModules(packageManager)
+      const detected = detectGlobalNodeModules(packageManager, options.frozen)
       nodeModules.global.path = detected.path
       nodeModules.global.source = detected.source
       nodeModules.global.detected = Boolean(detected.path)

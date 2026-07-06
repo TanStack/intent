@@ -57,12 +57,10 @@ function lockedSource(
     kind: 'npm',
     version: '1.0.0',
     resolution: 'npm:foo@1.0.0',
+    skills: [],
     manifestHash: null,
     contentHash: 'sha256-aaa',
-    capabilities: [],
-    declaredSecrets: [],
-    mcpTools: [],
-    mcpPolicy: {},
+    capabilities: null,
     ...overrides,
   }
 }
@@ -98,6 +96,7 @@ describe('runSkillsApproveCommand', () => {
       ),
     ).rejects.toMatchObject({
       message: expect.stringContaining('cannot run in frozen mode'),
+      exitCode: 5,
     })
   })
 
