@@ -9,12 +9,35 @@ import type {
   IntentLockfileSource,
   ReadIntentLockfileResult,
 } from '../../core/lockfile/lockfile.js'
+import type { SourceIdentity } from '../../core/types.js'
 import type { ScanResult } from '../../shared/types.js'
 
 export function resolveLockfilePath(cwd: string): string {
   const context = resolveProjectContext({ cwd })
   const root = context.workspaceRoot ?? context.packageRoot ?? cwd
   return join(root, 'intent.lock')
+}
+
+// Shared by `approve` and `update`'s single-source argument form.
+export function parseSourceArg(arg: string): SourceIdentity {
+  const separatorIndex = arg.indexOf(':')
+  const kind = separatorIndex === -1 ? '' : arg.slice(0, separatorIndex)
+  let id = separatorIndex === -1 ? '' : arg.slice(separatorIndex + 1)
+
+  // Tolerate diff.ts's displayed kind:id@version label as input, but only
+  // strip a trailing @version, not a scoped package's leading @scope.
+  const lastAt = id.lastIndexOf('@')
+  if (lastAt > 0 && /^\d/.test(id.slice(lastAt + 1))) {
+    id = id.slice(0, lastAt)
+  }
+
+  if (kind !== 'npm' && kind !== 'workspace') {
+    fail(
+      `Invalid source "${arg}". Expected the form kind:id, e.g. npm:@tanstack/query or workspace:my-package.`,
+    )
+  }
+
+  return { kind, id }
 }
 
 export interface LockfileState {

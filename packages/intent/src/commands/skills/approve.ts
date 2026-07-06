@@ -4,11 +4,14 @@ import { writeIntentLockfile } from '../../core/lockfile/lockfile.js'
 import { sourceIdentityKey } from '../../core/types.js'
 import { isFrozenMode } from '../../shared/mode.js'
 import { fail } from '../../shared/cli-error.js'
-import { computeLockfileState, resolveLockfilePath } from './support.js'
+import {
+  computeLockfileState,
+  parseSourceArg,
+  resolveLockfilePath,
+} from './support.js'
 import type { LockfileFieldChange } from '../../core/lockfile/lockfile-diff.js'
 import type { IntentLockfileSource } from '../../core/lockfile/lockfile.js'
 import type { PolicedScan } from '../../core/source-policy.js'
-import type { SourceIdentity } from '../../core/types.js'
 
 export interface SkillsApproveCommandOptions {
   all?: boolean
@@ -30,27 +33,6 @@ export type ConfirmFn = (question: string) => Promise<boolean>
 
 function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
-}
-
-function parseSourceArg(arg: string): SourceIdentity {
-  const separatorIndex = arg.indexOf(':')
-  const kind = separatorIndex === -1 ? '' : arg.slice(0, separatorIndex)
-  let id = separatorIndex === -1 ? '' : arg.slice(separatorIndex + 1)
-
-  // Tolerate diff.ts's displayed kind:id@version label as input, but only
-  // strip a trailing @version, not a scoped package's leading @scope.
-  const lastAt = id.lastIndexOf('@')
-  if (lastAt > 0 && /^\d/.test(id.slice(lastAt + 1))) {
-    id = id.slice(0, lastAt)
-  }
-
-  if (kind !== 'npm' && kind !== 'workspace') {
-    fail(
-      `Invalid source "${arg}". Expected the form kind:id, e.g. npm:@tanstack/query or workspace:my-package.`,
-    )
-  }
-
-  return { kind, id }
 }
 
 function formatDisclosures(source: IntentLockfileSource): string {

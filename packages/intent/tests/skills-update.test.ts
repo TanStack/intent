@@ -1,0 +1,406 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  readIntentLockfile,
+  writeIntentLockfile,
+} from '../src/core/lockfile/lockfile.js'
+import { runSkillsUpdateCommand } from '../src/commands/skills/update.js'
+import type { IntentLockfile } from '../src/core/lockfile/lockfile.js'
+import type { PolicedScan } from '../src/core/source-policy.js'
+import type { IntentPackage, ScanResult } from '../src/shared/types.js'
+
+function emptyScanResult(packages: Array<IntentPackage> = []): ScanResult {
+  return {
+    packageManager: 'npm',
+    packages,
+    warnings: [],
+    notices: [],
+    conflicts: [],
+    nodeModules: {
+      local: { root: null, packages: [] },
+      global: { root: null, packages: [] },
+    },
+    stats: {
+      packageJsonReadCount: 0,
+      packageJsonCacheHits: 0,
+    },
+  } as unknown as ScanResult
+}
+
+function policedScan(overrides: Partial<PolicedScan> = {}): PolicedScan {
+  return {
+    scan: emptyScanResult(),
+    hiddenSourceCount: 0,
+    hiddenSources: [],
+    excludePatterns: [],
+    droppedNames: [],
+    ...overrides,
+  }
+}
+
+function baseLockfile(): IntentLockfile {
+  return {
+    lockfileVersion: 1,
+    intentVersion: '0.0.0',
+    sources: [],
+    policy: { ignores: [] },
+  }
+}
+
+function lockedSource(
+  overrides: Partial<IntentLockfile['sources'][number]> = {},
+): IntentLockfile['sources'][number] {
+  return {
+    id: 'foo',
+    kind: 'npm',
+    version: '1.0.0',
+    resolution: 'npm:foo@1.0.0',
+    manifestHash: null,
+    contentHash: 'sha256-aaa',
+    capabilities: [],
+    declaredSecrets: [],
+    mcpTools: [],
+    mcpPolicy: {},
+    ...overrides,
+  }
+}
+
+describe('runSkillsUpdateCommand', () => {
+  const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+  const tempDirs: Array<string> = []
+
+  afterEach(() => {
+    logSpy.mockClear()
+    vi.unstubAllEnvs()
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  function makeTempProject(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'intent-skills-update-'))
+    tempDirs.push(dir)
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x' }))
+    return dir
+  }
+
+  it('refuses to run in frozen mode', async () => {
+    const cwd = makeTempProject()
+
+    await expect(
+      runSkillsUpdateCommand(
+        undefined,
+        { frozen: true },
+        () => Promise.resolve(policedScan()),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('cannot run in frozen mode'),
+    })
+  })
+
+  it('rejects passing both a source id and --all', async () => {
+    const cwd = makeTempProject()
+
+    await expect(
+      runSkillsUpdateCommand(
+        'npm:foo',
+        { all: true },
+        () => Promise.resolve(policedScan()),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('either a source id or --all'),
+    })
+  })
+
+  it('fails when there is no intent.lock', async () => {
+    const cwd = makeTempProject()
+
+    await expect(
+      runSkillsUpdateCommand(
+        undefined,
+        {},
+        () => Promise.resolve(policedScan()),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('No intent.lock found'),
+    })
+  })
+
+  it('reports nothing to update when current matches the lockfile', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
+
+    await runSkillsUpdateCommand(
+      undefined,
+      {},
+      () => Promise.resolve(policedScan()),
+      cwd,
+    )
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(output).toContain('Nothing to update')
+  })
+
+  it('re-syncs a version/hash change for all locked sources', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: [lockedSource({ id: 'foo', version: '1.0.0' })],
+    })
+
+    const fetchSpy = vi.fn()
+    globalThis.fetch = fetchSpy
+
+    await runSkillsUpdateCommand(
+      undefined,
+      {},
+      () =>
+        Promise.resolve(
+          policedScan({
+            scan: emptyScanResult([
+              {
+                name: 'foo',
+                kind: 'npm',
+                version: '2.0.0',
+                packageRoot: cwd,
+                skills: [],
+              } as unknown as IntentPackage,
+            ]),
+          }),
+        ),
+      cwd,
+    )
+
+    expect(fetchSpy).not.toHaveBeenCalled()
+
+    const result = readIntentLockfile(join(cwd, 'intent.lock'))
+    expect(result.status).toBe('found')
+    if (result.status === 'found') {
+      expect(result.lockfile.sources).toHaveLength(1)
+      expect(result.lockfile.sources[0]).toMatchObject({
+        id: 'foo',
+        version: '2.0.0',
+      })
+    }
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(output).toContain('Updated 1 source(s)')
+  })
+
+  it('updates only the targeted source, leaving other drift untouched', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: [
+        lockedSource({ id: 'foo', version: '1.0.0' }),
+        lockedSource({ id: 'bar', version: '1.0.0' }),
+      ],
+    })
+
+    await runSkillsUpdateCommand(
+      'npm:foo',
+      {},
+      () =>
+        Promise.resolve(
+          policedScan({
+            scan: emptyScanResult([
+              {
+                name: 'foo',
+                kind: 'npm',
+                version: '2.0.0',
+                packageRoot: cwd,
+                skills: [],
+              } as unknown as IntentPackage,
+              {
+                name: 'bar',
+                kind: 'npm',
+                version: '2.0.0',
+                packageRoot: cwd,
+                skills: [],
+              } as unknown as IntentPackage,
+            ]),
+          }),
+        ),
+      cwd,
+    )
+
+    const result = readIntentLockfile(join(cwd, 'intent.lock'))
+    expect(result.status).toBe('found')
+    if (result.status === 'found') {
+      const foo = result.lockfile.sources.find((s) => s.id === 'foo')
+      const bar = result.lockfile.sources.find((s) => s.id === 'bar')
+      expect(foo?.version).toBe('2.0.0')
+      expect(bar?.version).toBe('1.0.0')
+    }
+  })
+
+  it('does not add newly discovered sources that are not yet locked', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
+
+    await runSkillsUpdateCommand(
+      undefined,
+      { all: true },
+      () =>
+        Promise.resolve(
+          policedScan({
+            scan: emptyScanResult([
+              {
+                name: 'new-source',
+                kind: 'npm',
+                version: '1.0.0',
+                packageRoot: cwd,
+                skills: [],
+              } as unknown as IntentPackage,
+            ]),
+          }),
+        ),
+      cwd,
+    )
+
+    const result = readIntentLockfile(join(cwd, 'intent.lock'))
+    expect(result.status).toBe('found')
+    if (result.status === 'found') {
+      expect(result.lockfile.sources).toHaveLength(0)
+    }
+  })
+
+  it('does not remove a locked source that is no longer discovered', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: [lockedSource({ id: 'foo' })],
+    })
+
+    await runSkillsUpdateCommand(
+      undefined,
+      { all: true },
+      () => Promise.resolve(policedScan()),
+      cwd,
+    )
+
+    const result = readIntentLockfile(join(cwd, 'intent.lock'))
+    expect(result.status).toBe('found')
+    if (result.status === 'found') {
+      expect(result.lockfile.sources).toHaveLength(1)
+      expect(result.lockfile.sources[0]).toMatchObject({ id: 'foo' })
+    }
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(output).toContain('Nothing to update')
+  })
+
+  it('fails when the given source id is not locked', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
+
+    await expect(
+      runSkillsUpdateCommand(
+        'npm:does-not-exist',
+        {},
+        () => Promise.resolve(policedScan()),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('is not in intent.lock'),
+    })
+  })
+
+  it('fails when the given source id is locked but no longer discovered', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: [lockedSource({ id: 'foo' })],
+    })
+
+    await expect(
+      runSkillsUpdateCommand(
+        'npm:foo',
+        {},
+        () => Promise.resolve(policedScan()),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('no longer discovered'),
+    })
+  })
+
+  it('rejects an invalid source id format', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
+
+    await expect(
+      runSkillsUpdateCommand(
+        'not-a-valid-source',
+        {},
+        () => Promise.resolve(policedScan()),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('Invalid source'),
+    })
+  })
+
+  it('preserves the existing policy.ignores', async () => {
+    const cwd = makeTempProject()
+    const ignore = {
+      id: 'ignored-thing',
+      scope: { source: 'npm:foo', contentHash: 'sha256-aaa' },
+      reason: 'reviewed and accepted',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      expiresAt: '2027-01-01T00:00:00.000Z',
+    }
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: [lockedSource({ id: 'foo', version: '1.0.0' })],
+      policy: { ignores: [ignore] },
+    })
+
+    await runSkillsUpdateCommand(
+      undefined,
+      {},
+      () =>
+        Promise.resolve(
+          policedScan({
+            scan: emptyScanResult([
+              {
+                name: 'foo',
+                kind: 'npm',
+                version: '2.0.0',
+                packageRoot: cwd,
+                skills: [],
+              } as unknown as IntentPackage,
+            ]),
+          }),
+        ),
+      cwd,
+    )
+
+    const result = readIntentLockfile(join(cwd, 'intent.lock'))
+    expect(result.status).toBe('found')
+    if (result.status === 'found') {
+      expect(result.lockfile.policy.ignores).toEqual([ignore])
+    }
+  })
+
+  it('does not write intent.lock when nothing changed', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
+    const before = readFileSync(join(cwd, 'intent.lock'), 'utf8')
+
+    await runSkillsUpdateCommand(
+      undefined,
+      {},
+      () => Promise.resolve(policedScan()),
+      cwd,
+    )
+
+    const after = readFileSync(join(cwd, 'intent.lock'), 'utf8')
+    expect(after).toBe(before)
+  })
+})

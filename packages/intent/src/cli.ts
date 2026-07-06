@@ -12,6 +12,7 @@ import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
 import type { SkillsApproveCommandOptions } from './commands/skills/approve.js'
 import type { SkillsScanCommandOptions } from './commands/skills/scan.js'
+import type { SkillsUpdateCommandOptions } from './commands/skills/update.js'
 import type { StaleCommandOptions } from './commands/stale.js'
 import type { ValidateCommandOptions } from './commands/validate.js'
 
@@ -213,15 +214,15 @@ function createCli(): CAC {
   cli
     .command(
       'skills [action] [source]',
-      'Scan, diff, or approve skills against intent.lock',
+      'Scan, diff, approve, or update skills against intent.lock',
     )
     .usage(
-      'skills <scan|diff|approve> [source] [--json] [--all] [--frozen] [--no-frozen]',
+      'skills <scan|diff|approve|update> [source] [--json] [--all] [--frozen] [--no-frozen]',
     )
     .option('--json', 'Output JSON')
     .option(
       '--all',
-      'With `approve`, accept all pending changes without prompting',
+      'With `approve`/`update`, act on all pending changes without prompting',
     )
     .option(
       '--frozen',
@@ -233,11 +234,14 @@ function createCli(): CAC {
     .example('skills scan --json')
     .example('skills approve --all')
     .example('skills approve npm:@tanstack/query')
+    .example('skills update --all')
     .action(
       async (
         action: string | undefined,
         source: string | undefined,
-        options: SkillsScanCommandOptions & SkillsApproveCommandOptions,
+        options: SkillsScanCommandOptions &
+          SkillsApproveCommandOptions &
+          SkillsUpdateCommandOptions,
       ) => {
         const { scanPolicedIntentsOrFail, frozenOptionsFromGlobalFlags } =
           await import('./commands/support.js')
@@ -274,7 +278,18 @@ function createCli(): CAC {
           return
         }
 
-        fail('Unknown skills action: expected scan, diff, or approve.')
+        if (action === 'update') {
+          const { runSkillsUpdateCommand } =
+            await import('./commands/skills/update.js')
+          await runSkillsUpdateCommand(
+            source,
+            { ...options, ...frozenOptions },
+            scanPolicedIntentsOrFail,
+          )
+          return
+        }
+
+        fail('Unknown skills action: expected scan, diff, approve, or update.')
       },
     )
 
