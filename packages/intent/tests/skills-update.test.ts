@@ -336,13 +336,111 @@ describe('runSkillsUpdateCommand', () => {
 
     await expect(
       runSkillsUpdateCommand(
-        'not-a-valid-source',
+        'git:not-a-supported-kind',
         {},
         () => Promise.resolve(policedScan()),
         cwd,
       ),
     ).rejects.toMatchObject({
       message: expect.stringContaining('Invalid source'),
+    })
+  })
+
+  it('fails when a bare name matches no discovered source', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: [lockedSource({ id: 'foo' })],
+    })
+
+    await expect(
+      runSkillsUpdateCommand(
+        'not-discovered',
+        {},
+        () => Promise.resolve(policedScan()),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('No discovered source matches'),
+    })
+  })
+
+  it('resolves a bare name to its single discovered match', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: [lockedSource({ id: 'foo', version: '1.0.0' })],
+    })
+
+    await runSkillsUpdateCommand(
+      'foo',
+      {},
+      () =>
+        Promise.resolve(
+          policedScan({
+            scan: emptyScanResult([
+              {
+                name: 'foo',
+                kind: 'npm',
+                version: '2.0.0',
+                packageRoot: cwd,
+                skills: [],
+              } as unknown as IntentPackage,
+            ]),
+          }),
+        ),
+      cwd,
+    )
+
+    const result = readIntentLockfile(join(cwd, 'intent.lock'))
+    expect(result.status).toBe('found')
+    if (result.status === 'found') {
+      expect(result.lockfile.sources[0]).toMatchObject({
+        id: 'foo',
+        version: '2.0.0',
+      })
+    }
+  })
+
+  it('errors on an ambiguous bare name matching sources of two kinds', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: [
+        lockedSource({ id: 'foo', kind: 'npm' }),
+        lockedSource({ id: 'foo', kind: 'workspace' }),
+      ],
+    })
+
+    await expect(
+      runSkillsUpdateCommand(
+        'foo',
+        {},
+        () =>
+          Promise.resolve(
+            policedScan({
+              scan: emptyScanResult([
+                {
+                  name: 'foo',
+                  kind: 'npm',
+                  version: '1.0.0',
+                  packageRoot: cwd,
+                  skills: [],
+                } as unknown as IntentPackage,
+                {
+                  name: 'foo',
+                  kind: 'workspace',
+                  version: '1.0.0',
+                  packageRoot: cwd,
+                  skills: [],
+                } as unknown as IntentPackage,
+              ]),
+            }),
+          ),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('Ambiguous source "foo"'),
     })
   })
 

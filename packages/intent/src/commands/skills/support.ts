@@ -19,25 +19,52 @@ export function resolveLockfilePath(cwd: string): string {
 }
 
 // Shared by `approve` and `update`'s single-source argument form.
-export function parseSourceArg(arg: string): SourceIdentity {
+export function resolveSourceArg(
+  arg: string,
+  discovered: ReadonlyArray<SourceIdentity>,
+): SourceIdentity {
   const separatorIndex = arg.indexOf(':')
-  const kind = separatorIndex === -1 ? '' : arg.slice(0, separatorIndex)
-  let id = separatorIndex === -1 ? '' : arg.slice(separatorIndex + 1)
 
-  // Tolerate diff.ts's displayed kind:id@version label as input, but only
-  // strip a trailing @version, not a scoped package's leading @scope.
-  const lastAt = id.lastIndexOf('@')
-  if (lastAt > 0 && /^\d/.test(id.slice(lastAt + 1))) {
-    id = id.slice(0, lastAt)
+  if (separatorIndex !== -1) {
+    const kind = arg.slice(0, separatorIndex)
+    let id = arg.slice(separatorIndex + 1)
+
+    // Tolerate diff.ts's displayed kind:id@version label as input, but only
+    // strip a trailing @version, not a scoped package's leading @scope.
+    const lastAt = id.lastIndexOf('@')
+    if (lastAt > 0 && /^\d/.test(id.slice(lastAt + 1))) {
+      id = id.slice(0, lastAt)
+    }
+
+    if (kind !== 'npm' && kind !== 'workspace') {
+      fail(
+        `Invalid source "${arg}". Expected the form kind:id, e.g. npm:@tanstack/query or workspace:my-package.`,
+      )
+    }
+
+    return { kind, id }
   }
 
-  if (kind !== 'npm' && kind !== 'workspace') {
+  // Bare name (F1 rule): resolve against currently-discovered sources. A name
+  // shared across kinds (e.g. workspace:foo and npm:foo) can't be guessed.
+  const matches = discovered.filter((source) => source.id === arg)
+  const [firstMatch] = matches
+
+  if (!firstMatch) {
     fail(
-      `Invalid source "${arg}". Expected the form kind:id, e.g. npm:@tanstack/query or workspace:my-package.`,
+      `No discovered source matches "${arg}". It may not be installed, or may not be listed in intent.skills.`,
     )
   }
 
-  return { kind, id }
+  if (matches.length > 1) {
+    const labels = matches
+      .map((source) => `${source.kind}:${source.id}`)
+      .sort()
+      .join(' and ')
+    fail(`Ambiguous source "${arg}": matches ${labels} — specify kind:id.`)
+  }
+
+  return firstMatch
 }
 
 export interface LockfileState {

@@ -6,8 +6,8 @@ import { isFrozenMode } from '../../shared/mode.js'
 import { fail } from '../../shared/cli-error.js'
 import {
   computeLockfileState,
-  parseSourceArg,
   resolveLockfilePath,
+  resolveSourceArg,
 } from './support.js'
 import type { LockfileFieldChange } from '../../core/lockfile/lockfile-diff.js'
 import type { IntentLockfileSource } from '../../core/lockfile/lockfile.js'
@@ -165,7 +165,7 @@ export async function runSkillsApproveCommand(
   let toApply: Array<PendingChange>
 
   if (sourceArg) {
-    const identity = sourceIdentityKey(parseSourceArg(sourceArg))
+    const identity = sourceIdentityKey(resolveSourceArg(sourceArg, current))
     const match = changes.find((change) => change.identity === identity)
     if (!match) {
       fail(

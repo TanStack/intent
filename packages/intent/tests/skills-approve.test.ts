@@ -230,13 +230,109 @@ describe('runSkillsApproveCommand', () => {
 
     await expect(
       runSkillsApproveCommand(
-        'not-a-valid-source',
+        'git:not-a-supported-kind',
         {},
         () => Promise.resolve(policedScan()),
         cwd,
       ),
     ).rejects.toMatchObject({
       message: expect.stringContaining('Invalid source'),
+    })
+  })
+
+  it('fails when a bare name matches no discovered source', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
+
+    await expect(
+      runSkillsApproveCommand(
+        'not-discovered',
+        {},
+        () => Promise.resolve(policedScan()),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('No discovered source matches'),
+    })
+  })
+
+  it('resolves a bare name to its single discovered match', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: [
+        lockedSource({ id: 'foo', version: '1.0.0' }),
+        lockedSource({ id: 'bar' }),
+      ],
+    })
+
+    await runSkillsApproveCommand(
+      'foo',
+      {},
+      () =>
+        Promise.resolve(
+          policedScan({
+            scan: emptyScanResult([
+              {
+                name: 'foo',
+                kind: 'npm',
+                version: '2.0.0',
+                packageRoot: cwd,
+                skills: [],
+              } as unknown as IntentPackage,
+            ]),
+          }),
+        ),
+      cwd,
+    )
+
+    const result = readIntentLockfile(join(cwd, 'intent.lock'))
+    expect(result.status).toBe('found')
+    if (result.status === 'found') {
+      // "foo"'s version bump was approved; "bar"'s pending removal (declined,
+      // since only "foo" was targeted) stays in the lock as drift.
+      const foo = result.lockfile.sources.find((s) => s.id === 'foo')
+      expect(foo?.version).toBe('2.0.0')
+      expect(result.lockfile.sources.map((s) => s.id).sort()).toEqual([
+        'bar',
+        'foo',
+      ])
+    }
+  })
+
+  it('errors on an ambiguous bare name matching sources of two kinds', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
+
+    await expect(
+      runSkillsApproveCommand(
+        'foo',
+        {},
+        () =>
+          Promise.resolve(
+            policedScan({
+              scan: emptyScanResult([
+                {
+                  name: 'foo',
+                  kind: 'npm',
+                  version: '1.0.0',
+                  packageRoot: cwd,
+                  skills: [],
+                } as unknown as IntentPackage,
+                {
+                  name: 'foo',
+                  kind: 'workspace',
+                  version: '1.0.0',
+                  packageRoot: cwd,
+                  skills: [],
+                } as unknown as IntentPackage,
+              ]),
+            }),
+          ),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('Ambiguous source "foo"'),
     })
   })
 

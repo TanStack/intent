@@ -5,8 +5,8 @@ import { isFrozenMode } from '../../shared/mode.js'
 import { fail } from '../../shared/cli-error.js'
 import {
   computeLockfileState,
-  parseSourceArg,
   resolveLockfilePath,
+  resolveSourceArg,
 } from './support.js'
 import type { LockfileSourceChange } from '../../core/lockfile/lockfile-diff.js'
 import type { PolicedScan } from '../../core/source-policy.js'
@@ -63,7 +63,7 @@ export async function runSkillsUpdateCommand(
   let targets: Array<LockfileSourceChange>
 
   if (sourceArg) {
-    const identity = sourceIdentityKey(parseSourceArg(sourceArg))
+    const identity = sourceIdentityKey(resolveSourceArg(sourceArg, current))
     const lockedByIdentity = new Set(
       lockedResult.lockfile.sources.map((source) => sourceIdentityKey(source)),
     )
