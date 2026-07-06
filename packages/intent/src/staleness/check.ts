@@ -7,6 +7,7 @@ import {
   readScalarField,
   toPosixPath,
 } from '../shared/utils.js'
+import { isFrozenMode } from '../shared/mode.js'
 import { readIntentArtifacts } from './artifact-coverage.js'
 import type {
   IntentArtifactSet,
@@ -93,6 +94,10 @@ function readLocalVersion(packageDir: string): string | null {
 const NPM_REGISTRY_FETCH_TIMEOUT_MS = 5_000
 
 async function fetchNpmVersion(packageName: string): Promise<string | null> {
+  // Frozen mode forbids outbound network calls entirely; treat the registry
+  // as unreachable rather than threading a frozen flag through every caller.
+  if (isFrozenMode()) return null
+
   try {
     const res = await fetch(
       `https://registry.npmjs.org/${encodeURIComponent(packageName)}/latest`,

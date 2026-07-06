@@ -12,6 +12,7 @@ import {
 import { createRequire } from 'node:module'
 import { dirname, join, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
+import { isFrozenMode } from './mode.js'
 import type { Dirent } from 'node:fs'
 
 /**
@@ -48,9 +49,6 @@ export const nodeReadFs: ReadFs = {
   closeSync,
 }
 
-/**
- * Convert a path to use forward slashes (for cross-platform consistency).
- */
 export function toPosixPath(p: string): string {
   return p.split(sep).join('/')
 }
@@ -80,9 +78,6 @@ export function createFsIdentityCache(
   }
 }
 
-/**
- * Recursively find all SKILL.md files under a directory.
- */
 export function findSkillFiles(
   dir: string,
   fs: ReadFs = nodeReadFs,
@@ -138,10 +133,6 @@ export function hasAnySkillFile(dir: string, fs: ReadFs = nodeReadFs): boolean {
   return false
 }
 
-/**
- * Read dependencies and peerDependencies (and optionally devDependencies) from
- * a parsed package.json object.
- */
 export function getDeps(
   pkgJson: Record<string, unknown>,
   includeDevDeps = false,
@@ -270,6 +261,10 @@ export function detectGlobalNodeModules(packageManager: string): {
     }
   }
 
+  // Frozen mode forbids shelling out to a package manager; fail closed to
+  // "not found" rather than threading a frozen flag through every caller.
+  if (isFrozenMode()) return { path: null }
+
   const commands: Array<{
     command: string
     args: Array<string>
@@ -310,11 +305,6 @@ export function detectGlobalNodeModules(packageManager: string): {
 }
 
 /**
- * Resolve the directory of a dependency by name. Tries createRequire first
- * (handles pnpm symlinks), then falls back to walking up node_modules
- * directories (handles packages with export maps that block ./package.json).
- */
-/**
  * `createRequire` builds a full module-resolution context; constructing it is
  * non-trivial and `resolveDepDir` is called once per dependency, often many
  * times from the same `parentDir` (every sibling dep of one package). Cache the
@@ -338,7 +328,6 @@ export function resolveDepDir(
   depName: string,
   parentDir: string,
 ): string | null {
-  // Try createRequire — works for most packages including pnpm virtual store
   try {
     const req = getRequireForBase(join(parentDir, 'package.json'))
     const pkgJsonPath = req.resolve(join(depName, 'package.json'))
@@ -359,8 +348,6 @@ export function resolveDepDir(
     }
   }
 
-  // Fallback: walk up from parentDir checking node_modules/<depName>.
-  // Handles packages with exports maps that don't expose ./package.json.
   let dir = parentDir
   let prev: string | undefined
   while (dir !== prev) {
@@ -390,9 +377,6 @@ export function readScalarField(
   return typeof top === 'string' ? top : undefined
 }
 
-/**
- * Parse YAML frontmatter from a file. Returns null if no frontmatter or on error.
- */
 export function parseFrontmatter(
   filePath: string,
   fs: ReadFs = nodeReadFs,
@@ -413,11 +397,6 @@ const FRONTMATTER_READ_LIMIT = 16 * 1024
 /** Reused across calls; safe because reads are synchronous and single-threaded. */
 const frontmatterBuffer = Buffer.allocUnsafe(FRONTMATTER_READ_LIMIT)
 
-/**
- * Read just the leading region of a file, enough to cover its frontmatter,
- * instead of its whole body. Falls back to a full read when the bounded read
- * primitives are unavailable or the frontmatter exceeds the probe limit.
- */
 function readFrontmatterRegion(filePath: string, fs: ReadFs): string | null {
   if (fs.openSync && fs.readSync && fs.closeSync) {
     let region: string | null = null

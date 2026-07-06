@@ -86,6 +86,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch
+  vi.unstubAllEnvs()
   if (existsSync(tmpDir)) {
     rmSync(tmpDir, { recursive: true, force: true })
   }
@@ -252,6 +253,26 @@ describe('checkStaleness', () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
 
     const report = await checkStaleness(tmpDir, '@example/lib')
+    expect(report.currentVersion).toBeNull()
+    expect(report.versionDrift).toBeNull()
+  })
+
+  it('makes no npm registry fetch in frozen mode', async () => {
+    vi.stubEnv('INTENT_FROZEN', '1')
+    writeSkill(tmpDir, 'core', {
+      name: 'core',
+      description: 'Core',
+      library_version: '1.0.0',
+    })
+
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ version: '2.0.0' }),
+    } as Response)
+    globalThis.fetch = fetchSpy
+
+    const report = await checkStaleness(tmpDir, '@example/lib')
+    expect(fetchSpy).not.toHaveBeenCalled()
     expect(report.currentVersion).toBeNull()
     expect(report.versionDrift).toBeNull()
   })
