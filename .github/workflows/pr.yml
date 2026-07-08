@@ -36,7 +36,7 @@ jobs:
         with:
           main-branch-name: main
       - name: Start Nx Agents
-        run: npx nx-cloud start-ci-run --distribute-on=".nx/workflows/agents.yaml" --require-explicit-completion
+        run: npx nx-cloud start-ci-run --distribute-on=".nx/workflows/dynamic-changesets.yaml" --require-explicit-completion
       - name: Run Checks
         run: pnpm run test:pr
       - name: Complete Nx Agents
