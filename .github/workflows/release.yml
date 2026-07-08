@@ -10,7 +10,6 @@ concurrency:
 
 env:
   NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
-  NX_CLOUD_CONTINUOUS_ASSIGNMENT: true
   SERVER_PRESET: 'node-server'
 
 permissions:
@@ -42,17 +41,15 @@ jobs:
           fi
       - name: Start Nx Agents
         if: steps.changesets.outputs.has_changesets == 'true'
-        run: npx nx-cloud start-ci-run --distribute-on=".nx/workflows/agents.yaml" --require-explicit-completion
+        run: npx nx-cloud start-ci-run --distribute-on=".nx/workflows/dynamic-changesets.yaml"
       - name: Setup Tools
         uses: TanStack/config/.github/setup@b313637fa7d314532b98638f6b57b7b9c169d390 # main
       - name: Run Tests
         if: steps.changesets.outputs.has_changesets == 'true'
-        run: |
-          pnpm nx record -- pnpm exec tsc --noEmit
-          pnpm nx run-many --targets=test:eslint,test:sherif,test:knip,test:docs,test:lib,test:integration,test:types,build --parallel=3
-      - name: Complete Nx Agents
+        run: pnpm run test:ci --parallel=3
+      - name: Stop Nx Agents
         if: ${{ always() && steps.changesets.outputs.has_changesets == 'true' }}
-        run: npx nx-cloud complete-ci-run
+        run: npx nx-cloud stop-all-agents
       - name: Enter Pre-Release Mode
         if: "contains(github.ref_name, '-pre') && !hashFiles('.changeset/pre.json')"
         run: pnpm changeset pre enter pre
