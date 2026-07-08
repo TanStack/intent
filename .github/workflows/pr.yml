@@ -13,6 +13,7 @@ concurrency:
 
 env:
   NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
+  NX_CLOUD_CONTINUOUS_ASSIGNMENT: true
 
 permissions:
   contents: read
@@ -34,8 +35,15 @@ jobs:
         uses: nrwl/nx-set-shas@3e9ad7370203c1e93d109be57f3b72eb0eb511b1 # v4.4.0
         with:
           main-branch-name: main
+      - name: Start Nx Agents
+        run: npx nx-cloud start-ci-run --distribute-on=".nx/workflows/agents.yaml" --require-explicit-completion
       - name: Run Checks
-        run: pnpm run test:pr
+        run: |
+          pnpm nx record -- pnpm exec tsc --noEmit
+          pnpm nx affected --targets=test:eslint,test:sherif,test:knip,test:docs,test:lib,test:types,build --exclude='examples/**'
+      - name: Complete Nx Agents
+        if: ${{ always() }}
+        run: npx nx-cloud complete-ci-run
   preview:
     name: Preview
     runs-on: ubuntu-latest
@@ -48,7 +56,12 @@ jobs:
           persist-credentials: false
       - name: Setup Tools
         uses: TanStack/config/.github/setup@b313637fa7d314532b98638f6b57b7b9c169d390 # main
+      - name: Start Nx Agents
+        run: npx nx-cloud start-ci-run --distribute-on=".nx/workflows/agents.yaml" --require-explicit-completion
       - name: Build Packages
-        run: pnpm run build:all
+        run: pnpm nx run-many --targets=build --exclude='examples/**'
       - name: Publish Previews
         run: pnpx pkg-pr-new publish --pnpm './packages/*'
+      - name: Complete Nx Agents
+        if: ${{ always() }}
+        run: npx nx-cloud complete-ci-run
