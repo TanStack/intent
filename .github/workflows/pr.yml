@@ -38,9 +38,7 @@ jobs:
       - name: Start Nx Agents
         run: npx nx-cloud start-ci-run --distribute-on=".nx/workflows/agents.yaml" --require-explicit-completion
       - name: Run Checks
-        run: |
-          pnpm nx record -- pnpm exec tsc --noEmit
-          pnpm nx affected --targets=test:eslint,test:sherif,test:knip,test:docs,test:lib,test:types,build --exclude='examples/**'
+        run: pnpm run test:pr
       - name: Complete Nx Agents
         if: ${{ always() }}
         run: npx nx-cloud complete-ci-run
@@ -56,12 +54,7 @@ jobs:
           persist-credentials: false
       - name: Setup Tools
         uses: TanStack/config/.github/setup@b313637fa7d314532b98638f6b57b7b9c169d390 # main
-      - name: Start Nx Agents
-        run: npx nx-cloud start-ci-run --distribute-on=".nx/workflows/agents.yaml" --require-explicit-completion
       - name: Build Packages
-        run: pnpm nx run-many --targets=build --exclude='examples/**'
+        run: pnpm run build:all
       - name: Publish Previews
         run: pnpx pkg-pr-new publish --pnpm './packages/*'
-      - name: Complete Nx Agents
-        if: ${{ always() }}
-        run: npx nx-cloud complete-ci-run
