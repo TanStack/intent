@@ -269,6 +269,49 @@ describe('runSkillsUpdateCommand', () => {
     }
   })
 
+  it('reports pending added/removed drift after updating, since update never touches it', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: [
+        lockedSource({ id: 'foo', version: '1.0.0' }),
+        lockedSource({ id: 'gone' }),
+      ],
+    })
+
+    await runSkillsUpdateCommand(
+      undefined,
+      { all: true },
+      () =>
+        Promise.resolve(
+          policedScan({
+            scan: emptyScanResult([
+              {
+                name: 'foo',
+                kind: 'npm',
+                version: '2.0.0',
+                packageRoot: cwd,
+                skills: [],
+              } as unknown as IntentPackage,
+              {
+                name: 'new-source',
+                kind: 'npm',
+                version: '1.0.0',
+                packageRoot: cwd,
+                skills: [],
+              } as unknown as IntentPackage,
+            ]),
+          }),
+        ),
+      cwd,
+    )
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(output).toContain('Updated 1 source(s)')
+    expect(output).toContain('1 added, 1 removed source(s) still pending')
+    expect(output).toContain('intent skills approve')
+  })
+
   it('does not remove a locked source that is no longer discovered', async () => {
     const cwd = makeTempProject()
     writeIntentLockfile(join(cwd, 'intent.lock'), {

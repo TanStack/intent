@@ -8,7 +8,10 @@ import {
   resolveLockfilePath,
   resolveSourceArg,
 } from './support.js'
-import type { LockfileSourceChange } from '../../core/lockfile/lockfile-diff.js'
+import type {
+  LockfileDiffResult,
+  LockfileSourceChange,
+} from '../../core/lockfile/lockfile-diff.js'
 import type { PolicedScan } from '../../core/source-policy.js'
 
 export interface SkillsUpdateCommandOptions {
@@ -31,6 +34,16 @@ function printUpdated(changes: ReadonlyArray<LockfileSourceChange>): void {
       )
     }
   }
+}
+
+// update only ever touches the changed set (§7.4); added/removed sources are
+// approve's trust decision, so surface them here or the operator sees a
+// clean "Updated N" with no sign that other drift still needs approve.
+function printPendingAddRemove(diff: LockfileDiffResult): void {
+  if (diff.added.length === 0 && diff.removed.length === 0) return
+  console.log(
+    `${diff.added.length} added, ${diff.removed.length} removed source(s) still pending. Run \`intent skills approve\` to review.`,
+  )
 }
 
 export async function runSkillsUpdateCommand(
@@ -90,6 +103,7 @@ export async function runSkillsUpdateCommand(
       console.log(
         `intent.lock already matches the installed state for "${sourceArg}". Nothing to update.`,
       )
+      printPendingAddRemove(diff)
       return
     }
     targets = [match]
@@ -101,6 +115,7 @@ export async function runSkillsUpdateCommand(
     console.log(
       'intent.lock already matches installed sources. Nothing to update.',
     )
+    printPendingAddRemove(diff)
     return
   }
 
@@ -133,4 +148,5 @@ export async function runSkillsUpdateCommand(
   })
 
   printUpdated(targets)
+  printPendingAddRemove(diff)
 }
