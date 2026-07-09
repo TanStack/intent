@@ -1,5 +1,6 @@
-import { relative, sep } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { sourceIdentityKey } from '../types.js'
+import { computeManifestHash, readIntentManifest } from '../manifest.js'
 import { computeSourceContentHash } from './hash.js'
 import type { SourceContentHash } from './hash.js'
 import type { IntentLockfileSource } from './lockfile.js'
@@ -26,6 +27,31 @@ function buildResolution(pkg: IntentPackage): string | null {
   return pkg.kind === 'npm' ? `npm:${pkg.name}@${pkg.version}` : null
 }
 
+// manifestHash/capabilities stay null when a package ships no M3 manifest —
+// reserved-nullable by design, so the lockfile works before every package
+// adopts a manifest. When a manifest is present, its declared capabilities
+// (unioned across skills) and hash join the lockfile source entry.
+function readManifestFields(pkg: IntentPackage): {
+  manifestHash: string | null
+  capabilities: Array<string> | null
+} {
+  const manifest = readIntentManifest(
+    join(pkg.packageRoot, 'skills', 'intent.manifest.json'),
+  )
+  if (!manifest) {
+    return { manifestHash: null, capabilities: null }
+  }
+
+  const capabilities = [
+    ...new Set(manifest.skills.flatMap((skill) => skill.capabilities)),
+  ].sort(compareStrings)
+
+  return {
+    manifestHash: computeManifestHash(manifest),
+    capabilities,
+  }
+}
+
 function assertUniqueIdentities(
   sources: ReadonlyArray<IntentLockfileSource>,
 ): void {
@@ -47,6 +73,7 @@ export function buildCurrentLockfileSources(
   const sources = packages
     .map((pkg): IntentLockfileSource => {
       const { skills, contentHash } = buildSourceContent(pkg)
+      const { manifestHash, capabilities } = readManifestFields(pkg)
       return {
         id: pkg.name,
         kind: pkg.kind,
@@ -54,8 +81,8 @@ export function buildCurrentLockfileSources(
         resolution: buildResolution(pkg),
         skills,
         contentHash,
-        manifestHash: null,
-        capabilities: null,
+        manifestHash,
+        capabilities,
       }
     })
     .sort((a, b) => compareStrings(sourceIdentityKey(a), sourceIdentityKey(b)))

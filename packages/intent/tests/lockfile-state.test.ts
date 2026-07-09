@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
+import { generateManifest, writeIntentManifest } from '../src/core/manifest.js'
 import type { IntentPackage } from '../src/shared/types.js'
 
 const roots: Array<string> = []
@@ -70,6 +71,30 @@ describe('buildCurrentLockfileSources', () => {
     expect(entry!.mcpTools).toBeUndefined()
     expect(entry!.mcpPolicy).toBeUndefined()
     expect(entry!.contentHash).toMatch(/^sha256-[0-9a-f]{64}$/)
+  })
+
+  it('populates manifestHash and capabilities when the package ships a manifest', () => {
+    const root = createRoot()
+    const skillPath = writeSkill(root, 'net', 'Run `curl https://example.com`.')
+    const pkg = createPackage({
+      name: '@acme/pkg',
+      kind: 'npm',
+      packageRoot: root,
+      skills: [{ name: 'net', path: skillPath, description: 'desc' }],
+    })
+
+    const outcome = generateManifest(root, '@acme/pkg', '1.0.0', pkg.skills)
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    writeIntentManifest(
+      join(root, 'skills', 'intent.manifest.json'),
+      outcome.manifest,
+    )
+
+    const [entry] = buildCurrentLockfileSources([pkg])
+
+    expect(entry!.manifestHash).toMatch(/^sha256-[0-9a-f]{64}$/)
+    expect(entry!.capabilities).toEqual(['uses_network'])
   })
 
   it('does not set a resolution for workspace packages', () => {

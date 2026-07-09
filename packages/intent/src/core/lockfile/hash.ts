@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto'
-import { isAbsolute, relative } from 'node:path'
+import { isAbsolute, join, relative } from 'node:path'
 import {
   closeSync,
   fstatSync,
   openSync,
   readFileSync,
+  readdirSync,
   realpathSync,
 } from 'node:fs'
 
@@ -183,4 +184,56 @@ export function computeSourceContentHash(
     skills: entries.map((entry) => entry.relativePath).toSorted(compareStrings),
     contentHash: hashEntries(hashed),
   }
+}
+
+function toPosixRelative(baseDir: string, absolutePath: string): string {
+  const rel = relative(baseDir, absolutePath)
+  return rel.split('\\').join('/')
+}
+
+function collectFilesRecursive(
+  dir: string,
+  baseDir: string,
+): Array<SkillContentEntry> {
+  const entries: Array<SkillContentEntry> = []
+  for (const dirent of readdirSync(dir, { withFileTypes: true })) {
+    const absolutePath = join(dir, dirent.name)
+    if (dirent.isDirectory()) {
+      entries.push(...collectFilesRecursive(absolutePath, baseDir))
+    } else if (dirent.isFile()) {
+      entries.push({
+        relativePath: toPosixRelative(baseDir, absolutePath),
+        absolutePath,
+      })
+    }
+  }
+  return entries
+}
+
+// Manifest per-skill hash scope: the whole skill folder (SKILL.md plus any
+// references/, assets/, scripts/), unlike the lockfile's per-package
+// aggregate which is SKILL.md-only. Same canonical hashing rules (LF text
+// normalization, byte-exact binary), different scope.
+export function computeSkillFolderHash(
+  skillDir: string,
+  packageRoot: string,
+): string {
+  const realPackageRoot = realpathSync(packageRoot)
+  const entries = collectFilesRecursive(skillDir, skillDir)
+
+  assertNoDuplicateKeys(
+    entries.map((entry) => entry.relativePath),
+    'skill folder path',
+  )
+
+  const hashed = entries.map((entry) => ({
+    key: entry.relativePath,
+    value: readSkillMdContent(
+      entry.absolutePath,
+      realPackageRoot,
+      entry.relativePath,
+    ),
+  }))
+
+  return hashEntries(hashed)
 }
