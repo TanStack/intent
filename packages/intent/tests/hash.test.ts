@@ -246,7 +246,7 @@ describe('computeSourceContentHash', () => {
     expect(hashA).toBe(hashB)
   })
 
-  it('does not hash a non-SKILL.md file even if present in the skill folder', () => {
+  it('hashes a reference file in a skill folder', () => {
     const root = createRoot()
     const skillPath = writeFile(root, 'skills/a/SKILL.md', 'body')
     writeFile(root, 'skills/a/references/deep-dive.md', 'reference')
@@ -261,7 +261,7 @@ describe('computeSourceContentHash', () => {
       computeSourceContentHash(root, [
         { relativePath: 'skills/a/SKILL.md', absolutePath: skillPath },
       ]).contentHash,
-    ).toBe(before)
+    ).not.toBe(before)
   })
 
   it('fails closed when a symlinked SKILL.md escapes the package root', () => {
