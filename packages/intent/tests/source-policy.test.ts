@@ -176,6 +176,20 @@ describe('applySourcePolicy — allowlist matrix', () => {
 })
 
 describe('applySourcePolicy — permit-all and empty modes', () => {
+  it('excludes only the matching kind for a kind-qualified package pattern', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [pkg('foo', ['x'], 'npm'), pkg('foo', ['y'], 'workspace')],
+      },
+      {
+        config: config(['*']),
+        excludeMatchers: compileExcludePatterns(['workspace:foo']),
+      },
+    )
+
+    expect(result.packages).toEqual([pkg('foo', ['x'], 'npm')])
+  })
+
   it('unqualified exclude hides both an npm and a workspace package of the same name (kind-agnostic, deliberate)', () => {
     const result = applySourcePolicy(
       {

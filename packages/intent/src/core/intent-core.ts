@@ -11,7 +11,6 @@ import { resolveSkillUseFastPath } from './load-resolution.js'
 import { resolveProjectContext } from './project-context.js'
 import {
   checkLoadAllowed,
-  isSourcePermitted,
   packageNotListedRefusal,
   readSkillSourcesConfig,
   scanForPolicedIntents,
@@ -302,10 +301,12 @@ function resolveIntentSkillInCwd(
     fsCache,
   )
   if (fastPathResolved) {
-    if (
-      !isSourcePermitted(config, parsedUse.packageName, fastPathResolved.kind)
-    ) {
-      const lateRefusal = packageNotListedRefusal(use, parsedUse.packageName)
+    const lateRefusal = checkLoadAllowed(use, parsedUse, {
+      config,
+      excludeMatchers,
+      sourceKind: fastPathResolved.kind,
+    })
+    if (lateRefusal) {
       throw new IntentCoreError(lateRefusal.code, lateRefusal.message)
     }
     return toResolvedIntentSkill(

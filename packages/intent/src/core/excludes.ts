@@ -3,13 +3,17 @@ import { resolveProjectContext } from './project-context.js'
 import { readPackageJson } from './package-json.js'
 import type { ProjectContext } from './project-context.js'
 import type { IntentCoreOptions } from './types.js'
+import type { IntentPackage } from '../shared/types.js'
 
 const MAX_EXCLUDE_PATTERN_LENGTH = 200
 const PACKAGE_NAME_BOUNDARY = /[^a-zA-Z0-9_.-]/
 
 export interface ExcludeMatcher {
   pattern: string
-  matchesPackage: (packageName: string) => boolean
+  matchesPackage: (
+    packageName: string,
+    packageKind?: IntentPackage['kind'],
+  ) => boolean
   matchesSkill?: (skillName: string) => boolean
 }
 
@@ -100,6 +104,33 @@ function compileSegment(segment: string): (value: string) => boolean {
   return (value) => regex.test(value)
 }
 
+function parsePackageSegment(segment: string): {
+  kind?: IntentPackage['kind']
+  packagePattern: string
+} {
+  const separatorIndex = segment.indexOf(':')
+  if (separatorIndex === -1) {
+    return { packagePattern: segment }
+  }
+
+  const prefix = segment.slice(0, separatorIndex)
+  const packagePattern = segment.slice(separatorIndex + 1)
+  if (prefix === 'npm' || prefix === 'workspace') {
+    return { kind: prefix, packagePattern }
+  }
+
+  return { packagePattern: segment }
+}
+
+function createPackageMatcher(
+  packageSegment: string,
+): ExcludeMatcher['matchesPackage'] {
+  const { kind, packagePattern } = parsePackageSegment(packageSegment)
+  const matchesName = compileSegment(packagePattern)
+  return (packageName, packageKind) =>
+    (kind === undefined || kind === packageKind) && matchesName(packageName)
+}
+
 export function compileExcludePatterns(
   patterns: Array<string>,
 ): Array<ExcludeMatcher> {
@@ -108,32 +139,33 @@ export function compileExcludePatterns(
 
     const hashIndex = pattern.indexOf('#')
     if (hashIndex === -1) {
-      return { pattern, matchesPackage: compileSegment(pattern) }
+      return { pattern, matchesPackage: createPackageMatcher(pattern) }
     }
 
     const packageSegment = pattern.slice(0, hashIndex)
     const skillSegment = pattern.slice(hashIndex + 1)
 
     if (skillSegment.replace(/\*+/g, '*') === '*') {
-      return { pattern, matchesPackage: compileSegment(packageSegment) }
+      return { pattern, matchesPackage: createPackageMatcher(packageSegment) }
     }
 
     return {
       pattern,
-      matchesPackage: compileSegment(packageSegment),
+      matchesPackage: createPackageMatcher(packageSegment),
       matchesSkill: compileSegment(skillSegment),
     }
   })
 }
 
-// Deliberately kind-agnostic, unlike the allowlist/lockfile — not a gap to close later.
 export function isPackageExcluded(
   packageName: string,
   matchers: Array<ExcludeMatcher>,
+  packageKind?: IntentPackage['kind'],
 ): boolean {
   return matchers.some(
     (matcher) =>
-      matcher.matchesSkill === undefined && matcher.matchesPackage(packageName),
+      matcher.matchesSkill === undefined &&
+      matcher.matchesPackage(packageName, packageKind),
   )
 }
 
@@ -154,10 +186,11 @@ export function isSkillExcluded(
   packageName: string,
   skillName: string,
   matchers: Array<ExcludeMatcher>,
+  packageKind?: IntentPackage['kind'],
 ): boolean {
   const variants = skillNameVariants(packageName, skillName)
   return matchers.some((matcher) => {
-    if (!matcher.matchesPackage(packageName)) return false
+    if (!matcher.matchesPackage(packageName, packageKind)) return false
     if (matcher.matchesSkill === undefined) return true
     return variants.some((variant) => matcher.matchesSkill!(variant))
   })

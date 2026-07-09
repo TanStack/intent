@@ -18,6 +18,14 @@ describe('exclude matching — package level (backward compatible)', () => {
     expect(isPackageExcluded('@other/pkg', matchers)).toBe(false)
   })
 
+  it('matches a kind-qualified package pattern only for that kind', () => {
+    const matchers = compileExcludePatterns(['workspace:foo'])
+
+    expect(isPackageExcluded('foo', matchers, 'workspace')).toBe(true)
+    expect(isPackageExcluded('foo', matchers, 'npm')).toBe(false)
+    expect(isPackageExcluded('foo', matchers)).toBe(false)
+  })
+
   it('treats a whole-package exclusion as excluding all of its skills', () => {
     const matchers = compileExcludePatterns(['@scope/pkg'])
     expect(isSkillExcluded('@scope/pkg', 'anything', matchers)).toBe(true)

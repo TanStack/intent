@@ -83,12 +83,13 @@ export function checkLoadAllowed(
   params: {
     config: SkillSourcesConfig
     excludeMatchers: Array<ExcludeMatcher>
+    sourceKind?: IntentPackage['kind']
   },
 ): LoadRefusal | null {
-  const { config, excludeMatchers } = params
+  const { config, excludeMatchers, sourceKind } = params
   const { packageName, skillName } = parsed
 
-  if (isPackageExcluded(packageName, excludeMatchers)) {
+  if (isPackageExcluded(packageName, excludeMatchers, sourceKind)) {
     return {
       code: 'package-excluded',
       message: `Cannot load skill use "${use}": package "${packageName}" is excluded by Intent configuration.`,
@@ -102,7 +103,7 @@ export function checkLoadAllowed(
     return packageNotListedRefusal(use, packageName)
   }
 
-  if (isSkillExcluded(packageName, skillName, excludeMatchers)) {
+  if (isSkillExcluded(packageName, skillName, excludeMatchers, sourceKind)) {
     return {
       code: 'skill-excluded',
       message: `Cannot load skill use "${use}": skill "${packageName}#${skillName}" is excluded by Intent configuration.`,
@@ -168,7 +169,7 @@ export function applySourcePolicy(
   const hiddenSources: Array<IntentHiddenSourceSummary> = []
 
   for (const pkg of scanResult.packages) {
-    if (isPackageExcluded(pkg.name, excludeMatchers)) continue
+    if (isPackageExcluded(pkg.name, excludeMatchers, pkg.kind)) continue
 
     if (!isSourcePermitted(config, pkg.name, pkg.kind)) {
       if (config.mode === 'explicit') {
@@ -182,7 +183,8 @@ export function applySourcePolicy(
     }
 
     const skills = pkg.skills.filter(
-      (skill) => !isSkillExcluded(pkg.name, skill.name, excludeMatchers),
+      (skill) =>
+        !isSkillExcluded(pkg.name, skill.name, excludeMatchers, pkg.kind),
     )
     packages.push(
       skills.length === pkg.skills.length ? pkg : { ...pkg, skills },
