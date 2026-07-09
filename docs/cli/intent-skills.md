@@ -1,0 +1,95 @@
+---
+title: intent skills
+id: intent-skills
+---
+
+`intent skills` manages `intent.lock`, the committed record of which skill-bearing sources you've approved and what their content looked like when you approved it. Four subcommands: `scan`, `diff` (read-only), `approve`, `update` (mutating).
+
+```bash
+npx @tanstack/intent@latest skills <scan|diff|approve|update> [source] [--json] [--all] [--yes] [--frozen] [--no-frozen]
+```
+
+See [Lockfile and frozen mode](../security/lockfile) for what `intent.lock` is and what frozen mode guarantees.
+
+## `intent skills scan`
+
+```bash
+npx @tanstack/intent@latest skills scan [--json] [--frozen] [--no-frozen]
+```
+
+Read-only. Discovers current skill-bearing sources, computes each source's `contentHash`, and reports drift against `intent.lock`.
+
+- No lock found: prints `No intent.lock found. Run \`intent skills approve --all\` to create one.`
+- Lock is clean: prints `intent.lock is up to date.`
+- Lock is stale: prints `intent.lock is out of date: N added, N removed, N changed.`
+- Discovered sources not in `intent.skills`: prints a count and points at `intent.skills`/`intent.exclude`
+- `--json` prints `{ frozen, hiddenSourceCount, hasLockfile, added, removed, changed, isClean }`
+
+## `intent skills diff`
+
+```bash
+npx @tanstack/intent@latest skills diff [--json] [--frozen] [--no-frozen]
+```
+
+Read-only. Same underlying computation as `scan`, but change-focused: prints only `Added:`/`Removed:`/`Changed:` sections with per-field diffs (`version`, `resolution`, `skills`, `contentHash`, `manifestHash`, `capabilities`). Unchanged sources are omitted.
+
+```
+Changed:
+  ~ npm:@acme/query
+      version: "1.0.0" -> "1.1.0"
+      resolution: "npm:@acme/query@1.0.0" -> "npm:@acme/query@1.1.0"
+      contentHash: "sha256-492ac4..." -> "sha256-2631b3..."
+```
+
+## `intent skills approve [source]`
+
+```bash
+npx @tanstack/intent@latest skills approve [source] [--all] [--yes]
+```
+
+Writes `intent.lock`. This is the trust decision — approving means a human reviewed this exact change.
+
+- **No arg, no `--all`/`--yes`:** interactive per-pending-change prompt (approve/skip each). Fails if stdin isn't a TTY.
+- **`--all` or `--yes`:** accepts every pending change (added, removed, changed) without prompting. This is the first-run path that creates the initial lock.
+- **A single source:** `approve npm:@tanstack/query`, `approve workspace:my-package`, or a bare name (`approve foo`) if it resolves unambiguously against currently-discovered sources. Two sources sharing a bare name across kinds (`npm:foo` and `workspace:foo`) error instead of guessing — pass `kind:id` explicitly.
+- Re-serializes the whole file deterministically: identical inputs produce a byte-identical `intent.lock`.
+- Only touches the targeted entry (single-source form) or all pending changes (`--all`/`--yes`) — never silently drops an entry you didn't act on.
+- Refuses in frozen mode (exit `5`).
+
+## `intent skills update [source]`
+
+```bash
+npx @tanstack/intent@latest skills update [source] [--all]
+```
+
+Writes `intent.lock`. This is the mechanical refresh, not a trust decision: it re-reads currently-installed sources and re-syncs the matching **already-locked** entries' `version`, `resolution`, `skills`, and `contentHash` to whatever's installed now.
+
+- Only touches sources present in **both** the lock and the current scan. It never adds a newly-discovered source (that's `approve`'s job) and never drops a source that's no longer discovered (also `approve`'s job — removing a source from the trust boundary is itself a trust decision).
+- Reports pending added/removed drift it didn't touch: `N added, M removed source(s) still pending. Run \`intent skills approve\` to review.`
+- Makes zero network calls and zero subprocess calls — it only reads what's already on disk.
+- Refuses in frozen mode (exit `5`).
+
+## Options
+
+- `--json`: with `scan`/`diff`, print the structured diff instead of text
+- `--all`: with `approve`/`update`, act on all pending changes without prompting
+- `--yes`: with `approve`, accept all pending changes non-interactively (alias for `--all`'s non-interactive behavior, for scripted first-run)
+- `--frozen`: force frozen mode, regardless of `INTENT_FROZEN`/`CI` auto-detection
+- `--no-frozen`: force interactive mode — overrides `INTENT_FROZEN` and the `CI` auto-detect (highest-precedence explicit override)
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | ok |
+| `1` | generic CLI usage/parse error |
+| `2` | drift found under frozen mode |
+| `3` | unapproved/unlisted skill-bearing source found under frozen mode |
+| `4` | no `intent.lock` found under frozen mode |
+| `5` | `approve`/`update` refused — frozen mode disallows mutation |
+| `6` | `intent.lock` is malformed or from an unsupported (newer) `lockfileVersion` |
+
+## Related
+
+- [Lockfile and frozen mode](../security/lockfile)
+- [Trust model](../concepts/trust-model)
