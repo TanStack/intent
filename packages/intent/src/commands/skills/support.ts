@@ -77,7 +77,7 @@ export function computeLockfileState(
   scan: ScanResult,
   cwd: string,
 ): LockfileState {
-  const current = buildCurrentLockfileSources(scan.packages)
+  const current = buildCurrentLockfileSources(scan.packages, scan.readFs)
   const lockedResult = readLockfileOrFail(cwd)
   const diff = diffLockfileSources(current, lockedResult)
   return { current, lockedResult, diff }

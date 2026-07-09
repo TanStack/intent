@@ -5,6 +5,8 @@ import { computeSourceContentHash } from './hash.js'
 import type { SourceContentHash } from './hash.js'
 import type { IntentLockfileSource } from './lockfile.js'
 import type { IntentPackage } from '../../shared/types.js'
+import { nodeReadFs } from '../../shared/utils.js'
+import type { ReadFs } from '../../shared/utils.js'
 
 function toPosixPath(path: string): string {
   return sep === '/' ? path : path.split(sep).join('/')
@@ -14,13 +16,13 @@ function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }
 
-function buildSourceContent(pkg: IntentPackage): SourceContentHash {
+function buildSourceContent(pkg: IntentPackage, fs: ReadFs): SourceContentHash {
   const entries = pkg.skills.map((skill) => ({
     relativePath: toPosixPath(relative(pkg.packageRoot, skill.path)),
     absolutePath: skill.path,
   }))
 
-  return computeSourceContentHash(pkg.packageRoot, entries)
+  return computeSourceContentHash(pkg.packageRoot, entries, fs)
 }
 
 function buildResolution(pkg: IntentPackage): string | null {
@@ -69,10 +71,11 @@ function assertUniqueIdentities(
 
 export function buildCurrentLockfileSources(
   packages: ReadonlyArray<IntentPackage>,
+  fs: ReadFs = nodeReadFs,
 ): Array<IntentLockfileSource> {
   const sources = packages
     .map((pkg): IntentLockfileSource => {
-      const { skills, contentHash } = buildSourceContent(pkg)
+      const { skills, contentHash } = buildSourceContent(pkg, fs)
       const { manifestHash, capabilities } = readManifestFields(pkg)
       return {
         id: pkg.name,

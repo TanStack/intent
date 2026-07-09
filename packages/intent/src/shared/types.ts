@@ -13,6 +13,8 @@ export interface IntentConfig {
 // Scanner types
 // ---------------------------------------------------------------------------
 
+import type { ReadFs } from './utils.js'
+
 export interface ScanResult {
   packageManager: PackageManager
   packages: Array<IntentPackage>
@@ -24,6 +26,7 @@ export interface ScanResult {
     global: NodeModulesScanTarget
   }
   stats: ScanStats
+  readFs?: ReadFs
 }
 
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'unknown'

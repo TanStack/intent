@@ -1,15 +1,9 @@
 import { createHash } from 'node:crypto'
 import { dirname, isAbsolute, join, relative } from 'node:path'
-import {
-  closeSync,
-  fstatSync,
-  openSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  statSync,
-} from 'node:fs'
+import { readdirSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
+import { nodeReadFs } from '../../shared/utils.js'
+import type { ReadFs } from '../../shared/utils.js'
 
 export interface SkillContentEntry {
   relativePath: string
@@ -104,44 +98,32 @@ function hashEntries(
   return `sha256-${hash.digest('hex')}`
 }
 
-// Opens once and reads/verifies-type from that same fd rather than
-// stat-by-path-then-open-by-path: the fd is bound to a specific inode, so a
-// path swap after this call can't produce a torn read mixing old/new bytes.
 function readRegularFile(
+  fs: ReadFs,
   physicalPath: string,
   logicalRelativePath: string,
 ): Buffer {
-  let fd: number
   try {
-    fd = openSync(physicalPath, 'r')
+    if (!fs.lstatSync(physicalPath).isFile()) {
+      throw new Error('not a regular file.')
+    }
+    return fs.readFileSync(physicalPath)
   } catch (err) {
     throw new Error(
       `Failed to read skill file "${logicalRelativePath}": ${err instanceof Error ? err.message : String(err)}`,
     )
   }
-
-  try {
-    if (!fstatSync(fd).isFile()) {
-      throw new Error(
-        `Failed to read skill file "${logicalRelativePath}": not a regular file.`,
-      )
-    }
-    return readFileSync(fd)
-  } finally {
-    closeSync(fd)
-  }
 }
 
-// Resolves through symlinks once, validated against the package root, not the
-// original path, to avoid a TOCTOU window between the check and the read.
 function readSkillMdContent(
+  fs: ReadFs,
   absolutePath: string,
   realPackageRoot: string,
   logicalRelativePath: string,
 ): Buffer {
   let realPath: string
   try {
-    realPath = realpathSync(absolutePath)
+    realPath = fs.realpathSync(absolutePath)
   } catch (err) {
     throw new Error(
       `Failed to resolve skill file "${logicalRelativePath}": ${err instanceof Error ? err.message : String(err)}`,
@@ -154,18 +136,19 @@ function readSkillMdContent(
     )
   }
 
-  const raw = readRegularFile(realPath, logicalRelativePath)
+  const raw = readRegularFile(fs, realPath, logicalRelativePath)
   return isBinaryContent(raw) ? raw : normalizeLineEndings(raw)
 }
 
 function resolveContainedDirectory(
+  fs: ReadFs,
   absolutePath: string,
   realPackageRoot: string,
   logicalRelativePath: string,
 ): string {
   let realPath: string
   try {
-    realPath = realpathSync(absolutePath)
+    realPath = fs.realpathSync(absolutePath)
   } catch (err) {
     throw new Error(
       `Failed to resolve skill directory "${logicalRelativePath}": ${err instanceof Error ? err.message : String(err)}`,
@@ -179,7 +162,7 @@ function resolveContainedDirectory(
   }
 
   try {
-    if (!statSync(realPath).isDirectory()) {
+    if (!fs.lstatSync(realPath).isDirectory()) {
       throw new Error('not a directory.')
     }
   } catch (err) {
@@ -192,12 +175,14 @@ function resolveContainedDirectory(
 }
 
 function collectSupportFiles(
+  fs: ReadFs,
   dir: string,
   baseDir: string,
   realPackageRoot: string,
 ): Array<SkillContentEntry> {
   const logicalRelativePath = toPosixRelative(baseDir, dir)
   const realDir = resolveContainedDirectory(
+    fs,
     dir,
     realPackageRoot,
     logicalRelativePath,
@@ -205,7 +190,10 @@ function collectSupportFiles(
 
   let dirents: Array<Dirent<string>>
   try {
-    dirents = readdirSync(realDir, { withFileTypes: true })
+    dirents = fs.readdirSync(realDir, {
+      withFileTypes: true,
+      encoding: 'utf8',
+    })
   } catch (err) {
     throw new Error(
       `Failed to read skill directory "${logicalRelativePath}": ${err instanceof Error ? err.message : String(err)}`,
@@ -216,7 +204,9 @@ function collectSupportFiles(
   for (const dirent of dirents) {
     const absolutePath = join(dir, dirent.name)
     if (dirent.isDirectory()) {
-      files.push(...collectSupportFiles(absolutePath, baseDir, realPackageRoot))
+      files.push(
+        ...collectSupportFiles(fs, absolutePath, baseDir, realPackageRoot),
+      )
       continue
     }
     if (dirent.isFile()) {
@@ -227,17 +217,18 @@ function collectSupportFiles(
       continue
     }
     if (dirent.isSymbolicLink()) {
-      let stat: ReturnType<typeof statSync>
+      let realPath: string
       try {
-        stat = statSync(absolutePath)
+        realPath = fs.realpathSync(absolutePath)
       } catch (err) {
         throw new Error(
           `Failed to resolve skill file "${toPosixRelative(baseDir, absolutePath)}": ${err instanceof Error ? err.message : String(err)}`,
         )
       }
+      const stat = fs.lstatSync(realPath)
       if (stat.isDirectory()) {
         files.push(
-          ...collectSupportFiles(absolutePath, baseDir, realPackageRoot),
+          ...collectSupportFiles(fs, absolutePath, baseDir, realPackageRoot),
         )
       } else if (stat.isFile()) {
         files.push({
@@ -252,6 +243,7 @@ function collectSupportFiles(
 }
 
 function collectSkillContentEntries(
+  fs: ReadFs,
   packageRoot: string,
   entries: ReadonlyArray<SkillContentEntry>,
   realPackageRoot: string,
@@ -261,7 +253,10 @@ function collectSkillContentEntries(
     const skillDir = dirname(entry.absolutePath)
     let dirents: Array<Dirent<string>>
     try {
-      dirents = readdirSync(skillDir, { withFileTypes: true })
+      dirents = fs.readdirSync(skillDir, {
+        withFileTypes: true,
+        encoding: 'utf8',
+      })
     } catch (err) {
       throw new Error(
         `Failed to read skill directory "${toPosixRelative(packageRoot, skillDir)}": ${err instanceof Error ? err.message : String(err)}`,
@@ -278,17 +273,18 @@ function collectSkillContentEntries(
       }
 
       const supportDir = join(skillDir, dirent.name)
-      let stat: ReturnType<typeof statSync>
+      let realPath: string
       try {
-        stat = statSync(supportDir)
+        realPath = fs.realpathSync(supportDir)
       } catch (err) {
         throw new Error(
           `Failed to resolve skill directory "${toPosixRelative(packageRoot, supportDir)}": ${err instanceof Error ? err.message : String(err)}`,
         )
       }
+      const stat = fs.lstatSync(realPath)
       if (stat.isDirectory()) {
         contentEntries.push(
-          ...collectSupportFiles(supportDir, packageRoot, realPackageRoot),
+          ...collectSupportFiles(fs, supportDir, packageRoot, realPackageRoot),
         )
       }
     }
@@ -300,6 +296,7 @@ function collectSkillContentEntries(
 export function computeSourceContentHash(
   packageRoot: string,
   entries: ReadonlyArray<SkillContentEntry>,
+  fs: ReadFs = nodeReadFs,
 ): SourceContentHash {
   for (const entry of entries) {
     assertValidRelativePath(entry.relativePath, 'skill path')
@@ -309,8 +306,9 @@ export function computeSourceContentHash(
     'skill path',
   )
 
-  const realPackageRoot = realpathSync(packageRoot)
+  const realPackageRoot = fs.realpathSync(packageRoot)
   const contentEntries = collectSkillContentEntries(
+    fs,
     packageRoot,
     entries,
     realPackageRoot,
@@ -323,6 +321,7 @@ export function computeSourceContentHash(
   const hashed = contentEntries.map((entry) => ({
     key: entry.relativePath,
     value: readSkillMdContent(
+      fs,
       entry.absolutePath,
       realPackageRoot,
       entry.relativePath,
@@ -367,7 +366,7 @@ export function computeSkillFolderHash(
   skillDir: string,
   packageRoot: string,
 ): string {
-  const realPackageRoot = realpathSync(packageRoot)
+  const realPackageRoot = nodeReadFs.realpathSync(packageRoot)
   const entries = collectFilesRecursive(skillDir, skillDir)
 
   assertNoDuplicateKeys(
@@ -378,6 +377,7 @@ export function computeSkillFolderHash(
   const hashed = entries.map((entry) => ({
     key: entry.relativePath,
     value: readSkillMdContent(
+      nodeReadFs,
       entry.absolutePath,
       realPackageRoot,
       entry.relativePath,

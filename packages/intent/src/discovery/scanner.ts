@@ -710,6 +710,7 @@ export function scanForIntents(
       conflicts,
       nodeModules,
       stats: getStats(),
+      readFs: fsCache.getReadFs(),
     }
   }
 
@@ -739,6 +740,7 @@ export function scanForIntents(
     conflicts,
     nodeModules,
     stats: getStats(),
+    readFs: fsCache.getReadFs(),
   }
 }
 

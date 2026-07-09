@@ -2,9 +2,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
+import { computeLockfileState } from '../src/commands/skills/support.js'
 import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
 import { generateManifest, writeIntentManifest } from '../src/core/manifest.js'
-import type { IntentPackage } from '../src/shared/types.js'
+import { nodeReadFs } from '../src/shared/utils.js'
+import type { IntentPackage, ScanResult } from '../src/shared/types.js'
+import type { ReadFs } from '../src/shared/utils.js'
 
 const roots: Array<string> = []
 
@@ -129,6 +132,45 @@ describe('buildCurrentLockfileSources', () => {
     const after = buildCurrentLockfileSources([pkg])[0]!.contentHash
 
     expect(after).not.toBe(before)
+  })
+
+  it('reads source bytes through the scanner filesystem', () => {
+    const root = createRoot()
+    const skillPath = writeSkill(root, 'core', 'native bytes')
+    const pkg = createPackage({
+      name: 'router',
+      kind: 'workspace',
+      packageRoot: root,
+      skills: [{ name: 'core', path: skillPath, description: 'desc' }],
+    })
+    const realSkillPath = nodeReadFs.realpathSync(skillPath)
+    const readFs: ReadFs = {
+      ...nodeReadFs,
+      readFileSync: ((path: string | Buffer | URL | number) => {
+        if (String(path) === realSkillPath) {
+          return Buffer.from('patched zip bytes')
+        }
+        return nodeReadFs.readFileSync(path)
+      }) as typeof nodeReadFs.readFileSync,
+    }
+
+    const nativeHash = buildCurrentLockfileSources([pkg])[0]!.contentHash
+    const scan: ScanResult = {
+      packageManager: 'yarn',
+      packages: [pkg],
+      warnings: [],
+      notices: [],
+      conflicts: [],
+      nodeModules: {
+        local: { path: null, detected: false, exists: false, scanned: false },
+        global: { path: null, detected: false, exists: false, scanned: false },
+      },
+      stats: { packageJsonReadCount: 0, packageJsonCacheHits: 0 },
+      readFs,
+    }
+    const patchedHash = computeLockfileState(scan, root).current[0]!.contentHash
+
+    expect(patchedHash).not.toBe(nativeHash)
   })
 
   it('produces a stable hash for an unchanged package', () => {
