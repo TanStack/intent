@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join, sep } from 'node:path'
+import { sourceIdentityKey } from '../core/types.js'
 import { rewriteSkillLoadPaths } from '../skills/paths.js'
 import { listNodeModulesPackageDirs } from '../shared/utils.js'
 import type {
@@ -124,10 +125,14 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
       kind: opts.getPackageKind(dirPath),
       source,
     }
-    const existingIndex = opts.packageIndexes.get(name)
+    const candidateKey = sourceIdentityKey({
+      kind: candidate.kind,
+      id: candidate.name,
+    })
+    const existingIndex = opts.packageIndexes.get(candidateKey)
     if (existingIndex === undefined) {
       opts.rememberVariant(candidate)
-      opts.packageIndexes.set(name, opts.packages.push(candidate) - 1)
+      opts.packageIndexes.set(candidateKey, opts.packages.push(candidate) - 1)
       return true
     }
 

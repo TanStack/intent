@@ -17,6 +17,7 @@ import {
   findWorkspacePackages,
   findWorkspaceRoot,
 } from '../setup/workspace-patterns.js'
+import { sourceIdentityKey } from '../core/types.js'
 import { createIntentFsCache } from './fs-cache.js'
 import { detectPackageManager } from './package-manager.js'
 import { createDependencyWalker, createPackageRegistrar } from './index.js'
@@ -375,29 +376,42 @@ function getSkillNameHints(
 // ---------------------------------------------------------------------------
 
 function topoSort(packages: Array<IntentPackage>): Array<IntentPackage> {
-  const byName = new Map(packages.map((p) => [p.name, p]))
+  const byName = new Map<string, Array<IntentPackage>>()
+  for (const pkg of packages) {
+    const matches = byName.get(pkg.name)
+    if (matches) {
+      matches.push(pkg)
+    } else {
+      byName.set(pkg.name, [pkg])
+    }
+  }
   const visited = new Set<string>()
   const sorted: Array<IntentPackage> = []
 
-  function visit(name: string): void {
-    if (visited.has(name)) return
-    visited.add(name)
-    const pkg = byName.get(name)
-    if (!pkg) return
+  function visit(pkg: IntentPackage): void {
+    const key = sourceIdentityKey({ kind: pkg.kind, id: pkg.name })
+    if (visited.has(key)) return
+    visited.add(key)
     for (const dep of pkg.intent.requires ?? []) {
-      visit(dep)
+      for (const dependency of byName.get(dep) ?? []) {
+        visit(dependency)
+      }
     }
     sorted.push(pkg)
   }
 
   for (const pkg of packages) {
-    visit(pkg.name)
+    visit(pkg)
   }
   return sorted
 }
 
 function getPackageDepth(packageRoot: string, projectRoot: string): number {
   return relative(projectRoot, packageRoot).split(sep).length
+}
+
+function packageIdentityKey(pkg: IntentPackage): string {
+  return sourceIdentityKey({ kind: pkg.kind, id: pkg.name })
 }
 
 function normalizeVersion(version: string): string | null {
@@ -519,7 +533,6 @@ export function scanForIntents(
         : undefined,
     },
   }
-  // Track registered package names to avoid duplicates across phases
   const packageIndexes = new Map<string, number>()
   const packageVariants = new Map<
     string,
@@ -549,10 +562,11 @@ export function scanForIntents(
   }
 
   function rememberVariant(pkg: IntentPackage): void {
-    let variants = packageVariants.get(pkg.name)
+    const key = packageIdentityKey(pkg)
+    let variants = packageVariants.get(key)
     if (!variants) {
       variants = new Map()
-      packageVariants.set(pkg.name, variants)
+      packageVariants.set(key, variants)
     }
     variants.set(pkg.packageRoot, {
       version: pkg.version,
@@ -715,7 +729,7 @@ export function scanForIntents(
   }
 
   for (const pkg of packages) {
-    const variants = packageVariants.get(pkg.name)
+    const variants = packageVariants.get(packageIdentityKey(pkg))
     if (!variants) continue
 
     const conflict = toVersionConflict(pkg.name, [...variants.values()], pkg)

@@ -263,8 +263,6 @@ export function scanForPolicedIntents(params: {
     excludeMatchers,
   })
 
-  // Name-only Sets, correct because the scanner guarantees at most one
-  // package per name (createPackageRegistrar dedups before this runs).
   const survivingNames = new Set(policy.packages.map((pkg) => pkg.name))
   const droppedNames = scanResult.packages
     .map((pkg) => pkg.name)

@@ -135,6 +135,43 @@ describe('scanForIntents', () => {
     expect(result.stats.packageJsonReadCount).toBeGreaterThan(0)
   })
 
+  it('retains npm and workspace packages with the same name', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'consumer',
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    const workspacePkg = createDir(root, 'packages', 'foo')
+    writeJson(join(workspacePkg, 'package.json'), {
+      name: 'foo',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'test/workspace-foo', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(workspacePkg, 'skills', 'workspace'), {
+      name: 'workspace',
+      description: 'Workspace skill',
+    })
+
+    const npmPkg = createDir(root, 'node_modules', 'foo')
+    writeJson(join(npmPkg, 'package.json'), {
+      name: 'foo',
+      version: '2.0.0',
+      intent: { version: 1, repo: 'test/npm-foo', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(npmPkg, 'skills', 'npm'), {
+      name: 'npm',
+      description: 'npm skill',
+    })
+
+    const result = scanForIntents(root)
+
+    expect(
+      result.packages.map((pkg) => `${pkg.kind}:${pkg.name}`).sort(),
+    ).toEqual(['npm:foo', 'workspace:foo'])
+    expect(result.conflicts).toEqual([])
+    expect(result.warnings).toEqual([])
+  })
+
   it('does not throw when skills exists but is not a directory', () => {
     const pkgDir = createDir(root, 'node_modules', '@tanstack', 'db')
     writeJson(join(pkgDir, 'package.json'), {

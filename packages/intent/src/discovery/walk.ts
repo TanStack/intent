@@ -115,6 +115,9 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
 
       const wsPkg = readPkgJsonWithWarning(wsDir, 'workspace')
       if (wsPkg) {
+        const workspaceName =
+          typeof wsPkg.name === 'string' ? wsPkg.name : 'unknown'
+        opts.tryRegister(wsDir, workspaceName)
         walkDepsOf(wsPkg, wsDir)
       }
     }
