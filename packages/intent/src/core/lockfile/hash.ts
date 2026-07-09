@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { dirname, isAbsolute, join, relative } from 'node:path'
 import { readdirSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
+import { assertCanonicalPackageRelativePaths } from '../skill-path.js'
 import { nodeReadFs } from '../../shared/utils.js'
 import type { ReadFs } from '../../shared/utils.js'
 
@@ -37,29 +38,6 @@ function normalizeLineEndings(content: Buffer): Buffer {
 function isWithinDir(candidate: string, dir: string): boolean {
   const rel = relative(dir, candidate)
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
-}
-
-function assertValidRelativePath(path: string, label: string): void {
-  if (path.length === 0) {
-    throw new Error(`Invalid ${label}: path must not be empty.`)
-  }
-  if (isAbsolute(path)) {
-    throw new Error(`Invalid ${label}: path must be relative, got "${path}".`)
-  }
-  if (path.includes('\\')) {
-    throw new Error(
-      `Invalid ${label}: path must use "/" separators, got "${path}".`,
-    )
-  }
-  if (
-    path
-      .split('/')
-      .some((segment) => segment === '' || segment === '.' || segment === '..')
-  ) {
-    throw new Error(
-      `Invalid ${label}: path must not contain "." or ".." segments, got "${path}".`,
-    )
-  }
 }
 
 function assertNoDuplicateKeys(keys: Array<string>, label: string): void {
@@ -298,10 +276,7 @@ export function computeSourceContentHash(
   entries: ReadonlyArray<SkillContentEntry>,
   fs: ReadFs = nodeReadFs,
 ): SourceContentHash {
-  for (const entry of entries) {
-    assertValidRelativePath(entry.relativePath, 'skill path')
-  }
-  assertNoDuplicateKeys(
+  assertCanonicalPackageRelativePaths(
     entries.map((entry) => entry.relativePath),
     'skill path',
   )

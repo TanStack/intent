@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { sourceIdentityKey } from '../types.js'
+import { assertCanonicalPackageRelativePaths } from '../skill-path.js'
 
 const INTENT_LOCKFILE_VERSION = 1
 
@@ -139,12 +140,15 @@ function parseSource(value: unknown): IntentLockfileSource {
     )
   }
 
+  const skills = assertStringArray(source.skills, 'source.skills')
+  assertCanonicalPackageRelativePaths(skills, 'source.skills path')
+
   return {
     id: assertString(source.id, 'source.id'),
     kind,
     version: assertNullableString(source.version, 'source.version'),
     resolution: assertNullableString(source.resolution, 'source.resolution'),
-    skills: assertStringArray(source.skills, 'source.skills'),
+    skills,
     contentHash: assertString(source.contentHash, 'source.contentHash'),
     manifestHash: assertNullableString(
       source.manifestHash,

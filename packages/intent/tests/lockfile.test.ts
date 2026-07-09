@@ -180,6 +180,35 @@ describe('parseIntentLockfile', () => {
       ),
     ).toThrow('Unsupported intent.lock version: 2')
   })
+
+  it.each([
+    '',
+    '/absolute/SKILL.md',
+    'skills\\core\\SKILL.md',
+    'skills/core/\0SKILL.md',
+    'skills//core/SKILL.md',
+    './skills/core/SKILL.md',
+    'skills/../core/SKILL.md',
+  ])('rejects an unsafe source skill path: %j', (skillPath) => {
+    const lockfile = createLockfile()
+    lockfile.sources[0]!.skills = [skillPath]
+
+    expect(() => parseIntentLockfile(JSON.stringify(lockfile))).toThrow(
+      /Invalid source.skills path/,
+    )
+  })
+
+  it('rejects duplicate source skill paths', () => {
+    const lockfile = createLockfile()
+    lockfile.sources[0]!.skills = [
+      'skills/core/SKILL.md',
+      'skills/core/SKILL.md',
+    ]
+
+    expect(() => parseIntentLockfile(JSON.stringify(lockfile))).toThrow(
+      /duplicate path/,
+    )
+  })
 })
 
 describe('readIntentLockfile', () => {

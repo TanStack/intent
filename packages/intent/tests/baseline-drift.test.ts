@@ -122,6 +122,30 @@ describe('resolveBaseline', () => {
 })
 
 describe('computeBaselineDrift', () => {
+  it('fails before Git access when a tracked skill path escapes its package root', () => {
+    mkdirSync(join(repoDir, 'pkg'), { recursive: true })
+    writeFileSync(join(repoDir, 'outside.md'), 'outside package')
+    git(['add', '.'])
+    git(['commit', '--quiet', '-m', 'first'])
+    git(['tag', 'v1.0.0'])
+
+    const baseline = resolveBaseline(repoDir, 'v1.0.0', baseLockfile())
+    expect(baseline.ok).toBe(true)
+    if (!baseline.ok) return
+
+    const result = computeBaselineDrift(
+      repoDir,
+      baseline.baseline,
+      [source({ skills: ['../outside.md'] })],
+      new Map([['npm:@acme/pkg', join(repoDir, 'pkg')]]),
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining('source.skills path'),
+    })
+  })
+
   it('reports no candidates when nothing changed since baseline', () => {
     mkdirSync(join(repoDir, 'pkg', 'skills', 'core'), { recursive: true })
     writeFileSync(join(repoDir, 'pkg', 'skills', 'core', 'SKILL.md'), 'content')

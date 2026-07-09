@@ -11,6 +11,10 @@ import {
   repoRoot,
   resolveCommit,
 } from '../git-adapter.js'
+import {
+  assertCanonicalPackageRelativePath,
+  resolveCanonicalPackagePath,
+} from '../skill-path.js'
 import type { IntentLockfile, IntentLockfileSource } from './lockfile.js'
 
 export interface BaselineResolution {
@@ -90,6 +94,19 @@ export function computeBaselineDrift(
   packageRoots: ReadonlyMap<string, string>,
   fileFilter?: ReadonlySet<string>,
 ): BaselineDriftOutcome | BaselineDriftFailure {
+  try {
+    for (const source of sources) {
+      for (const skillPath of source.skills) {
+        assertCanonicalPackageRelativePath(skillPath, 'source.skills path')
+      }
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      reason: err instanceof Error ? err.message : String(err),
+    }
+  }
+
   const root = repoRoot(cwd)
   if (!root.ok) {
     return { ok: false, reason: `not a git repository: ${root.reason}` }
@@ -109,9 +126,22 @@ export function computeBaselineDrift(
     const realPackageRoot = realpathSync(packageRoot)
 
     for (const skillPath of source.skills) {
+      let resolvedSkillPath: string
+      try {
+        resolvedSkillPath = resolveCanonicalPackagePath(
+          realPackageRoot,
+          skillPath,
+          'source.skills path',
+        )
+      } catch (err) {
+        return {
+          ok: false,
+          reason: err instanceof Error ? err.message : String(err),
+        }
+      }
       const repoRelativePath = relative(
         realRoot,
-        `${realPackageRoot}/${skillPath}`,
+        resolvedSkillPath,
       )
 
       if (fileFilter && !fileFilter.has(repoRelativePath)) continue

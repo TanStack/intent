@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto'
 import { computeSkillFolderHash } from './lockfile/hash.js'
 import { detectCapabilityHeuristics, findSecretMatches } from './secrets.js'
 import { nodeReadFs } from '../shared/utils.js'
+import { assertCanonicalPackageRelativePath } from './skill-path.js'
 import type { SkillEntry } from '../shared/types.js'
 import type { ReadFs } from '../shared/utils.js'
 
@@ -192,11 +193,7 @@ export function parseManifest(raw: unknown): IntentManifest {
   const skills = skillsRaw.map((entry, index): IntentManifestSkill => {
     const skillRecord = assertRecord(entry, `skills[${index}]`)
     const path = assertString(skillRecord.path, `skills[${index}].path`)
-    if (path.startsWith('/') || path.includes('..')) {
-      throw new Error(
-        `Invalid intent.manifest.json: skills[${index}].path must be package-relative without ".." segments.`,
-      )
-    }
+    assertCanonicalPackageRelativePath(path, `manifest skills[${index}].path`)
     if (seenPaths.has(path)) {
       throw new Error(
         `Invalid intent.manifest.json: duplicate skill path "${path}".`,
