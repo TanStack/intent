@@ -16,7 +16,12 @@ export interface CreateDependencyWalkerOptions {
   readPkgJson: (dirPath: string) => PackageJson | null
   getFsIdentity: (path: string) => string
   scanNodeModulesDir: (nodeModulesDir: string) => void
-  tryRegister: (dirPath: string, fallbackName: string) => boolean
+  tryRegister: (
+    dirPath: string,
+    fallbackName: string,
+    source?: IntentPackage['source'],
+    provenance?: ReadonlyArray<string>,
+  ) => boolean
   packages: Array<IntentPackage>
   warnings: Array<string>
 }
@@ -47,17 +52,23 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
     pkgJson: PackageJson,
     fromDir: string,
     includeDevDeps = false,
+    provenance: ReadonlyArray<string> = [],
   ): void {
     for (const depName of getDeps(pkgJson, includeDevDeps)) {
       const depDir = resolveDepDirCached(depName, fromDir)
       if (!depDir) continue
 
-      opts.tryRegister(depDir, depName)
-      walkDeps(depDir, depName)
+      const dependencyProvenance = [...provenance, depName]
+      opts.tryRegister(depDir, depName, 'local', dependencyProvenance)
+      walkDeps(depDir, depName, dependencyProvenance)
     }
   }
 
-  function walkDeps(pkgDir: string, pkgName: string): void {
+  function walkDeps(
+    pkgDir: string,
+    pkgName: string,
+    provenance: ReadonlyArray<string> = [],
+  ): void {
     // Resolve from the realpath: a pnpm symlink path can't resolve store-only
     // transitive deps, and walkVisited dedups on realpath so no later retry.
     const pkgKey = opts.getFsIdentity(pkgDir)
@@ -72,19 +83,21 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
       return
     }
 
-    walkDepsOf(pkgJson, pkgKey)
+    walkDepsOf(pkgJson, pkgKey, false, provenance)
   }
 
   function walkKnownPackages(): void {
     for (const pkg of [...opts.packages]) {
-      walkDeps(pkg.packageRoot, pkg.name)
+      walkDeps(pkg.packageRoot, pkg.name, [pkg.name])
     }
   }
 
   function walkProjectDeps(): void {
     const projectPkg = readPkgJsonWithWarning(opts.projectRoot, 'project')
     if (!projectPkg) return
-    walkDepsOf(projectPkg, opts.projectRoot, true)
+    const projectName =
+      typeof projectPkg.name === 'string' ? projectPkg.name : 'project'
+    walkDepsOf(projectPkg, opts.projectRoot, true, [projectName])
   }
 
   function readPkgJsonWithWarning(
@@ -117,8 +130,8 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
       if (wsPkg) {
         const workspaceName =
           typeof wsPkg.name === 'string' ? wsPkg.name : 'unknown'
-        opts.tryRegister(wsDir, workspaceName)
-        walkDepsOf(wsPkg, wsDir)
+        opts.tryRegister(wsDir, workspaceName, 'local', [workspaceName])
+        walkDepsOf(wsPkg, wsDir, false, [workspaceName])
       }
     }
   }

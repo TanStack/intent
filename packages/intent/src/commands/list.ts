@@ -101,8 +101,11 @@ function printHiddenSources(result: IntentSkillList, audience: string): void {
 
   console.log('\nHidden skill sources:\n')
   for (const source of result.hiddenSources) {
+    const provenance = source.provenance
+      ?.map((path) => path.join(' -> '))
+      .join('; ')
     console.log(
-      `  ${source.name} (${source.skillCount} ${source.skillCount === 1 ? 'skill' : 'skills'})`,
+      `  ${source.name} (${source.skillCount} ${source.skillCount === 1 ? 'skill' : 'skills'})${provenance ? ` via ${provenance}` : ''}`,
     )
   }
 }

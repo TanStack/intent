@@ -12,6 +12,8 @@ import type {
 
 type PackageJson = Record<string, unknown>
 
+const MAX_PROVENANCE_PATHS = 3
+
 function isLocalToProject(dirPath: string, projectRoot: string): boolean {
   return (
     dirPath.startsWith(projectRoot + sep) ||
@@ -43,7 +45,31 @@ export interface CreatePackageRegistrarOptions {
 
 export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
   const attemptedPackageRoots = new Set<string>()
+  const provenanceByPackageRoot = new Map<string, Array<Array<string>>>()
+  const registeredPackagesByRoot = new Map<string, IntentPackage>()
   const scannedNodeModulesDirs = new Set<string>()
+
+  function recordProvenance(
+    dirPath: string,
+    provenance: ReadonlyArray<string> | undefined,
+  ): void {
+    if (!provenance || provenance.length === 0) return
+
+    const rootKey = opts.getFsIdentity(dirPath)
+    const paths = provenanceByPackageRoot.get(rootKey) ?? []
+    if (!provenanceByPackageRoot.has(rootKey)) {
+      provenanceByPackageRoot.set(rootKey, paths)
+    }
+
+    if (
+      paths.length < MAX_PROVENANCE_PATHS &&
+      !paths.some((path) => path.join('\0') === provenance.join('\0'))
+    ) {
+      paths.push([...provenance])
+      const registered = registeredPackagesByRoot.get(rootKey)
+      if (registered) registered.provenance = paths
+    }
+  }
 
   function shouldAttemptPackageRoot(dirPath: string): boolean {
     const key = opts.getFsIdentity(dirPath)
@@ -80,7 +106,9 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     dirPath: string,
     fallbackName: string,
     source: IntentPackage['source'] = 'local',
+    provenance?: ReadonlyArray<string>,
   ): boolean {
+    recordProvenance(dirPath, provenance)
     if (!shouldAttemptPackageRoot(dirPath)) return false
 
     const skillsDir = join(dirPath, 'skills')
@@ -126,6 +154,13 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
       packageRoot: dirPath,
       kind,
       source,
+      ...(provenanceByPackageRoot.get(opts.getFsIdentity(dirPath))?.length
+        ? {
+            provenance: provenanceByPackageRoot.get(
+              opts.getFsIdentity(dirPath),
+            ),
+          }
+        : {}),
     }
     const candidateKey = sourceIdentityKey({
       kind: candidate.kind,
@@ -135,6 +170,7 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     if (existingIndex === undefined) {
       opts.rememberVariant(candidate)
       opts.packageIndexes.set(candidateKey, opts.packages.push(candidate) - 1)
+      registeredPackagesByRoot.set(opts.getFsIdentity(dirPath), candidate)
       return true
     }
 
@@ -161,6 +197,7 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
 
     if (shouldReplace) {
       opts.packages[existingIndex] = candidate
+      registeredPackagesByRoot.set(opts.getFsIdentity(dirPath), candidate)
     }
 
     return true

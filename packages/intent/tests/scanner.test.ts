@@ -235,6 +235,34 @@ describe('scanForIntents', () => {
     expect(result.packages[0]!.name).toBe('my-lib')
   })
 
+  it('records the parent chain for a transitive skill package', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      dependencies: { parent: '1.0.0' },
+    })
+    const parentDir = createDir(root, 'node_modules', 'parent')
+    writeJson(join(parentDir, 'package.json'), {
+      name: 'parent',
+      version: '1.0.0',
+      dependencies: { leaf: '1.0.0' },
+    })
+    const leafDir = createDir(parentDir, 'node_modules', 'leaf')
+    writeJson(join(leafDir, 'package.json'), {
+      name: 'leaf',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'test/leaf', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(leafDir, 'skills', 'core'), {
+      name: 'core',
+      description: 'Leaf skill',
+    })
+
+    const result = scanForIntents(root)
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.provenance).toEqual([['app', 'parent', 'leaf']])
+  })
+
   it('discovers transitive skills of a skill-bearing direct dep under pnpm isolated linker (#153)', () => {
     // pnpm isolated layout: a store-only transitive dep (start-core) reached
     // only through its skill-bearing parent's (react-start) store dir.

@@ -129,7 +129,15 @@ function formatUnlistedNotice(
   }
 
   const noun = sourceCount === 1 ? 'package ships' : 'packages ship'
-  return `${sourceCount} discovered ${noun} skills but ${sourceCount === 1 ? 'is' : 'are'} not listed in intent.skills: ${sorted.map((source) => source.name).join(', ')}. Add to opt in.`
+  const sources = sorted
+    .map((source) => {
+      const provenance = source.provenance
+        ?.map((path) => path.join(' -> '))
+        .join('; ')
+      return provenance ? `${source.name} (via ${provenance})` : source.name
+    })
+    .join(', ')
+  return `${sourceCount} discovered ${noun} skills but ${sourceCount === 1 ? 'is' : 'are'} not listed in intent.skills: ${sources}. Add to opt in.`
 }
 
 export interface SourcePolicyResult {
@@ -162,7 +170,11 @@ export function applySourcePolicy(
 
     if (!isSourcePermitted(config, pkg.name, pkg.kind)) {
       if (config.mode === 'explicit') {
-        hiddenSources.push({ name: pkg.name, skillCount: pkg.skills.length })
+        hiddenSources.push({
+          name: pkg.name,
+          skillCount: pkg.skills.length,
+          ...(pkg.provenance ? { provenance: pkg.provenance } : {}),
+        })
       }
       continue
     }

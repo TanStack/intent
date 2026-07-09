@@ -61,6 +61,7 @@ export interface IntentPackage {
   packageRoot: string
   kind: 'npm' | 'workspace'
   source: 'local' | 'global'
+  provenance?: Array<Array<string>>
 }
 
 export interface InstalledVariant {

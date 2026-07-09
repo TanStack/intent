@@ -20,6 +20,7 @@ export type IntentAudience = 'agent' | 'human'
 export interface IntentHiddenSourceSummary {
   name: string
   skillCount: number
+  provenance?: Array<Array<string>>
 }
 
 export interface IntentSkillSummary {
