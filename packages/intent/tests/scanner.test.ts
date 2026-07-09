@@ -235,6 +235,27 @@ describe('scanForIntents', () => {
     expect(result.packages[0]!.name).toBe('my-lib')
   })
 
+  it('records the parent chain for a direct skill package', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      dependencies: { leaf: '1.0.0' },
+    })
+    const leafDir = createDir(root, 'node_modules', 'leaf')
+    writeJson(join(leafDir, 'package.json'), {
+      name: 'leaf',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'test/leaf', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(leafDir, 'skills', 'core'), {
+      name: 'core',
+      description: 'Leaf skill',
+    })
+
+    const result = scanForIntents(root)
+
+    expect(result.packages[0]!.provenance).toEqual([['app', 'leaf']])
+  })
+
   it('records the parent chain for a transitive skill package', () => {
     writeJson(join(root, 'package.json'), {
       name: 'app',
@@ -261,6 +282,49 @@ describe('scanForIntents', () => {
 
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]!.provenance).toEqual([['app', 'parent', 'leaf']])
+  })
+
+  it('retains a bounded number of parent chains for the same skill package', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      dependencies: {
+        alpha: '1.0.0',
+        beta: '1.0.0',
+        gamma: '1.0.0',
+        delta: '1.0.0',
+      },
+    })
+    for (const name of ['alpha', 'beta', 'gamma', 'delta']) {
+      const parentDir = createDir(root, 'node_modules', name)
+      writeJson(join(parentDir, 'package.json'), {
+        name,
+        version: '1.0.0',
+        dependencies: { leaf: '1.0.0' },
+      })
+    }
+    const leafDir = createDir(root, 'node_modules', 'leaf')
+    writeJson(join(leafDir, 'package.json'), {
+      name: 'leaf',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'test/leaf', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(leafDir, 'skills', 'core'), {
+      name: 'core',
+      description: 'Leaf skill',
+    })
+
+    const result = scanForIntents(root)
+    const provenance = result.packages[0]!.provenance
+
+    expect(provenance).toHaveLength(3)
+    expect(provenance).toEqual(
+      expect.arrayContaining([
+        ['app', 'alpha', 'leaf'],
+        ['app', 'beta', 'leaf'],
+        ['app', 'gamma', 'leaf'],
+      ]),
+    )
+    expect(provenance).not.toContainEqual(['app', 'delta', 'leaf'])
   })
 
   it('discovers transitive skills of a skill-bearing direct dep under pnpm isolated linker (#153)', () => {

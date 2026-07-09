@@ -195,7 +195,19 @@ describe('runSkillsScanCommand', () => {
     await expect(
       runSkillsScanCommand(
         { frozen: true },
-        () => Promise.resolve(policedScan({ hiddenSourceCount: 1 })),
+        () =>
+          Promise.resolve(
+            policedScan({
+              hiddenSourceCount: 1,
+              hiddenSources: [
+                {
+                  name: 'leaf',
+                  skillCount: 1,
+                  provenance: [['app', 'parent', 'leaf']],
+                },
+              ],
+            }),
+          ),
         cwd,
       ),
     ).rejects.toMatchObject({

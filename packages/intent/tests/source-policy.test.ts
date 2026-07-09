@@ -59,7 +59,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
     expect(result.notices).toEqual([])
   })
 
-  it('drops an unlisted discovered package and warns', () => {
+  it('falls back to unknown provenance for an unlisted package', () => {
     const result = applySourcePolicy(
       { packages: [pkg('@scope/a', ['x']), pkg('@scope/b', ['y'])] },
       { config: config(['@scope/a']), excludeMatchers: [] },
@@ -67,6 +67,25 @@ describe('applySourcePolicy — allowlist matrix', () => {
     expect(names(result.packages)).toEqual(['@scope/a'])
     expect(result.notices).toEqual([
       '1 discovered package ships skills but is not listed in intent.skills: @scope/b (provenance unknown). Add to opt in.',
+    ])
+  })
+
+  it('includes known provenance in an unlisted-source notice', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [
+          pkg('@scope/a', ['x']),
+          {
+            ...pkg('@scope/b', ['y']),
+            provenance: [['app', '@scope/parent', '@scope/b']],
+          },
+        ],
+      },
+      { config: config(['@scope/a']), excludeMatchers: [] },
+    )
+
+    expect(result.notices).toEqual([
+      '1 discovered package ships skills but is not listed in intent.skills: @scope/b (via app -> @scope/parent -> @scope/b). Add to opt in.',
     ])
   })
 
