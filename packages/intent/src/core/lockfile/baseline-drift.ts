@@ -139,10 +139,7 @@ export function computeBaselineDrift(
           reason: err instanceof Error ? err.message : String(err),
         }
       }
-      const repoRelativePath = relative(
-        realRoot,
-        resolvedSkillPath,
-      )
+      const repoRelativePath = relative(realRoot, resolvedSkillPath)
 
       if (fileFilter && !fileFilter.has(repoRelativePath)) continue
 

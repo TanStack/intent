@@ -53,10 +53,7 @@ export function resolveCanonicalPackagePath(
   assertCanonicalPackageRelativePath(path, label)
   const resolvedPath = resolve(packageRoot, path)
   const packageRelativePath = relative(packageRoot, resolvedPath)
-  if (
-    packageRelativePath.startsWith('..') ||
-    isAbsolute(packageRelativePath)
-  ) {
+  if (packageRelativePath.startsWith('..') || isAbsolute(packageRelativePath)) {
     throw new Error(
       `Invalid ${label}: path escapes the package root, got "${path}".`,
     )
