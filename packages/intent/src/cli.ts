@@ -232,7 +232,10 @@ function createCli(): CAC {
       '--frozen',
       'Force frozen mode (fail if intent.lock is missing or stale)',
     )
-    .option('--no-frozen', 'Disable CI auto-detection of frozen mode')
+    .option(
+      '--no-frozen',
+      'Force interactive mode, overriding INTENT_FROZEN/CI auto-detect',
+    )
     .example('skills scan')
     .example('skills diff')
     .example('skills scan --json')

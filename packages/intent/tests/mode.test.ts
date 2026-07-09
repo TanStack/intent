@@ -96,18 +96,18 @@ describe('isFrozenMode', () => {
     expect(isFrozenMode({ noFrozen: true }, { isTTY: undefined })).toBe(false)
   })
 
-  it('--no-frozen does not override an explicit INTENT_FROZEN=1', () => {
+  it('--no-frozen overrides an explicit INTENT_FROZEN=1', () => {
     vi.stubEnv('CI', undefined)
     vi.stubEnv('INTENT_FROZEN', '1')
 
-    expect(isFrozenMode({ noFrozen: true }, { isTTY: true })).toBe(true)
+    expect(isFrozenMode({ noFrozen: true }, { isTTY: true })).toBe(false)
   })
 
-  it('--no-frozen does not override CI+INTENT_FROZEN stacked together', () => {
+  it('--no-frozen overrides CI+INTENT_FROZEN stacked together', () => {
     vi.stubEnv('CI', 'true')
     vi.stubEnv('INTENT_FROZEN', '1')
 
-    expect(isFrozenMode({ noFrozen: true }, { isTTY: undefined })).toBe(true)
+    expect(isFrozenMode({ noFrozen: true }, { isTTY: undefined })).toBe(false)
   })
 
   it('throws when both --frozen and --no-frozen are passed', () => {

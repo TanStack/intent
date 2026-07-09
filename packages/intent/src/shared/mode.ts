@@ -9,9 +9,8 @@ export interface FrozenModeContext {
   isTTY?: boolean
 }
 
-// --no-frozen only overrides the CI auto-detect, never an explicit --frozen
-// or INTENT_FROZEN — the RFC's "(overridable with --no-frozen)" clause reads
-// as scoped to the auto-detect condition it directly follows.
+// M2-SPEC §8.1: --no-frozen is the highest-precedence explicit override,
+// beating INTENT_FROZEN and the CI auto-detect alike.
 export function isFrozenMode(
   options: FrozenModeOptions = {},
   context: FrozenModeContext = {},
@@ -21,8 +20,8 @@ export function isFrozenMode(
   }
 
   if (options.frozen) return true
-  if (isEnvFlagSet('INTENT_FROZEN')) return true
   if (options.noFrozen) return false
+  if (isEnvFlagSet('INTENT_FROZEN')) return true
 
   const isTTY = context.isTTY ?? process.stdin.isTTY
   return isEnvFlagSet('CI') && isTTY !== true
