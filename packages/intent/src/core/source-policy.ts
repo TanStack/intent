@@ -134,7 +134,9 @@ function formatUnlistedNotice(
       const provenance = source.provenance
         ?.map((path) => path.join(' -> '))
         .join('; ')
-      return provenance ? `${source.name} (via ${provenance})` : source.name
+      return provenance
+        ? `${source.name} (via ${provenance})`
+        : `${source.name} (provenance unknown)`
     })
     .join(', ')
   return `${sourceCount} discovered ${noun} skills but ${sourceCount === 1 ? 'is' : 'are'} not listed in intent.skills: ${sources}. Add to opt in.`

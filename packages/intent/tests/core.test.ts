@@ -271,7 +271,7 @@ describe('listIntentSkills', () => {
       { name: '@tanstack/unlisted', skillCount: 1 },
     ])
     expect(result.notices).toEqual([
-      '1 discovered package ships skills but is not listed in intent.skills: @tanstack/unlisted. Add to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: @tanstack/unlisted (provenance unknown). Add to opt in.',
     ])
   })
 

@@ -66,7 +66,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
     )
     expect(names(result.packages)).toEqual(['@scope/a'])
     expect(result.notices).toEqual([
-      '1 discovered package ships skills but is not listed in intent.skills: @scope/b. Add to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: @scope/b (provenance unknown). Add to opt in.',
     ])
   })
 
@@ -82,7 +82,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
       { config: config(['@scope/a']), excludeMatchers: [] },
     )
     expect(result.notices).toEqual([
-      '2 discovered packages ship skills but are not listed in intent.skills: @scope/b, @scope/c. Add to opt in.',
+      '2 discovered packages ship skills but are not listed in intent.skills: @scope/b (provenance unknown), @scope/c (provenance unknown). Add to opt in.',
     ])
   })
 
@@ -104,7 +104,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
     )
     expect(names(result.packages)).toEqual([])
     expect(result.notices).toEqual([
-      '1 discovered package ships skills but is not listed in intent.skills: foo. Add to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: foo (provenance unknown). Add to opt in.',
       '"workspace:foo" is declared in intent.skills but was not discovered.',
     ])
   })
@@ -125,7 +125,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
     )
     expect(names(result.packages)).toEqual(['@scope/listed'])
     expect(result.notices).toEqual([
-      '1 discovered package ships skills but is not listed in intent.skills: @scope/dep. Add to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: @scope/dep (provenance unknown). Add to opt in.',
     ])
   })
 
@@ -138,7 +138,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
       },
     )
     expect(result.notices).toEqual([
-      '1 discovered package ships skills but is not listed in intent.skills: @scope/unlisted. Add to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: @scope/unlisted (provenance unknown). Add to opt in.',
       '"@scope/missing" is declared in intent.skills but was not discovered.',
     ])
   })
