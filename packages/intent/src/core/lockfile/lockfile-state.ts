@@ -33,12 +33,16 @@ function buildResolution(pkg: IntentPackage): string | null {
 // reserved-nullable by design, so the lockfile works before every package
 // adopts a manifest. When a manifest is present, its declared capabilities
 // (unioned across skills) and hash join the lockfile source entry.
-function readManifestFields(pkg: IntentPackage): {
+function readManifestFields(
+  pkg: IntentPackage,
+  fs: ReadFs,
+): {
   manifestHash: string | null
   capabilities: Array<string> | null
 } {
   const manifest = readIntentManifest(
     join(pkg.packageRoot, 'skills', 'intent.manifest.json'),
+    fs,
   )
   if (!manifest) {
     return { manifestHash: null, capabilities: null }
@@ -76,7 +80,7 @@ export function buildCurrentLockfileSources(
   const sources = packages
     .map((pkg): IntentLockfileSource => {
       const { skills, contentHash } = buildSourceContent(pkg, fs)
-      const { manifestHash, capabilities } = readManifestFields(pkg)
+      const { manifestHash, capabilities } = readManifestFields(pkg, fs)
       return {
         id: pkg.name,
         kind: pkg.kind,

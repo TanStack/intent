@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -11,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
+import { computeSourceContentHash } from '../../src/core/lockfile/hash.js'
 
 /**
  * Regression guard for discussion #119: skill discovery in a real Yarn Berry
@@ -41,6 +43,8 @@ const realTmpdir = realpathSync(tmpdir())
 
 // Never block on corepack's interactive download prompt in a non-TTY shell.
 const corepackEnv = { ...process.env, COREPACK_ENABLE_DOWNLOAD_PROMPT: '0' }
+const skillContent =
+  '---\nname: core\ndescription: Core skill from the leaf package.\n---\n# Core\n'
 
 function berryAvailable(): boolean {
   try {
@@ -73,7 +77,27 @@ function writeJson(path: string, data: unknown): void {
   writeFileSync(path, JSON.stringify(data, null, 2))
 }
 
-function scaffoldBerryProject(): string {
+function writeSkillPackage(packageRoot: string): string {
+  const skillPath = join(packageRoot, 'skills', 'core', 'SKILL.md')
+  mkdirSync(dirname(skillPath), { recursive: true })
+  writeFileSync(skillPath, skillContent)
+  const skillDir = dirname(skillPath)
+  mkdirSync(join(skillDir, 'references'), { recursive: true })
+  writeFileSync(join(skillDir, 'references', 'guide.md'), '# Guide\n')
+  mkdirSync(join(skillDir, 'assets'), { recursive: true })
+  writeFileSync(join(skillDir, 'assets', 'data.bin'), Buffer.from([0x00, 0xff]))
+  mkdirSync(join(skillDir, 'scripts'), { recursive: true })
+  writeFileSync(join(skillDir, 'scripts', 'run.mjs'), 'export {}\n')
+  return skillPath
+}
+
+function hashSkillPackage(packageRoot: string, skillPath: string): string {
+  return computeSourceContentHash(packageRoot, [
+    { relativePath: 'skills/core/SKILL.md', absolutePath: skillPath },
+  ]).contentHash
+}
+
+function scaffoldBerryProject(): { root: string; packageSourceRoot: string } {
   const dir = mkdtempSync(join(realTmpdir, 'intent-berry-corepack-'))
   tempDirs.push(dir)
 
@@ -87,10 +111,7 @@ function scaffoldBerryProject(): string {
     intent: { version: 1, repo: 'repro/leaf', docs: 'https://example.com' },
     repository: { type: 'git', url: 'git+https://github.com/repro/leaf.git' },
   })
-  writeFileSync(
-    join(pkgSrc, 'skills', 'core', 'SKILL.md'),
-    '---\nname: core\ndescription: Core skill from the leaf package.\n---\n# Core\n',
-  )
+  writeSkillPackage(pkgSrc)
   execFileSync('npm', ['pack', '--pack-destination', dir], {
     cwd: pkgSrc,
     timeout: CMD_TIMEOUT_MS,
@@ -116,12 +137,12 @@ function scaffoldBerryProject(): string {
     timeout: CMD_TIMEOUT_MS,
     maxBuffer: 10 * 1024 * 1024,
   })
-  return dir
+  return { root: dir, packageSourceRoot: pkgSrc }
 }
 
 describe.skipIf(!shouldRun)('Yarn Berry PnP (zip-backed dependencies)', () => {
-  it('discovers and loads skills from a zip-backed dependency', () => {
-    const cwd = scaffoldBerryProject()
+  it('discovers, loads, and hashes skills from a zip-backed dependency', () => {
+    const { root: cwd, packageSourceRoot } = scaffoldBerryProject()
 
     const list = execFileSync('node', [cliPath, 'list', '--json'], {
       cwd,
@@ -148,5 +169,55 @@ describe.skipIf(!shouldRun)('Yarn Berry PnP (zip-backed dependencies)', () => {
       },
     )
     expect(load).toContain('# Core')
+
+    execFileSync('node', [cliPath, 'skills', 'approve', '--all', '--yes'], {
+      cwd,
+      encoding: 'utf8',
+      timeout: CMD_TIMEOUT_MS,
+      maxBuffer: 5 * 1024 * 1024,
+    })
+
+    const expectedHash = hashSkillPackage(
+      packageSourceRoot,
+      join(packageSourceRoot, 'skills', 'core', 'SKILL.md'),
+    )
+    const lockfile = JSON.parse(
+      readFileSync(join(cwd, 'intent.lock'), 'utf8'),
+    ) as { sources: Array<{ id: string; contentHash: string }> }
+    const pnpHash = lockfile.sources.find(
+      (source) => source.id === '@repro/skills-leaf',
+    )?.contentHash
+
+    const npmRoot = join(
+      cwd,
+      'npm-layout',
+      'node_modules',
+      '@repro',
+      'skills-leaf',
+    )
+    const pnpmRoot = join(
+      cwd,
+      'pnpm-layout',
+      'node_modules',
+      '.pnpm',
+      '@repro+skills-leaf@1.0.0',
+      'node_modules',
+      '@repro',
+      'skills-leaf',
+    )
+    const workspaceRoot = join(
+      cwd,
+      'workspace-layout',
+      'packages',
+      'skills-leaf',
+    )
+    const layoutHashes = [
+      hashSkillPackage(npmRoot, writeSkillPackage(npmRoot)),
+      hashSkillPackage(pnpmRoot, writeSkillPackage(pnpmRoot)),
+      hashSkillPackage(workspaceRoot, writeSkillPackage(workspaceRoot)),
+    ]
+
+    expect(pnpHash).toBe(expectedHash)
+    expect(layoutHashes).toEqual([expectedHash, expectedHash, expectedHash])
   }, 120_000)
 })

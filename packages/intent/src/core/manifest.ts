@@ -8,7 +8,9 @@ import { dirname, join, relative } from 'node:path'
 import { createHash } from 'node:crypto'
 import { computeSkillFolderHash } from './lockfile/hash.js'
 import { detectCapabilityHeuristics, findSecretMatches } from './secrets.js'
+import { nodeReadFs } from '../shared/utils.js'
 import type { SkillEntry } from '../shared/types.js'
+import type { ReadFs } from '../shared/utils.js'
 
 const MANIFEST_VERSION = 1
 
@@ -84,7 +86,10 @@ export function generateManifest(
     const matches = findSecretMatches(content)
     if (matches.length > 0) {
       for (const match of matches) {
-        secretFindings.push({ skillPath: relativePath, patternName: match.name })
+        secretFindings.push({
+          skillPath: relativePath,
+          patternName: match.name,
+        })
       }
       continue
     }
@@ -228,10 +233,13 @@ export function parseManifest(raw: unknown): IntentManifest {
   }
 }
 
-export function readIntentManifest(filePath: string): IntentManifest | null {
-  if (!existsSync(filePath)) return null
+export function readIntentManifest(
+  filePath: string,
+  fs: Pick<ReadFs, 'existsSync' | 'readFileSync'> = nodeReadFs,
+): IntentManifest | null {
+  if (!fs.existsSync(filePath)) return null
   try {
-    return parseManifest(JSON.parse(readFileSync(filePath, 'utf8')))
+    return parseManifest(JSON.parse(fs.readFileSync(filePath, 'utf8')))
   } catch {
     return null
   }
