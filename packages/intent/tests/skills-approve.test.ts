@@ -185,10 +185,27 @@ describe('runSkillsApproveCommand', () => {
     }
   })
 
-  it('approves a single source id without touching unrelated pending changes', async () => {
+  it('preserves metadata when approving a single source id', async () => {
     const cwd = makeTempProject()
+    const metadata = {
+      staleness: {
+        baseline: { kind: 'tag' as const, ref: 'v1.0.0', commit: 'abc123' },
+      },
+      policy: {
+        ignores: [
+          {
+            id: 'rejected-thing',
+            scope: { source: 'npm:foo', contentHash: 'sha256-aaa' },
+            reason: 'reviewed and rejected',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            expiresAt: '2027-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    }
     writeIntentLockfile(join(cwd, 'intent.lock'), {
       ...baseLockfile(),
+      ...metadata,
       sources: [lockedSource({ id: 'foo' }), lockedSource({ id: 'bar' })],
     })
 
@@ -204,6 +221,10 @@ describe('runSkillsApproveCommand', () => {
     if (result.status === 'found') {
       // "bar" still has a pending removal (declined) — stays in the lock as drift.
       expect(result.lockfile.sources.map((s) => s.id).sort()).toEqual(['bar'])
+      expect({
+        staleness: result.lockfile.staleness,
+        policy: result.lockfile.policy,
+      }).toEqual(metadata)
     }
   })
 
@@ -460,14 +481,27 @@ describe('runSkillsApproveCommand', () => {
     }
   })
 
-  it('preserves staleness metadata through approve --all', async () => {
+  it('preserves metadata through approve --all', async () => {
     const cwd = makeTempProject()
-    const staleness = {
-      baseline: { kind: 'tag' as const, ref: 'v1.0.0', commit: 'abc123' },
+    const metadata = {
+      staleness: {
+        baseline: { kind: 'tag' as const, ref: 'v1.0.0', commit: 'abc123' },
+      },
+      policy: {
+        ignores: [
+          {
+            id: 'rejected-thing',
+            scope: { source: 'npm:foo', contentHash: 'sha256-aaa' },
+            reason: 'reviewed and rejected',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            expiresAt: '2027-01-01T00:00:00.000Z',
+          },
+        ],
+      },
     }
     writeIntentLockfile(join(cwd, 'intent.lock'), {
       ...baseLockfile(),
-      staleness,
+      ...metadata,
       sources: [lockedSource({ version: '1.0.0' })],
     })
 
@@ -494,7 +528,10 @@ describe('runSkillsApproveCommand', () => {
     const result = readIntentLockfile(join(cwd, 'intent.lock'))
     expect(result.status).toBe('found')
     if (result.status === 'found') {
-      expect(result.lockfile.staleness).toEqual(staleness)
+      expect({
+        staleness: result.lockfile.staleness,
+        policy: result.lockfile.policy,
+      }).toEqual(metadata)
     }
   })
 
