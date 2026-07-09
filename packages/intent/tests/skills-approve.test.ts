@@ -460,6 +460,44 @@ describe('runSkillsApproveCommand', () => {
     }
   })
 
+  it('preserves staleness metadata through approve --all', async () => {
+    const cwd = makeTempProject()
+    const staleness = {
+      baseline: { kind: 'tag' as const, ref: 'v1.0.0', commit: 'abc123' },
+    }
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      staleness,
+      sources: [lockedSource({ version: '1.0.0' })],
+    })
+
+    await runSkillsApproveCommand(
+      undefined,
+      { all: true },
+      () =>
+        Promise.resolve(
+          policedScan({
+            scan: emptyScanResult([
+              {
+                name: 'foo',
+                kind: 'npm',
+                version: '2.0.0',
+                packageRoot: cwd,
+                skills: [],
+              } as unknown as IntentPackage,
+            ]),
+          }),
+        ),
+      cwd,
+    )
+
+    const result = readIntentLockfile(join(cwd, 'intent.lock'))
+    expect(result.status).toBe('found')
+    if (result.status === 'found') {
+      expect(result.lockfile.staleness).toEqual(staleness)
+    }
+  })
+
   it('does not write intent.lock when every pending change is declined', async () => {
     const cwd = makeTempProject()
     writeIntentLockfile(join(cwd, 'intent.lock'), {

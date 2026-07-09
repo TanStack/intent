@@ -143,6 +143,9 @@ export async function runSkillsUpdateCommand(
   writeIntentLockfile(resolveLockfilePath(cwd), {
     lockfileVersion: 1,
     intentVersion: getIntentPackageVersion(),
+    ...(lockedResult.lockfile.staleness
+      ? { staleness: lockedResult.lockfile.staleness }
+      : {}),
     sources: [...finalSources.values()],
     policy: lockedResult.lockfile.policy,
   })

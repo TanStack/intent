@@ -209,6 +209,9 @@ export async function runSkillsApproveCommand(
   writeIntentLockfile(resolveLockfilePath(cwd), {
     lockfileVersion: 1,
     intentVersion: getIntentPackageVersion(),
+    ...(lockedResult.status === 'found' && lockedResult.lockfile.staleness
+      ? { staleness: lockedResult.lockfile.staleness }
+      : {}),
     sources: [...finalSources.values()],
     policy:
       lockedResult.status === 'found'
