@@ -12,6 +12,7 @@ import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
 import type { SkillsApproveCommandOptions } from './commands/skills/approve.js'
 import type { SkillsScanCommandOptions } from './commands/skills/scan.js'
+import type { SkillsStaleCommandOptions } from './commands/skills/stale.js'
 import type { SkillsUpdateCommandOptions } from './commands/skills/update.js'
 import type { StaleCommandOptions } from './commands/stale.js'
 import type { ValidateCommandOptions } from './commands/validate.js'
@@ -214,10 +215,10 @@ function createCli(): CAC {
   cli
     .command(
       'skills [action] [source]',
-      'Scan, diff, approve, or update skills against intent.lock',
+      'Scan, diff, approve, update, or check staleness of skills against intent.lock',
     )
     .usage(
-      'skills <scan|diff|approve|update> [source] [--json] [--all] [--yes] [--frozen] [--no-frozen]',
+      'skills <scan|diff|approve|update|stale> [source] [--json] [--all] [--yes] [--frozen] [--no-frozen] [--baseline <ref>] [--files <path...>]',
     )
     .option('--json', 'Output JSON')
     .option(
@@ -236,6 +237,14 @@ function createCli(): CAC {
       '--no-frozen',
       'Force interactive mode, overriding INTENT_FROZEN/CI auto-detect',
     )
+    .option(
+      '--baseline <ref>',
+      'With `stale`, override the git ref used as the staleness baseline',
+    )
+    .option(
+      '--files <path...>',
+      'With `stale`, restrict Layer 2 baseline drift checks to these repo-relative paths',
+    )
     .example('skills scan')
     .example('skills diff')
     .example('skills scan --json')
@@ -243,13 +252,16 @@ function createCli(): CAC {
     .example('skills approve --yes')
     .example('skills approve npm:@tanstack/query')
     .example('skills update --all')
+    .example('skills stale')
+    .example('skills stale --baseline v1.42.0')
     .action(
       async (
         action: string | undefined,
         source: string | undefined,
         options: SkillsScanCommandOptions &
           SkillsApproveCommandOptions &
-          SkillsUpdateCommandOptions,
+          SkillsUpdateCommandOptions &
+          SkillsStaleCommandOptions,
       ) => {
         const { scanPolicedIntentsOrFail, frozenOptionsFromGlobalFlags } =
           await import('./commands/support.js')
@@ -297,7 +309,19 @@ function createCli(): CAC {
           return
         }
 
-        fail('Unknown skills action: expected scan, diff, approve, or update.')
+        if (action === 'stale') {
+          const { runSkillsStaleCommand } =
+            await import('./commands/skills/stale.js')
+          await runSkillsStaleCommand(
+            { ...options, ...frozenOptions },
+            scanPolicedIntentsOrFail,
+          )
+          return
+        }
+
+        fail(
+          'Unknown skills action: expected scan, diff, approve, update, or stale.',
+        )
       },
     )
 
