@@ -236,7 +236,9 @@ function collectSupportFiles(
         )
       }
       if (stat.isDirectory()) {
-        files.push(...collectSupportFiles(absolutePath, baseDir, realPackageRoot))
+        files.push(
+          ...collectSupportFiles(absolutePath, baseDir, realPackageRoot),
+        )
       } else if (stat.isFile()) {
         files.push({
           relativePath: toPosixRelative(baseDir, absolutePath),

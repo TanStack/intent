@@ -1,6 +1,7 @@
 import {
   mkdirSync,
   mkdtempSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -27,6 +28,12 @@ function writeFile(
   mkdirSync(join(filePath, '..'), { recursive: true })
   writeFileSync(filePath, content)
   return filePath
+}
+
+function sourceHash(root: string, skillPath: string): string {
+  return computeSourceContentHash(root, [
+    { relativePath: 'skills/a/SKILL.md', absolutePath: skillPath },
+  ]).contentHash
 }
 
 afterEach(() => {
@@ -262,6 +269,52 @@ describe('computeSourceContentHash', () => {
         { relativePath: 'skills/a/SKILL.md', absolutePath: skillPath },
       ]).contentHash,
     ).not.toBe(before)
+  })
+
+  it.each([
+    ['references', 'deep-dive.md'],
+    ['assets', 'fixture.bin'],
+    ['scripts', 'run.mjs'],
+  ] as const)(
+    'changes when a %s file is modified, added, removed, or renamed',
+    (directory, fileName) => {
+      const root = createRoot()
+      const skillPath = writeFile(root, 'skills/a/SKILL.md', 'body')
+      const supportPath = `skills/a/${directory}/${fileName}`
+      const renamedPath = `skills/a/${directory}/renamed-${fileName}`
+      writeFile(root, supportPath, 'original')
+      const before = sourceHash(root, skillPath)
+
+      writeFile(root, supportPath, 'modified')
+      expect(sourceHash(root, skillPath)).not.toBe(before)
+
+      writeFile(root, supportPath, 'original')
+      writeFile(root, `skills/a/${directory}/added-${fileName}`, 'added')
+      expect(sourceHash(root, skillPath)).not.toBe(before)
+
+      rmSync(join(root, `skills/a/${directory}/added-${fileName}`))
+      rmSync(join(root, supportPath))
+      expect(sourceHash(root, skillPath)).not.toBe(before)
+
+      writeFile(root, supportPath, 'original')
+      renameSync(join(root, supportPath), join(root, renamedPath))
+      expect(sourceHash(root, skillPath)).not.toBe(before)
+    },
+  )
+
+  it('keeps binary supporting-file bytes exact', () => {
+    const root = createRoot()
+    const skillPath = writeFile(root, 'skills/a/SKILL.md', 'body')
+    const assetPath = writeFile(
+      root,
+      'skills/a/assets/data.bin',
+      Buffer.from([0x00, 0x0d, 0x0a, 0xff]),
+    )
+    const before = sourceHash(root, skillPath)
+
+    writeFileSync(assetPath, Buffer.from([0x00, 0x0a, 0xff]))
+
+    expect(sourceHash(root, skillPath)).not.toBe(before)
   })
 
   it('fails closed when a symlinked SKILL.md escapes the package root', () => {
