@@ -106,12 +106,14 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     }
 
     const skills = opts.discoverSkills(skillsDir, name)
+    const kind = opts.getPackageKind(dirPath)
 
     if (isLocalToProject(dirPath, opts.projectRoot)) {
       rewriteSkillLoadPaths({
         packageName: name,
         packageRoot: dirPath,
         projectRoot: opts.projectRoot,
+        preferStableNodeModulesPath: kind === 'npm',
         skills,
       })
     }
@@ -122,7 +124,7 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
       intent,
       skills,
       packageRoot: dirPath,
-      kind: opts.getPackageKind(dirPath),
+      kind,
       source,
     }
     const candidateKey = sourceIdentityKey({

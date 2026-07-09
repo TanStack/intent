@@ -42,14 +42,17 @@ export function rewriteSkillLoadPaths({
   packageName,
   packageRoot,
   projectRoot,
+  preferStableNodeModulesPath = true,
   skills,
 }: {
   packageName: string
   packageRoot: string
   projectRoot: string
+  preferStableNodeModulesPath?: boolean
   skills: Array<SkillEntry>
 }): void {
   const hasStableSymlink =
+    preferStableNodeModulesPath &&
     packageName !== '' &&
     existsSync(join(projectRoot, 'node_modules', packageName))
 
