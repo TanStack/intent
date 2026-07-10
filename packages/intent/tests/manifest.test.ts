@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   computeManifestHash,
@@ -122,6 +122,37 @@ describe('generateManifest', () => {
       { skillPath: 'skills/leaky/SKILL.md', patternName: 'github-token' },
     ])
   })
+
+  it.each([
+    ['references', 'notes.md'],
+    ['assets', 'config.txt'],
+    ['scripts', 'run.mjs'],
+  ])(
+    'hard-fails generation when %s/%s contains a literal secret value',
+    (directory, fileName) => {
+      const skill = writeSkill('skills/leaky', 'See supporting material.')
+      const supportPath = join(packageRoot, 'skills/leaky', directory, fileName)
+      mkdirSync(dirname(supportPath), { recursive: true })
+      writeFileSync(
+        supportPath,
+        'export GITHUB_TOKEN=ghp_1234567890abcdef1234567890abcdef',
+      )
+
+      const outcome = generateManifest(packageRoot, '@acme/pkg', '1.0.0', [
+        skill,
+      ])
+
+      expect(outcome).toEqual({
+        ok: false,
+        secretFindings: [
+          {
+            skillPath: `skills/leaky/${directory}/${fileName}`,
+            patternName: 'github-token',
+          },
+        ],
+      })
+    },
+  )
 })
 
 describe('serializeManifest / parseManifest round-trip', () => {

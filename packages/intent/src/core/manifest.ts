@@ -3,10 +3,13 @@
 // separate from SKILL.md content. Not a second lockfile — it's a maintainer-
 // authored description of what a package's skills are and declare, never a
 // consumer approval record, and it never lives in the consumer root.
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { createHash } from 'node:crypto'
-import { computeSkillFolderHash } from './lockfile/hash.js'
+import {
+  computeSkillFolderHash,
+  readSkillFolderContents,
+} from './lockfile/hash.js'
 import { detectCapabilityHeuristics, findSecretMatches } from './secrets.js'
 import { nodeReadFs } from '../shared/utils.js'
 import { assertCanonicalPackageRelativePath } from './skill-path.js'
@@ -75,9 +78,9 @@ export type GenerateManifestOutcome =
 // Walks each skill's own folder, computes its content hash, and runs static
 // heuristics to pre-fill capabilities. The maintainer reviews and edits the
 // resulting file before committing — heuristics inform, they don't decide.
-// Hard-fails (no partial manifest) if any skill body contains a literal
-// secret value; a declared secret NAME belongs in declaredSecrets, never a
-// value in the body.
+// Hard-fails (no partial manifest) if any hash-included file contains a
+// literal secret value; a declared secret NAME belongs in declaredSecrets,
+// never a value in skill content.
 export function generateManifest(
   packageRoot: string,
   packageName: string,
@@ -90,20 +93,37 @@ export function generateManifest(
   for (const skill of skills) {
     const skillDir = dirname(skill.path)
     const relativePath = toPosixPath(relative(packageRoot, skill.path))
-    const content = readFileSync(skill.path, 'utf8')
+    const folderContents = readSkillFolderContents(skillDir, packageRoot)
+    const skillContent = folderContents.find(
+      (entry) => entry.relativePath === 'SKILL.md',
+    )
+    if (!skillContent) {
+      throw new Error(`Missing SKILL.md in "${relativePath}".`)
+    }
 
-    const matches = findSecretMatches(content)
-    if (matches.length > 0) {
-      for (const match of matches) {
-        secretFindings.push({
-          skillPath: relativePath,
-          patternName: match.name,
-        })
+    let hasSecret = false
+    for (const entry of folderContents) {
+      const matches = findSecretMatches(entry.content.toString('utf8'))
+      if (matches.length > 0) {
+        hasSecret = true
+        const entryPath = toPosixPath(
+          relative(packageRoot, join(skillDir, entry.relativePath)),
+        )
+        for (const match of matches) {
+          secretFindings.push({
+            skillPath: entryPath,
+            patternName: match.name,
+          })
+        }
       }
+    }
+    if (hasSecret) {
       continue
     }
 
-    const heuristics = detectCapabilityHeuristics(content)
+    const heuristics = detectCapabilityHeuristics(
+      skillContent.content.toString('utf8'),
+    )
     const capabilities: Array<string> = []
     if (heuristics.usesNetwork) capabilities.push('uses_network')
     if (heuristics.runsInstallCommand) capabilities.push('runs_install_command')

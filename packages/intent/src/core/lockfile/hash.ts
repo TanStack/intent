@@ -15,6 +15,11 @@ export interface SourceContentHash {
   contentHash: string
 }
 
+export interface SkillFolderContentEntry {
+  relativePath: string
+  content: Buffer
+}
+
 const RECORD_SEPARATOR = Buffer.from([0])
 
 export const HASH_LIMITS = {
@@ -416,9 +421,22 @@ export function computeSkillFolderHash(
   skillDir: string,
   packageRoot: string,
 ): string {
-  const realPackageRoot = nodeReadFs.realpathSync(packageRoot)
+  return hashEntries(
+    readSkillFolderContents(skillDir, packageRoot).map((entry) => ({
+      key: entry.relativePath,
+      value: entry.content,
+    })),
+  )
+}
+
+export function readSkillFolderContents(
+  skillDir: string,
+  packageRoot: string,
+  fs: ReadFs = nodeReadFs,
+): Array<SkillFolderContentEntry> {
+  const realPackageRoot = fs.realpathSync(packageRoot)
   const entries = collectSkillContentEntries(
-    nodeReadFs,
+    fs,
     skillDir,
     [
       {
@@ -434,7 +452,8 @@ export function computeSkillFolderHash(
     'skill folder path',
   )
 
-  const hashed = readHashEntries(entries, nodeReadFs, realPackageRoot)
-
-  return hashEntries(hashed)
+  return readHashEntries(entries, fs, realPackageRoot).map((entry) => ({
+    relativePath: entry.key,
+    content: entry.value,
+  }))
 }
