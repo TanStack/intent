@@ -172,7 +172,7 @@ export function applySourcePolicy(
     if (isPackageExcluded(pkg.name, excludeMatchers, pkg.kind)) continue
 
     if (!isSourcePermitted(config, pkg.name, pkg.kind)) {
-      if (config.mode === 'explicit') {
+      if (config.mode === 'explicit' || config.mode === 'empty') {
         hiddenSources.push({
           name: pkg.name,
           skillCount: pkg.skills.length,
@@ -191,7 +191,7 @@ export function applySourcePolicy(
     )
   }
 
-  if (hiddenSources.length > 0) {
+  if (hiddenSources.length > 0 && config.mode === 'explicit') {
     emit(formatUnlistedNotice(hiddenSources, audience))
   }
 

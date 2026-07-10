@@ -155,6 +155,39 @@ describe('generateManifest', () => {
   )
 })
 
+describe('parseManifest', () => {
+  it.each([
+    [
+      'root',
+      {
+        manifestVersion: 1,
+        package: '@acme/pkg',
+        packageVersion: '1.0.0',
+        skills: [],
+        securityReview: 'unreviewed',
+      },
+    ],
+    [
+      'skill',
+      {
+        manifestVersion: 1,
+        package: '@acme/pkg',
+        packageVersion: '1.0.0',
+        skills: [
+          {
+            name: 'core',
+            path: 'skills/core/SKILL.md',
+            contentHash: 'sha256-core',
+            extraMetadata: 'unreviewed',
+          },
+        ],
+      },
+    ],
+  ])('rejects undeclared %s fields', (_label, manifest) => {
+    expect(() => parseManifest(manifest)).toThrow(/undeclared field/)
+  })
+})
+
 describe('serializeManifest / parseManifest round-trip', () => {
   it('round-trips a generated manifest', () => {
     const skill = writeSkill('skills/core', '# Core\n\nGuidance.')

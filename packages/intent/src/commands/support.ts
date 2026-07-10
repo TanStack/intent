@@ -155,12 +155,18 @@ export function noticeOptionsFromGlobalFlags(options: GlobalScanFlags): {
 // single "frozen" key that defaults to true (see cac's Option constructor),
 // which can't represent our third state (neither flag passed => auto-detect).
 // Read the raw argv instead so "nothing passed" stays distinguishable.
-export function frozenOptionsFromGlobalFlags(argv: ReadonlyArray<string>): {
+export function frozenOptionsFromGlobalFlags(
+  options: { frozen?: boolean },
+  argv: ReadonlyArray<string>,
+): {
   frozen: boolean
   noFrozen: boolean
 } {
+  const hasFrozenFlag = argv.some(
+    (arg) => arg === '--frozen' || arg.startsWith('--frozen='),
+  )
   return {
-    frozen: argv.includes('--frozen'),
+    frozen: hasFrozenFlag && options.frozen === true,
     noFrozen: argv.includes('--no-frozen'),
   }
 }

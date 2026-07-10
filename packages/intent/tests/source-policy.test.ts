@@ -227,6 +227,7 @@ describe('applySourcePolicy — permit-all and empty modes', () => {
       { config: config([]), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual([])
+    expect(result.hiddenSourceCount).toBe(1)
     expect(result.notices).toEqual([EMPTY_NOTE])
   })
 

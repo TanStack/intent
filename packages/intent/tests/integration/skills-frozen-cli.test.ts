@@ -104,6 +104,10 @@ describe('built CLI frozen mode', () => {
     expect(runCli(createProject(), ['scan', '--frozen'])).toBe(4)
   })
 
+  it('fails when intent.lock is missing with --frozen=true', () => {
+    expect(runCli(createProject(), ['scan', '--frozen=true'])).toBe(4)
+  })
+
   it('fails when intent.lock is malformed', () => {
     const root = createProject()
     writeFileSync(join(root, 'intent.lock'), '{"lockfileVersion":2}\n')
@@ -115,6 +119,18 @@ describe('built CLI frozen mode', () => {
     const root = createProject()
     writeSkillPackage(root, 'unlisted')
     approveInitialLock(root)
+
+    expect(runCli(root, ['scan', '--frozen'])).toBe(3)
+  })
+
+  it('fails when a discovered source is denied by an empty allowlist', () => {
+    const root = createProject([])
+    writeJson(join(root, 'intent.lock'), {
+      lockfileVersion: 1,
+      intentVersion: '0.0.0',
+      sources: [],
+      policy: { ignores: [] },
+    })
 
     expect(runCli(root, ['scan', '--frozen'])).toBe(3)
   })

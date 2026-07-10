@@ -16,8 +16,22 @@ import type { PolicedScan } from '../../core/source-policy.js'
 
 export interface SkillsUpdateCommandOptions {
   all?: boolean
+  yes?: boolean
   frozen?: boolean
   noFrozen?: boolean
+}
+
+function requiresApproval(change: LockfileSourceChange): boolean {
+  return change.fields.some(
+    ({ field }) =>
+      field === 'skills' ||
+      field === 'contentHash' ||
+      field === 'manifestHash' ||
+      field === 'capabilities' ||
+      field === 'declaredSecrets' ||
+      field === 'mcpTools' ||
+      field === 'mcpPolicy',
+  )
 }
 
 function formatChangeLabel(change: LockfileSourceChange): string {
@@ -117,6 +131,12 @@ export async function runSkillsUpdateCommand(
     )
     printPendingAddRemove(diff)
     return
+  }
+
+  if (targets.some(requiresApproval) && !options.yes) {
+    fail(
+      'Trust-bearing source changes require `--yes`. Run `intent skills diff` to review, then re-run with `--yes` to update intent.lock.',
+    )
   }
 
   const currentByIdentity = new Map(

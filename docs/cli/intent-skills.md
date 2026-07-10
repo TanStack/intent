@@ -59,10 +59,10 @@ Writes `intent.lock`. This is the trust decision — approving means a human rev
 ## `intent skills update [source]`
 
 ```bash
-npx @tanstack/intent@latest skills update [source] [--all]
+npx @tanstack/intent@latest skills update [source] [--all] [--yes]
 ```
 
-Writes `intent.lock`. This is the mechanical refresh, not a trust decision: it re-reads currently-installed sources and re-syncs the matching **already-locked** entries' `version`, `resolution`, `skills`, `contentHash`, `manifestHash`, and `capabilities` to whatever's installed now.
+Writes `intent.lock`. It mechanically re-syncs version and resolution for matching **already-locked** entries. Changes to skills, content hashes, manifests, capabilities, declared secrets, or MCP metadata require `--yes` after reviewing `intent skills diff`.
 
 - Only touches sources present in **both** the lock and the current scan. It never adds a newly-discovered source (that's `approve`'s job) and never drops a source that's no longer discovered (also `approve`'s job — removing a source from the trust boundary is itself a trust decision).
 - Reports pending added/removed drift it didn't touch: `N added, M removed source(s) still pending. Run \`intent skills approve\` to review.`
@@ -101,7 +101,7 @@ Maintainer-only. Writes `skills/intent.manifest.json` inside each discovered pac
 
 - `--json`: with `scan`/`diff`, print the structured diff instead of text
 - `--all`: with `approve`/`update`, act on all pending changes without prompting
-- `--yes`: with `approve`, accept all pending changes non-interactively (alias for `--all`'s non-interactive behavior, for scripted first-run)
+- `--yes`: with `approve`, accept all pending changes non-interactively; with `update`, accept reviewed trust-bearing changes
 - `--frozen`: force frozen mode, regardless of `INTENT_FROZEN`/`CI` auto-detection
 - `--no-frozen`: force interactive mode — overrides `INTENT_FROZEN` and the `CI` auto-detect (highest-precedence explicit override)
 - `--baseline <ref>`: with `stale`, override the git ref used as the staleness baseline

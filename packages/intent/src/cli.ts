@@ -228,7 +228,7 @@ function createCli(): CAC {
     )
     .option(
       '--yes',
-      'With `approve`, accept all pending changes non-interactively (scripted first-run)',
+      'With `approve`/`update`, accept trust-bearing changes non-interactively',
     )
     .option(
       '--frozen',
@@ -268,7 +268,7 @@ function createCli(): CAC {
       ) => {
         const { scanPolicedIntentsOrFail, frozenOptionsFromGlobalFlags } =
           await import('./commands/support.js')
-        const frozenOptions = frozenOptionsFromGlobalFlags(cli.rawArgs)
+        const frozenOptions = frozenOptionsFromGlobalFlags(options, cli.rawArgs)
 
         if (action === 'scan') {
           const { runSkillsScanCommand } =

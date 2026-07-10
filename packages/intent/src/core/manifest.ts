@@ -32,6 +32,20 @@ const MANIFEST_CAPABILITIES = new Set<IntentManifestCapability>([
   'writes_project_files',
 ])
 const MCP_TOOL_FIELDS = new Set(['description', 'inputSchema', 'name'])
+const MANIFEST_FIELDS = new Set([
+  'manifestVersion',
+  'package',
+  'packageVersion',
+  'skills',
+])
+const MANIFEST_SKILL_FIELDS = new Set([
+  'capabilities',
+  'contentHash',
+  'declaredSecrets',
+  'mcpTools',
+  'name',
+  'path',
+])
 
 export interface IntentManifestSkill {
   name: string
@@ -215,6 +229,20 @@ function assertString(value: unknown, label: string): string {
   return value
 }
 
+function assertNoUndeclaredFields(
+  record: Record<string, unknown>,
+  fields: ReadonlySet<string>,
+  label: string,
+): void {
+  for (const field of Object.keys(record)) {
+    if (!fields.has(field)) {
+      throw new Error(
+        `Invalid intent.manifest.json: ${label} contains undeclared field "${field}".`,
+      )
+    }
+  }
+}
+
 function assertStringArray(value: unknown, label: string): Array<string> {
   if (!Array.isArray(value) || value.some((v) => typeof v !== 'string')) {
     throw new Error(
@@ -327,6 +355,7 @@ function canonicalMcpTools(
 
 export function parseManifest(raw: unknown): IntentManifest {
   const record = assertRecord(raw, 'manifest')
+  assertNoUndeclaredFields(record, MANIFEST_FIELDS, 'manifest')
   if (record.manifestVersion !== 1) {
     throw new Error('Invalid intent.manifest.json: manifestVersion must be 1.')
   }
@@ -339,6 +368,11 @@ export function parseManifest(raw: unknown): IntentManifest {
   const seenPaths = new Set<string>()
   const skills = skillsRaw.map((entry, index): IntentManifestSkill => {
     const skillRecord = assertRecord(entry, `skills[${index}]`)
+    assertNoUndeclaredFields(
+      skillRecord,
+      MANIFEST_SKILL_FIELDS,
+      `skills[${index}]`,
+    )
     const path = assertString(skillRecord.path, `skills[${index}].path`)
     assertCanonicalPackageRelativePath(path, `manifest skills[${index}].path`)
     if (seenPaths.has(path)) {

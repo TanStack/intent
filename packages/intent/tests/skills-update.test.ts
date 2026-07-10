@@ -157,7 +157,7 @@ describe('runSkillsUpdateCommand', () => {
 
     await runSkillsUpdateCommand(
       undefined,
-      {},
+      { yes: true },
       () =>
         Promise.resolve(
           policedScan({
@@ -191,6 +191,70 @@ describe('runSkillsUpdateCommand', () => {
     expect(output).toContain('Updated 1 source(s)')
   })
 
+  it('requires --yes before accepting a content hash change', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: [lockedSource()],
+    })
+
+    await expect(
+      runSkillsUpdateCommand(
+        undefined,
+        { all: true },
+        () =>
+          Promise.resolve(
+            policedScan({
+              scan: emptyScanResult([
+                {
+                  name: 'foo',
+                  kind: 'npm',
+                  version: '1.0.0',
+                  packageRoot: cwd,
+                  skills: [],
+                } as unknown as IntentPackage,
+              ]),
+            }),
+          ),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('--yes'),
+    })
+
+    const result = readIntentLockfile(join(cwd, 'intent.lock'))
+    expect(result.status).toBe('found')
+    if (result.status === 'found') {
+      expect(result.lockfile.sources[0]?.contentHash).toBe('sha256-aaa')
+    }
+
+    await runSkillsUpdateCommand(
+      undefined,
+      { all: true, yes: true },
+      () =>
+        Promise.resolve(
+          policedScan({
+            scan: emptyScanResult([
+              {
+                name: 'foo',
+                kind: 'npm',
+                version: '1.0.0',
+                packageRoot: cwd,
+                skills: [],
+              } as unknown as IntentPackage,
+            ]),
+          }),
+        ),
+      cwd,
+    )
+
+    const updated = readIntentLockfile(join(cwd, 'intent.lock'))
+    expect(updated.status).toBe('found')
+    if (updated.status === 'found') {
+      expect(updated.lockfile.sources[0]?.contentHash).not.toBe('sha256-aaa')
+    }
+  })
+
   it('preserves metadata while updating a targeted source', async () => {
     const cwd = makeTempProject()
     const metadata = {
@@ -220,7 +284,7 @@ describe('runSkillsUpdateCommand', () => {
 
     await runSkillsUpdateCommand(
       'npm:foo',
-      {},
+      { yes: true },
       () =>
         Promise.resolve(
           policedScan({
@@ -265,7 +329,7 @@ describe('runSkillsUpdateCommand', () => {
 
     await runSkillsUpdateCommand(
       undefined,
-      { all: true },
+      { all: true, yes: true },
       () =>
         Promise.resolve(
           policedScan({
@@ -302,7 +366,7 @@ describe('runSkillsUpdateCommand', () => {
 
     await runSkillsUpdateCommand(
       undefined,
-      { all: true },
+      { all: true, yes: true },
       () =>
         Promise.resolve(
           policedScan({
@@ -437,7 +501,7 @@ describe('runSkillsUpdateCommand', () => {
 
     await runSkillsUpdateCommand(
       'foo',
-      {},
+      { yes: true },
       () =>
         Promise.resolve(
           policedScan({
@@ -524,7 +588,7 @@ describe('runSkillsUpdateCommand', () => {
 
     await runSkillsUpdateCommand(
       undefined,
-      {},
+      { yes: true },
       () =>
         Promise.resolve(
           policedScan({
@@ -575,7 +639,7 @@ describe('runSkillsUpdateCommand', () => {
 
     await runSkillsUpdateCommand(
       undefined,
-      {},
+      { yes: true },
       () =>
         Promise.resolve(
           policedScan({
