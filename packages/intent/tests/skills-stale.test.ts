@@ -98,7 +98,9 @@ describe('runSkillsStaleCommand', () => {
     await runSkillsStaleCommand({}, () => Promise.resolve(policedScan()), cwd)
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
-    expect(output).toContain('No intent.lock found')
+    expect(output).toContain(
+      'No intent.lock found. Run `intent skills approve --all` to create one.',
+    )
   })
 
   it('throws in frozen mode when intent.lock is missing', async () => {

@@ -67,6 +67,17 @@ Frozen mode is the CI gate: it turns "an allowlisted source's content silently d
 
 See [`intent skills`](../cli/intent-skills#exit-codes) for the full exit-code table.
 
+## Consumer CI
+
+Run the frozen scan in the consumer repository after dependencies and `intent.lock` are present:
+
+```yaml
+- name: Verify approved skill sources
+  run: npx @tanstack/intent@latest skills scan --frozen
+```
+
+The generated `Check Skills` workflow is for library-maintainer validation and review; it does not add this consumer lockfile gate automatically.
+
 ## What this does and doesn't solve
 
 - **Solves:** an allowlisted package's skill content changing without a human noticing, in CI.
