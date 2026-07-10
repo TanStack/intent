@@ -123,6 +123,22 @@ describe('buildCurrentLockfileSources', () => {
     expect(entry!.capabilities).toEqual([])
   })
 
+  it('fails when an existing manifest is malformed', () => {
+    const root = createRoot()
+    const skillPath = writeSkill(root, 'core', 'body')
+    const pkg = createPackage({
+      name: '@acme/pkg',
+      kind: 'npm',
+      packageRoot: root,
+      skills: [{ name: 'core', path: skillPath, description: 'desc' }],
+    })
+    writeFileSync(join(root, 'skills', 'intent.manifest.json'), '{not json')
+
+    expect(() => buildCurrentLockfileSources([pkg])).toThrow(
+      /Invalid intent.manifest.json/,
+    )
+  })
+
   it.each([
     [
       'declared secrets',

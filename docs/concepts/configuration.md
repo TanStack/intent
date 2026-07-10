@@ -30,7 +30,9 @@ Each array entry names one source:
 | `workspace:@scope/pkg` | workspace | A package in the current workspace. |
 | `git:<host>/<repo>#<ref>` | git | Reserved. Not yet supported, and rejected until a future version adds it. |
 
-A malformed entry fails the whole command, and every bad entry is reported at once. Intent currently matches an allowlist entry against a discovered package by name. This matching will tighten in a future version.
+A malformed entry fails the whole command, and every bad entry is reported at once. Intent matches a source by `(kind, id)`: `workspace:foo` never authorizes an npm-installed `foo`.
+
+If both `npm:foo` and `workspace:foo` provide the same requested skill, `intent load foo#skill` fails as ambiguous instead of selecting one source by discovery order. Narrow the allowlist to one source before loading it.
 
 ### Special forms
 
@@ -40,7 +42,7 @@ The list as a whole has three special forms:
 - **Empty.** `"skills": []`. No package is surfaced. Intent prints an info notice to stderr.
 - **Wildcard.** `"skills": ["*"]`. Every discovered package is surfaced. Intent prints an acknowledged-risk notice to stderr, since unvetted skills may reach your agent.
 
-A package that ships skills but is not listed is dropped. When packages are dropped this way, Intent prints one summary line naming them so you can opt in. A listed package that was not discovered is reported as well.
+A package that ships skills but is not listed is dropped. Human-facing output includes bounded dependency provenance when available, otherwise `provenance unknown`. A listed package that was not discovered is reported as well.
 
 ### Existing projects
 
@@ -84,5 +86,7 @@ Pattern grammar:
 - The skill segment may be a glob: `@scope/pkg#experimental-*`.
 - A pattern may cross package boundaries at skill granularity: `*#experimental-*`.
 - The `#*` shortcut excludes the whole package: `@scope/pkg#*`.
+
+Prefix a package segment with `npm:` or `workspace:` to target one source kind, for example `workspace:foo` or `npm:foo#experimental-*`. Bare package patterns remain broad and match either kind.
 
 Only exact names and `*` wildcards are supported on each segment. Bare package-name patterns keep working unchanged. An excluded package does not trigger the unlisted-source warning, because an exclude is an explicit decision.

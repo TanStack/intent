@@ -91,9 +91,9 @@ Read-only. Surfaces staleness **candidates** for human/agent review — never a 
 npx @tanstack/intent@latest skills generate-manifest [--json]
 ```
 
-Maintainer-only. Writes `skills/intent.manifest.json` inside each discovered package — never `intent.lock`, and unrelated to frozen mode. For each skill folder, computes a content hash over the **whole folder** (`SKILL.md` plus any `references/`, `assets/`, `scripts/` — a wider scope than the lockfile's `SKILL.md`-only aggregate hash) and runs static heuristics to pre-fill `capabilities`: `uses_network` (curl/wget/fetch reference), `runs_install_command` (npm/pnpm/yarn/bun/pip install reference), `ships_scripts` (non-empty `scripts/` dir). Heuristics only ever suggest — review and edit the generated file before committing.
+Maintainer-only. Writes `skills/intent.manifest.json` inside each discovered package — never `intent.lock`, and unrelated to frozen mode. For each skill folder, computes a content hash over `SKILL.md` plus any `references/`, `assets/`, and `scripts/` files. The consumer lockfile aggregate uses the same directory scope. Static heuristics pre-fill `capabilities`: `uses_network` (curl/wget/fetch reference), `runs_install_command` (npm/pnpm/yarn/bun/pip install reference), `ships_scripts` (non-empty `scripts/` dir). Heuristics only ever suggest — review and edit the generated file before committing.
 
-- **Hard-fails generation** (no partial manifest written) if any skill body contains what looks like a literal secret *value* (GitHub/Slack tokens, AWS access key IDs, a PEM private key block, a generic `key = "..."` assignment). A secret's *name* belongs in the manifest's `declaredSecrets`, never its value in skill content.
+- **Hard-fails generation** (no partial manifest written) if any hash-included skill file contains what looks like a literal secret *value* (GitHub/Slack tokens, AWS access key IDs, a PEM private key block, a generic `key = "..."` assignment). A secret's *name* belongs in the manifest's `declaredSecrets`, never its value in skill content.
 - Once a package ships a manifest, `intent skills scan`/`diff`/`approve` pick up its `manifestHash` and unioned `capabilities` automatically — no separate wiring needed on the consumer side.
 
 ## Options

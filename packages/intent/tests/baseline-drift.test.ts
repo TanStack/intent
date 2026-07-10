@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -143,6 +149,32 @@ describe('computeBaselineDrift', () => {
     expect(result).toMatchObject({
       ok: false,
       reason: expect.stringContaining('source.skills path'),
+    })
+  })
+
+  it('fails before Git access when a tracked skill symlink escapes its package root', () => {
+    const skillDir = join(repoDir, 'pkg', 'skills', 'core')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(join(repoDir, 'outside.md'), 'outside package')
+    symlinkSync('../../../outside.md', join(skillDir, 'SKILL.md'))
+    git(['add', '.'])
+    git(['commit', '--quiet', '-m', 'first'])
+    git(['tag', 'v1.0.0'])
+
+    const baseline = resolveBaseline(repoDir, 'v1.0.0', baseLockfile())
+    expect(baseline.ok).toBe(true)
+    if (!baseline.ok) return
+
+    const result = computeBaselineDrift(
+      repoDir,
+      baseline.baseline,
+      [source({ skills: ['skills/core/SKILL.md'] })],
+      new Map([['npm:@acme/pkg', join(repoDir, 'pkg')]]),
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining('escapes the package root'),
     })
   })
 

@@ -346,10 +346,22 @@ export function readIntentManifest(
   fs: Pick<ReadFs, 'existsSync' | 'readFileSync'> = nodeReadFs,
 ): IntentManifest | null {
   if (!fs.existsSync(filePath)) return null
+
+  let content: string
   try {
-    return parseManifest(JSON.parse(fs.readFileSync(filePath, 'utf8')))
-  } catch {
-    return null
+    content = fs.readFileSync(filePath, 'utf8')
+  } catch (err) {
+    throw new Error(
+      `Failed to read intent.manifest.json at "${filePath}": ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
+
+  try {
+    return parseManifest(JSON.parse(content))
+  } catch (err) {
+    throw new Error(
+      `Invalid intent.manifest.json at "${filePath}": ${err instanceof Error ? err.message : String(err)}`,
+    )
   }
 }
 

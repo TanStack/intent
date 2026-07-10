@@ -224,6 +224,16 @@ describe('writeIntentManifest / readIntentManifest', () => {
   it('returns null when the manifest file does not exist', () => {
     expect(readIntentManifest(join(packageRoot, 'nope.json'))).toBeNull()
   })
+
+  it('fails when an existing manifest is malformed', () => {
+    const manifestPath = join(packageRoot, 'skills', 'intent.manifest.json')
+    mkdirSync(dirname(manifestPath), { recursive: true })
+    writeFileSync(manifestPath, '{not json')
+
+    expect(() => readIntentManifest(manifestPath)).toThrow(
+      /Invalid intent.manifest.json/,
+    )
+  })
 })
 
 describe('computeManifestHash', () => {

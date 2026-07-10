@@ -77,6 +77,22 @@ function scanResult(
 }
 
 describe('resolveSkillUse', () => {
+  it('rejects a same-name skill use when npm and workspace sources both match', () => {
+    const npm = intentPackage({ name: 'foo', kind: 'npm' })
+    const workspace = intentPackage({
+      name: 'foo',
+      kind: 'workspace',
+      packageRoot: 'packages/foo',
+      skills: [skill('core', 'packages/foo/skills/core/SKILL.md')],
+    })
+
+    expect(() =>
+      resolveSkillUse('foo#core', scanResult([npm, workspace])),
+    ).toThrow(
+      'Cannot resolve skill use "foo#core": package "foo" is ambiguous between npm:foo and workspace:foo.',
+    )
+  })
+
   it('resolves a local package and exact skill', () => {
     const pkg = intentPackage({
       name: '@tanstack/query',

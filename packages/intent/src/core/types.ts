@@ -118,6 +118,7 @@ export function sourceIdentityEquals(
 export type IntentCoreErrorCode =
   | 'invalid-options'
   | 'invalid-skill-use'
+  | 'package-ambiguous'
   | 'package-not-found'
   | 'package-excluded'
   | 'package-not-listed'

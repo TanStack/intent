@@ -117,7 +117,9 @@ The list as a whole has three special forms:
 - **Empty** (`"skills": []`): no package is surfaced, with an info notice printed to stderr.
 - **Wildcard** (`"skills": ["*"]`): every discovered package is surfaced, with an acknowledged-risk notice printed to stderr.
 
-A package that ships skills but is not listed is dropped. When packages are dropped this way, Intent prints one summary line naming them so you can opt in. In agent sessions, hidden sources are reported by count only; run `intent list --show-hidden` outside the agent session to review candidates. A listed package that was not discovered is reported as well. Matching is currently by package name. See [Configuration](../concepts/configuration) and [Trust model](../concepts/trust-model).
+A package that ships skills but is not listed is dropped. Human-facing output includes bounded dependency provenance when available, otherwise `provenance unknown`. In agent sessions, hidden sources are reported by count only; run `intent list --show-hidden` outside the agent session to review candidates. A listed package that was not discovered is reported as well. Matching uses `(kind, id)`. See [Configuration](../concepts/configuration) and [Trust model](../concepts/trust-model).
+
+When an npm and workspace source share a name and the requested skill, `intent load` rejects the unqualified use as ambiguous.
 
 ## Excludes
 
@@ -133,7 +135,7 @@ Manage persistent excludes with `intent exclude add|remove|list`.
 }
 ```
 
-A pattern without `#` excludes a whole package. A pattern with `#` excludes a single skill (`@scope/pkg#search-params`), and the skill segment may itself be a glob (`@scope/pkg#experimental-*`). A pattern may cross package boundaries at skill granularity (`*#experimental-*`). The `#*` shortcut (`@scope/pkg#*`) excludes the whole package. Only exact names and `*` wildcards are supported on each segment. Bare package-name patterns keep working unchanged.
+A pattern without `#` excludes a whole package. A pattern with `#` excludes a single skill (`@scope/pkg#search-params`), and the skill segment may itself be a glob (`@scope/pkg#experimental-*`). A pattern may cross package boundaries at skill granularity (`*#experimental-*`). The `#*` shortcut (`@scope/pkg#*`) excludes the whole package. Prefix a package segment with `npm:` or `workspace:` to target one source kind. Only exact names and `*` wildcards are supported on each segment. Bare package-name patterns keep working unchanged.
 
 An excluded package never triggers the unlisted-source warning, because an exclude is an explicit decision rather than an oversight.
 

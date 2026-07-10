@@ -2,7 +2,7 @@
 // intent.lock (or an explicit override). Pure candidate detection: a source
 // touched since baseline is fed back for human/agent impact classification,
 // never a hard "stale" verdict on its own — staleness is a signal, not a gate.
-import { relative } from 'node:path'
+import { isAbsolute, relative } from 'node:path'
 import { realpathSync } from 'node:fs'
 import {
   blobShaAtCommit,
@@ -82,6 +82,11 @@ export interface BaselineDriftFailure {
   reason: string
 }
 
+function isWithinDir(candidate: string, dir: string): boolean {
+  const rel = relative(dir, candidate)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
 // Compares each source's tracked skill files (already package-relative in
 // the lockfile) against the baseline commit's tree. `packageRoots` maps a
 // source identity key (`kind:id`) to its on-disk package root, so
@@ -137,6 +142,25 @@ export function computeBaselineDrift(
         return {
           ok: false,
           reason: err instanceof Error ? err.message : String(err),
+        }
+      }
+      try {
+        const realSkillPath = realpathSync(resolvedSkillPath)
+        if (!isWithinDir(realSkillPath, realPackageRoot)) {
+          return {
+            ok: false,
+            reason: `source.skills path escapes the package root via a symlink: "${skillPath}".`,
+          }
+        }
+      } catch (err) {
+        if (
+          !(err instanceof Error) ||
+          (err as NodeJS.ErrnoException).code !== 'ENOENT'
+        ) {
+          return {
+            ok: false,
+            reason: `failed to resolve source.skills path "${skillPath}": ${err instanceof Error ? err.message : String(err)}`,
+          }
         }
       }
       const repoRelativePath = relative(realRoot, resolvedSkillPath)

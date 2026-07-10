@@ -18,7 +18,10 @@ export interface ResolveSkillResult {
   conflict: VersionConflict | null
 }
 
-export type ResolveSkillUseErrorCode = 'package-not-found' | 'skill-not-found'
+export type ResolveSkillUseErrorCode =
+  | 'package-ambiguous'
+  | 'package-not-found'
+  | 'skill-not-found'
 
 export class ResolveSkillUseError extends Error {
   readonly code: ResolveSkillUseErrorCode
@@ -162,6 +165,21 @@ export function resolveSkillUse(
     })
   }
 
+  const identities = [
+    ...new Set(
+      packages.map((candidate) => `${candidate.kind}:${candidate.name}`),
+    ),
+  ].toSorted()
+  if (identities.length > 1) {
+    throw new ResolveSkillUseError({
+      availablePackages: identities,
+      code: 'package-ambiguous',
+      packageName,
+      skillName,
+      use,
+    })
+  }
+
   const resolvedSkill = resolveSkillEntry(packageName, skillName, pkg.skills)
   const skill = resolvedSkill.skill
 
@@ -213,6 +231,8 @@ function formatResolveSkillUseErrorMessage({
   use: string
 }): string {
   switch (code) {
+    case 'package-ambiguous':
+      return `Cannot resolve skill use "${use}": package "${packageName}" is ambiguous between ${availablePackages.join(' and ')}.`
     case 'package-not-found': {
       const available =
         availablePackages.length > 0

@@ -98,6 +98,8 @@ npx @tanstack/intent@latest setup
 
 ## Compatibility
 
+Intent requires Node.js 20 or newer.
+
 | Environment    | Status      | Notes                                              |
 | -------------- | ----------- | -------------------------------------------------- |
 | Node.js + npm  | Supported   | Use `npx @tanstack/intent@latest <command>`        |

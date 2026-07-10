@@ -207,6 +207,16 @@ describe('source identity lifecycle', () => {
     })
   }
 
+  it('rejects an ambiguous load when npm and workspace sources share a skill', () => {
+    writeRootConfig({ skills: ['foo', 'workspace:foo'] })
+    writeWorkspaceIntentPackage(root, 'foo', 'core')
+    writeIntentPackage(root, 'foo', 'core')
+
+    expect(() => loadIntentSkill('foo#core', { cwd: root })).toThrow(
+      'Cannot resolve skill use "foo#core": package "foo" is ambiguous between npm:foo and workspace:foo.',
+    )
+  })
+
   it('preserves same-name sources through policy, locking, diffing, and frozen checks', async () => {
     writeRootConfig({ skills: ['workspace:foo'] })
     writeWorkspaceIntentPackage(root, 'foo', 'workspace')

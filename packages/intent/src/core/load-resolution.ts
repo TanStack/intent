@@ -263,13 +263,11 @@ export function resolveSkillUseFastPath(
     cwd,
     fsCache,
   )
-  if (directResolved) return directResolved
-
   if (!context.workspaceRoot) {
-    return null
+    return directResolved
   }
 
-  return resolveFromPackageRoots(
+  const workspaceResolved = resolveFromPackageRoots(
     getWorkspaceLoadFastPathCandidateDirs(
       parsedUse.packageName,
       context,
@@ -279,4 +277,12 @@ export function resolveSkillUseFastPath(
     cwd,
     fsCache,
   )
+  if (
+    directResolved &&
+    workspaceResolved &&
+    directResolved.kind !== workspaceResolved.kind
+  ) {
+    return null
+  }
+  return directResolved ?? workspaceResolved
 }

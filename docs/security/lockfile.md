@@ -32,12 +32,12 @@ This is tamper-evidence, not semantic validation. Approving a source means **a h
 ```
 
 - **`sources[]`** is keyed by `(kind, id)`, never `id` alone — `workspace:foo` and `npm:foo` are distinct entries and distinct approvals.
-- **`skills[]`** is the sorted list of package-relative `SKILL.md` paths that fed `contentHash`. It's what lets `diff` show *which files* changed, not just an opaque hash flip.
-- **`contentHash`** is a `sha256-` digest over each source's `SKILL.md` files (path + bytes, LF-normalized). Only `SKILL.md` files are hashed — scripts, assets, and other files under `skills/` are out of scope for now. A file rename with identical bytes changes the hash, because a path change is a real content-set change.
-- **`manifestHash`** and **`capabilities`** are `null` until the package ships a `skills/intent.manifest.json` (see [`intent skills generate-manifest`](../cli/intent-skills#intent-skills-generate-manifest)). Once a manifest exists, `manifestHash` is populated and `capabilities` is always an array: `[]` means the manifest declares none; a non-empty array is the union of declared capabilities. `declaredSecrets`, `mcpTools`, and `mcpPolicy` remain reserved and, if present (e.g. written by a newer Intent version), are preserved on read/write but not required.
+- **`skills[]`** is the sorted list of package-relative `SKILL.md` paths in the aggregate. Supporting-file changes still change `contentHash`.
+- **`contentHash`** is a `sha256-` digest over each listed `SKILL.md` plus files under that skill's `references/`, `assets/`, and `scripts/` directories. Text line endings normalize to LF; binary bytes remain exact. A file rename with identical bytes changes the hash.
+- **`manifestHash`** and **`capabilities`** are `null` until the package ships a `skills/intent.manifest.json` (see [`intent skills generate-manifest`](../cli/intent-skills#intent-skills-generate-manifest)). An existing manifest must parse and validate. Once it does, `manifestHash` is populated and `capabilities` is always an array: `[]` means the manifest declares none; a non-empty array is the union of declared capabilities. `declaredSecrets`, `mcpTools`, and `mcpPolicy` remain reserved and, if present (e.g. written by a newer Intent version), are preserved on read/write but not required.
 - **`policy.ignores`** is a reserved block; nothing writes to it yet, but it's round-tripped verbatim if present.
 - **`staleness.baseline`** (`{ kind: "tag", ref, commit }`) is a reserved, optional field read by [`intent skills stale`](../cli/intent-skills#intent-skills-stale) as one input to baseline resolution. Nothing currently writes it — when absent, `stale` falls back to the nearest local git tag.
-- A `lockfileVersion` newer than this Intent version supports, a duplicate `(kind, id)` entry, or any other structural problem is a **malformed lockfile** — fails closed, never silently treated as an empty lock.
+- A `lockfileVersion` newer than this Intent version supports, a duplicate `(kind, id)` entry, a non-canonical skill path, or any other structural problem is a **malformed lockfile** — fails closed, never silently treated as an empty lock.
 
 ## Commands
 
@@ -63,7 +63,7 @@ Frozen mode is the CI gate: it turns "an allowlisted source's content silently d
 - Fails on a discovered skill-bearing source that isn't in `intent.lock` (exit `3`).
 - Fails if there's no `intent.lock` at all (exit `4`) — run `approve --all` interactively first.
 - Fails closed on a malformed or unsupported `intent.lock` (exit `6`).
-- Makes zero network calls (skips the staleness-check registry lookup) and zero subprocess calls (skips shelling out to a package manager to detect a global install path).
+- `scan` and `diff` make zero network calls and skip subprocess-based global package-manager detection. `skills stale` may use the read-only Git adapter for baseline comparison.
 
 See [`intent skills`](../cli/intent-skills#exit-codes) for the full exit-code table.
 
