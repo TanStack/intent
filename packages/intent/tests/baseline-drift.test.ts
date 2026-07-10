@@ -19,6 +19,7 @@ import type {
 } from '../src/core/lockfile/lockfile.js'
 
 let repoDir: string
+const externalDirs: Array<string> = []
 
 function git(args: Array<string>): string {
   return execFileSync('git', args, { cwd: repoDir, encoding: 'utf8' })
@@ -59,6 +60,9 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(repoDir, { recursive: true, force: true })
+  for (const dir of externalDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 describe('resolveBaseline', () => {
@@ -128,6 +132,54 @@ describe('resolveBaseline', () => {
 })
 
 describe('computeBaselineDrift', () => {
+  it('skips installed dependency paths outside the consumer repository', () => {
+    const installedRoot = mkdtempSync(
+      join(tmpdir(), 'installed-skill-package-'),
+    )
+    externalDirs.push(installedRoot)
+    const skillDir = join(installedRoot, 'skills', 'core')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(join(skillDir, 'SKILL.md'), 'installed dependency content')
+    git(['commit', '--allow-empty', '--quiet', '-m', 'first'])
+    git(['tag', 'v1.0.0'])
+
+    const baseline = resolveBaseline(repoDir, 'v1.0.0', baseLockfile())
+    expect(baseline.ok).toBe(true)
+    if (!baseline.ok) return
+
+    const result = computeBaselineDrift(
+      repoDir,
+      baseline.baseline,
+      [source({ skills: ['skills/core/SKILL.md'] })],
+      new Map([['npm:@acme/pkg', installedRoot]]),
+    )
+
+    expect(result).toEqual({ ok: true, candidates: [] })
+  })
+
+  it('does not report an unchanged in-bounds symlink as drift', () => {
+    const skillDir = join(repoDir, 'pkg', 'skills', 'core')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(join(skillDir, 'content.md'), 'linked content')
+    symlinkSync('content.md', join(skillDir, 'SKILL.md'))
+    git(['add', '.'])
+    git(['commit', '--quiet', '-m', 'first'])
+    git(['tag', 'v1.0.0'])
+
+    const baseline = resolveBaseline(repoDir, 'v1.0.0', baseLockfile())
+    expect(baseline.ok).toBe(true)
+    if (!baseline.ok) return
+
+    const result = computeBaselineDrift(
+      repoDir,
+      baseline.baseline,
+      [source({ skills: ['skills/core/SKILL.md'] })],
+      new Map([['npm:@acme/pkg', join(repoDir, 'pkg')]]),
+    )
+
+    expect(result).toEqual({ ok: true, candidates: [] })
+  })
+
   it('fails before Git access when a tracked skill path escapes its package root', () => {
     mkdirSync(join(repoDir, 'pkg'), { recursive: true })
     writeFileSync(join(repoDir, 'outside.md'), 'outside package')

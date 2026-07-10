@@ -129,6 +129,7 @@ export function computeBaselineDrift(
     if (!packageRoot) continue
 
     const realPackageRoot = realpathSync(packageRoot)
+    if (!isWithinDir(realPackageRoot, realRoot)) continue
 
     for (const skillPath of source.skills) {
       let resolvedSkillPath: string
@@ -144,6 +145,7 @@ export function computeBaselineDrift(
           reason: err instanceof Error ? err.message : String(err),
         }
       }
+      let gitPath = resolvedSkillPath
       try {
         const realSkillPath = realpathSync(resolvedSkillPath)
         if (!isWithinDir(realSkillPath, realPackageRoot)) {
@@ -152,6 +154,7 @@ export function computeBaselineDrift(
             reason: `source.skills path escapes the package root via a symlink: "${skillPath}".`,
           }
         }
+        gitPath = realSkillPath
       } catch (err) {
         if (
           !(err instanceof Error) ||
@@ -163,7 +166,7 @@ export function computeBaselineDrift(
           }
         }
       }
-      const repoRelativePath = relative(realRoot, resolvedSkillPath)
+      const repoRelativePath = relative(realRoot, gitPath)
 
       if (fileFilter && !fileFilter.has(repoRelativePath)) continue
 

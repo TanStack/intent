@@ -1,8 +1,9 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
 import { writeIntentLockfile } from '../src/core/lockfile/lockfile.js'
 import { runSkillsStaleCommand } from '../src/commands/skills/stale.js'
 import type {
@@ -70,10 +71,14 @@ function source(
 describe('runSkillsStaleCommand', () => {
   const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
   const tempDirs: Array<string> = []
+  const externalDirs: Array<string> = []
 
   afterEach(() => {
     logSpy.mockClear()
     for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    for (const dir of externalDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
   })
@@ -129,6 +134,41 @@ describe('runSkillsStaleCommand', () => {
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(output).toContain('No staleness candidates found')
+  })
+
+  it('does not treat an approved installed dependency as baseline drift in frozen mode', async () => {
+    const cwd = makeTempProject()
+    git(cwd, ['add', '.'])
+    git(cwd, ['commit', '--quiet', '-m', 'first'])
+    git(cwd, ['tag', 'v1.0.0'])
+    const installedRoot = mkdtempSync(
+      join(tmpdir(), 'installed-stale-package-'),
+    )
+    externalDirs.push(installedRoot)
+    const skillPath = join(installedRoot, 'skills', 'core', 'SKILL.md')
+    mkdirSync(join(installedRoot, 'skills', 'core'), { recursive: true })
+    writeFileSync(skillPath, 'installed guidance')
+    const pkg: IntentPackage = {
+      name: '@acme/pkg',
+      version: '1.0.0',
+      intent: { version: 1, repo: '', docs: '' },
+      skills: [{ name: 'core', path: skillPath, description: '' }],
+      packageRoot: installedRoot,
+      kind: 'npm',
+      source: 'local',
+    }
+    writeIntentLockfile(
+      join(cwd, 'intent.lock'),
+      baseLockfile({ sources: buildCurrentLockfileSources([pkg]) }),
+    )
+
+    await expect(
+      runSkillsStaleCommand(
+        { frozen: true },
+        () => Promise.resolve(policedScan({ scan: emptyScanResult([pkg]) })),
+        cwd,
+      ),
+    ).resolves.toBeUndefined()
   })
 
   it('reports layer 2 drift when a tracked skill file changed since the baseline tag', async () => {
