@@ -117,7 +117,7 @@ export function enforceFrozenMode(
 
   if (!diff.hasLockfile) {
     fail(
-      'Frozen mode requires intent.lock. Run `intent skills scan` outside frozen mode first.',
+      'Frozen mode requires intent.lock. Run `intent skills approve --all` outside frozen mode first.',
       4,
     )
   }

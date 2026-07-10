@@ -173,6 +173,22 @@ describe('parseIntentLockfile', () => {
     ).toEqual(createCanonicalLockfile())
   })
 
+  it('preserves null and empty capabilities as distinct states', () => {
+    const lockfile = createLockfile()
+    lockfile.sources[0]!.capabilities = []
+    lockfile.sources[1]!.capabilities = null
+
+    const parsed = parseIntentLockfile(JSON.stringify(lockfile))
+
+    expect(
+      parsed.sources.find((source) => source.id === 'router')?.capabilities,
+    ).toEqual([])
+    expect(
+      parsed.sources.find((source) => source.id === '@tanstack/router')
+        ?.capabilities,
+    ).toBeNull()
+  })
+
   it('rejects an unsupported lockfile version', () => {
     expect(() =>
       parseIntentLockfile(

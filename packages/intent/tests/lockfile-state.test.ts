@@ -100,6 +100,29 @@ describe('buildCurrentLockfileSources', () => {
     expect(entry!.capabilities).toEqual(['uses_network'])
   })
 
+  it('uses an empty capabilities array when a manifest declares none', () => {
+    const root = createRoot()
+    const skillPath = writeSkill(root, 'core', 'plain guidance')
+    const pkg = createPackage({
+      name: '@acme/pkg',
+      kind: 'npm',
+      packageRoot: root,
+      skills: [{ name: 'core', path: skillPath, description: 'desc' }],
+    })
+    const outcome = generateManifest(root, '@acme/pkg', '1.0.0', pkg.skills)
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    writeIntentManifest(
+      join(root, 'skills', 'intent.manifest.json'),
+      outcome.manifest,
+    )
+
+    const [entry] = buildCurrentLockfileSources([pkg])
+
+    expect(entry!.manifestHash).toMatch(/^sha256-[0-9a-f]{64}$/)
+    expect(entry!.capabilities).toEqual([])
+  })
+
   it.each([
     [
       'declared secrets',
