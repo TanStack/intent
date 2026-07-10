@@ -13,11 +13,11 @@ export interface IntentLockfile {
   policy: IntentLockfilePolicy
 }
 
-interface IntentLockfileStaleness {
+export interface IntentLockfileStaleness {
   baseline: IntentLockfileStalenessBaseline
 }
 
-interface IntentLockfileStalenessBaseline {
+export interface IntentLockfileStalenessBaseline {
   kind: 'tag'
   ref: string
   commit: string
@@ -37,11 +37,11 @@ export interface IntentLockfileSource {
   mcpPolicy?: Record<string, unknown>
 }
 
-interface IntentLockfilePolicy {
+export interface IntentLockfilePolicy {
   ignores: Array<IntentLockfilePolicyIgnore>
 }
 
-interface IntentLockfilePolicyIgnore {
+export interface IntentLockfilePolicyIgnore {
   id: string
   scope: {
     source: string

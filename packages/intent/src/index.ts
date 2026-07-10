@@ -48,3 +48,13 @@ export type {
   SkillStaleness,
   StalenessSignal,
 } from './shared/types.js'
+export type {
+  IntentLockfile,
+  IntentLockfilePolicy,
+  IntentLockfilePolicyIgnore,
+  IntentLockfileSource,
+  IntentLockfileStaleness,
+  IntentLockfileStalenessBaseline,
+  ReadIntentLockfileResult,
+} from './core/lockfile/lockfile.js'
+export type { SourceIdentity } from './core/types.js'
