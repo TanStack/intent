@@ -30,6 +30,14 @@ interface ManifestMcpTool {
   inputSchema?: Record<string, unknown>
 }
 
+type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | Array<JsonValue>
+  | { [key: string]: JsonValue }
+
 export interface IntentManifest {
   manifestVersion: 1
   package: string
@@ -130,7 +138,11 @@ export function generateManifest(
 // generateManifest) and stable key order, no generated timestamps — a
 // manifest regenerated from unchanged inputs serializes byte-identical.
 export function serializeManifest(manifest: IntentManifest): string {
-  const canonical = {
+  return `${JSON.stringify(canonicalManifest(manifest), null, 2)}\n`
+}
+
+function canonicalManifest(manifest: IntentManifest): IntentManifest {
+  return {
     manifestVersion: manifest.manifestVersion,
     package: manifest.package,
     packageVersion: manifest.packageVersion,
@@ -142,10 +154,9 @@ export function serializeManifest(manifest: IntentManifest): string {
         contentHash: skill.contentHash,
         capabilities: skill.capabilities.toSorted(compareStrings),
         declaredSecrets: skill.declaredSecrets.toSorted(compareStrings),
-        mcpTools: skill.mcpTools,
+        mcpTools: canonicalMcpTools(skill.mcpTools, 'mcpTools'),
       })),
   }
-  return `${JSON.stringify(canonical, null, 2)}\n`
 }
 
 export function writeIntentManifest(
@@ -176,6 +187,85 @@ function assertStringArray(value: unknown, label: string): Array<string> {
     )
   }
   return value
+}
+
+function canonicalJsonValue(value: unknown, label: string): JsonValue {
+  if (
+    value === null ||
+    typeof value === 'boolean' ||
+    typeof value === 'string'
+  ) {
+    return value
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new Error(
+        `Invalid intent.manifest.json: ${label} must be JSON-serializable.`,
+      )
+    }
+    return value
+  }
+  if (Array.isArray(value)) {
+    return value.map((item, index) =>
+      canonicalJsonValue(item, `${label}[${index}]`),
+    )
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => compareStrings(a, b))
+        .map(([key, item]) => [
+          key,
+          canonicalJsonValue(item, `${label}.${key}`),
+        ]),
+    )
+  }
+  throw new Error(
+    `Invalid intent.manifest.json: ${label} must be JSON-serializable.`,
+  )
+}
+
+function canonicalMcpTools(
+  value: unknown,
+  label: string,
+): Array<ManifestMcpTool> {
+  if (!Array.isArray(value)) {
+    throw new Error(`Invalid intent.manifest.json: ${label} must be an array.`)
+  }
+
+  const tools = value.map((tool, index): ManifestMcpTool => {
+    const record = assertRecord(tool, `${label}[${index}]`)
+    const name = assertString(record.name, `${label}[${index}].name`)
+    const description =
+      record.description === undefined
+        ? undefined
+        : assertString(record.description, `${label}[${index}].description`)
+    const inputSchema =
+      record.inputSchema === undefined
+        ? undefined
+        : canonicalJsonValue(
+            assertRecord(record.inputSchema, `${label}[${index}].inputSchema`),
+            `${label}[${index}].inputSchema`,
+          )
+
+    return {
+      name,
+      ...(description === undefined ? {} : { description }),
+      ...(inputSchema === undefined
+        ? {}
+        : { inputSchema: inputSchema as Record<string, unknown> }),
+    }
+  })
+
+  const sorted = tools.toSorted((a, b) => compareStrings(a.name, b.name))
+  for (let index = 1; index < sorted.length; index++) {
+    if (sorted[index - 1]!.name === sorted[index]!.name) {
+      throw new Error(
+        `Invalid intent.manifest.json: ${label} contains duplicate tool name "${sorted[index]!.name}".`,
+      )
+    }
+  }
+  return sorted
 }
 
 export function parseManifest(raw: unknown): IntentManifest {
@@ -216,9 +306,10 @@ export function parseManifest(raw: unknown): IntentManifest {
         skillRecord.declaredSecrets ?? [],
         `skills[${index}].declaredSecrets`,
       ),
-      mcpTools: Array.isArray(skillRecord.mcpTools)
-        ? (skillRecord.mcpTools as Array<ManifestMcpTool>)
-        : [],
+      mcpTools: canonicalMcpTools(
+        skillRecord.mcpTools ?? [],
+        `skills[${index}].mcpTools`,
+      ),
     }
   })
 
@@ -248,15 +339,6 @@ export function readIntentManifest(
 // without needing to store the whole manifest inline.
 export function computeManifestHash(manifest: IntentManifest): string {
   const hash = createHash('sha256')
-  for (const skill of manifest.skills.toSorted((a, b) =>
-    compareStrings(a.path, b.path),
-  )) {
-    hash.update(skill.path)
-    hash.update('\0')
-    hash.update(skill.contentHash)
-    hash.update('\0')
-    hash.update(skill.capabilities.toSorted(compareStrings).join(','))
-    hash.update('\0')
-  }
+  hash.update(serializeManifest(manifest))
   return `sha256-${hash.digest('hex')}`
 }

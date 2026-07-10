@@ -100,6 +100,70 @@ describe('buildCurrentLockfileSources', () => {
     expect(entry!.capabilities).toEqual(['uses_network'])
   })
 
+  it.each([
+    [
+      'declared secrets',
+      {
+        declaredSecrets: ['API_TOKEN'],
+        mcpTools: [],
+      },
+    ],
+    [
+      'an MCP tool name',
+      {
+        declaredSecrets: [],
+        mcpTools: [{ name: 'fetch' }],
+      },
+    ],
+    [
+      'an MCP tool description',
+      {
+        declaredSecrets: [],
+        mcpTools: [{ name: 'fetch', description: 'Fetch a resource.' }],
+      },
+    ],
+    [
+      'an MCP tool schema',
+      {
+        declaredSecrets: [],
+        mcpTools: [{ name: 'fetch', inputSchema: { type: 'object' } }],
+      },
+    ],
+  ])('changes manifestHash when %s changes', (_, disclosure) => {
+    const root = createRoot()
+    const skillPath = writeSkill(root, 'core', 'body')
+    const pkg = createPackage({
+      name: '@acme/pkg',
+      kind: 'npm',
+      packageRoot: root,
+      skills: [{ name: 'core', path: skillPath, description: 'desc' }],
+    })
+    const manifestPath = join(root, 'skills', 'intent.manifest.json')
+    const baseManifest = {
+      manifestVersion: 1,
+      package: '@acme/pkg',
+      packageVersion: '1.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          contentHash: 'sha256-core',
+          capabilities: [],
+          declaredSecrets: [],
+          mcpTools: [],
+        },
+      ],
+    }
+    writeFileSync(manifestPath, JSON.stringify(baseManifest))
+    const before = buildCurrentLockfileSources([pkg])[0]!.manifestHash
+
+    const changedManifest = structuredClone(baseManifest)
+    Object.assign(changedManifest.skills[0]!, disclosure)
+    writeFileSync(manifestPath, JSON.stringify(changedManifest))
+
+    expect(buildCurrentLockfileSources([pkg])[0]!.manifestHash).not.toBe(before)
+  })
+
   it('does not set a resolution for workspace packages', () => {
     const root = createRoot()
     const skillPath = writeSkill(root, 'core', 'body')

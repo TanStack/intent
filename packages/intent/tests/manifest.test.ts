@@ -1,9 +1,4 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -27,15 +22,16 @@ afterEach(() => {
   rmSync(packageRoot, { recursive: true, force: true })
 })
 
-function writeSkill(
-  relDir: string,
-  content: string,
-): SkillEntry {
+function writeSkill(relDir: string, content: string): SkillEntry {
   const skillDir = join(packageRoot, relDir)
   mkdirSync(skillDir, { recursive: true })
   const filePath = join(skillDir, 'SKILL.md')
   writeFileSync(filePath, content)
-  return { name: relDir.split('/').pop() ?? relDir, path: filePath, description: '' }
+  return {
+    name: relDir.split('/').pop() ?? relDir,
+    path: filePath,
+    description: '',
+  }
 }
 
 describe('generateManifest', () => {
@@ -59,7 +55,10 @@ describe('generateManifest', () => {
   })
 
   it('pre-fills uses_network from a curl/fetch reference', () => {
-    const skill = writeSkill('skills/net', 'Run `curl https://example.com/api`.')
+    const skill = writeSkill(
+      'skills/net',
+      'Run `curl https://example.com/api`.',
+    )
 
     const outcome = generateManifest(packageRoot, '@acme/pkg', '1.0.0', [skill])
     expect(outcome.ok).toBe(true)
@@ -222,5 +221,127 @@ describe('computeManifestHash', () => {
       ],
     }
     expect(computeManifestHash(mutated)).not.toBe(before)
+  })
+
+  it('canonicalizes declared arrays, tool order, and schema object keys', () => {
+    const unsorted = parseManifest({
+      manifestVersion: 1,
+      package: '@acme/pkg',
+      packageVersion: '1.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          contentHash: 'sha256-core',
+          capabilities: ['uses_network', 'runs_install_command'],
+          declaredSecrets: ['Z_TOKEN', 'A_TOKEN'],
+          mcpTools: [
+            { name: 'zeta', inputSchema: { z: 1, a: { y: true, x: false } } },
+            { name: 'alpha', description: 'Alpha tool.' },
+          ],
+        },
+      ],
+    })
+    const sorted = parseManifest({
+      manifestVersion: 1,
+      package: '@acme/pkg',
+      packageVersion: '1.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          contentHash: 'sha256-core',
+          capabilities: ['runs_install_command', 'uses_network'],
+          declaredSecrets: ['A_TOKEN', 'Z_TOKEN'],
+          mcpTools: [
+            { name: 'alpha', description: 'Alpha tool.' },
+            { name: 'zeta', inputSchema: { a: { x: false, y: true }, z: 1 } },
+          ],
+        },
+      ],
+    })
+
+    expect(serializeManifest(unsorted)).toBe(serializeManifest(sorted))
+    expect(computeManifestHash(unsorted)).toBe(computeManifestHash(sorted))
+  })
+
+  it.each([
+    [
+      'declared secret',
+      (manifest: ReturnType<typeof parseManifest>) => {
+        manifest.skills[0]!.declaredSecrets = ['API_TOKEN']
+      },
+    ],
+    [
+      'MCP tool name',
+      (manifest: ReturnType<typeof parseManifest>) => {
+        manifest.skills[0]!.mcpTools = [{ name: 'fetch' }]
+      },
+    ],
+    [
+      'MCP tool description',
+      (manifest: ReturnType<typeof parseManifest>) => {
+        manifest.skills[0]!.mcpTools = [
+          { name: 'fetch', description: 'Fetch a resource.' },
+        ]
+      },
+    ],
+    [
+      'MCP tool schema',
+      (manifest: ReturnType<typeof parseManifest>) => {
+        manifest.skills[0]!.mcpTools = [
+          { name: 'fetch', inputSchema: { type: 'object', required: ['url'] } },
+        ]
+      },
+    ],
+  ])('changes when a %s changes', (_, mutate) => {
+    const manifest = parseManifest({
+      manifestVersion: 1,
+      package: '@acme/pkg',
+      packageVersion: '1.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          contentHash: 'sha256-core',
+          capabilities: [],
+          declaredSecrets: [],
+          mcpTools: [],
+        },
+      ],
+    })
+    const before = computeManifestHash(manifest)
+    const mutated = structuredClone(manifest)
+
+    mutate(mutated)
+
+    expect(computeManifestHash(mutated)).not.toBe(before)
+  })
+
+  it('rejects MCP tools without a valid structural shape', () => {
+    for (const mcpTools of [
+      [{}],
+      [{ name: 1 }],
+      [{ name: 'fetch', description: 1 }],
+      [{ name: 'fetch', inputSchema: [] }],
+      [{ name: 'fetch', inputSchema: { type: undefined } }],
+      [{ name: 'fetch' }, { name: 'fetch' }],
+    ]) {
+      expect(() =>
+        parseManifest({
+          manifestVersion: 1,
+          package: '@acme/pkg',
+          packageVersion: '1.0.0',
+          skills: [
+            {
+              name: 'core',
+              path: 'skills/core/SKILL.md',
+              contentHash: 'sha256-core',
+              mcpTools,
+            },
+          ],
+        }),
+      ).toThrow(/mcpTools/)
+    }
   })
 })

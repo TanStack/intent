@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { diffLockfileSources } from '../src/core/lockfile/lockfile-diff.js'
+import { computeManifestHash, parseManifest } from '../src/core/manifest.js'
 import type {
   IntentLockfile,
   IntentLockfileSource,
@@ -132,6 +133,84 @@ describe('diffLockfileSources', () => {
         kind: 'workspace',
         fields: [
           { field: 'contentHash', from: 'sha256-aaa', to: 'sha256-bbb' },
+        ],
+      },
+    ])
+  })
+
+  it.each([
+    [
+      'declared secrets',
+      {
+        declaredSecrets: ['API_TOKEN'],
+        mcpTools: [],
+      },
+    ],
+    [
+      'an MCP tool name',
+      {
+        declaredSecrets: [],
+        mcpTools: [{ name: 'fetch' }],
+      },
+    ],
+    [
+      'an MCP tool description',
+      {
+        declaredSecrets: [],
+        mcpTools: [{ name: 'fetch', description: 'Fetch a resource.' }],
+      },
+    ],
+    [
+      'an MCP tool schema',
+      {
+        declaredSecrets: [],
+        mcpTools: [{ name: 'fetch', inputSchema: { type: 'object' } }],
+      },
+    ],
+  ])('reports manifestHash drift when %s changes', (_, disclosure) => {
+    const baseManifest = parseManifest({
+      manifestVersion: 1,
+      package: 'foo',
+      packageVersion: '1.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          contentHash: 'sha256-core',
+          capabilities: [],
+          declaredSecrets: [],
+          mcpTools: [],
+        },
+      ],
+    })
+    const changedManifest = structuredClone(baseManifest)
+    Object.assign(changedManifest.skills[0]!, disclosure)
+    const locked = createSource({
+      id: 'foo',
+      kind: 'npm',
+      manifestHash: computeManifestHash(baseManifest),
+    })
+    const current = createSource({
+      id: 'foo',
+      kind: 'npm',
+      manifestHash: computeManifestHash(changedManifest),
+    })
+
+    const result = diffLockfileSources([current], {
+      status: 'found',
+      lockfile: createLockfile([locked]),
+    })
+
+    expect(result.changed).toEqual([
+      {
+        id: 'foo',
+        kind: 'npm',
+        fields: [
+          {
+            field: 'manifestHash',
+            from: locked.manifestHash,
+            to: current.manifestHash,
+          },
         ],
       },
     ])

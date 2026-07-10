@@ -99,7 +99,7 @@ export function checkLoadAllowed(
   // Name-only pre-check: kind isn't known yet at this point in the load path.
   // A late, kind-aware isSourcePermitted call happens once resolution reveals
   // the actual kind (see intent-core.ts).
-  if (!isSourcePermitted(config, packageName)) {
+  if (!isSourcePermitted(config, packageName, sourceKind)) {
     return packageNotListedRefusal(use, packageName)
   }
 
