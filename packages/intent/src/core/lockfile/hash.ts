@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import { dirname, isAbsolute, join, relative } from 'node:path'
-import { readdirSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import { assertCanonicalPackageRelativePaths } from '../skill-path.js'
 import { nodeReadFs } from '../../shared/utils.js'
@@ -17,6 +16,22 @@ export interface SourceContentHash {
 }
 
 const RECORD_SEPARATOR = Buffer.from([0])
+
+export const HASH_LIMITS = {
+  maxRecursionDepth: 32,
+  maxFileCount: 1000,
+  maxFileBytes: 4 * 1024 * 1024,
+  maxTotalBytes: 16 * 1024 * 1024,
+} as const
+
+type HashCollectionState = {
+  fileCount: number
+}
+
+type ReadSkillContent = {
+  content: Buffer
+  bytesRead: number
+}
 
 function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
@@ -48,6 +63,24 @@ function assertNoDuplicateKeys(keys: Array<string>, label: string): void {
     }
     seen.add(key)
   }
+}
+
+function assertHashFileCount(fileCount: number): void {
+  if (fileCount > HASH_LIMITS.maxFileCount) {
+    throw new Error(
+      `Hash file count limit (${HASH_LIMITS.maxFileCount}) exceeded.`,
+    )
+  }
+}
+
+function appendHashFile(
+  files: Array<SkillContentEntry>,
+  entry: SkillContentEntry,
+  state: HashCollectionState,
+): void {
+  state.fileCount += 1
+  assertHashFileCount(state.fileCount)
+  files.push(entry)
 }
 
 // Values are length-prefixed because content can contain NUL bytes. Keys
@@ -98,7 +131,7 @@ function readSkillMdContent(
   absolutePath: string,
   realPackageRoot: string,
   logicalRelativePath: string,
-): Buffer {
+): ReadSkillContent {
   let realPath: string
   try {
     realPath = fs.realpathSync(absolutePath)
@@ -115,7 +148,38 @@ function readSkillMdContent(
   }
 
   const raw = readRegularFile(fs, realPath, logicalRelativePath)
-  return isBinaryContent(raw) ? raw : normalizeLineEndings(raw)
+  if (raw.byteLength > HASH_LIMITS.maxFileBytes) {
+    throw new Error(
+      `Hash file size limit (${HASH_LIMITS.maxFileBytes} bytes) exceeded by "${logicalRelativePath}".`,
+    )
+  }
+  return {
+    content: isBinaryContent(raw) ? raw : normalizeLineEndings(raw),
+    bytesRead: raw.byteLength,
+  }
+}
+
+function readHashEntries(
+  entries: ReadonlyArray<SkillContentEntry>,
+  fs: ReadFs,
+  realPackageRoot: string,
+): Array<{ key: string; value: Buffer }> {
+  let totalBytes = 0
+  return entries.map((entry) => {
+    const { content, bytesRead } = readSkillMdContent(
+      fs,
+      entry.absolutePath,
+      realPackageRoot,
+      entry.relativePath,
+    )
+    totalBytes += bytesRead
+    if (totalBytes > HASH_LIMITS.maxTotalBytes) {
+      throw new Error(
+        `Hash total size limit (${HASH_LIMITS.maxTotalBytes} bytes) exceeded.`,
+      )
+    }
+    return { key: entry.relativePath, value: content }
+  })
 }
 
 function resolveContainedDirectory(
@@ -157,7 +221,14 @@ function collectSupportFiles(
   dir: string,
   baseDir: string,
   realPackageRoot: string,
+  depth: number,
+  state: HashCollectionState,
 ): Array<SkillContentEntry> {
+  if (depth > HASH_LIMITS.maxRecursionDepth) {
+    throw new Error(
+      `Hash recursion depth limit (${HASH_LIMITS.maxRecursionDepth}) exceeded at "${toPosixRelative(baseDir, dir)}".`,
+    )
+  }
   const logicalRelativePath = toPosixRelative(baseDir, dir)
   const realDir = resolveContainedDirectory(
     fs,
@@ -183,15 +254,26 @@ function collectSupportFiles(
     const absolutePath = join(dir, dirent.name)
     if (dirent.isDirectory()) {
       files.push(
-        ...collectSupportFiles(fs, absolutePath, baseDir, realPackageRoot),
+        ...collectSupportFiles(
+          fs,
+          absolutePath,
+          baseDir,
+          realPackageRoot,
+          depth + 1,
+          state,
+        ),
       )
       continue
     }
     if (dirent.isFile()) {
-      files.push({
-        relativePath: toPosixRelative(baseDir, absolutePath),
-        absolutePath,
-      })
+      appendHashFile(
+        files,
+        {
+          relativePath: toPosixRelative(baseDir, absolutePath),
+          absolutePath,
+        },
+        state,
+      )
       continue
     }
     if (dirent.isSymbolicLink()) {
@@ -206,13 +288,24 @@ function collectSupportFiles(
       const stat = fs.lstatSync(realPath)
       if (stat.isDirectory()) {
         files.push(
-          ...collectSupportFiles(fs, absolutePath, baseDir, realPackageRoot),
+          ...collectSupportFiles(
+            fs,
+            absolutePath,
+            baseDir,
+            realPackageRoot,
+            depth + 1,
+            state,
+          ),
         )
       } else if (stat.isFile()) {
-        files.push({
-          relativePath: toPosixRelative(baseDir, absolutePath),
-          absolutePath,
-        })
+        appendHashFile(
+          files,
+          {
+            relativePath: toPosixRelative(baseDir, absolutePath),
+            absolutePath,
+          },
+          state,
+        )
       }
     }
   }
@@ -222,11 +315,13 @@ function collectSupportFiles(
 
 function collectSkillContentEntries(
   fs: ReadFs,
-  packageRoot: string,
+  pathBaseDir: string,
   entries: ReadonlyArray<SkillContentEntry>,
   realPackageRoot: string,
 ): Array<SkillContentEntry> {
   const contentEntries = [...entries]
+  const state = { fileCount: contentEntries.length }
+  assertHashFileCount(state.fileCount)
   for (const entry of entries) {
     const skillDir = dirname(entry.absolutePath)
     let dirents: Array<Dirent<string>>
@@ -237,7 +332,7 @@ function collectSkillContentEntries(
       })
     } catch (err) {
       throw new Error(
-        `Failed to read skill directory "${toPosixRelative(packageRoot, skillDir)}": ${err instanceof Error ? err.message : String(err)}`,
+        `Failed to read skill directory "${toPosixRelative(pathBaseDir, skillDir)}": ${err instanceof Error ? err.message : String(err)}`,
       )
     }
 
@@ -256,13 +351,20 @@ function collectSkillContentEntries(
         realPath = fs.realpathSync(supportDir)
       } catch (err) {
         throw new Error(
-          `Failed to resolve skill directory "${toPosixRelative(packageRoot, supportDir)}": ${err instanceof Error ? err.message : String(err)}`,
+          `Failed to resolve skill directory "${toPosixRelative(pathBaseDir, supportDir)}": ${err instanceof Error ? err.message : String(err)}`,
         )
       }
       const stat = fs.lstatSync(realPath)
       if (stat.isDirectory()) {
         contentEntries.push(
-          ...collectSupportFiles(fs, supportDir, packageRoot, realPackageRoot),
+          ...collectSupportFiles(
+            fs,
+            supportDir,
+            pathBaseDir,
+            realPackageRoot,
+            0,
+            state,
+          ),
         )
       }
     }
@@ -293,15 +395,7 @@ export function computeSourceContentHash(
     'skill content path',
   )
 
-  const hashed = contentEntries.map((entry) => ({
-    key: entry.relativePath,
-    value: readSkillMdContent(
-      fs,
-      entry.absolutePath,
-      realPackageRoot,
-      entry.relativePath,
-    ),
-  }))
+  const hashed = readHashEntries(contentEntries, fs, realPackageRoot)
 
   return {
     skills: entries.map((entry) => entry.relativePath).toSorted(compareStrings),
@@ -314,25 +408,6 @@ function toPosixRelative(baseDir: string, absolutePath: string): string {
   return rel.split('\\').join('/')
 }
 
-function collectFilesRecursive(
-  dir: string,
-  baseDir: string,
-): Array<SkillContentEntry> {
-  const entries: Array<SkillContentEntry> = []
-  for (const dirent of readdirSync(dir, { withFileTypes: true })) {
-    const absolutePath = join(dir, dirent.name)
-    if (dirent.isDirectory()) {
-      entries.push(...collectFilesRecursive(absolutePath, baseDir))
-    } else if (dirent.isFile()) {
-      entries.push({
-        relativePath: toPosixRelative(baseDir, absolutePath),
-        absolutePath,
-      })
-    }
-  }
-  return entries
-}
-
 // Manifest per-skill hash scope: the whole skill folder (SKILL.md plus any
 // references/, assets/, scripts/), unlike the lockfile's per-package
 // aggregate which is SKILL.md-only. Same canonical hashing rules (LF text
@@ -342,22 +417,24 @@ export function computeSkillFolderHash(
   packageRoot: string,
 ): string {
   const realPackageRoot = nodeReadFs.realpathSync(packageRoot)
-  const entries = collectFilesRecursive(skillDir, skillDir)
+  const entries = collectSkillContentEntries(
+    nodeReadFs,
+    skillDir,
+    [
+      {
+        relativePath: 'SKILL.md',
+        absolutePath: join(skillDir, 'SKILL.md'),
+      },
+    ],
+    realPackageRoot,
+  )
 
   assertNoDuplicateKeys(
     entries.map((entry) => entry.relativePath),
     'skill folder path',
   )
 
-  const hashed = entries.map((entry) => ({
-    key: entry.relativePath,
-    value: readSkillMdContent(
-      nodeReadFs,
-      entry.absolutePath,
-      realPackageRoot,
-      entry.relativePath,
-    ),
-  }))
+  const hashed = readHashEntries(entries, nodeReadFs, realPackageRoot)
 
   return hashEntries(hashed)
 }

@@ -9,7 +9,11 @@ import {
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
-import { computeSourceContentHash } from '../src/core/lockfile/hash.js'
+import {
+  computeSkillFolderHash,
+  computeSourceContentHash,
+  HASH_LIMITS,
+} from '../src/core/lockfile/hash.js'
 
 const roots: Array<string> = []
 
@@ -315,6 +319,59 @@ describe('computeSourceContentHash', () => {
     writeFileSync(assetPath, Buffer.from([0x00, 0x0a, 0xff]))
 
     expect(sourceHash(root, skillPath)).not.toBe(before)
+  })
+
+  it('rejects support directories beyond the recursion depth limit', () => {
+    const root = createRoot()
+    const skillPath = writeFile(root, 'skills/a/SKILL.md', 'body')
+    let nestedDir = 'skills/a/references'
+    for (let index = 0; index <= HASH_LIMITS.maxRecursionDepth; index++) {
+      nestedDir = join(nestedDir, `level-${index}`)
+    }
+    writeFile(root, join(nestedDir, 'note.md'), 'content')
+
+    expect(() => sourceHash(root, skillPath)).toThrow(/recursion depth limit/)
+  })
+
+  it('rejects support file sets beyond the file count limit', () => {
+    const root = createRoot()
+    const skillPath = writeFile(root, 'skills/a/SKILL.md', 'body')
+    for (let index = 0; index < HASH_LIMITS.maxFileCount; index++) {
+      writeFile(root, `skills/a/assets/file-${index}.txt`, 'content')
+    }
+
+    expect(() => sourceHash(root, skillPath)).toThrow(/file count limit/)
+  })
+
+  it('rejects files beyond the per-file size limit for source and manifest hashes', () => {
+    const root = createRoot()
+    const skillPath = writeFile(root, 'skills/a/SKILL.md', 'body')
+    writeFile(
+      root,
+      'skills/a/assets/large.bin',
+      Buffer.alloc(HASH_LIMITS.maxFileBytes + 1),
+    )
+
+    expect(() => sourceHash(root, skillPath)).toThrow(/file size limit/)
+    expect(() => computeSkillFolderHash(join(root, 'skills/a'), root)).toThrow(
+      /file size limit/,
+    )
+  })
+
+  it('rejects content sets beyond the total size limit', () => {
+    const root = createRoot()
+    const skillPath = writeFile(root, 'skills/a/SKILL.md', 'body')
+    const fileSize = Math.floor(HASH_LIMITS.maxFileBytes * 0.75)
+    const fileCount = Math.ceil((HASH_LIMITS.maxTotalBytes + 1) / fileSize)
+    for (let index = 0; index < fileCount; index++) {
+      writeFile(
+        root,
+        `skills/a/assets/part-${index}.bin`,
+        Buffer.alloc(fileSize),
+      )
+    }
+
+    expect(() => sourceHash(root, skillPath)).toThrow(/total size limit/)
   })
 
   it('fails closed when a symlinked SKILL.md escapes the package root', () => {
