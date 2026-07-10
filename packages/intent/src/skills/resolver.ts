@@ -163,10 +163,16 @@ export function resolveSkillUse(
     })
   }
 
-  const packagesByIdentity = Map.groupBy(
-    packages,
-    (candidate) => `${candidate.kind}:${candidate.name}`,
-  )
+  const packagesByIdentity = new Map<string, Array<IntentPackage>>()
+  for (const candidate of packages) {
+    const identity = `${candidate.kind}:${candidate.name}`
+    const identityPackages = packagesByIdentity.get(identity)
+    if (identityPackages) {
+      identityPackages.push(candidate)
+    } else {
+      packagesByIdentity.set(identity, [candidate])
+    }
+  }
   const candidates = [...packagesByIdentity.entries()].map(
     ([identity, identityPackages]) => {
       const pkg =

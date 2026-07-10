@@ -72,6 +72,7 @@ describe('runSkillsUpdateCommand', () => {
   afterEach(() => {
     logSpy.mockClear()
     vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -153,7 +154,7 @@ describe('runSkillsUpdateCommand', () => {
     })
 
     const fetchSpy = vi.fn()
-    globalThis.fetch = fetchSpy
+    vi.stubGlobal('fetch', fetchSpy)
 
     await runSkillsUpdateCommand(
       undefined,
