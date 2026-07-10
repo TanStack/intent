@@ -1,3 +1,5 @@
+import type { ReadFs } from './utils.js'
+
 // ---------------------------------------------------------------------------
 // Intent config (lives in library package.json under "intent" key)
 // ---------------------------------------------------------------------------
@@ -12,8 +14,6 @@ export interface IntentConfig {
 // ---------------------------------------------------------------------------
 // Scanner types
 // ---------------------------------------------------------------------------
-
-import type { ReadFs } from './utils.js'
 
 export interface ScanResult {
   packageManager: PackageManager

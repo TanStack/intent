@@ -62,7 +62,7 @@ Writes `intent.lock`. This is the trust decision — approving means a human rev
 npx @tanstack/intent@latest skills update [source] [--all]
 ```
 
-Writes `intent.lock`. This is the mechanical refresh, not a trust decision: it re-reads currently-installed sources and re-syncs the matching **already-locked** entries' `version`, `resolution`, `skills`, and `contentHash` to whatever's installed now.
+Writes `intent.lock`. This is the mechanical refresh, not a trust decision: it re-reads currently-installed sources and re-syncs the matching **already-locked** entries' `version`, `resolution`, `skills`, `contentHash`, `manifestHash`, and `capabilities` to whatever's installed now.
 
 - Only touches sources present in **both** the lock and the current scan. It never adds a newly-discovered source (that's `approve`'s job) and never drops a source that's no longer discovered (also `approve`'s job — removing a source from the trust boundary is itself a trust decision).
 - Reports pending added/removed drift it didn't touch: `N added, M removed source(s) still pending. Run \`intent skills approve\` to review.`
@@ -91,10 +91,11 @@ Read-only. Surfaces staleness **candidates** for human/agent review — never a 
 npx @tanstack/intent@latest skills generate-manifest [--json]
 ```
 
-Maintainer-only. Writes `skills/intent.manifest.json` inside each discovered package — never `intent.lock`, and unrelated to frozen mode. For each skill folder, computes a content hash over `SKILL.md` plus any `references/`, `assets/`, and `scripts/` files. The consumer lockfile aggregate uses the same directory scope. Static heuristics pre-fill `capabilities`: `uses_network` (curl/wget/fetch reference), `runs_install_command` (npm/pnpm/yarn/bun/pip install reference), `ships_scripts` (non-empty `scripts/` dir). Heuristics only ever suggest — review and edit the generated file before committing.
+Maintainer-only. Writes `skills/intent.manifest.json` inside each discovered package, never `intent.lock`. It refuses frozen mode. For each skill folder, computes a content hash over `SKILL.md` plus any `references/`, `assets/`, and `scripts/` files. The consumer lockfile aggregate uses the same directory scope. Static heuristics pre-fill `capabilities`: `uses_network` (curl/wget/fetch reference), `runs_install_command` (npm/pnpm/yarn/bun/pip install reference), `ships_scripts` (non-empty `scripts/` dir). Heuristics only ever suggest. Review and edit the generated file before committing.
 
 - **Hard-fails generation** (no partial manifest written) if any hash-included skill file contains what looks like a literal secret *value* (GitHub/Slack tokens, AWS access key IDs, a PEM private key block, a generic `key = "..."` assignment). A secret's *name* belongs in the manifest's `declaredSecrets`, never its value in skill content.
 - Once a package ships a manifest, `intent skills scan`/`diff`/`approve` pick up its `manifestHash` and unioned `capabilities` automatically — no separate wiring needed on the consumer side.
+- After a package changes manifest metadata, consumers run `intent skills diff` and review it with `intent skills approve`. Frozen scans reject the changed `manifestHash` until that approval updates `intent.lock`.
 
 ## Options
 

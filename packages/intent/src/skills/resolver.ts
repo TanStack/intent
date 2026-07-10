@@ -152,10 +152,8 @@ export function resolveSkillUse(
 ): ResolveSkillResult {
   const { packageName, skillName } = parseSkillUse(use)
   const packages = scanResult.packages.filter((pkg) => pkg.name === packageName)
-  const pkg =
-    packages.find((candidate) => candidate.source === 'local') ?? packages[0]
 
-  if (!pkg) {
+  if (packages.length === 0) {
     throw new ResolveSkillUseError({
       availablePackages: scanResult.packages.map((candidate) => candidate.name),
       code: 'package-not-found',
@@ -165,14 +163,31 @@ export function resolveSkillUse(
     })
   }
 
-  const identities = [
-    ...new Set(
-      packages.map((candidate) => `${candidate.kind}:${candidate.name}`),
-    ),
-  ].toSorted()
-  if (identities.length > 1) {
+  const packagesByIdentity = Map.groupBy(
+    packages,
+    (candidate) => `${candidate.kind}:${candidate.name}`,
+  )
+  const candidates = [...packagesByIdentity.entries()].map(
+    ([identity, identityPackages]) => {
+      const pkg =
+        identityPackages.find((candidate) => candidate.source === 'local') ??
+        identityPackages[0]!
+      return {
+        identity,
+        pkg,
+        resolvedSkill: resolveSkillEntry(packageName, skillName, pkg.skills),
+      }
+    },
+  )
+  const matches = candidates.filter(
+    (candidate) => candidate.resolvedSkill.skill,
+  )
+
+  if (matches.length > 1) {
     throw new ResolveSkillUseError({
-      availablePackages: identities,
+      availablePackages: matches
+        .map((candidate) => candidate.identity)
+        .toSorted(),
       code: 'package-ambiguous',
       packageName,
       skillName,
@@ -180,7 +195,8 @@ export function resolveSkillUse(
     })
   }
 
-  const resolvedSkill = resolveSkillEntry(packageName, skillName, pkg.skills)
+  const selected = matches[0] ?? candidates[0]!
+  const { pkg, resolvedSkill } = selected
   const skill = resolvedSkill.skill
 
   if (!skill) {

@@ -1,11 +1,15 @@
 import { join, relative, sep } from 'node:path'
 import { sourceIdentityKey } from '../types.js'
-import { computeManifestHash, readIntentManifest } from '../manifest.js'
+import { nodeReadFs } from '../../shared/utils.js'
+import {
+  assertManifestMatchesPackage,
+  computeManifestHash,
+  readIntentManifest,
+} from '../manifest.js'
 import { computeSourceContentHash } from './hash.js'
 import type { SourceContentHash } from './hash.js'
 import type { IntentLockfileSource } from './lockfile.js'
 import type { IntentPackage } from '../../shared/types.js'
-import { nodeReadFs } from '../../shared/utils.js'
 import type { ReadFs } from '../../shared/utils.js'
 
 function toPosixPath(path: string): string {
@@ -47,6 +51,14 @@ function readManifestFields(
   if (!manifest) {
     return { manifestHash: null, capabilities: null }
   }
+  assertManifestMatchesPackage(
+    manifest,
+    pkg.packageRoot,
+    pkg.name,
+    pkg.version,
+    pkg.skills,
+    fs,
+  )
 
   const capabilities = [
     ...new Set(manifest.skills.flatMap((skill) => skill.capabilities)),

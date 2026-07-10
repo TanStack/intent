@@ -10,9 +10,9 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  HASH_LIMITS,
   computeSkillFolderHash,
   computeSourceContentHash,
-  HASH_LIMITS,
 } from '../src/core/lockfile/hash.js'
 
 const roots: Array<string> = []
@@ -341,6 +341,18 @@ describe('computeSourceContentHash', () => {
     }
 
     expect(() => sourceHash(root, skillPath)).toThrow(/file count limit/)
+  })
+
+  it('rejects support directory sets beyond the entry count limit', () => {
+    const root = createRoot()
+    const skillPath = writeFile(root, 'skills/a/SKILL.md', 'body')
+    for (let index = 0; index <= HASH_LIMITS.maxEntryCount; index++) {
+      mkdirSync(join(root, `skills/a/assets/empty-${index}`), {
+        recursive: true,
+      })
+    }
+
+    expect(() => sourceHash(root, skillPath)).toThrow(/entry count limit/)
   })
 
   it('rejects files beyond the per-file size limit for source and manifest hashes', () => {

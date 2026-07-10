@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
 import { dirname, isAbsolute, join, relative } from 'node:path'
-import type { Dirent } from 'node:fs'
 import { assertCanonicalPackageRelativePaths } from '../skill-path.js'
 import { nodeReadFs } from '../../shared/utils.js'
 import type { ReadFs } from '../../shared/utils.js'
+import type { Dirent } from 'node:fs'
 
 export interface SkillContentEntry {
   relativePath: string
@@ -25,12 +25,14 @@ const RECORD_SEPARATOR = Buffer.from([0])
 export const HASH_LIMITS = {
   maxRecursionDepth: 32,
   maxFileCount: 1000,
+  maxEntryCount: 1000,
   maxFileBytes: 4 * 1024 * 1024,
   maxTotalBytes: 16 * 1024 * 1024,
 } as const
 
 type HashCollectionState = {
   fileCount: number
+  entryCount: number
 }
 
 type ReadSkillContent = {
@@ -76,6 +78,19 @@ function assertHashFileCount(fileCount: number): void {
       `Hash file count limit (${HASH_LIMITS.maxFileCount}) exceeded.`,
     )
   }
+}
+
+function assertHashEntryCount(entryCount: number): void {
+  if (entryCount > HASH_LIMITS.maxEntryCount) {
+    throw new Error(
+      `Hash entry count limit (${HASH_LIMITS.maxEntryCount}) exceeded.`,
+    )
+  }
+}
+
+function appendHashEntry(state: HashCollectionState): void {
+  state.entryCount += 1
+  assertHashEntryCount(state.entryCount)
 }
 
 function appendHashFile(
@@ -256,6 +271,7 @@ function collectSupportFiles(
 
   const files: Array<SkillContentEntry> = []
   for (const dirent of dirents) {
+    appendHashEntry(state)
     const absolutePath = join(dir, dirent.name)
     if (dirent.isDirectory()) {
       files.push(
@@ -325,7 +341,7 @@ function collectSkillContentEntries(
   realPackageRoot: string,
 ): Array<SkillContentEntry> {
   const contentEntries = [...entries]
-  const state = { fileCount: contentEntries.length }
+  const state = { fileCount: contentEntries.length, entryCount: 0 }
   assertHashFileCount(state.fileCount)
   for (const entry of entries) {
     const skillDir = dirname(entry.absolutePath)
@@ -420,9 +436,10 @@ function toPosixRelative(baseDir: string, absolutePath: string): string {
 export function computeSkillFolderHash(
   skillDir: string,
   packageRoot: string,
+  fs: ReadFs = nodeReadFs,
 ): string {
   return hashEntries(
-    readSkillFolderContents(skillDir, packageRoot).map((entry) => ({
+    readSkillFolderContents(skillDir, packageRoot, fs).map((entry) => ({
       key: entry.relativePath,
       value: entry.content,
     })),

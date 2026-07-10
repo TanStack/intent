@@ -6,6 +6,10 @@ import type {
   IntentLockfileSource,
   IntentLockfileStaleness,
   IntentLockfileStalenessBaseline,
+  IntentManifest,
+  IntentManifestCapability,
+  IntentManifestMcpTool,
+  IntentManifestSkill,
   ReadIntentLockfileResult,
   SourceIdentity,
 } from '@tanstack/intent'
@@ -48,5 +52,29 @@ describe('public lockfile types', () => {
 
     expectTypeOf(result).toMatchTypeOf<ReadIntentLockfileResult>()
     expectTypeOf(identity).toMatchTypeOf<SourceIdentity>()
+  })
+
+  it('imports manifest metadata types from the package root', () => {
+    const tool: IntentManifestMcpTool = {
+      name: 'fetch',
+      inputSchema: { type: 'object' },
+    }
+    const capability: IntentManifestCapability = 'uses_network'
+    const skill: IntentManifestSkill = {
+      name: 'core',
+      path: 'skills/core/SKILL.md',
+      contentHash: 'sha256-core',
+      capabilities: [capability],
+      declaredSecrets: [],
+      mcpTools: [tool],
+    }
+    const manifest: IntentManifest = {
+      manifestVersion: 1,
+      package: 'foo',
+      packageVersion: '1.0.0',
+      skills: [skill],
+    }
+
+    expectTypeOf(manifest).toMatchTypeOf<IntentManifest>()
   })
 })

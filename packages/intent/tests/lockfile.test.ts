@@ -225,6 +225,78 @@ describe('parseIntentLockfile', () => {
       /duplicate path/,
     )
   })
+
+  it.each([
+    [
+      'root',
+      (lockfile: Record<string, unknown>) => ({ ...lockfile, extra: true }),
+    ],
+    [
+      'source',
+      (lockfile: Record<string, unknown>) => ({
+        ...lockfile,
+        sources: [{ ...(lockfile.sources as Array<object>)[0], extra: true }],
+      }),
+    ],
+    [
+      'policy',
+      (lockfile: Record<string, unknown>) => ({
+        ...lockfile,
+        policy: { ...(lockfile.policy as object), extra: true },
+      }),
+    ],
+    [
+      'policy ignore scope',
+      (lockfile: Record<string, unknown>) => ({
+        ...lockfile,
+        policy: {
+          ignores: [
+            {
+              scope: {
+                source: '@tanstack/router',
+                contentHash: 'sha256-router',
+                extra: true,
+              },
+              id: 'ignore',
+              reason: 'test',
+              createdAt: '2026-01-01T00:00:00Z',
+              expiresAt: '2026-02-01T00:00:00Z',
+            },
+          ],
+        },
+      }),
+    ],
+    [
+      'staleness',
+      (lockfile: Record<string, unknown>) => ({
+        ...lockfile,
+        staleness: { ...(lockfile.staleness as object), extra: true },
+      }),
+    ],
+    [
+      'staleness baseline',
+      (lockfile: Record<string, unknown>) => ({
+        ...lockfile,
+        staleness: {
+          ...(lockfile.staleness as { baseline: object }),
+          baseline: {
+            ...(lockfile.staleness as { baseline: object }).baseline,
+            extra: true,
+          },
+        },
+      }),
+    ],
+  ])('rejects an undeclared %s field', (_, addField) => {
+    const lockfile = createLockfile()
+
+    expect(() =>
+      parseIntentLockfile(
+        JSON.stringify(
+          addField(lockfile as unknown as Record<string, unknown>),
+        ),
+      ),
+    ).toThrow(/undeclared field/)
+  })
 })
 
 describe('readIntentLockfile', () => {

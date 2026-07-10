@@ -1,17 +1,17 @@
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
+import { ResolveSkillUseError, resolveSkillUse } from '../skills/resolver.js'
+import { formatSkillUse, parseSkillUse } from '../skills/use.js'
+import { isFrozenMode } from '../shared/mode.js'
 import { diffLockfileSources } from './lockfile/lockfile-diff.js'
 import { readIntentLockfile } from './lockfile/lockfile.js'
 import { buildCurrentLockfileSources } from './lockfile/lockfile-state.js'
-import { ResolveSkillUseError, resolveSkillUse } from '../skills/resolver.js'
-import { formatSkillUse, parseSkillUse } from '../skills/use.js'
 import {
   compileExcludePatterns,
   getEffectiveExcludePatterns,
 } from './excludes.js'
 import { rewriteLoadedSkillMarkdownDestinations } from './markdown.js'
 import { resolveSkillUseFastPath } from './load-resolution.js'
-import { isFrozenMode } from '../shared/mode.js'
 import { resolveProjectContext } from './project-context.js'
 import {
   checkLoadAllowed,
@@ -22,8 +22,12 @@ import {
 import type { ResolveSkillResult } from '../skills/resolver.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { ReadFs } from '../shared/utils.js'
-import type { IntentPackage, ScanOptions, ScanScope } from '../shared/types.js'
-import type { ScanResult } from '../shared/types.js'
+import type {
+  IntentPackage,
+  ScanOptions,
+  ScanResult,
+  ScanScope,
+} from '../shared/types.js'
 import type {
   IntentCoreErrorCode,
   IntentCoreOptions,

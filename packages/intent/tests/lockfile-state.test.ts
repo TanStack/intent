@@ -140,6 +140,45 @@ describe('buildCurrentLockfileSources', () => {
   })
 
   it.each([
+    ['package name', { package: '@acme/other' }],
+    ['package version', { packageVersion: '2.0.0' }],
+    ['skill set', { skills: [] }],
+    [
+      'skill content hash',
+      {
+        skills: [
+          {
+            name: 'core',
+            path: 'skills/core/SKILL.md',
+            contentHash: 'sha256-stale',
+            capabilities: [],
+            declaredSecrets: [],
+            mcpTools: [],
+          },
+        ],
+      },
+    ],
+  ])('fails when a manifest has a mismatched %s', (_, override) => {
+    const root = createRoot()
+    const skillPath = writeSkill(root, 'core', 'body')
+    const pkg = createPackage({
+      name: '@acme/pkg',
+      kind: 'npm',
+      packageRoot: root,
+      skills: [{ name: 'core', path: skillPath, description: 'desc' }],
+    })
+    const outcome = generateManifest(root, '@acme/pkg', '1.0.0', pkg.skills)
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    writeFileSync(
+      join(root, 'skills', 'intent.manifest.json'),
+      JSON.stringify({ ...outcome.manifest, ...override }),
+    )
+
+    expect(() => buildCurrentLockfileSources([pkg])).toThrow(/does not match/)
+  })
+
+  it.each([
     [
       'declared secrets',
       {
@@ -178,21 +217,10 @@ describe('buildCurrentLockfileSources', () => {
       skills: [{ name: 'core', path: skillPath, description: 'desc' }],
     })
     const manifestPath = join(root, 'skills', 'intent.manifest.json')
-    const baseManifest = {
-      manifestVersion: 1,
-      package: '@acme/pkg',
-      packageVersion: '1.0.0',
-      skills: [
-        {
-          name: 'core',
-          path: 'skills/core/SKILL.md',
-          contentHash: 'sha256-core',
-          capabilities: [],
-          declaredSecrets: [],
-          mcpTools: [],
-        },
-      ],
-    }
+    const outcome = generateManifest(root, '@acme/pkg', '1.0.0', pkg.skills)
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    const baseManifest = outcome.manifest
     writeFileSync(manifestPath, JSON.stringify(baseManifest))
     const before = buildCurrentLockfileSources([pkg])[0]!.manifestHash
 

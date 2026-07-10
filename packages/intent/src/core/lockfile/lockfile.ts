@@ -71,6 +71,20 @@ function assertRecord(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
+function assertNoUndeclaredFields(
+  value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
+  label: string,
+): void {
+  for (const field of Object.keys(value)) {
+    if (!allowedFields.has(field)) {
+      throw new Error(
+        `Invalid intent.lock: ${label} contains undeclared field "${field}".`,
+      )
+    }
+  }
+}
+
 function assertString(value: unknown, label: string): string {
   if (typeof value !== 'string') {
     throw new Error(`Invalid intent.lock: ${label} must be a string.`)
@@ -133,6 +147,23 @@ function assertNoDuplicateSourceIdentities(
 
 function parseSource(value: unknown): IntentLockfileSource {
   const source = assertRecord(value, 'source')
+  assertNoUndeclaredFields(
+    source,
+    new Set([
+      'capabilities',
+      'contentHash',
+      'declaredSecrets',
+      'id',
+      'kind',
+      'manifestHash',
+      'mcpPolicy',
+      'mcpTools',
+      'resolution',
+      'skills',
+      'version',
+    ]),
+    'source',
+  )
   const kind = source.kind
   if (kind !== 'npm' && kind !== 'workspace') {
     throw new Error(
@@ -170,6 +201,16 @@ function parseSource(value: unknown): IntentLockfileSource {
 function parsePolicyIgnore(value: unknown): IntentLockfilePolicyIgnore {
   const ignore = assertRecord(value, 'policy.ignore')
   const scope = assertRecord(ignore.scope, 'policy.ignore.scope')
+  assertNoUndeclaredFields(
+    ignore,
+    new Set(['createdAt', 'expiresAt', 'id', 'reason', 'scope']),
+    'policy.ignore',
+  )
+  assertNoUndeclaredFields(
+    scope,
+    new Set(['contentHash', 'source']),
+    'policy.ignore.scope',
+  )
   return {
     id: assertString(ignore.id, 'policy.ignore.id'),
     scope: {
@@ -187,6 +228,7 @@ function parsePolicyIgnore(value: unknown): IntentLockfilePolicyIgnore {
 
 function parsePolicy(value: unknown): IntentLockfilePolicy {
   const policy = assertRecord(value, 'policy')
+  assertNoUndeclaredFields(policy, new Set(['ignores']), 'policy')
   if (!Array.isArray(policy.ignores)) {
     throw new Error('Invalid intent.lock: policy.ignores must be an array.')
   }
@@ -197,6 +239,12 @@ function parseStaleness(value: unknown): IntentLockfileStaleness | undefined {
   if (value === undefined) return undefined
   const staleness = assertRecord(value, 'staleness')
   const baseline = assertRecord(staleness.baseline, 'staleness.baseline')
+  assertNoUndeclaredFields(staleness, new Set(['baseline']), 'staleness')
+  assertNoUndeclaredFields(
+    baseline,
+    new Set(['commit', 'kind', 'ref']),
+    'staleness.baseline',
+  )
   if (baseline.kind !== 'tag') {
     throw new Error('Invalid intent.lock: staleness.baseline.kind must be tag.')
   }
@@ -326,6 +374,17 @@ export function parseIntentLockfile(content: string): IntentLockfile {
   }
 
   const lockfile = assertRecord(parsed, 'root')
+  assertNoUndeclaredFields(
+    lockfile,
+    new Set([
+      'intentVersion',
+      'lockfileVersion',
+      'policy',
+      'sources',
+      'staleness',
+    ]),
+    'root',
+  )
   if (lockfile.lockfileVersion !== INTENT_LOCKFILE_VERSION) {
     throw new Error(
       `Unsupported intent.lock version: ${String(lockfile.lockfileVersion)}`,

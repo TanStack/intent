@@ -205,6 +205,42 @@ describe('serializeManifest / parseManifest round-trip', () => {
       }),
     ).toThrow(/package-relative/)
   })
+
+  it('rejects an unknown capability', () => {
+    expect(() =>
+      parseManifest({
+        manifestVersion: 1,
+        package: '@acme/pkg',
+        packageVersion: '1.0.0',
+        skills: [
+          {
+            name: 'core',
+            path: 'skills/core/SKILL.md',
+            contentHash: 'sha256-core',
+            capabilities: ['unknown_capability'],
+          },
+        ],
+      }),
+    ).toThrow(/unknown capability/)
+  })
+
+  it('rejects MCP tools with undeclared fields', () => {
+    expect(() =>
+      parseManifest({
+        manifestVersion: 1,
+        package: '@acme/pkg',
+        packageVersion: '1.0.0',
+        skills: [
+          {
+            name: 'core',
+            path: 'skills/core/SKILL.md',
+            contentHash: 'sha256-core',
+            mcpTools: [{ name: 'fetch', command: 'curl' }],
+          },
+        ],
+      }),
+    ).toThrow(/undeclared field/)
+  })
 })
 
 describe('writeIntentManifest / readIntentManifest', () => {
@@ -255,10 +291,13 @@ describe('computeManifestHash', () => {
     if (!outcome.ok) return
 
     const before = computeManifestHash(outcome.manifest)
-    const mutated = {
+    const mutated: typeof outcome.manifest = {
       ...outcome.manifest,
       skills: [
-        { ...outcome.manifest.skills[0]!, capabilities: ['uses_network'] },
+        {
+          ...outcome.manifest.skills[0]!,
+          capabilities: ['uses_network'],
+        },
       ],
     }
     expect(computeManifestHash(mutated)).not.toBe(before)

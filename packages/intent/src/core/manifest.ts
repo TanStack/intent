@@ -6,28 +6,43 @@
 import { existsSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { createHash } from 'node:crypto'
+import { nodeReadFs } from '../shared/utils.js'
 import {
   computeSkillFolderHash,
   readSkillFolderContents,
 } from './lockfile/hash.js'
 import { detectCapabilityHeuristics, findSecretMatches } from './secrets.js'
-import { nodeReadFs } from '../shared/utils.js'
 import { assertCanonicalPackageRelativePath } from './skill-path.js'
 import type { SkillEntry } from '../shared/types.js'
 import type { ReadFs } from '../shared/utils.js'
 
 const MANIFEST_VERSION = 1
+export type IntentManifestCapability =
+  | 'reads_project_files'
+  | 'runs_install_command'
+  | 'ships_scripts'
+  | 'uses_network'
+  | 'writes_project_files'
 
-interface IntentManifestSkill {
+const MANIFEST_CAPABILITIES = new Set<IntentManifestCapability>([
+  'reads_project_files',
+  'runs_install_command',
+  'ships_scripts',
+  'uses_network',
+  'writes_project_files',
+])
+const MCP_TOOL_FIELDS = new Set(['description', 'inputSchema', 'name'])
+
+export interface IntentManifestSkill {
   name: string
   path: string
   contentHash: string
-  capabilities: Array<string>
+  capabilities: Array<IntentManifestCapability>
   declaredSecrets: Array<string>
-  mcpTools: Array<ManifestMcpTool>
+  mcpTools: Array<IntentManifestMcpTool>
 }
 
-interface ManifestMcpTool {
+export interface IntentManifestMcpTool {
   name: string
   description?: string
   inputSchema?: Record<string, unknown>
@@ -124,7 +139,7 @@ export function generateManifest(
     const heuristics = detectCapabilityHeuristics(
       skillContent.content.toString('utf8'),
     )
-    const capabilities: Array<string> = []
+    const capabilities: Array<IntentManifestCapability> = []
     if (heuristics.usesNetwork) capabilities.push('uses_network')
     if (heuristics.runsInstallCommand) capabilities.push('runs_install_command')
     if (hasNonEmptyScriptsDir(skillDir)) capabilities.push('ships_scripts')
@@ -209,6 +224,21 @@ function assertStringArray(value: unknown, label: string): Array<string> {
   return value
 }
 
+function assertCapabilities(
+  value: unknown,
+  label: string,
+): Array<IntentManifestCapability> {
+  const capabilities = assertStringArray(value, label)
+  for (const capability of capabilities) {
+    if (!MANIFEST_CAPABILITIES.has(capability as IntentManifestCapability)) {
+      throw new Error(
+        `Invalid intent.manifest.json: ${label} contains unknown capability "${capability}".`,
+      )
+    }
+  }
+  return capabilities as Array<IntentManifestCapability>
+}
+
 function canonicalJsonValue(value: unknown, label: string): JsonValue {
   if (
     value === null ||
@@ -230,7 +260,7 @@ function canonicalJsonValue(value: unknown, label: string): JsonValue {
       canonicalJsonValue(item, `${label}[${index}]`),
     )
   }
-  if (typeof value === 'object' && value !== null) {
+  if (typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
         .sort(([a], [b]) => compareStrings(a, b))
@@ -248,13 +278,20 @@ function canonicalJsonValue(value: unknown, label: string): JsonValue {
 function canonicalMcpTools(
   value: unknown,
   label: string,
-): Array<ManifestMcpTool> {
+): Array<IntentManifestMcpTool> {
   if (!Array.isArray(value)) {
     throw new Error(`Invalid intent.manifest.json: ${label} must be an array.`)
   }
 
-  const tools = value.map((tool, index): ManifestMcpTool => {
+  const tools = value.map((tool, index): IntentManifestMcpTool => {
     const record = assertRecord(tool, `${label}[${index}]`)
+    for (const field of Object.keys(record)) {
+      if (!MCP_TOOL_FIELDS.has(field)) {
+        throw new Error(
+          `Invalid intent.manifest.json: ${label}[${index}] contains undeclared field "${field}".`,
+        )
+      }
+    }
     const name = assertString(record.name, `${label}[${index}].name`)
     const description =
       record.description === undefined
@@ -318,7 +355,7 @@ export function parseManifest(raw: unknown): IntentManifest {
         skillRecord.contentHash,
         `skills[${index}].contentHash`,
       ),
-      capabilities: assertStringArray(
+      capabilities: assertCapabilities(
         skillRecord.capabilities ?? [],
         `skills[${index}].capabilities`,
       ),
@@ -338,6 +375,55 @@ export function parseManifest(raw: unknown): IntentManifest {
     package: assertString(record.package, 'package'),
     packageVersion: assertString(record.packageVersion, 'packageVersion'),
     skills,
+  }
+}
+
+export function assertManifestMatchesPackage(
+  manifest: IntentManifest,
+  packageRoot: string,
+  packageName: string,
+  packageVersion: string,
+  skills: ReadonlyArray<SkillEntry>,
+  fs: ReadFs = nodeReadFs,
+): void {
+  if (manifest.package !== packageName) {
+    throw new Error(
+      `intent.manifest.json package "${manifest.package}" does not match discovered package "${packageName}".`,
+    )
+  }
+  if (manifest.packageVersion !== packageVersion) {
+    throw new Error(
+      `intent.manifest.json packageVersion "${manifest.packageVersion}" does not match discovered version "${packageVersion}".`,
+    )
+  }
+
+  const expected = new Map(
+    skills.map((skill) => {
+      const path = toPosixPath(relative(packageRoot, skill.path))
+      return [
+        path,
+        computeSkillFolderHash(dirname(skill.path), packageRoot, fs),
+      ]
+    }),
+  )
+  if (manifest.skills.length !== expected.size) {
+    throw new Error(
+      'intent.manifest.json skill set does not match discovered skills.',
+    )
+  }
+
+  for (const skill of manifest.skills) {
+    const expectedHash = expected.get(skill.path)
+    if (!expectedHash) {
+      throw new Error(
+        `intent.manifest.json skill path "${skill.path}" does not match discovered skills.`,
+      )
+    }
+    if (skill.contentHash !== expectedHash) {
+      throw new Error(
+        `intent.manifest.json skill hash for "${skill.path}" does not match installed content.`,
+      )
+    }
   }
 }
 

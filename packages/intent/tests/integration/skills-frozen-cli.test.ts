@@ -4,6 +4,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import {
+  generateManifest,
+  writeIntentManifest,
+} from '../../src/core/manifest.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const cliPath = join(thisDir, '..', '..', 'dist', 'cli.mjs')
@@ -18,7 +22,7 @@ function writeSkillPackage(
   root: string,
   name: string,
   content = 'Guidance.',
-): void {
+): string {
   const packageRoot = join(root, 'node_modules', ...name.split('/'))
   writeJson(join(packageRoot, 'package.json'), {
     name,
@@ -29,6 +33,30 @@ function writeSkillPackage(
   writeFileSync(
     join(packageRoot, 'skills', 'core', 'SKILL.md'),
     `---\nname: core\ndescription: ${name} skill\n---\n\n${content}\n`,
+  )
+  return packageRoot
+}
+
+function writeManifest(
+  root: string,
+  name: string,
+  capabilities: Array<'uses_network'> = [],
+): void {
+  const packageRoot = join(root, 'node_modules', ...name.split('/'))
+  const outcome = generateManifest(packageRoot, name, '1.0.0', [
+    {
+      name: 'core',
+      path: join(packageRoot, 'skills', 'core', 'SKILL.md'),
+      description: `${name} skill`,
+    },
+  ])
+  if (!outcome.ok) {
+    throw new Error('Fixture manifest unexpectedly contains a secret.')
+  }
+  outcome.manifest.skills[0]!.capabilities = capabilities
+  writeIntentManifest(
+    join(packageRoot, 'skills', 'intent.manifest.json'),
+    outcome.manifest,
   )
 }
 
@@ -115,6 +143,15 @@ describe('built CLI frozen mode', () => {
       join(root, 'node_modules', 'foo', 'skills', 'core', 'SKILL.md'),
       '---\nname: core\ndescription: foo skill\n---\n\nChanged guidance.\n',
     )
+
+    expect(runCli(root, ['scan', '--frozen'])).toBe(2)
+  })
+
+  it('fails when a locked source manifest metadata changes', () => {
+    const root = createProject()
+    writeManifest(root, 'foo')
+    approveInitialLock(root)
+    writeManifest(root, 'foo', ['uses_network'])
 
     expect(runCli(root, ['scan', '--frozen'])).toBe(2)
   })

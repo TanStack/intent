@@ -93,6 +93,26 @@ describe('resolveSkillUse', () => {
     )
   })
 
+  it('resolves a same-name skill use when only one source provides the skill', () => {
+    const npm = intentPackage({ name: 'foo', kind: 'npm' })
+    const workspace = intentPackage({
+      name: 'foo',
+      kind: 'workspace',
+      packageRoot: 'packages/foo',
+      skills: [
+        skill('workspace-only', 'packages/foo/skills/workspace-only/SKILL.md'),
+      ],
+    })
+
+    expect(
+      resolveSkillUse('foo#workspace-only', scanResult([npm, workspace])),
+    ).toMatchObject({
+      packageRoot: 'packages/foo',
+      path: 'packages/foo/skills/workspace-only/SKILL.md',
+      skillName: 'workspace-only',
+    })
+  })
+
   it('resolves a local package and exact skill', () => {
     const pkg = intentPackage({
       name: '@tanstack/query',

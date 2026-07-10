@@ -48,7 +48,7 @@ export interface LoadRefusal {
   message: string
 }
 
-export function isSourcePermitted(
+function isSourcePermitted(
   config: SkillSourcesConfig,
   packageName: string,
   packageKind?: 'npm' | 'workspace',
