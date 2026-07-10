@@ -36,36 +36,41 @@ describe('findSecretMatches / containsSecretLiteral', () => {
   })
 
   it('does not flag a secret NAME by itself (no value)', () => {
-    const content = 'This skill requires the `GITHUB_TOKEN` environment variable.'
+    const content =
+      'This skill requires the `GITHUB_TOKEN` environment variable.'
     expect(containsSecretLiteral(content)).toBe(false)
   })
 })
 
 describe('detectCapabilityHeuristics', () => {
   it('detects network usage from curl/wget/fetch', () => {
-    expect(detectCapabilityHeuristics('run `curl https://example.com`').usesNetwork).toBe(
+    expect(
+      detectCapabilityHeuristics('run `curl https://example.com`').usesNetwork,
+    ).toBe(true)
+    expect(detectCapabilityHeuristics('await fetch(url)').usesNetwork).toBe(
       true,
     )
-    expect(detectCapabilityHeuristics('await fetch(url)').usesNetwork).toBe(true)
-    expect(detectCapabilityHeuristics('no network here').usesNetwork).toBe(false)
+    expect(detectCapabilityHeuristics('no network here').usesNetwork).toBe(
+      false,
+    )
   })
 
   it('detects install commands', () => {
-    expect(detectCapabilityHeuristics('run `npm install foo`').runsInstallCommand).toBe(
-      true,
-    )
-    expect(detectCapabilityHeuristics('run `pnpm add foo`').runsInstallCommand).toBe(
-      true,
-    )
+    expect(
+      detectCapabilityHeuristics('run `npm install foo`').runsInstallCommand,
+    ).toBe(true)
+    expect(
+      detectCapabilityHeuristics('run `pnpm add foo`').runsInstallCommand,
+    ).toBe(true)
     expect(detectCapabilityHeuristics('nothing here').runsInstallCommand).toBe(
       false,
     )
   })
 
   it('detects subprocess/child_process usage', () => {
-    expect(detectCapabilityHeuristics('child_process.exec(cmd)').shellsOut).toBe(
-      true,
-    )
+    expect(
+      detectCapabilityHeuristics('child_process.exec(cmd)').shellsOut,
+    ).toBe(true)
     expect(detectCapabilityHeuristics('spawn("ls")').shellsOut).toBe(true)
     expect(detectCapabilityHeuristics('nothing here').shellsOut).toBe(false)
   })
