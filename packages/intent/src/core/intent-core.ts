@@ -1,5 +1,8 @@
-import { isAbsolute, relative, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
+import { diffLockfileSources } from './lockfile/lockfile-diff.js'
+import { readIntentLockfile } from './lockfile/lockfile.js'
+import { buildCurrentLockfileSources } from './lockfile/lockfile-state.js'
 import { ResolveSkillUseError, resolveSkillUse } from '../skills/resolver.js'
 import { formatSkillUse, parseSkillUse } from '../skills/use.js'
 import {
@@ -8,6 +11,7 @@ import {
 } from './excludes.js'
 import { rewriteLoadedSkillMarkdownDestinations } from './markdown.js'
 import { resolveSkillUseFastPath } from './load-resolution.js'
+import { isFrozenMode } from '../shared/mode.js'
 import { resolveProjectContext } from './project-context.js'
 import {
   checkLoadAllowed,
@@ -18,7 +22,8 @@ import {
 import type { ResolveSkillResult } from '../skills/resolver.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { ReadFs } from '../shared/utils.js'
-import type { ScanOptions, ScanScope } from '../shared/types.js'
+import type { IntentPackage, ScanOptions, ScanScope } from '../shared/types.js'
+import type { ScanResult } from '../shared/types.js'
 import type {
   IntentCoreErrorCode,
   IntentCoreOptions,
@@ -260,6 +265,48 @@ function createLoadedSkillDebug({
   }
 }
 
+function assertFrozenLoadLockfile(
+  cwd: string,
+  scan: ScanResult,
+  hiddenSourceCount: number,
+): void {
+  if (hiddenSourceCount > 0) {
+    throw new IntentCoreError(
+      'package-not-listed',
+      `Frozen mode found ${hiddenSourceCount} unlisted skill-bearing source(s) not in intent.skills. Add them to intent.skills or intent.exclude, then re-run outside frozen mode.`,
+    )
+  }
+
+  const context = resolveProjectContext({ cwd })
+  const root = context.workspaceRoot ?? context.packageRoot ?? cwd
+  const lockedResult = readIntentLockfile(join(root, 'intent.lock'))
+  if (lockedResult.status === 'missing') {
+    throw new IntentCoreError(
+      'package-not-listed',
+      'Frozen mode requires intent.lock. Run `intent skills approve --all` outside frozen mode first.',
+    )
+  }
+
+  const packages = scan.packages.map(
+    (pkg): IntentPackage => ({
+      ...pkg,
+      packageRoot: resolve(cwd, pkg.packageRoot),
+      skills: pkg.skills.map((skill) => ({
+        ...skill,
+        path: resolve(cwd, skill.path),
+      })),
+    }),
+  )
+  const current = buildCurrentLockfileSources(packages, scan.readFs)
+  const diff = diffLockfileSources(current, lockedResult)
+  if (!diff.isClean) {
+    throw new IntentCoreError(
+      'package-not-listed',
+      'intent.lock is out of date. Run `intent skills diff` outside frozen mode, then `intent skills approve`.',
+    )
+  }
+}
+
 function resolveIntentSkillInCwd(
   cwd: string,
   use: string,
@@ -293,13 +340,10 @@ function resolveIntentSkillInCwd(
 
   const scanOptions = toScanOptions(options)
   const scope = getScanScope(scanOptions)
-  const fastPathResolved = resolveSkillUseFastPath(
-    parsedUse,
-    options,
-    projectContext,
-    cwd,
-    fsCache,
-  )
+  const frozen = isFrozenMode()
+  const fastPathResolved = frozen
+    ? null
+    : resolveSkillUseFastPath(parsedUse, options, projectContext, cwd, fsCache)
   if (fastPathResolved) {
     const lateRefusal = checkLoadAllowed(use, parsedUse, {
       config,
@@ -327,7 +371,11 @@ function resolveIntentSkillInCwd(
     )
   }
 
-  const { scan: scanResult, droppedNames } = scanForPolicedIntents({
+  const {
+    scan: scanResult,
+    droppedNames,
+    hiddenSourceCount,
+  } = scanForPolicedIntents({
     cwd,
     scanOptions: withFsCache(scanOptions, fsCache),
     coreOptions: options,
@@ -347,6 +395,10 @@ function resolveIntentSkillInCwd(
       })
     }
     throw err
+  }
+
+  if (frozen) {
+    assertFrozenLoadLockfile(cwd, scanResult, hiddenSourceCount)
   }
 
   return toResolvedIntentSkill(

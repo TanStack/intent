@@ -15,6 +15,8 @@ import {
   loadIntentSkill,
   resolveIntentSkill,
 } from '../src/core/index.js'
+import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
+import { writeIntentLockfile } from '../src/core/lockfile/lockfile.js'
 
 const realTmpdir = realpathSync(tmpdir())
 
@@ -467,6 +469,62 @@ describe('loadIntentSkill', () => {
       warnings: [],
       conflict: null,
     })
+  })
+
+  it('refuses changed content when frozen mode has an approved lockfile entry', () => {
+    const previousFrozen = process.env.INTENT_FROZEN
+    process.env.INTENT_FROZEN = '1'
+    try {
+      writeJson(join(root, 'package.json'), {
+        name: 'test-app',
+        private: true,
+        intent: { skills: ['@tanstack/query'] },
+      })
+      writeInstalledIntentPackage(root, {
+        name: '@tanstack/query',
+        version: '5.0.0',
+        skillName: 'fetching',
+        description: 'Query data fetching patterns',
+      })
+      const current = listIntentSkills({ cwd: root })
+      const pkg = {
+        name: current.packages[0]!.name,
+        version: current.packages[0]!.version,
+        intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+        skills: [
+          {
+            name: 'fetching',
+            path: join(
+              root,
+              'node_modules',
+              '@tanstack',
+              'query',
+              'skills',
+              'fetching',
+              'SKILL.md',
+            ),
+            description: 'Query data fetching patterns',
+          },
+        ],
+        packageRoot: join(root, 'node_modules', '@tanstack', 'query'),
+        kind: 'npm' as const,
+        source: 'local' as const,
+      }
+      writeIntentLockfile(join(root, 'intent.lock'), {
+        lockfileVersion: 1,
+        intentVersion: '0.0.0',
+        sources: buildCurrentLockfileSources([pkg]),
+        policy: { ignores: [] },
+      })
+      writeFileSync(pkg.skills[0]!.path, 'changed guidance')
+
+      expect(() =>
+        loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+      ).toThrow('intent.lock is out of date')
+    } finally {
+      if (previousFrozen === undefined) delete process.env.INTENT_FROZEN
+      else process.env.INTENT_FROZEN = previousFrozen
+    }
   })
 
   it('does not change process cwd when loading from an explicit cwd', () => {

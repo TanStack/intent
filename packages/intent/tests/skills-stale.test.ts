@@ -122,6 +122,25 @@ describe('runSkillsStaleCommand', () => {
     })
   })
 
+  it('throws in frozen mode when discovery finds an unlisted skill-bearing source', async () => {
+    const cwd = makeTempProject()
+    git(cwd, ['add', '.'])
+    git(cwd, ['commit', '--quiet', '-m', 'first'])
+    git(cwd, ['tag', 'v1.0.0'])
+    writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
+
+    await expect(
+      runSkillsStaleCommand(
+        { frozen: true },
+        () => Promise.resolve(policedScan({ hiddenSourceCount: 1 })),
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('unlisted skill-bearing source'),
+      exitCode: 3,
+    })
+  })
+
   it('reports no candidates when nothing changed since baseline and lockfile is clean', async () => {
     const cwd = makeTempProject()
     git(cwd, ['add', '.'])

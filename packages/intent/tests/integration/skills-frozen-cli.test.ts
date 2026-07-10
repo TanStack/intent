@@ -48,13 +48,17 @@ function createProject(skills: Array<string> = ['foo']): string {
   return root
 }
 
-function runCli(root: string, args: Array<string>): number | null {
-  return spawnSync(process.execPath, [cliPath, 'skills', ...args], {
+function runCommand(root: string, args: Array<string>): number | null {
+  return spawnSync(process.execPath, [cliPath, ...args], {
     cwd: root,
     encoding: 'utf8',
     env: { ...process.env, CI: '', INTENT_FROZEN: '' },
     timeout: 30_000,
   }).status
+}
+
+function runCli(root: string, args: Array<string>): number | null {
+  return runCommand(root, ['skills', ...args])
 }
 
 function approveInitialLock(root: string): void {
@@ -113,5 +117,16 @@ describe('built CLI frozen mode', () => {
     )
 
     expect(runCli(root, ['scan', '--frozen'])).toBe(2)
+  })
+
+  it('refuses to load changed approved content in frozen mode', () => {
+    const root = createProject()
+    approveInitialLock(root)
+    writeFileSync(
+      join(root, 'node_modules', 'foo', 'skills', 'core', 'SKILL.md'),
+      '---\nname: core\ndescription: foo skill\n---\n\nChanged guidance.\n',
+    )
+
+    expect(runCommand(root, ['load', 'foo#core', '--frozen'])).toBe(1)
   })
 })

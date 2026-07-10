@@ -92,7 +92,13 @@ export async function runSkillsStaleCommand(
     noFrozen: options.noFrozen,
   })
 
-  const { scan } = await scanPolicedIntents()
+  const { scan, hiddenSourceCount } = await scanPolicedIntents()
+  if (frozen && hiddenSourceCount > 0) {
+    fail(
+      `Frozen mode found ${hiddenSourceCount} unlisted skill-bearing source(s) not in intent.skills. Add them to intent.skills or intent.exclude, then re-run outside frozen mode.`,
+      3,
+    )
+  }
   const state = computeLockfileState(scan, cwd)
 
   if (state.lockedResult.status !== 'found') {
