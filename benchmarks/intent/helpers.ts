@@ -153,7 +153,7 @@ export function createTempDir(name: string): string {
   return mkdtempSync(join(tmpdir(), `intent-bench-${name}-`))
 }
 
-export function writeFile(filePath: string, content: string): void {
+export function writeFile(filePath: string, content: string | Buffer): void {
   mkdirSync(dirname(filePath), { recursive: true })
   writeFileSync(filePath, content)
 }
