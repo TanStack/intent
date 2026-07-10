@@ -6,6 +6,8 @@
 // entire argv per subcommand, never just the subcommand name, and never
 // shells out through a string command line.
 import { execFileSync } from 'node:child_process'
+import { statSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 interface GitAdapterResult<T> {
   ok: true
@@ -36,6 +38,9 @@ const FORBIDDEN_FLAG_PREFIXES = [
   '--textconv',
   '--filters',
 ]
+
+const GIT_MAX_OUTPUT_BYTES = 1024 * 1024
+const GIT_TIMEOUT_MS = 10_000
 
 function assertNoForbiddenFlags(args: ReadonlyArray<string>): void {
   for (const arg of args) {
@@ -78,6 +83,8 @@ function runGit(
       env: hardenedEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf8',
+      maxBuffer: GIT_MAX_OUTPUT_BYTES,
+      timeout: GIT_TIMEOUT_MS,
     })
     return ok(stdout)
   } catch (err) {
@@ -154,11 +161,23 @@ export function currentBlobSha(
   cwd: string,
   relPath: string,
 ): GitAdapterOutcome<string | null> {
-  const result = runGit(cwd, ['hash-object', '--', relPath])
-  if (!result.ok) {
-    // hash-object fails with a non-zero exit when the path does not exist;
-    // treat that as "no current content" rather than an adapter failure.
-    return ok(null)
+  try {
+    if (!statSync(resolve(cwd, relPath)).isFile()) {
+      return fail(`git-adapter: "${relPath}" is not a regular file.`)
+    }
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err as NodeJS.ErrnoException).code === 'ENOENT'
+    ) {
+      return ok(null)
+    }
+    return fail(
+      `git-adapter: failed to inspect "${relPath}": ${err instanceof Error ? err.message : String(err)}`,
+    )
   }
+
+  const result = runGit(cwd, ['hash-object', '--', relPath])
+  if (!result.ok) return result
   return ok(result.value.trim())
 }

@@ -1,4 +1,10 @@
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -134,6 +140,14 @@ describe('currentBlobSha', () => {
     if (result.ok) {
       expect(result.value).toBeNull()
     }
+  })
+
+  it('fails for an existing directory instead of treating it as missing', () => {
+    mkdirSync(join(repoDir, 'directory'))
+
+    const result = currentBlobSha(repoDir, 'directory')
+
+    expect(result.ok).toBe(false)
   })
 
   it('detects drift: current content hashes differently than the baseline blob', () => {
