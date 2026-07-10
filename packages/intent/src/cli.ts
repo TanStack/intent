@@ -326,7 +326,7 @@ function createCli(): CAC {
           const { runSkillsGenerateManifestCommand } =
             await import('./commands/skills/generate-manifest.js')
           await runSkillsGenerateManifestCommand(
-            options,
+            { ...options, ...frozenOptions },
             scanPolicedIntentsOrFail,
           )
           return

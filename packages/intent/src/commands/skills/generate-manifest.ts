@@ -1,10 +1,16 @@
+import { realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { generateManifest, writeIntentManifest } from '../../core/manifest.js'
+import { resolveProjectContext } from '../../core/project-context.js'
+import { findWorkspacePackages } from '../../setup/workspace-patterns.js'
 import { fail } from '../../shared/cli-error.js'
+import { isFrozenMode } from '../../shared/mode.js'
 import type { PolicedScan } from '../../core/source-policy.js'
 
 export interface SkillsGenerateManifestCommandOptions {
+  frozen?: boolean
   json?: boolean
+  noFrozen?: boolean
 }
 
 interface GenerateManifestResult {
@@ -18,8 +24,37 @@ interface GenerateManifestResult {
 export async function runSkillsGenerateManifestCommand(
   options: SkillsGenerateManifestCommandOptions,
   scanPolicedIntents: () => Promise<PolicedScan>,
+  cwd: string = process.cwd(),
 ): Promise<void> {
+  if (
+    isFrozenMode({
+      frozen: options.frozen,
+      noFrozen: options.noFrozen,
+    })
+  ) {
+    fail('`intent skills generate-manifest` cannot run in frozen mode.', 5)
+  }
+
   const { scan } = await scanPolicedIntents()
+  const context = resolveProjectContext({ cwd })
+  const ownedRoots = new Set(
+    [
+      context.packageRoot,
+      ...(context.workspaceRoot
+        ? findWorkspacePackages(context.workspaceRoot)
+        : []),
+    ]
+      .filter((root): root is string => root !== null)
+      .map((root) => realpathSync(root)),
+  )
+  const unowned = scan.packages.filter(
+    (pkg) => !ownedRoots.has(realpathSync(pkg.packageRoot)),
+  )
+  if (unowned.length > 0) {
+    fail(
+      '`intent skills generate-manifest` only writes the current package or workspace members. Run it from the package you maintain.',
+    )
+  }
   const results: Array<GenerateManifestResult> = []
 
   for (const pkg of scan.packages) {
