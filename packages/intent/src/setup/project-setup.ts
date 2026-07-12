@@ -29,6 +29,11 @@ export interface EditPackageJsonResult {
   alreadyPresent: Array<string>
 }
 
+export interface EditPackageJsonPlan extends EditPackageJsonResult {
+  packageJsonPath: string
+  content: string
+}
+
 export interface SetupGithubActionsResult {
   workflows: Array<string>
   skipped: Array<string>
@@ -289,7 +294,7 @@ function copyTemplates(
 // Command: edit-package-json
 // ---------------------------------------------------------------------------
 
-export function runEditPackageJson(root: string): EditPackageJsonResult {
+export function planEditPackageJson(root: string): EditPackageJsonPlan | null {
   const result: EditPackageJsonResult = { added: [], alreadyPresent: [] }
   const context = resolveProjectContext({ cwd: root })
   const packageRoot = context.packageRoot ?? root
@@ -297,8 +302,7 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
 
   if (!existsSync(pkgPath)) {
     console.error('No package.json found in ' + packageRoot)
-    process.exitCode = 1
-    return result
+    return null
   }
 
   const raw = readFileSync(pkgPath, 'utf8')
@@ -308,8 +312,7 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
   } catch (err) {
     const detail = err instanceof SyntaxError ? err.message : String(err)
     console.error(`Failed to parse ${pkgPath}: ${detail}`)
-    process.exitCode = 1
-    return result
+    return null
   }
 
   // Detect indent size from existing file
@@ -349,13 +352,31 @@ export function runEditPackageJson(root: string): EditPackageJsonResult {
     }
   }
 
-  writeFileSync(pkgPath, JSON.stringify(pkg, null, indentSize) + '\n')
+  return {
+    ...result,
+    packageJsonPath: pkgPath,
+    content: JSON.stringify(pkg, null, indentSize) + '\n',
+  }
+}
+
+export function writeEditPackageJsonPlan(plan: EditPackageJsonPlan): void {
+  writeFileSync(plan.packageJsonPath, plan.content)
+}
+
+export function runEditPackageJson(root: string): EditPackageJsonResult {
+  const plan = planEditPackageJson(root)
+  if (!plan) {
+    process.exitCode = 1
+    return { added: [], alreadyPresent: [] }
+  }
+
+  writeEditPackageJsonPlan(plan)
 
   // Print results
-  for (const a of result.added) console.log(`✓ Added ${a}`)
-  for (const a of result.alreadyPresent) console.log(`  Already present: ${a}`)
+  for (const a of plan.added) console.log(`✓ Added ${a}`)
+  for (const a of plan.alreadyPresent) console.log(`  Already present: ${a}`)
 
-  return result
+  return { added: plan.added, alreadyPresent: plan.alreadyPresent }
 }
 
 // ---------------------------------------------------------------------------
@@ -395,6 +416,15 @@ export function runEditPackageJsonAll(
   root: string,
 ): Array<MonorepoResult<EditPackageJsonResult>> | EditPackageJsonResult {
   return runForEachPackage(root, runEditPackageJson)
+}
+
+export function planEditPackageJsonAll(
+  root: string,
+):
+  | Array<MonorepoResult<EditPackageJsonPlan | null>>
+  | EditPackageJsonPlan
+  | null {
+  return runForEachPackage(root, planEditPackageJson)
 }
 
 // ---------------------------------------------------------------------------

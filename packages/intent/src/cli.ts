@@ -15,6 +15,7 @@ import type { SkillsGenerateManifestCommandOptions } from './commands/skills/gen
 import type { SkillsScanCommandOptions } from './commands/skills/scan.js'
 import type { SkillsUpdateCommandOptions } from './commands/skills/update.js'
 import type { StaleCommandOptions } from './commands/stale.js'
+import type { SetupCommandOptions } from './commands/setup/command.js'
 import type { ValidateCommandOptions } from './commands/validate.js'
 
 function createCli(): CAC {
@@ -361,18 +362,17 @@ function createCli(): CAC {
     })
 
   cli
-    .command(
-      'setup',
-      'Copy Intent CI workflow templates into .github/workflows/',
-    )
-    .usage('setup')
-    .action(async () => {
-      const [{ getMetaDir }, { runSetupGithubActionsCommand }] =
-        await Promise.all([
-          import('./commands/support.js'),
-          import('./commands/setup/github-actions.js'),
-        ])
-      await runSetupGithubActionsCommand(process.cwd(), getMetaDir())
+    .command('setup', 'Preview, check, or apply Intent package setup')
+    .usage('setup <--dry-run|--write|--check>')
+    .option('--dry-run', 'Preview package.json changes without writing')
+    .option('--write', 'Apply the previewed package.json changes')
+    .option('--check', 'Fail when package.json setup changes are pending')
+    .example('setup --dry-run')
+    .example('setup --write')
+    .example('setup --check')
+    .action(async (options: SetupCommandOptions) => {
+      const { runSetupCommand } = await import('./commands/setup/command.js')
+      await runSetupCommand(process.cwd(), options)
     })
 
   cli

@@ -728,6 +728,118 @@ describe('cli commands', () => {
     expect(output).toContain('Added keywords: "tanstack-intent"')
   })
 
+  it('previews, checks, and writes package setup idempotently', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-setup-package-'))
+    tempDirs.push(root)
+    const packageJsonPath = join(root, 'package.json')
+    writeJson(packageJsonPath, {
+      name: 'pkg',
+      version: '1.0.0',
+      files: ['dist'],
+    })
+    const original = readFileSync(packageJsonPath, 'utf8')
+    process.chdir(root)
+
+    const dryRunExitCode = await main(['setup', '--dry-run'])
+    const dryRunOutput = logSpy.mock.calls.flat().join('\n')
+
+    expect(dryRunExitCode).toBe(0)
+    expect(dryRunOutput).toContain('package.json')
+    expect(dryRunOutput).toContain('keywords: "tanstack-intent"')
+    expect(dryRunOutput).toContain('files: "skills"')
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(original)
+    expect(existsSync(join(root, '.github'))).toBe(false)
+
+    logSpy.mockClear()
+    errorSpy.mockClear()
+    const checkExitCode = await main(['setup', '--check'])
+
+    expect(checkExitCode).not.toBe(0)
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+      'intent setup --write',
+    )
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(original)
+
+    logSpy.mockClear()
+    errorSpy.mockClear()
+    const writeExitCode = await main(['setup', '--write'])
+    const written = readFileSync(packageJsonPath, 'utf8')
+    const pkg = JSON.parse(written) as {
+      files: Array<string>
+      keywords: Array<string>
+    }
+
+    expect(writeExitCode).toBe(0)
+    expect(pkg.keywords).toContain('tanstack-intent')
+    expect(pkg.files).toEqual(['dist', 'skills', '!skills/_artifacts'])
+
+    logSpy.mockClear()
+    const secondWriteExitCode = await main(['setup', '--write'])
+
+    expect(secondWriteExitCode).toBe(0)
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(written)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'Package setup is already current',
+    )
+
+    logSpy.mockClear()
+    const currentCheckExitCode = await main(['setup', '--check'])
+
+    expect(currentCheckExitCode).toBe(0)
+    expect(logSpy).toHaveBeenCalledWith('✅ Package setup is current')
+  })
+
+  it('requires an explicit setup mode before writing', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-setup-mode-'))
+    tempDirs.push(root)
+    const packageJsonPath = join(root, 'package.json')
+    writeJson(packageJsonPath, { name: 'pkg', version: '1.0.0' })
+    const original = readFileSync(packageJsonPath, 'utf8')
+    process.chdir(root)
+
+    const exitCode = await main(['setup'])
+
+    expect(exitCode).toBe(0)
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(original)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'intent setup --dry-run',
+    )
+  })
+
+  it('writes setup to skill-owning workspace packages', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-setup-workspace-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    const packageRoot = join(root, 'packages', 'router')
+    writeJson(join(packageRoot, 'package.json'), {
+      name: '@tanstack/router',
+      version: '1.0.0',
+      files: ['dist'],
+    })
+    writeSkillMd(join(packageRoot, 'skills', 'routing'), {
+      name: 'routing',
+      description: 'Routing concepts',
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['setup', '--write'])
+    const workspacePackage = JSON.parse(
+      readFileSync(join(packageRoot, 'package.json'), 'utf8'),
+    ) as { files: Array<string>; keywords: Array<string> }
+    const workspaceRoot = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    ) as { files?: Array<string> }
+
+    expect(exitCode).toBe(0)
+    expect(workspacePackage.keywords).toContain('tanstack-intent')
+    expect(workspacePackage.files).toContain('skills')
+    expect(workspacePackage.files).not.toContain('!skills/_artifacts')
+    expect(workspaceRoot.files).toBeUndefined()
+  })
+
   it('copies github workflow templates', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-setup-gha-'))
     tempDirs.push(root)
@@ -740,27 +852,6 @@ describe('cli commands', () => {
     process.chdir(root)
 
     const exitCode = await main(['setup-github-actions'])
-    const workflowsDir = join(root, '.github', 'workflows')
-    const output = logSpy.mock.calls.flat().join('\n')
-
-    expect(exitCode).toBe(0)
-    expect(existsSync(workflowsDir)).toBe(true)
-    expect(output).toContain('Copied workflow:')
-    expect(output).toContain('Template variables applied:')
-  })
-
-  it('copies github workflow templates with the setup alias', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-setup-alias-'))
-    tempDirs.push(root)
-    writeJson(join(root, 'package.json'), {
-      name: '@scope/pkg',
-      version: '1.0.0',
-      intent: { version: 1, repo: 'scope/pkg', docs: 'docs/' },
-    })
-
-    process.chdir(root)
-
-    const exitCode = await main(['setup'])
     const workflowsDir = join(root, '.github', 'workflows')
     const output = logSpy.mock.calls.flat().join('\n')
 
