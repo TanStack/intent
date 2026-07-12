@@ -42,7 +42,7 @@ const MANIFEST_SKILL_FIELDS = new Set([
   'path',
 ])
 
-export interface IntentManifestSkill {
+interface IntentManifestSkill {
   name: string
   path: string
   contentHash: string
@@ -51,7 +51,7 @@ export interface IntentManifestSkill {
   mcpTools: Array<IntentManifestMcpTool>
 }
 
-export interface IntentManifestMcpTool {
+interface IntentManifestMcpTool {
   name: string
   description?: string
   inputSchema?: Record<string, unknown>

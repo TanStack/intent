@@ -16,7 +16,7 @@ export interface SourceContentHash {
   contentHash: string
 }
 
-export interface SkillFolderContentEntry {
+interface SkillFolderContentEntry {
   relativePath: string
   content: Buffer
 }
@@ -447,7 +447,7 @@ export function computeSkillFolderHash(
   )
 }
 
-export function readSkillFolderContents(
+function readSkillFolderContents(
   skillDir: string,
   packageRoot: string,
   fs: ReadFs = nodeReadFs,
