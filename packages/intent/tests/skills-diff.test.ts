@@ -96,12 +96,27 @@ describe('runSkillsDiffCommand', () => {
 
     await runSkillsDiffCommand(
       {},
-      () => Promise.resolve(policedScan({ hiddenSourceCount: 3 })),
+      () =>
+        Promise.resolve(
+          policedScan({
+            hiddenSourceCount: 2,
+            hiddenSources: [
+              {
+                name: 'leaf',
+                skillCount: 1,
+                provenance: [['app', 'parent', 'leaf']],
+              },
+              { name: 'unknown', skillCount: 1 },
+            ],
+          }),
+        ),
       cwd,
     )
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
-    expect(output).toContain('3 discovered skill-bearing source(s)')
+    expect(output).toContain('2 discovered skill-bearing source(s)')
+    expect(output).toContain('leaf (via app -> parent -> leaf)')
+    expect(output).toContain('unknown (provenance unknown)')
     expect(output).toContain('intent.lock is up to date')
   })
 

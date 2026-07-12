@@ -1,10 +1,15 @@
 import { isFrozenMode } from '../../shared/mode.js'
-import { buildSkillsDiff, enforceFrozenMode } from './support.js'
+import {
+  buildSkillsDiff,
+  enforceFrozenMode,
+  formatHiddenSourceDetails,
+} from './support.js'
 import type {
   LockfileDiffResult,
   LockfileSourceChange,
 } from '../../core/lockfile/lockfile-diff.js'
 import type { IntentLockfileSource } from '../../core/lockfile/lockfile.js'
+import type { IntentHiddenSourceSummary } from '../../core/types.js'
 import type { PolicedScan } from '../../core/source-policy.js'
 
 export interface SkillsDiffCommandOptions {
@@ -24,10 +29,11 @@ function formatChangeLabel(change: LockfileSourceChange): string {
 function printDiffDetails(
   diff: LockfileDiffResult,
   hiddenSourceCount: number,
+  hiddenSources: ReadonlyArray<IntentHiddenSourceSummary>,
 ): void {
   if (hiddenSourceCount > 0) {
     console.log(
-      `${hiddenSourceCount} discovered skill-bearing source(s) are not listed in intent.skills. Add them to intent.skills or intent.exclude.`,
+      `${hiddenSourceCount} discovered skill-bearing source(s) are not listed in intent.skills${formatHiddenSourceDetails(hiddenSources)}. Add them to intent.skills or intent.exclude.`,
     )
   }
 
@@ -81,14 +87,14 @@ export async function runSkillsDiffCommand(
     frozen: options.frozen,
     noFrozen: options.noFrozen,
   })
-  const { scan, hiddenSourceCount } = await scanPolicedIntents()
+  const { scan, hiddenSourceCount, hiddenSources } = await scanPolicedIntents()
   const diff = buildSkillsDiff(scan, cwd)
 
   if (options.json) {
     console.log(JSON.stringify({ frozen, hiddenSourceCount, ...diff }, null, 2))
   } else {
-    printDiffDetails(diff, hiddenSourceCount)
+    printDiffDetails(diff, hiddenSourceCount, hiddenSources)
   }
 
-  enforceFrozenMode(diff, frozen, hiddenSourceCount)
+  enforceFrozenMode(diff, frozen, hiddenSourceCount, hiddenSources)
 }

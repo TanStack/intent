@@ -1,6 +1,11 @@
 import { isFrozenMode } from '../../shared/mode.js'
-import { buildSkillsDiff, enforceFrozenMode } from './support.js'
+import {
+  buildSkillsDiff,
+  enforceFrozenMode,
+  formatHiddenSourceDetails,
+} from './support.js'
 import type { LockfileDiffResult } from '../../core/lockfile/lockfile-diff.js'
+import type { IntentHiddenSourceSummary } from '../../core/types.js'
 import type { PolicedScan } from '../../core/source-policy.js'
 
 export interface SkillsScanCommandOptions {
@@ -12,10 +17,11 @@ export interface SkillsScanCommandOptions {
 function printScanSummary(
   diff: LockfileDiffResult,
   hiddenSourceCount: number,
+  hiddenSources: ReadonlyArray<IntentHiddenSourceSummary>,
 ): void {
   if (hiddenSourceCount > 0) {
     console.log(
-      `${hiddenSourceCount} discovered skill-bearing source(s) are not listed in intent.skills. Add them to intent.skills or intent.exclude.`,
+      `${hiddenSourceCount} discovered skill-bearing source(s) are not listed in intent.skills${formatHiddenSourceDetails(hiddenSources)}. Add them to intent.skills or intent.exclude.`,
     )
   }
 
@@ -48,14 +54,14 @@ export async function runSkillsScanCommand(
     frozen: options.frozen,
     noFrozen: options.noFrozen,
   })
-  const { scan, hiddenSourceCount } = await scanPolicedIntents()
+  const { scan, hiddenSourceCount, hiddenSources } = await scanPolicedIntents()
   const diff = buildSkillsDiff(scan, cwd)
 
   if (options.json) {
     console.log(JSON.stringify({ frozen, hiddenSourceCount, ...diff }, null, 2))
   } else {
-    printScanSummary(diff, hiddenSourceCount)
+    printScanSummary(diff, hiddenSourceCount, hiddenSources)
   }
 
-  enforceFrozenMode(diff, frozen, hiddenSourceCount)
+  enforceFrozenMode(diff, frozen, hiddenSourceCount, hiddenSources)
 }

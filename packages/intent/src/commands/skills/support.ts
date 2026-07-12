@@ -9,7 +9,10 @@ import type {
   IntentLockfileSource,
   ReadIntentLockfileResult,
 } from '../../core/lockfile/lockfile.js'
-import type { SourceIdentity } from '../../core/types.js'
+import type {
+  IntentHiddenSourceSummary,
+  SourceIdentity,
+} from '../../core/types.js'
 import type { ScanResult } from '../../shared/types.js'
 
 export function resolveLockfilePath(cwd: string): string {
@@ -101,16 +104,37 @@ export function buildSkillsDiff(
   return computeLockfileState(scan, cwd).diff
 }
 
+export function formatHiddenSourceDetails(
+  hiddenSources: ReadonlyArray<IntentHiddenSourceSummary>,
+): string {
+  if (hiddenSources.length === 0) return ''
+
+  const details = hiddenSources
+    .toSorted((a, b) => a.name.localeCompare(b.name))
+    .map((source) => {
+      const provenance = source.provenance
+        ?.map((path) => path.join(' -> '))
+        .join('; ')
+      return provenance
+        ? `${source.name} (via ${provenance})`
+        : `${source.name} (provenance unknown)`
+    })
+    .join(', ')
+
+  return `: ${details}`
+}
+
 export function enforceFrozenMode(
   diff: LockfileDiffResult,
   frozen: boolean,
   hiddenSourceCount: number,
+  hiddenSources: ReadonlyArray<IntentHiddenSourceSummary> = [],
 ): void {
   if (!frozen) return
 
   if (hiddenSourceCount > 0) {
     fail(
-      `Frozen mode found ${hiddenSourceCount} unlisted skill-bearing source(s) not in intent.skills. Add them to intent.skills or intent.exclude, then re-run outside frozen mode.`,
+      `Frozen mode found ${hiddenSourceCount} unlisted skill-bearing source(s) not in intent.skills${formatHiddenSourceDetails(hiddenSources)}. Add them to intent.skills or intent.exclude, then re-run outside frozen mode.`,
       3,
     )
   }
