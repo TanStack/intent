@@ -4,10 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  generateManifest,
-  writeIntentManifest,
-} from '../../src/core/manifest.js'
+import { computeSkillFolderHash } from '../../src/core/lockfile/hash.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const cliPath = join(thisDir, '..', '..', 'dist', 'cli.mjs')
@@ -43,21 +40,22 @@ function writeManifest(
   capabilities: Array<'uses_network'> = [],
 ): void {
   const packageRoot = join(root, 'node_modules', ...name.split('/'))
-  const outcome = generateManifest(packageRoot, name, '1.0.0', [
-    {
-      name: 'core',
-      path: join(packageRoot, 'skills', 'core', 'SKILL.md'),
-      description: `${name} skill`,
-    },
-  ])
-  if (!outcome.ok) {
-    throw new Error('Fixture manifest unexpectedly contains a secret.')
-  }
-  outcome.manifest.skills[0]!.capabilities = capabilities
-  writeIntentManifest(
-    join(packageRoot, 'skills', 'intent.manifest.json'),
-    outcome.manifest,
-  )
+  const skillDir = join(packageRoot, 'skills', 'core')
+  writeJson(join(packageRoot, 'skills', 'intent.manifest.json'), {
+    manifestVersion: 1,
+    package: name,
+    packageVersion: '1.0.0',
+    skills: [
+      {
+        name: 'core',
+        path: 'skills/core/SKILL.md',
+        contentHash: computeSkillFolderHash(skillDir, packageRoot),
+        capabilities,
+        declaredSecrets: [],
+        mcpTools: [],
+      },
+    ],
+  })
 }
 
 function writeProject(root: string, skills: Array<string>): void {

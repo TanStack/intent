@@ -58,9 +58,3 @@ export type {
   ReadIntentLockfileResult,
 } from './core/lockfile/lockfile.js'
 export type { SourceIdentity } from './core/types.js'
-export type {
-  IntentManifest,
-  IntentManifestCapability,
-  IntentManifestMcpTool,
-  IntentManifestSkill,
-} from './core/manifest.js'

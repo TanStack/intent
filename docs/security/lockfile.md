@@ -34,14 +34,14 @@ This is tamper-evidence, not semantic validation. Approving a source means **a h
 - **`sources[]`** is keyed by `(kind, id)`, never `id` alone — `workspace:foo` and `npm:foo` are distinct entries and distinct approvals.
 - **`skills[]`** is the sorted list of package-relative `SKILL.md` paths in the aggregate. Supporting-file changes still change `contentHash`.
 - **`contentHash`** is a `sha256-` digest over each listed `SKILL.md` plus files under that skill's `references/`, `assets/`, and `scripts/` directories. Text line endings normalize to LF; binary bytes remain exact. A file rename with identical bytes changes the hash.
-- **`manifestHash`** and **`capabilities`** are `null` until the package ships a `skills/intent.manifest.json` (see [`intent skills generate-manifest`](../cli/intent-skills#intent-skills-generate-manifest)). An existing manifest must parse and match the installed package identity, skill paths, and per-skill hashes. Once it does, `manifestHash` is populated and `capabilities` is always an array: `[]` means the manifest declares none; a non-empty array is the union of declared capabilities. `declaredSecrets`, `mcpTools`, and `mcpPolicy` remain reserved fields for the current lockfile version.
+- **`manifestHash`** and **`capabilities`** are `null` until the package ships a `skills/intent.manifest.json`. An existing manifest must parse and match the installed package identity, skill paths, and per-skill hashes. Once it does, `manifestHash` is populated and `capabilities` is always an array: `[]` means the manifest declares none; a non-empty array is the union of declared capabilities. Manifest authoring remains M3 work. `declaredSecrets`, `mcpTools`, and `mcpPolicy` remain reserved fields for the current lockfile version.
 - **`policy.ignores`** is a reserved block; nothing writes to it yet, but it's round-tripped verbatim if present.
 - **`staleness.baseline`** (`{ kind: "tag", ref, commit }`) is a reserved, optional field read by [`intent skills stale`](../cli/intent-skills#intent-skills-stale) as one input to baseline resolution. Nothing currently writes it — when absent, `stale` falls back to the nearest local git tag.
 - A `lockfileVersion` newer than this Intent version supports, an undeclared field, a duplicate `(kind, id)` entry, a non-canonical skill path, or any other structural problem is a **malformed lockfile**. Intent fails closed and never silently treats it as an empty lock.
 
 ## Commands
 
-`intent.lock` is managed entirely by the [`intent skills`](../cli/intent-skills) command group: `scan`/`diff`/`stale` (read-only) and `approve`/`update` (mutating). `generate-manifest` is maintainer-only and never touches `intent.lock` — it writes a package's own `skills/intent.manifest.json`.
+`intent.lock` is managed entirely by the [`intent skills`](../cli/intent-skills) command group: `scan`/`diff`/`stale` (read-only) and `approve`/`update` (mutating).
 
 ## Frozen mode
 

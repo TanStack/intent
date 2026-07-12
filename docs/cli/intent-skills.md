@@ -3,10 +3,10 @@ title: intent skills
 id: intent-skills
 ---
 
-`intent skills` manages `intent.lock`, the committed record of which skill-bearing sources you've approved and what their content looked like when you approved it. Six subcommands: `scan`, `diff` (read-only), `approve`, `update` (mutating), `stale` (read-only, checks for skill drift needing re-review), and `generate-manifest` (maintainer-only — writes a package's own `skills/intent.manifest.json`, never touches `intent.lock`).
+`intent skills` manages `intent.lock`, the committed record of which skill-bearing sources you've approved and what their content looked like when you approved it. Five subcommands: `scan`, `diff` (read-only), `approve`, `update` (mutating), and `stale` (read-only, checks for skill drift needing re-review).
 
 ```bash
-npx @tanstack/intent@latest skills <scan|diff|approve|update|stale|generate-manifest> [source] [--json] [--all] [--yes] [--frozen] [--no-frozen] [--baseline <ref>] [--files <path...>]
+npx @tanstack/intent@latest skills <scan|diff|approve|update|stale> [source] [--json] [--all] [--yes] [--frozen] [--no-frozen] [--baseline <ref>] [--files <path...>]
 ```
 
 See [Lockfile and frozen mode](../security/lockfile) for what `intent.lock` is and what frozen mode guarantees.
@@ -84,18 +84,6 @@ Read-only. Surfaces staleness **candidates** for human/agent review — never a 
 - No baseline resolvable: interactive mode reports `Layer 2 (baseline drift) skipped: <reason>` and continues with Layer 0/1 only; frozen mode fails closed (exit `5`).
 - Makes no network calls. Requires git for Layer 2 only — if `cwd` isn't a git repository, Layer 2 fails the same way as an unresolvable baseline.
 - Frozen mode: fails (exit `1`) if any candidate — Layer 0/1 or Layer 2 — was found, so CI gates a PR that hasn't refreshed staleness.
-
-## `intent skills generate-manifest`
-
-```bash
-npx @tanstack/intent@latest skills generate-manifest [--json]
-```
-
-Maintainer-only. Writes `skills/intent.manifest.json` inside each discovered package, never `intent.lock`. It refuses frozen mode. For each skill folder, computes a content hash over `SKILL.md` plus any `references/`, `assets/`, and `scripts/` files. The consumer lockfile aggregate uses the same directory scope. Static heuristics pre-fill `capabilities`: `uses_network` (curl/wget/fetch reference), `runs_install_command` (npm/pnpm/yarn/bun/pip install reference), `ships_scripts` (non-empty `scripts/` dir). Heuristics only ever suggest. Review and edit the generated file before committing.
-
-- **Hard-fails generation** (no partial manifest written) if any hash-included skill file contains what looks like a literal secret *value* (GitHub/Slack tokens, AWS access key IDs, a PEM private key block, a generic `key = "..."` assignment). A secret's *name* belongs in the manifest's `declaredSecrets`, never its value in skill content.
-- Once a package ships a manifest, `intent skills scan`/`diff`/`approve` pick up its `manifestHash` and unioned `capabilities` automatically — no separate wiring needed on the consumer side.
-- After a package changes manifest metadata, consumers run `intent skills diff` and review it with `intent skills approve`. Frozen scans reject the changed `manifestHash` until that approval updates `intent.lock`.
 
 ## Options
 

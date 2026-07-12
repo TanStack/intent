@@ -1,11 +1,16 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import { computeLockfileState } from '../src/commands/skills/support.js'
+import { computeSkillFolderHash } from '../src/core/lockfile/hash.js'
 import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
-import { generateManifest, writeIntentManifest } from '../src/core/manifest.js'
+import { writeIntentManifest } from '../src/core/manifest.js'
 import { nodeReadFs } from '../src/shared/utils.js'
+import type {
+  IntentManifest,
+  IntentManifestCapability,
+} from '../src/core/manifest.js'
 import type { IntentPackage, ScanResult } from '../src/shared/types.js'
 import type { ReadFs } from '../src/shared/utils.js'
 
@@ -38,6 +43,28 @@ function createPackage(
     intent: { version: 1, repo: 'TanStack/test', docs: 'docs/' },
     source: 'local',
     ...overrides,
+  }
+}
+
+function createManifest(
+  pkg: IntentPackage,
+  capabilities: Array<IntentManifestCapability> = [],
+): IntentManifest {
+  return {
+    manifestVersion: 1,
+    package: pkg.name,
+    packageVersion: pkg.version,
+    skills: pkg.skills.map((skill) => ({
+      name: skill.name,
+      path: relative(pkg.packageRoot, skill.path).split('\\').join('/'),
+      contentHash: computeSkillFolderHash(
+        dirname(skill.path),
+        pkg.packageRoot,
+      ),
+      capabilities,
+      declaredSecrets: [],
+      mcpTools: [],
+    })),
   }
 }
 
@@ -86,12 +113,9 @@ describe('buildCurrentLockfileSources', () => {
       skills: [{ name: 'net', path: skillPath, description: 'desc' }],
     })
 
-    const outcome = generateManifest(root, '@acme/pkg', '1.0.0', pkg.skills)
-    expect(outcome.ok).toBe(true)
-    if (!outcome.ok) return
     writeIntentManifest(
       join(root, 'skills', 'intent.manifest.json'),
-      outcome.manifest,
+      createManifest(pkg, ['uses_network']),
     )
 
     const [entry] = buildCurrentLockfileSources([pkg])
@@ -109,12 +133,9 @@ describe('buildCurrentLockfileSources', () => {
       packageRoot: root,
       skills: [{ name: 'core', path: skillPath, description: 'desc' }],
     })
-    const outcome = generateManifest(root, '@acme/pkg', '1.0.0', pkg.skills)
-    expect(outcome.ok).toBe(true)
-    if (!outcome.ok) return
     writeIntentManifest(
       join(root, 'skills', 'intent.manifest.json'),
-      outcome.manifest,
+      createManifest(pkg),
     )
 
     const [entry] = buildCurrentLockfileSources([pkg])
@@ -167,12 +188,10 @@ describe('buildCurrentLockfileSources', () => {
       packageRoot: root,
       skills: [{ name: 'core', path: skillPath, description: 'desc' }],
     })
-    const outcome = generateManifest(root, '@acme/pkg', '1.0.0', pkg.skills)
-    expect(outcome.ok).toBe(true)
-    if (!outcome.ok) return
+    const manifest = createManifest(pkg)
     writeFileSync(
       join(root, 'skills', 'intent.manifest.json'),
-      JSON.stringify({ ...outcome.manifest, ...override }),
+      JSON.stringify({ ...manifest, ...override }),
     )
 
     expect(() => buildCurrentLockfileSources([pkg])).toThrow(/does not match/)
@@ -217,10 +236,7 @@ describe('buildCurrentLockfileSources', () => {
       skills: [{ name: 'core', path: skillPath, description: 'desc' }],
     })
     const manifestPath = join(root, 'skills', 'intent.manifest.json')
-    const outcome = generateManifest(root, '@acme/pkg', '1.0.0', pkg.skills)
-    expect(outcome.ok).toBe(true)
-    if (!outcome.ok) return
-    const baseManifest = outcome.manifest
+    const baseManifest = createManifest(pkg)
     writeFileSync(manifestPath, JSON.stringify(baseManifest))
     const before = buildCurrentLockfileSources([pkg])[0]!.manifestHash
 

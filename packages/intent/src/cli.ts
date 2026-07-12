@@ -12,7 +12,6 @@ import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
 import type { SkillsApproveCommandOptions } from './commands/skills/approve.js'
 import type { SkillsScanCommandOptions } from './commands/skills/scan.js'
-import type { SkillsGenerateManifestCommandOptions } from './commands/skills/generate-manifest.js'
 import type { SkillsStaleCommandOptions } from './commands/skills/stale.js'
 import type { SkillsUpdateCommandOptions } from './commands/skills/update.js'
 import type { StaleCommandOptions } from './commands/stale.js'
@@ -216,10 +215,10 @@ function createCli(): CAC {
   cli
     .command(
       'skills [action] [source]',
-      'Scan, diff, approve, update, check staleness, or generate a manifest for skills',
+      'Scan, diff, approve, update, or check staleness for skills',
     )
     .usage(
-      'skills <scan|diff|approve|update|stale|generate-manifest> [source] [--json] [--all] [--yes] [--frozen] [--no-frozen] [--baseline <ref>] [--files <path...>]',
+      'skills <scan|diff|approve|update|stale> [source] [--json] [--all] [--yes] [--frozen] [--no-frozen] [--baseline <ref>] [--files <path...>]',
     )
     .option('--json', 'Output JSON')
     .option(
@@ -255,7 +254,6 @@ function createCli(): CAC {
     .example('skills update --all')
     .example('skills stale')
     .example('skills stale --baseline v1.42.0')
-    .example('skills generate-manifest')
     .action(
       async (
         action: string | undefined,
@@ -263,8 +261,7 @@ function createCli(): CAC {
         options: SkillsScanCommandOptions &
           SkillsApproveCommandOptions &
           SkillsUpdateCommandOptions &
-          SkillsStaleCommandOptions &
-          SkillsGenerateManifestCommandOptions,
+          SkillsStaleCommandOptions,
       ) => {
         const { scanPolicedIntentsOrFail, frozenOptionsFromGlobalFlags } =
           await import('./commands/support.js')
@@ -322,18 +319,8 @@ function createCli(): CAC {
           return
         }
 
-        if (action === 'generate-manifest') {
-          const { runSkillsGenerateManifestCommand } =
-            await import('./commands/skills/generate-manifest.js')
-          await runSkillsGenerateManifestCommand(
-            { ...options, ...frozenOptions },
-            scanPolicedIntentsOrFail,
-          )
-          return
-        }
-
         fail(
-          'Unknown skills action: expected scan, diff, approve, update, stale, or generate-manifest.',
+          'Unknown skills action: expected scan, diff, approve, update, or stale.',
         )
       },
     )

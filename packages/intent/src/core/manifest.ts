@@ -3,20 +3,15 @@
 // separate from SKILL.md content. Not a second lockfile — it's a maintainer-
 // authored description of what a package's skills are and declare, never a
 // consumer approval record, and it never lives in the consumer root.
-import { existsSync, readdirSync, writeFileSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { writeFileSync } from 'node:fs'
+import { dirname, relative } from 'node:path'
 import { createHash } from 'node:crypto'
 import { nodeReadFs } from '../shared/utils.js'
-import {
-  computeSkillFolderHash,
-  readSkillFolderContents,
-} from './lockfile/hash.js'
-import { detectCapabilityHeuristics, findSecretMatches } from './secrets.js'
+import { computeSkillFolderHash } from './lockfile/hash.js'
 import { assertCanonicalPackageRelativePath } from './skill-path.js'
 import type { SkillEntry } from '../shared/types.js'
 import type { ReadFs } from '../shared/utils.js'
 
-const MANIFEST_VERSION = 1
 export type IntentManifestCapability =
   | 'reads_project_files'
   | 'runs_install_command'
@@ -85,107 +80,7 @@ function toPosixPath(path: string): string {
   return path.split('\\').join('/')
 }
 
-function hasNonEmptyScriptsDir(skillDir: string): boolean {
-  const scriptsDir = join(skillDir, 'scripts')
-  if (!existsSync(scriptsDir)) return false
-  try {
-    return readdirSync(scriptsDir).length > 0
-  } catch {
-    return false
-  }
-}
-
-interface SecretFinding {
-  skillPath: string
-  patternName: string
-}
-
-export type GenerateManifestOutcome =
-  | { ok: true; manifest: IntentManifest }
-  | { ok: false; secretFindings: Array<SecretFinding> }
-
-// Walks each skill's own folder, computes its content hash, and runs static
-// heuristics to pre-fill capabilities. The maintainer reviews and edits the
-// resulting file before committing — heuristics inform, they don't decide.
-// Hard-fails (no partial manifest) if any hash-included file contains a
-// literal secret value; a declared secret NAME belongs in declaredSecrets,
-// never a value in skill content.
-export function generateManifest(
-  packageRoot: string,
-  packageName: string,
-  packageVersion: string,
-  skills: ReadonlyArray<SkillEntry>,
-): GenerateManifestOutcome {
-  const secretFindings: Array<SecretFinding> = []
-  const manifestSkills: Array<IntentManifestSkill> = []
-
-  for (const skill of skills) {
-    const skillDir = dirname(skill.path)
-    const relativePath = toPosixPath(relative(packageRoot, skill.path))
-    const folderContents = readSkillFolderContents(skillDir, packageRoot)
-    const skillContent = folderContents.find(
-      (entry) => entry.relativePath === 'SKILL.md',
-    )
-    if (!skillContent) {
-      throw new Error(`Missing SKILL.md in "${relativePath}".`)
-    }
-
-    let hasSecret = false
-    for (const entry of folderContents) {
-      const matches = findSecretMatches(entry.content.toString('utf8'))
-      if (matches.length > 0) {
-        hasSecret = true
-        const entryPath = toPosixPath(
-          relative(packageRoot, join(skillDir, entry.relativePath)),
-        )
-        for (const match of matches) {
-          secretFindings.push({
-            skillPath: entryPath,
-            patternName: match.name,
-          })
-        }
-      }
-    }
-    if (hasSecret) {
-      continue
-    }
-
-    const heuristics = detectCapabilityHeuristics(
-      skillContent.content.toString('utf8'),
-    )
-    const capabilities: Array<IntentManifestCapability> = []
-    if (heuristics.usesNetwork) capabilities.push('uses_network')
-    if (heuristics.runsInstallCommand) capabilities.push('runs_install_command')
-    if (hasNonEmptyScriptsDir(skillDir)) capabilities.push('ships_scripts')
-
-    manifestSkills.push({
-      name: skill.name,
-      path: relativePath,
-      contentHash: computeSkillFolderHash(skillDir, packageRoot),
-      capabilities: capabilities.toSorted(compareStrings),
-      declaredSecrets: [],
-      mcpTools: [],
-    })
-  }
-
-  if (secretFindings.length > 0) {
-    return { ok: false, secretFindings }
-  }
-
-  return {
-    ok: true,
-    manifest: {
-      manifestVersion: MANIFEST_VERSION,
-      package: packageName,
-      packageVersion,
-      skills: manifestSkills.toSorted((a, b) => compareStrings(a.path, b.path)),
-    },
-  }
-}
-
-// Deterministic: stable entry order (by path, already sorted by
-// generateManifest) and stable key order, no generated timestamps — a
-// manifest regenerated from unchanged inputs serializes byte-identical.
+// Deterministic: stable entry and key order with no generated timestamps.
 export function serializeManifest(manifest: IntentManifest): string {
   return `${JSON.stringify(canonicalManifest(manifest), null, 2)}\n`
 }
