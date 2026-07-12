@@ -31,11 +31,13 @@
   "dependencies": {
     "cac": "^6.7.14",
     "jsonc-parser": "^3.3.1",
+    "picomatch": "^4.0.4",
     "semver": "^7.8.4",
     "std-env": "^4.1.0",
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@types/picomatch": "^4.0.3",
     "@types/semver": "^7.7.1",
     "tsdown": "^0.22.2",
     "verdaccio": "^6.7.2"
