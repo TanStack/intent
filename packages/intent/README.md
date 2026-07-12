@@ -121,23 +121,21 @@ The real risk with any derived artifact is staleness. `npx @tanstack/intent@late
 
 ## CLI Commands
 
-| Command                                                | Description                                         |
-| ------------------------------------------------------ | --------------------------------------------------- |
-| `npx @tanstack/intent@latest install`                  | Set up skill loading guidance in agent config files |
-| `npx @tanstack/intent@latest hooks install`            | Install hook enforcement for supported agents       |
-| `npx @tanstack/intent@latest list [--json]`            | Discover local intent-enabled packages              |
-| `npx @tanstack/intent@latest load <use>`               | Load `<package>#<skill>` SKILL.md content           |
-| `npx @tanstack/intent@latest meta`                     | List meta-skills for library maintainers            |
-| `npx @tanstack/intent@latest scaffold`                 | Print the guided skill generation prompt            |
-| `npx @tanstack/intent@latest validate [dir]`           | Validate SKILL.md files                             |
-| `npx @tanstack/intent@latest setup`                    | Copy CI templates into your repo                    |
-| `npx @tanstack/intent@latest stale [dir] [--json]`     | Check skills for version drift                      |
-| `npx @tanstack/intent@latest skills scan`              | Discover sources and diff against `intent.lock`     |
-| `npx @tanstack/intent@latest skills diff`              | Show pending `intent.lock` changes                  |
-| `npx @tanstack/intent@latest skills approve`           | Approve pending changes into `intent.lock`          |
-| `npx @tanstack/intent@latest skills update`            | Re-sync already-locked sources to installed state   |
-| `npx @tanstack/intent@latest skills stale`             | Check locked sources for content/version drift      |
-| `npx @tanstack/intent@latest skills generate-manifest` | Write a package's `skills/intent.manifest.json`     |
+| Command                                            | Description                                         |
+| -------------------------------------------------- | --------------------------------------------------- |
+| `npx @tanstack/intent@latest install`              | Set up skill loading guidance in agent config files |
+| `npx @tanstack/intent@latest hooks install`        | Install hook enforcement for supported agents       |
+| `npx @tanstack/intent@latest list [--json]`        | Discover local intent-enabled packages              |
+| `npx @tanstack/intent@latest load <use>`           | Load `<package>#<skill>` SKILL.md content           |
+| `npx @tanstack/intent@latest meta`                 | List meta-skills for library maintainers            |
+| `npx @tanstack/intent@latest scaffold`             | Print the guided skill generation prompt            |
+| `npx @tanstack/intent@latest validate [dir]`       | Validate SKILL.md files                             |
+| `npx @tanstack/intent@latest setup`                | Copy CI templates into your repo                    |
+| `npx @tanstack/intent@latest stale [dir] [--json]` | Check skills for version drift                      |
+| `npx @tanstack/intent@latest skills scan`          | Discover sources and diff against `intent.lock`     |
+| `npx @tanstack/intent@latest skills diff`          | Show pending `intent.lock` changes                  |
+| `npx @tanstack/intent@latest skills approve`       | Approve pending changes into `intent.lock`          |
+| `npx @tanstack/intent@latest skills update`        | Re-sync already-locked sources to installed state   |
 
 See [Lockfile and frozen mode](https://tanstack.com/intent/latest/docs/security/lockfile) and [`intent skills`](https://tanstack.com/intent/latest/docs/cli/intent-skills) for what `intent.lock` is and full command details.
 

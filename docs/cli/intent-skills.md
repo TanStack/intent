@@ -6,7 +6,7 @@ id: intent-skills
 `intent skills` manages `intent.lock`, the committed record of which skill-bearing sources you've approved and what their content looked like when you approved it. Four subcommands: `scan`, `diff` (read-only), `approve`, and `update` (mutating).
 
 ```bash
-npx @tanstack/intent@latest skills <scan|diff|approve|update> [source] [--json] [--all] [--yes] [--frozen] [--no-frozen]
+npx intent skills <scan|diff|approve|update> [source] [--json] [--all] [--yes] [--frozen] [--no-frozen]
 ```
 
 See [Lockfile and frozen mode](../security/lockfile) for what `intent.lock` is and what frozen mode guarantees.
@@ -14,7 +14,7 @@ See [Lockfile and frozen mode](../security/lockfile) for what `intent.lock` is a
 ## `intent skills scan`
 
 ```bash
-npx @tanstack/intent@latest skills scan [--json] [--frozen] [--no-frozen]
+npx intent skills scan [--json] [--frozen] [--no-frozen]
 ```
 
 Read-only. Discovers current skill-bearing sources, computes each source's `contentHash`, and reports drift against `intent.lock`.
@@ -22,13 +22,13 @@ Read-only. Discovers current skill-bearing sources, computes each source's `cont
 - No lock found: prints `No intent.lock found. Run \`intent skills approve --all\` to create one.`
 - Lock is clean: prints `intent.lock is up to date.`
 - Lock is stale: prints `intent.lock is out of date: N added, N removed, N changed.`
-- Discovered sources not in `intent.skills`: prints a count and points at `intent.skills`/`intent.exclude`
+- Discovered sources not in `intent.skills`: names each source with bounded dependency provenance when available, falls back to `provenance unknown`, and points at `intent.skills`/`intent.exclude`. Agent-mode output remains count-only.
 - `--json` prints `{ frozen, hiddenSourceCount, hasLockfile, added, removed, changed, isClean }`
 
 ## `intent skills diff`
 
 ```bash
-npx @tanstack/intent@latest skills diff [--json] [--frozen] [--no-frozen]
+npx intent skills diff [--json] [--frozen] [--no-frozen]
 ```
 
 Read-only. Same underlying computation as `scan`, but change-focused: prints only `Added:`/`Removed:`/`Changed:` sections with per-field diffs (`version`, `resolution`, `skills`, `contentHash`, `manifestHash`, `capabilities`). Unchanged sources are omitted.
@@ -44,7 +44,7 @@ Changed:
 ## `intent skills approve [source]`
 
 ```bash
-npx @tanstack/intent@latest skills approve [source] [--all] [--yes]
+npx intent skills approve [source] [--all] [--yes]
 ```
 
 Writes `intent.lock`. This is the trust decision — approving means a human reviewed this exact change.
@@ -59,7 +59,7 @@ Writes `intent.lock`. This is the trust decision — approving means a human rev
 ## `intent skills update [source]`
 
 ```bash
-npx @tanstack/intent@latest skills update [source] [--all] [--yes]
+npx intent skills update [source] [--all] [--yes]
 ```
 
 Writes `intent.lock`. It mechanically re-syncs version and resolution for matching **already-locked** entries. Changes to skills, content hashes, manifests, capabilities, declared secrets, or MCP metadata require `--yes` after reviewing `intent skills diff`.

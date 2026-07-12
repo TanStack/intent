@@ -21,8 +21,8 @@ Intent reads package data as files. It never imports, requires, or executes the 
 
 One exception is sanctioned: in Yarn Plug'n'Play projects, Intent loads Yarn's PnP runtime (`.pnp.cjs`) to map package identities to readable locations. It loads no package entry points, bins, lifecycle scripts, or other package-provided JavaScript. An ESLint rule enforces this invariant in the discovery code.
 
-## What the allowlist does not cover yet
+## Source identity and remaining limits
 
-Matching is currently by package name. A `workspace:foo` entry and a bare `foo` entry both authorize a discovered package named `foo`, because the scanner does not yet distinguish a workspace member from a published package of the same name. This errs toward permitting a same-named package, never toward denying one you listed. A future version tightens matching once the scanner carries that signal.
+Intent matches allowlist entries by `(kind, id)`. `workspace:foo` authorizes only the workspace member named `foo`; it does not authorize an installed `npm:foo`. A bare `foo` entry is normalized to the npm source kind. Same-named workspace and npm packages remain distinct sources throughout discovery, locking, and approval.
 
 The `git:` source kind is reserved. Intent parses and validates the shape, then rejects it until a future version can pin the resolved ref and content hash. A git entry never loads silently.

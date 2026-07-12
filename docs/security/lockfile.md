@@ -73,7 +73,7 @@ Run the frozen scan in the consumer repository after dependencies and `intent.lo
 
 ```yaml
 - name: Verify approved skill sources
-  run: npx @tanstack/intent@latest skills scan --frozen
+  run: npx intent skills scan --frozen
 ```
 
 The generated `Check Skills` workflow is for library-maintainer validation and review; it does not add this consumer lockfile gate automatically.
