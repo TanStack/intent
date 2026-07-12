@@ -430,10 +430,9 @@ function toPosixRelative(baseDir: string, absolutePath: string): string {
   return rel.split('\\').join('/')
 }
 
-// Manifest per-skill hash scope: the whole skill folder (SKILL.md plus any
-// references/, assets/, scripts/), unlike the lockfile's per-package
-// aggregate which is SKILL.md-only. Same canonical hashing rules (LF text
-// normalization, byte-exact binary), different scope.
+// Manifest hashes cover one whole skill folder. Lockfile hashes aggregate the
+// same content for every locked skill using package-relative paths. Both use
+// the same canonical hashing rules (LF text normalization, byte-exact binary).
 export function computeSkillFolderHash(
   skillDir: string,
   packageRoot: string,
