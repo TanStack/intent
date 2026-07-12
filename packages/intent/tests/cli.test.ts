@@ -918,6 +918,39 @@ describe('cli commands', () => {
     expect(stderr).toContain('Add to opt in')
   })
 
+  it('escapes hidden source names in human list output', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-hidden-escape-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'evil\u001b[2J\u202e',
+      version: '1.0.0',
+      skillName: 'escape',
+      description: 'Untrusted package name',
+    })
+    process.env.INTENT_AUDIENCE = 'human'
+    process.chdir(root)
+
+    expect(await main(['list', '--show-hidden'])).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+    const stderr = errorSpy.mock.calls.flat().join('\n')
+
+    expect(output).toContain('npm:evil\\u001b[2J\\u202e')
+    expect(stderr).toContain('npm:evil\\u001b[2J\\u202e')
+    expect(`${output}\n${stderr}`).not.toContain('\u001b')
+    expect(`${output}\n${stderr}`).not.toContain('\u202e')
+  })
+
   it('does not reveal hidden skill sources to agent list output', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-hidden-agent-'))
     tempDirs.push(root)

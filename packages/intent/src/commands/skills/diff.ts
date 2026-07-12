@@ -4,12 +4,11 @@ import {
 } from '../../core/lockfile/content-review.js'
 import { sourceIdentityKey } from '../../core/types.js'
 import { isFrozenMode } from '../../shared/mode.js'
+import { escapeReviewValue, formatReviewJson } from '../../shared/cli-output.js'
 import {
   computeLockfileState,
   enforceFrozenMode,
-  escapeReviewValue,
   formatHiddenSourceDetails,
-  formatReviewJson,
   printSourceContentReviews,
 } from './support.js'
 import type {

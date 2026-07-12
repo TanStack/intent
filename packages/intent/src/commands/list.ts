@@ -1,5 +1,6 @@
 import { detectIntentAudience } from '../shared/environment.js'
 import { formatIntentCommand } from '../shared/command-runner.js'
+import { escapeReviewValue } from '../shared/cli-output.js'
 import { listIntentSkills } from '../core/index.js'
 import {
   coreOptionsFromGlobalFlags,
@@ -102,10 +103,10 @@ function printHiddenSources(result: IntentSkillList, audience: string): void {
   console.log('\nHidden skill sources:\n')
   for (const source of result.hiddenSources) {
     const provenance = source.provenance
-      ?.map((path) => path.join(' -> '))
+      ?.map((path) => path.map(escapeReviewValue).join(' -> '))
       .join('; ')
     console.log(
-      `  ${source.kind}:${source.name} (${source.skillCount} ${source.skillCount === 1 ? 'skill' : 'skills'})${provenance ? ` via ${provenance}` : ' (provenance unknown)'}`,
+      `  ${source.kind}:${escapeReviewValue(source.name)} (${source.skillCount} ${source.skillCount === 1 ? 'skill' : 'skills'})${provenance ? ` via ${provenance}` : ' (provenance unknown)'}`,
     )
   }
 }

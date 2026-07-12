@@ -1,6 +1,6 @@
 import { scanForIntents } from '../discovery/scanner.js'
 import { detectIntentAudience } from '../shared/environment.js'
-import { ALLOW_ALL_NOTICE } from '../shared/cli-output.js'
+import { ALLOW_ALL_NOTICE, escapeReviewValue } from '../shared/cli-output.js'
 import {
   compileExcludePatterns,
   getConfigDirs,
@@ -137,11 +137,12 @@ function formatUnlistedNotice(
   const sources = sorted
     .map((source) => {
       const provenance = source.provenance
-        ?.map((path) => path.join(' -> '))
+        ?.map((path) => path.map(escapeReviewValue).join(' -> '))
         .join('; ')
+      const label = `${source.kind}:${escapeReviewValue(source.name)}`
       return provenance
-        ? `${source.kind}:${source.name} (via ${provenance})`
-        : `${source.kind}:${source.name} (provenance unknown)`
+        ? `${label} (via ${provenance})`
+        : `${label} (provenance unknown)`
     })
     .join(', ')
   return `${sourceCount} discovered ${noun} skills but ${sourceCount === 1 ? 'is' : 'are'} not listed in intent.skills: ${sources}. Add to opt in.`

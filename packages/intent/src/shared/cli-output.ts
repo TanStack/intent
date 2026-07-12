@@ -5,6 +5,25 @@ import { isEnvFlagSet } from './env-flag.js'
 export const ALLOW_ALL_NOTICE =
   'All skill sources allowed (intent.skills: ["*"]) — unvetted skills may be surfaced into agent guidance.'
 
+function escapeUnsafeUnicode(value: string): string {
+  return value.replace(
+    /[\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu,
+    (character) =>
+      `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  )
+}
+
+export function formatReviewJson(value: unknown): string {
+  return escapeUnsafeUnicode(String(JSON.stringify(value)))
+}
+
+export function escapeReviewValue(value: string): string {
+  // JSON escaping neutralizes terminal control bytes. Escape additional
+  // bidi/C1 controls that JSON permits literally so untrusted skill content
+  // and paths cannot visually reorder or overwrite CLI output.
+  return formatReviewJson(value).slice(1, -1)
+}
+
 export function printWarnings(warnings: Array<string>): void {
   if (warnings.length === 0) return
 

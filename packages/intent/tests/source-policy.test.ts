@@ -89,6 +89,23 @@ describe('applySourcePolicy — allowlist matrix', () => {
     ])
   })
 
+  it('escapes untrusted names and provenance in human notices', () => {
+    const hidden = {
+      ...pkg('evil\u001b[2J\u202e', ['y']),
+      provenance: [['root\nforged', 'dep\u001b[31m']],
+    }
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/a', ['x']), hidden] },
+      { config: config(['@scope/a']), excludeMatchers: [] },
+    )
+
+    expect(result.notices[0]).toContain('npm:evil\\u001b[2J\\u202e')
+    expect(result.notices[0]).toContain('via root\\nforged -> dep\\u001b[31m')
+    expect(result.notices[0]).not.toContain('\u001b')
+    expect(result.notices[0]).not.toContain('\u202e')
+    expect(result.notices[0]).not.toContain('root\nforged')
+  })
+
   it('collapses several unlisted packages into one sorted summary warning', () => {
     const result = applySourcePolicy(
       {

@@ -7,10 +7,9 @@ import { writeIntentLockfile } from '../../core/lockfile/lockfile.js'
 import { sourceIdentityKey } from '../../core/types.js'
 import { isFrozenMode } from '../../shared/mode.js'
 import { fail } from '../../shared/cli-error.js'
+import { escapeReviewValue, formatReviewJson } from '../../shared/cli-output.js'
 import {
   computeLockfileState,
-  escapeReviewValue,
-  formatReviewJson,
   printSourceContentReviews,
   resolveLockfilePath,
   resolveSourceArg,

@@ -4,6 +4,7 @@ import { buildCurrentLockfileSources } from '../../core/lockfile/lockfile-state.
 import { readIntentLockfile } from '../../core/lockfile/lockfile.js'
 import { resolveProjectContext } from '../../core/project-context.js'
 import { fail } from '../../shared/cli-error.js'
+import { escapeReviewValue } from '../../shared/cli-output.js'
 import type { LockfileDiffResult } from '../../core/lockfile/lockfile-diff.js'
 import type { SourceContentReview } from '../../core/lockfile/content-review.js'
 import type {
@@ -116,34 +117,16 @@ export function formatHiddenSourceDetails(
     )
     .map((source) => {
       const provenance = source.provenance
-        ?.map((path) => path.join(' -> '))
+        ?.map((path) => path.map(escapeReviewValue).join(' -> '))
         .join('; ')
+      const label = `${source.kind}:${escapeReviewValue(source.name)}`
       return provenance
-        ? `${source.kind}:${source.name} (via ${provenance})`
-        : `${source.kind}:${source.name} (provenance unknown)`
+        ? `${label} (via ${provenance})`
+        : `${label} (provenance unknown)`
     })
     .join(', ')
 
   return `: ${details}`
-}
-
-function escapeUnsafeUnicode(value: string): string {
-  return value.replace(
-    /[\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu,
-    (character) =>
-      `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
-  )
-}
-
-export function formatReviewJson(value: unknown): string {
-  return escapeUnsafeUnicode(String(JSON.stringify(value)))
-}
-
-export function escapeReviewValue(value: string): string {
-  // JSON escaping neutralizes terminal control bytes. Escape additional
-  // bidi/C1 controls that JSON permits literally so untrusted skill content
-  // and paths cannot visually reorder or overwrite the review output.
-  return formatReviewJson(value).slice(1, -1)
 }
 
 function formatCanonicalText(content: Buffer): string {

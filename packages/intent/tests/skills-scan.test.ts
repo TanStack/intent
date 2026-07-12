@@ -115,6 +115,37 @@ describe('runSkillsScanCommand', () => {
     expect(output).toContain('intent.lock is up to date')
   })
 
+  it('escapes untrusted hidden-source details', async () => {
+    const cwd = makeTempProject()
+    writeIntentLockfile(join(cwd, 'intent.lock'), baseLockfile())
+
+    await runSkillsScanCommand(
+      {},
+      () =>
+        Promise.resolve(
+          policedScan({
+            hiddenSourceCount: 1,
+            hiddenSources: [
+              {
+                kind: 'npm',
+                name: 'evil\u001b[2J\u202e',
+                skillCount: 1,
+                provenance: [['root\nforged', 'dep\u001b[31m']],
+              },
+            ],
+          }),
+        ),
+      cwd,
+    )
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(output).toContain('npm:evil\\u001b[2J\\u202e')
+    expect(output).toContain('via root\\nforged -> dep\\u001b[31m')
+    expect(output).not.toContain('\u001b')
+    expect(output).not.toContain('\u202e')
+    expect(output).not.toContain('root\nforged')
+  })
+
   it('reports drift when the lockfile has a source no longer present', async () => {
     const cwd = makeTempProject()
     writeIntentLockfile(join(cwd, 'intent.lock'), {
