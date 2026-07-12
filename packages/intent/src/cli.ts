@@ -221,7 +221,7 @@ function createCli(): CAC {
       'Scan, diff, approve, update, generate manifests, or validate skills',
     )
     .usage(
-      'skills <scan|diff|approve|update|generate-manifest|validate> [source] [--json] [--all] [--yes] [--check] [--write] [--fix] [--github-summary] [--set-version <version>] [--frozen] [--no-frozen]',
+      'skills <scan|diff|approve|update|generate-manifest|validate> [source] [--json] [--all] [--yes] [--check] [--write] [--fix] [--release] [--github-summary] [--set-version <version>] [--frozen] [--no-frozen]',
     )
     .option('--json', 'Output JSON')
     .option(
@@ -238,6 +238,10 @@ function createCli(): CAC {
     )
     .option('--write', 'With `generate-manifest`, write reviewed changes')
     .option('--fix', 'With `validate`, rewrite fixable frontmatter issues')
+    .option(
+      '--release',
+      'With `validate`, verify the npm package file inventory',
+    )
     .option(
       '--github-summary',
       'With `validate`, write a GitHub Actions step summary',
@@ -264,6 +268,7 @@ function createCli(): CAC {
     .example('skills generate-manifest --check')
     .example('skills generate-manifest --write')
     .example('skills validate')
+    .example('skills validate --release')
     .example('skills validate packages/query/skills --check')
     .action(
       async (

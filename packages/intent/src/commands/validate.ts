@@ -47,6 +47,7 @@ export interface ValidateCommandOptions {
   check?: boolean
   fix?: boolean
   githubSummary?: boolean
+  release?: boolean
   setVersion?: string
 }
 
@@ -834,6 +835,25 @@ async function runValidateCommandInternal(
 
     errors.push(...collectManifestErrors(validateContext, skillFiles))
 
+    if (options.release) {
+      if (!validateContext.packageRoot) {
+        errors.push({
+          file: relative(process.cwd(), skillsDir),
+          message:
+            'release validation requires an owning package.json with string name and version fields',
+        })
+      } else {
+        const { collectReleasePackageErrors } =
+          await import('./skills/release-package.js')
+        errors.push(
+          ...collectReleasePackageErrors({
+            packageRoot: validateContext.packageRoot,
+            skillFiles,
+          }),
+        )
+      }
+    }
+
     // In monorepos, _artifacts lives at the workspace root, not under each package's skills/ dir.
     const artifactsDir = join(skillsDir, '_artifacts')
     if (!validateContext.isMonorepo && existsSync(artifactsDir)) {
@@ -919,6 +939,7 @@ async function runValidateCommandInternal(
   }
 
   console.log(`✅ Validated ${validatedCount} skill files — all passed`)
+  if (options.release) console.log('✅ Verified npm package contents')
   if (warnings.length > 0) console.log()
   printWarnings(warnings)
 }

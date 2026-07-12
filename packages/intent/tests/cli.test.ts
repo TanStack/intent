@@ -75,6 +75,7 @@ let tempDirs: Array<string>
 let previousGlobalNodeModules: string | undefined
 let previousNoNotices: string | undefined
 let previousIntentAudience: string | undefined
+let previousNpmConfigCache: string | undefined
 
 function getHelpOutput(): string {
   return [...infoSpy.mock.calls, ...logSpy.mock.calls]
@@ -88,9 +89,11 @@ beforeEach(() => {
   previousGlobalNodeModules = process.env.INTENT_GLOBAL_NODE_MODULES
   previousNoNotices = process.env.INTENT_NO_NOTICES
   previousIntentAudience = process.env.INTENT_AUDIENCE
+  previousNpmConfigCache = process.env.npm_config_cache
   delete process.env.INTENT_GLOBAL_NODE_MODULES
   delete process.env.INTENT_NO_NOTICES
   delete process.env.INTENT_AUDIENCE
+  delete process.env.npm_config_cache
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
   infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -110,6 +113,11 @@ afterEach(() => {
     delete process.env.INTENT_NO_NOTICES
   } else {
     process.env.INTENT_NO_NOTICES = previousNoNotices
+  }
+  if (previousNpmConfigCache === undefined) {
+    delete process.env.npm_config_cache
+  } else {
+    process.env.npm_config_cache = previousNpmConfigCache
   }
   if (previousIntentAudience === undefined) {
     delete process.env.INTENT_AUDIENCE
@@ -2129,6 +2137,143 @@ describe('cli commands', () => {
     expect(logSpy).toHaveBeenCalledWith(
       '✅ Validated 1 skill files — all passed',
     )
+  })
+
+  it('fails release validation when npm excludes authored skill support files', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-release-missing-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@acme/pkg',
+      version: '1.0.0',
+      files: ['skills/core/SKILL.md', 'skills/intent.manifest.json'],
+    })
+    const skillDir = join(root, 'skills', 'core')
+    writeSkillMd(skillDir, {
+      name: 'core',
+      description: 'Core concepts',
+    })
+    const referencePath = join(skillDir, 'references', 'guide.md')
+    mkdirSync(dirname(referencePath), { recursive: true })
+    writeFileSync(referencePath, 'Supporting guidance.\n')
+    writeJson(join(root, 'skills', 'intent.manifest.json'), {
+      manifestVersion: 1,
+      package: '@acme/pkg',
+      packageVersion: '1.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          contentHash: computeSkillFolderHash(skillDir, root),
+          capabilities: [],
+          declaredSecrets: [],
+          mcpTools: [],
+        },
+      ],
+    })
+    process.env.npm_config_cache = join(root, '.npm-cache')
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'validate', '--release'])
+
+    expect(exitCode).not.toBe(0)
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+      'skills/core/references/guide.md',
+    )
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+      'package.json "files" or ignore rules',
+    )
+  })
+
+  it('fails release validation when npm includes skill artifacts', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-release-artifacts-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@acme/pkg',
+      version: '1.0.0',
+      files: ['skills'],
+    })
+    const skillDir = join(root, 'skills', 'core')
+    writeSkillMd(skillDir, {
+      name: 'core',
+      description: 'Core concepts',
+    })
+    const artifactsDir = join(root, 'skills', '_artifacts')
+    mkdirSync(artifactsDir, { recursive: true })
+    writeFileSync(join(artifactsDir, 'domain_map.yaml'), 'domains: []\n')
+    writeFileSync(join(artifactsDir, 'skill_spec.md'), 'Reviewed plan.\n')
+    writeFileSync(join(artifactsDir, 'skill_tree.yaml'), 'skills: []\n')
+    writeJson(join(root, 'skills', 'intent.manifest.json'), {
+      manifestVersion: 1,
+      package: '@acme/pkg',
+      packageVersion: '1.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          contentHash: computeSkillFolderHash(skillDir, root),
+          capabilities: [],
+          declaredSecrets: [],
+          mcpTools: [],
+        },
+      ],
+    })
+    process.env.npm_config_cache = join(root, '.npm-cache')
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'validate', '--release'])
+
+    expect(exitCode).not.toBe(0)
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+      'skills/_artifacts/skill_tree.yaml',
+    )
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+      'exclude skills/_artifacts',
+    )
+  })
+
+  it('passes release validation without running package lifecycle scripts', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-release-valid-'))
+    tempDirs.push(root)
+    const lifecycleMarker = join(root, 'prepack-ran')
+    writeJson(join(root, 'package.json'), {
+      name: '@acme/pkg',
+      version: '1.0.0',
+      files: ['skills', '!skills/_artifacts'],
+      scripts: {
+        prepack: `node -e "require('node:fs').writeFileSync('prepack-ran', 'ran')"`,
+      },
+    })
+    const skillDir = join(root, 'skills', 'core')
+    writeSkillMd(skillDir, {
+      name: 'core',
+      description: 'Core concepts',
+    })
+    const referencePath = join(skillDir, 'references', 'guide.md')
+    mkdirSync(dirname(referencePath), { recursive: true })
+    writeFileSync(referencePath, 'Supporting guidance.\n')
+    writeJson(join(root, 'skills', 'intent.manifest.json'), {
+      manifestVersion: 1,
+      package: '@acme/pkg',
+      packageVersion: '1.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          contentHash: computeSkillFolderHash(skillDir, root),
+          capabilities: [],
+          declaredSecrets: [],
+          mcpTools: [],
+        },
+      ],
+    })
+    process.env.npm_config_cache = join(root, '.npm-cache')
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'validate', '--release'])
+
+    expect(exitCode).toBe(0)
+    expect(existsSync(lifecycleMarker)).toBe(false)
+    expect(logSpy).toHaveBeenCalledWith('✅ Verified npm package contents')
   })
 
   it('migrates structured frontmatter into the manifest atomically', async () => {
