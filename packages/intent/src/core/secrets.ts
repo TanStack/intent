@@ -47,17 +47,45 @@ export interface SkillSecretFinding {
   patternName: string
 }
 
-export function findSkillSecretFindings(
+interface SkillCapabilitySignals {
+  path: string
+  runsInstallCommand: boolean
+  shipsScripts: boolean
+  usesNetwork: boolean
+}
+
+export interface SkillContentInspection {
+  capabilitySignals: Array<SkillCapabilitySignals>
+  secretFindings: Array<SkillSecretFinding>
+}
+
+const NETWORK_PATTERN = /\b(?:curl|wget|fetch\s*\()/i
+const INSTALL_COMMAND_PATTERN =
+  /\b(?:npm|pnpm|yarn|bun|pip)\s+(?:i|install|add)\b/i
+
+export function inspectSkillContents(
   packageRoot: string,
   skills: ReadonlyArray<Pick<SkillEntry, 'path'>>,
   fs: ReadFs = nodeReadFs,
-): Array<SkillSecretFinding> {
-  const findings: Array<SkillSecretFinding> = []
+): SkillContentInspection {
+  const capabilitySignals: Array<SkillCapabilitySignals> = []
+  const secretFindings: Array<SkillSecretFinding> = []
+
   for (const skill of skills) {
     const skillDir = dirname(skill.path)
+    const skillPath = relative(packageRoot, skill.path).split('\\').join('/')
+    let runsInstallCommand = false
+    let shipsScripts = false
+    let usesNetwork = false
+
     for (const entry of readSkillFolderContents(skillDir, packageRoot, fs)) {
-      for (const match of findSecretMatches(entry.content.toString('utf8'))) {
-        findings.push({
+      const content = entry.content.toString('utf8')
+      runsInstallCommand ||= INSTALL_COMMAND_PATTERN.test(content)
+      shipsScripts ||= entry.relativePath.startsWith('scripts/')
+      usesNetwork ||= NETWORK_PATTERN.test(content)
+
+      for (const match of findSecretMatches(content)) {
+        secretFindings.push({
           path: relative(packageRoot, join(skillDir, entry.relativePath))
             .split('\\')
             .join('/'),
@@ -65,6 +93,22 @@ export function findSkillSecretFindings(
         })
       }
     }
+
+    capabilitySignals.push({
+      path: skillPath,
+      runsInstallCommand,
+      shipsScripts,
+      usesNetwork,
+    })
   }
-  return findings
+
+  return { capabilitySignals, secretFindings }
+}
+
+export function findSkillSecretFindings(
+  packageRoot: string,
+  skills: ReadonlyArray<Pick<SkillEntry, 'path'>>,
+  fs: ReadFs = nodeReadFs,
+): Array<SkillSecretFinding> {
+  return inspectSkillContents(packageRoot, skills, fs).secretFindings
 }

@@ -42,6 +42,15 @@ function manifestFixture(): IntentManifest {
 }
 
 describe('parseManifest', () => {
+  it('accepts the complete capability vocabulary', () => {
+    const manifest = manifestFixture()
+    manifest.skills[0]!.capabilities = ['downloads_remote_content']
+
+    expect(parseManifest(manifest).skills[0]!.capabilities).toEqual([
+      'downloads_remote_content',
+    ])
+  })
+
   it.each(['sources', 'requires'])(
     'rejects malformed %s declarations',
     (field) => {

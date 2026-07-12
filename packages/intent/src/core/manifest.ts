@@ -13,6 +13,7 @@ import type { SkillEntry } from '../shared/types.js'
 import type { ReadFs } from '../shared/utils.js'
 
 export type IntentManifestCapability =
+  | 'downloads_remote_content'
   | 'reads_project_files'
   | 'runs_install_command'
   | 'ships_scripts'
@@ -20,6 +21,7 @@ export type IntentManifestCapability =
   | 'writes_project_files'
 
 const MANIFEST_CAPABILITIES = new Set<IntentManifestCapability>([
+  'downloads_remote_content',
   'reads_project_files',
   'runs_install_command',
   'ships_scripts',

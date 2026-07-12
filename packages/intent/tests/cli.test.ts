@@ -2249,6 +2249,67 @@ describe('cli commands', () => {
     )
   })
 
+  it('validates capability disclosures without treating them as enforcement', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-capabilities-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@acme/pkg',
+      version: '1.0.0',
+    })
+    const skillDir = join(root, 'skills', 'core')
+    mkdirSync(skillDir, { recursive: true })
+    const skillPath = join(skillDir, 'SKILL.md')
+    writeFileSync(
+      skillPath,
+      '---\nname: core\ndescription: Core concepts\n---\n\nUse `fetch("https://example.com")`, then run `pnpm add example`.\n',
+    )
+    const scriptPath = join(skillDir, 'scripts', 'setup.sh')
+    mkdirSync(dirname(scriptPath), { recursive: true })
+    writeFileSync(scriptPath, '#!/bin/sh\nexit 0\n')
+    const manifestPath = join(root, 'skills', 'intent.manifest.json')
+    const manifest = {
+      manifestVersion: 1,
+      package: '@acme/pkg',
+      packageVersion: '1.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          contentHash: computeSkillFolderHash(skillDir, root),
+          capabilities: [] as Array<string>,
+          declaredSecrets: [],
+          mcpTools: [],
+        },
+      ],
+    }
+    writeJson(manifestPath, manifest)
+    process.chdir(root)
+
+    const missingExitCode = await main(['skills', 'validate'])
+    const missingOutput = errorSpy.mock.calls.flat().join('\n')
+
+    expect(missingExitCode).not.toBe(0)
+    expect(missingOutput).toContain('ships_scripts')
+    expect(missingOutput).toContain('uses_network')
+    expect(missingOutput).toContain('runs_install_command')
+    expect(missingOutput).toContain('disclosure')
+    expect(missingOutput).toContain('heuristic')
+
+    errorSpy.mockClear()
+    manifest.skills[0]!.capabilities = [
+      'downloads_remote_content',
+      'runs_install_command',
+      'ships_scripts',
+      'uses_network',
+    ]
+    writeJson(manifestPath, manifest)
+
+    const declaredExitCode = await main(['skills', 'validate'])
+
+    expect(declaredExitCode).toBe(0)
+    expect(errorSpy).not.toHaveBeenCalled()
+  })
+
   it('keeps nested Intent skill names valid without Agent Skills spec warnings', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-nested-'))
     tempDirs.push(root)

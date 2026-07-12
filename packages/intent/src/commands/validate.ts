@@ -13,7 +13,7 @@ import {
   writeIntentManifest,
 } from '../core/manifest.js'
 import { resolveProjectContext } from '../core/project-context.js'
-import { findSkillSecretFindings } from '../core/secrets.js'
+import { inspectSkillContents } from '../core/secrets.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
 import { printWarnings } from './support.js'
 import type { ProjectContext } from '../core/project-context.js'
@@ -783,15 +783,52 @@ async function runValidateCommandInternal(
           message: `Exceeds 500 line limit (${lineCount} lines). Rewrite for conciseness: move API tables to references/, trim verbose examples, and remove content an agent already knows. Do not simply raise the limit.`,
         })
       }
+    }
 
-      const packageRoot = validateContext.packageRoot ?? skillsDir
-      for (const finding of findSkillSecretFindings(packageRoot, [
-        { path: filePath },
-      ])) {
-        errors.push({
-          file: relative(process.cwd(), join(packageRoot, finding.path)),
-          message: `${finding.patternName} literal-secret heuristic match; remove the literal value`,
-        })
+    const packageRoot = validateContext.packageRoot ?? skillsDir
+    const inspection = inspectSkillContents(
+      packageRoot,
+      skillFiles.map((path) => ({ path })),
+    )
+    for (const finding of inspection.secretFindings) {
+      errors.push({
+        file: relative(process.cwd(), join(packageRoot, finding.path)),
+        message: `${finding.patternName} literal-secret heuristic match; remove the literal value`,
+      })
+    }
+
+    if (validateContext.packageRoot) {
+      const manifest = readIntentManifest(
+        join(packageRoot, 'skills', 'intent.manifest.json'),
+      )
+      for (const signals of inspection.capabilitySignals) {
+        const manifestSkill = manifest?.skills.find(
+          (skill) => skill.path === signals.path,
+        )
+        if (!manifestSkill) continue
+        const declared = new Set(manifestSkill.capabilities)
+        const file = relative(process.cwd(), join(packageRoot, signals.path))
+
+        if (signals.shipsScripts && !declared.has('ships_scripts')) {
+          errors.push({
+            file,
+            message:
+              'non-empty scripts/ requires the ships_scripts disclosure; Intent does not execute or sandbox scripts',
+          })
+        }
+        if (signals.usesNetwork && !declared.has('uses_network')) {
+          warnings.push(
+            `${file}: content heuristically suggests network use without the uses_network disclosure; review the skill because this heuristic is incomplete`,
+          )
+        }
+        if (
+          signals.runsInstallCommand &&
+          !declared.has('runs_install_command')
+        ) {
+          warnings.push(
+            `${file}: content heuristically suggests an install command without the runs_install_command disclosure; review the skill because this heuristic is incomplete`,
+          )
+        }
       }
     }
 
