@@ -44,7 +44,7 @@
     "prepack": "npm run build",
     "build": "tsdown src/index.ts src/cli.ts src/setup.ts src/core.ts --format esm --dts",
     "test:smoke": "pnpm run build && node dist/cli.mjs --help > /dev/null && node dist/cli.mjs load --help > /dev/null",
-    "test:lib": "vitest run --exclude 'tests/integration/**'",
+    "test:lib": "vitest run --config vitest.unit.config.ts --exclude 'tests/integration/**'",
     "test:integration": "vitest run tests/integration/",
     "test:types": "tsc --noEmit",
     "test:eslint": "eslint ."
