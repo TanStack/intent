@@ -764,6 +764,8 @@ describe('cli commands', () => {
     errorSpy.mockClear()
     const writeExitCode = await main(['setup', '--write'])
     const written = readFileSync(packageJsonPath, 'utf8')
+    const workflowPath = join(root, '.github', 'workflows', 'check-skills.yml')
+    const workflow = readFileSync(workflowPath, 'utf8')
     const pkg = JSON.parse(written) as {
       files: Array<string>
       keywords: Array<string>
@@ -772,12 +774,15 @@ describe('cli commands', () => {
     expect(writeExitCode).toBe(0)
     expect(pkg.keywords).toContain('tanstack-intent')
     expect(pkg.files).toEqual(['dist', 'skills', '!skills/_artifacts'])
+    expect(workflow).toContain('# intent-workflow-managed: true')
+    expect(workflow).toMatch(/intent-workflow-content-sha256: [a-f0-9]{64}/)
 
     logSpy.mockClear()
     const secondWriteExitCode = await main(['setup', '--write'])
 
     expect(secondWriteExitCode).toBe(0)
     expect(readFileSync(packageJsonPath, 'utf8')).toBe(written)
+    expect(readFileSync(workflowPath, 'utf8')).toBe(workflow)
     expect(logSpy.mock.calls.flat().join('\n')).toContain(
       'Package setup is already current',
     )
@@ -786,7 +791,9 @@ describe('cli commands', () => {
     const currentCheckExitCode = await main(['setup', '--check'])
 
     expect(currentCheckExitCode).toBe(0)
-    expect(logSpy).toHaveBeenCalledWith('✅ Package setup is current')
+    expect(logSpy).toHaveBeenCalledWith(
+      '✅ Package and workflow setup are current',
+    )
   })
 
   it('requires an explicit setup mode before writing', async () => {
@@ -838,6 +845,27 @@ describe('cli commands', () => {
     expect(workspacePackage.files).toContain('skills')
     expect(workspacePackage.files).not.toContain('!skills/_artifacts')
     expect(workspaceRoot.files).toBeUndefined()
+  })
+
+  it('refuses to overwrite a custom setup workflow', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-setup-custom-'))
+    tempDirs.push(root)
+    const packageJsonPath = join(root, 'package.json')
+    writeJson(packageJsonPath, { name: 'pkg', version: '1.0.0' })
+    const originalPackage = readFileSync(packageJsonPath, 'utf8')
+    const workflowPath = join(root, '.github', 'workflows', 'check-skills.yml')
+    mkdirSync(dirname(workflowPath), { recursive: true })
+    writeFileSync(workflowPath, 'name: Custom workflow\n')
+    process.chdir(root)
+
+    const exitCode = await main(['setup', '--write'])
+
+    expect(exitCode).not.toBe(0)
+    expect(readFileSync(workflowPath, 'utf8')).toBe('name: Custom workflow\n')
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(originalPackage)
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+      'will not overwrite it',
+    )
   })
 
   it('copies github workflow templates', async () => {

@@ -7,7 +7,9 @@
 # Triggers: pull requests touching skills/artifacts, new release published, or
 # manual workflow_dispatch.
 #
-# intent-workflow-version: 3
+# intent-workflow-version: 4
+# intent-workflow-managed: true
+# intent-workflow-content-sha256: {{WORKFLOW_CONTENT_SHA256}}
 #
 # Template variables (replaced by `intent setup`):
 #   {{PACKAGE_LABEL}} — e.g. @tanstack/query or my-workspace workspace

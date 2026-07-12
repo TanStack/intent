@@ -10,9 +10,11 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  planSetupWorkflow,
   runEditPackageJson,
   runEditPackageJsonAll,
   runSetupGithubActions,
+  writeSetupWorkflowPlan,
 } from '../src/setup/index.js'
 import type {
   EditPackageJsonResult,
@@ -43,7 +45,9 @@ beforeEach(() => {
     join(metaDir, 'templates', 'workflows', 'check-skills.yml'),
     [
       'label: {{PACKAGE_LABEL}}',
-      '# intent-workflow-version: 3',
+      '# intent-workflow-managed: true',
+      '# intent-workflow-content-sha256: {{WORKFLOW_CONTENT_SHA256}}',
+      '# intent-workflow-version: 4',
       'install: npm install -g @tanstack/intent',
       'validate: intent validate --github-summary',
       'review: intent stale --github-review --package-label "{{PACKAGE_LABEL}}"',
@@ -243,6 +247,57 @@ describe('runEditPackageJson', () => {
   })
 })
 
+describe('planSetupWorkflow', () => {
+  it('plans a missing workflow and recognizes it after writing', () => {
+    writePkg({ name: '@tanstack/query' })
+
+    const missing = planSetupWorkflow(root, metaDir)
+
+    expect(missing.status).toBe('missing')
+    expect(missing.content).toMatch(
+      /intent-workflow-content-sha256: [a-f0-9]{64}/,
+    )
+
+    writeSetupWorkflowPlan(missing)
+
+    expect(planSetupWorkflow(root, metaDir).status).toBe('current')
+  })
+
+  it('recognizes an untouched older managed workflow as stale', () => {
+    writePkg({ name: '@tanstack/query' })
+    const templatePath = join(
+      metaDir,
+      'templates',
+      'workflows',
+      'check-skills.yml',
+    )
+    const currentTemplate = readFileSync(templatePath, 'utf8')
+    writeFileSync(
+      templatePath,
+      currentTemplate.replace(
+        'intent-workflow-version: 4',
+        'intent-workflow-version: 3',
+      ),
+    )
+    writeSetupWorkflowPlan(planSetupWorkflow(root, metaDir))
+    writeFileSync(templatePath, currentTemplate)
+
+    expect(planSetupWorkflow(root, metaDir).status).toBe('stale')
+  })
+
+  it('treats modified and unmarked workflows as conflicts', () => {
+    writePkg({ name: '@tanstack/query' })
+    const plan = planSetupWorkflow(root, metaDir)
+    writeSetupWorkflowPlan(plan)
+    writeFileSync(plan.workflowPath, `${plan.content}\n# custom change\n`)
+
+    expect(planSetupWorkflow(root, metaDir).status).toBe('conflict')
+
+    writeFileSync(plan.workflowPath, 'name: Custom workflow\n')
+    expect(planSetupWorkflow(root, metaDir).status).toBe('conflict')
+  })
+})
+
 describe('runSetupGithubActions', () => {
   it('copies workflow templates with variable substitution', () => {
     writePkg({
@@ -263,7 +318,7 @@ describe('runSetupGithubActions', () => {
       'utf8',
     )
     expect(checkContent).toContain('label: @tanstack/query')
-    expect(checkContent).toContain('# intent-workflow-version: 3')
+    expect(checkContent).toContain('# intent-workflow-version: 4')
     expect(checkContent).toContain('install: npm install -g @tanstack/intent')
     expect(checkContent).toContain('validate: intent validate --github-summary')
     expect(checkContent).toContain(

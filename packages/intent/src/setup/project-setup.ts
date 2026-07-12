@@ -5,7 +5,8 @@ import {
   readdirSync,
   writeFileSync,
 } from 'node:fs'
-import { basename, join, relative } from 'node:path'
+import { createHash } from 'node:crypto'
+import { basename, dirname, join, relative } from 'node:path'
 import { resolveProjectContext } from '../core/project-context.js'
 import {
   findPackagesWithSkills,
@@ -39,6 +40,15 @@ export interface SetupGithubActionsResult {
   skipped: Array<string>
 }
 
+export type SetupWorkflowStatus = 'conflict' | 'current' | 'missing' | 'stale'
+
+export interface SetupWorkflowPlan {
+  workflowPath: string
+  content: string
+  issue?: 'template-missing'
+  status: SetupWorkflowStatus
+}
+
 export interface MonorepoResult<T> {
   package: string
   result: T
@@ -53,6 +63,10 @@ interface TemplateVars {
   SRC_PATH: string
   WATCH_PATHS: string
 }
+
+const workflowHashPlaceholder = '{{WORKFLOW_CONTENT_SHA256}}'
+const workflowHashPattern =
+  /^(# intent-workflow-content-sha256: )([a-f0-9]{64})$/m
 
 function isGenericWorkspaceName(name: string, root: string): boolean {
   const normalized = name.trim().toLowerCase()
@@ -250,6 +264,35 @@ function applyVars(content: string, vars: TemplateVars): string {
     .replace(/\{\{WATCH_PATHS\}\}/g, vars.WATCH_PATHS)
 }
 
+function stampManagedWorkflow(content: string): string {
+  if (!content.includes(workflowHashPlaceholder)) return content
+  const hash = createHash('sha256').update(content).digest('hex')
+  return content.replace(workflowHashPlaceholder, hash)
+}
+
+function isUnmodifiedManagedWorkflow(content: string): boolean {
+  if (!content.includes('# intent-workflow-managed: true')) return false
+  const match = content.match(workflowHashPattern)
+  const declaredHash = match?.[2]
+  if (!declaredHash) return false
+  const normalized = content.replace(
+    workflowHashPattern,
+    `$1${workflowHashPlaceholder}`,
+  )
+  return createHash('sha256').update(normalized).digest('hex') === declaredHash
+}
+
+function renderTemplate(content: string, vars: TemplateVars): string {
+  let rendered = content
+  if (vars.WATCH_PATHS) {
+    rendered = rendered.replace(
+      /\s+- '?\{\{DOCS_PATH\}\}'?\n\s+- '?\{\{SRC_PATH\}\}'?/,
+      vars.WATCH_PATHS,
+    )
+  }
+  return stampManagedWorkflow(applyVars(rendered, vars))
+}
+
 // ---------------------------------------------------------------------------
 // Copy helpers
 // ---------------------------------------------------------------------------
@@ -275,19 +318,65 @@ function copyTemplates(
       continue
     }
 
-    let content = readFileSync(srcPath, 'utf8')
-    if (vars.WATCH_PATHS) {
-      content = content.replace(
-        /\s+- '?\{\{DOCS_PATH\}\}'?\n\s+- '?\{\{SRC_PATH\}\}'?/,
-        vars.WATCH_PATHS,
-      )
-    }
-    const substituted = applyVars(content, vars)
+    const content = readFileSync(srcPath, 'utf8')
+    const substituted = renderTemplate(content, vars)
     writeFileSync(destPath, substituted)
     copied.push(destPath)
   }
 
   return { copied, skipped }
+}
+
+export function planSetupWorkflow(
+  root: string,
+  metaDir: string,
+): SetupWorkflowPlan {
+  const workspaceRoot = findWorkspaceRoot(root) ?? root
+  const packageDirs = findPackagesWithSkills(workspaceRoot)
+  const vars = detectVars(
+    workspaceRoot,
+    packageDirs.length > 0 ? packageDirs : undefined,
+  )
+  const templatePath = join(
+    metaDir,
+    'templates',
+    'workflows',
+    'check-skills.yml',
+  )
+  const workflowPath = join(
+    workspaceRoot,
+    '.github',
+    'workflows',
+    'check-skills.yml',
+  )
+  if (!existsSync(templatePath)) {
+    return {
+      workflowPath,
+      content: '',
+      issue: 'template-missing',
+      status: 'conflict',
+    }
+  }
+
+  const content = renderTemplate(readFileSync(templatePath, 'utf8'), vars)
+  if (!existsSync(workflowPath)) {
+    return { workflowPath, content, status: 'missing' }
+  }
+
+  const existing = readFileSync(workflowPath, 'utf8')
+  if (existing === content) {
+    return { workflowPath, content, status: 'current' }
+  }
+  return {
+    workflowPath,
+    content,
+    status: isUnmodifiedManagedWorkflow(existing) ? 'stale' : 'conflict',
+  }
+}
+
+export function writeSetupWorkflowPlan(plan: SetupWorkflowPlan): void {
+  mkdirSync(dirname(plan.workflowPath), { recursive: true })
+  writeFileSync(plan.workflowPath, plan.content)
 }
 
 // ---------------------------------------------------------------------------

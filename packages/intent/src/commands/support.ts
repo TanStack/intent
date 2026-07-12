@@ -26,7 +26,7 @@ export interface StaleTargetResult {
   workflowAdvisories: Array<string>
 }
 
-export const INTENT_CHECK_SKILLS_WORKFLOW_VERSION = 3
+export const INTENT_CHECK_SKILLS_WORKFLOW_VERSION = 4
 
 export function getMetaDir(): string {
   return findMetaDir(dirname(fileURLToPath(import.meta.url)))
@@ -85,7 +85,7 @@ export function getCheckSkillsWorkflowAdvisories(root: string): Array<string> {
   if (installedVersion >= INTENT_CHECK_SKILLS_WORKFLOW_VERSION) return []
 
   return [
-    `Intent workflow update available: run \`npx @tanstack/intent@latest setup\` to refresh ${relative(process.cwd(), workflowPath) || workflowPath}.`,
+    `Intent workflow update available: run \`intent setup --dry-run\`, then \`intent setup --write\` to refresh ${relative(process.cwd(), workflowPath) || workflowPath}.`,
   ]
 }
 

@@ -61,14 +61,14 @@ describe('runStaleCommand', () => {
       Promise.resolve({
         reports: [],
         workflowAdvisories: [
-          'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
+          'Intent workflow update available: run `intent setup --dry-run`, then `intent setup --write`.',
         ],
       }),
     )
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(output).toContain('Intent workflow update available')
-    expect(output).toContain('npx @tanstack/intent@latest setup')
+    expect(output).toContain('intent setup --dry-run')
     expect(output).toContain('No intent-enabled packages found.')
   })
 
@@ -233,7 +233,7 @@ describe('getCheckSkillsWorkflowAdvisories', () => {
     )
 
     expect(getCheckSkillsWorkflowAdvisories(root)).toEqual([
-      expect.stringContaining('npx @tanstack/intent@latest setup'),
+      expect.stringContaining('intent setup --dry-run'),
     ])
   })
 
