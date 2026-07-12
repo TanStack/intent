@@ -47,10 +47,9 @@ beforeEach(() => {
       'label: {{PACKAGE_LABEL}}',
       '# intent-workflow-managed: true',
       '# intent-workflow-content-sha256: {{WORKFLOW_CONTENT_SHA256}}',
-      '# intent-workflow-version: 4',
-      'install: npm install -g @tanstack/intent',
-      'validate: intent validate --github-summary',
-      'review: intent stale --github-review --package-label "{{PACKAGE_LABEL}}"',
+      '# intent-workflow-version: 5',
+      'validate: npm exec --yes --ignore-scripts --package=@tanstack/intent@{{INTENT_VERSION}} -- intent skills validate --release --github-summary',
+      'review: npm exec --yes --ignore-scripts --package=@tanstack/intent@{{INTENT_VERSION}} -- intent stale --github-review --package-label "{{PACKAGE_LABEL}}"',
       'has_review=true',
       'gh pr list --head "$BRANCH"',
       'gh pr edit "$PR_URL" --body-file pr-body.md',
@@ -275,8 +274,8 @@ describe('planSetupWorkflow', () => {
     writeFileSync(
       templatePath,
       currentTemplate.replace(
+        'intent-workflow-version: 5',
         'intent-workflow-version: 4',
-        'intent-workflow-version: 3',
       ),
     )
     writeSetupWorkflowPlan(planSetupWorkflow(root, metaDir))
@@ -318,11 +317,12 @@ describe('runSetupGithubActions', () => {
       'utf8',
     )
     expect(checkContent).toContain('label: @tanstack/query')
-    expect(checkContent).toContain('# intent-workflow-version: 4')
-    expect(checkContent).toContain('install: npm install -g @tanstack/intent')
-    expect(checkContent).toContain('validate: intent validate --github-summary')
+    expect(checkContent).toContain('# intent-workflow-version: 5')
+    expect(checkContent).toContain('@tanstack/intent@0.0.0')
+    expect(checkContent).toContain('--ignore-scripts')
+    expect(checkContent).toContain('intent skills validate --release')
     expect(checkContent).toContain(
-      'review: intent stale --github-review --package-label "@tanstack/query"',
+      'intent stale --github-review --package-label "@tanstack/query"',
     )
     expect(checkContent).toContain('has_review=true')
     expect(checkContent).toContain('gh pr list --head "$BRANCH"')
@@ -374,9 +374,22 @@ describe('runSetupGithubActions', () => {
     )
 
     expect(checkContent).toContain('pull_request:')
-    expect(checkContent).toContain('intent validate --github-summary')
     expect(checkContent).toContain(
-      'intent stale --github-review --package-label "{{PACKAGE_LABEL}}"',
+      'npm exec --yes --ignore-scripts --package=@tanstack/intent@{{INTENT_VERSION}} -- intent skills generate-manifest --check',
+    )
+    expect(checkContent).toContain(
+      'npm exec --yes --ignore-scripts --package=@tanstack/intent@{{INTENT_VERSION}} -- intent skills validate --release --github-summary',
+    )
+    expect(checkContent).toContain(
+      'npm exec --yes --ignore-scripts --package=@tanstack/intent@{{INTENT_VERSION}} -- intent stale --github-review --package-label "{{PACKAGE_LABEL}}"',
+    )
+    expect(checkContent).not.toContain('npm install -g')
+    expect(checkContent).not.toContain('@tanstack/intent@latest')
+    expect(checkContent).toMatch(
+      /validate:\n(?:.|\n)*?permissions:\n {6}contents: read/,
+    )
+    expect(checkContent).toMatch(
+      /review:\n(?:.|\n)*?permissions:\n {6}contents: write\n {6}pull-requests: write/,
     )
     expect(checkContent).not.toContain('-type d -name skills -print')
     expect(checkContent).not.toContain('packages/*/skills')
@@ -468,7 +481,9 @@ describe('runSetupGithubActions', () => {
       'utf8',
     )
     expect(checkContent).toContain('label: @tanstack/router')
-    expect(checkContent).toContain('npm install -g @tanstack/intent')
+    expect(checkContent).toContain(
+      'npm exec --yes --ignore-scripts --package=@tanstack/intent@0.0.0',
+    )
     expect(checkContent).toContain(
       'intent stale --github-review --package-label "@tanstack/router"',
     )

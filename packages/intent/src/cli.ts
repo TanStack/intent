@@ -371,11 +371,17 @@ function createCli(): CAC {
     .example('setup --write')
     .example('setup --check')
     .action(async (options: SetupCommandOptions) => {
-      const [{ getMetaDir }, { runSetupCommand }] = await Promise.all([
-        import('./commands/support.js'),
-        import('./commands/setup/command.js'),
-      ])
-      await runSetupCommand(process.cwd(), getMetaDir(), options)
+      const [{ getIntentPackageVersion, getMetaDir }, { runSetupCommand }] =
+        await Promise.all([
+          import('./commands/support.js'),
+          import('./commands/setup/command.js'),
+        ])
+      await runSetupCommand(
+        process.cwd(),
+        getMetaDir(),
+        getIntentPackageVersion(),
+        options,
+      )
     })
 
   cli

@@ -7,12 +7,13 @@
 # Triggers: pull requests touching skills/artifacts, new release published, or
 # manual workflow_dispatch.
 #
-# intent-workflow-version: 4
+# intent-workflow-version: 5
 # intent-workflow-managed: true
 # intent-workflow-content-sha256: {{WORKFLOW_CONTENT_SHA256}}
 #
 # Template variables (replaced by `intent setup`):
 #   {{PACKAGE_LABEL}} — e.g. @tanstack/query or my-workspace workspace
+#   {{INTENT_VERSION}} — exact compatibility-bridge CLI version
 
 name: Check Skills
 
@@ -27,15 +28,13 @@ on:
     types: [published]
   workflow_dispatch: {}
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   validate:
     name: Validate intent skills
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,16 +44,19 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install intent
-        run: npm install -g @tanstack/intent
+      - name: Check skill manifest
+        run: npm exec --yes --ignore-scripts --package=@tanstack/intent@{{INTENT_VERSION}} -- intent skills generate-manifest --check
 
       - name: Validate skills
-        run: intent validate --github-summary
+        run: npm exec --yes --ignore-scripts --package=@tanstack/intent@{{INTENT_VERSION}} -- intent skills validate --release --github-summary
 
   review:
     name: Check intent skill coverage
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,13 +68,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install intent
-        run: npm install -g @tanstack/intent
-
       - name: Check skills
         id: stale
         run: |
-          intent stale --github-review --package-label "{{PACKAGE_LABEL}}"
+          npm exec --yes --ignore-scripts --package=@tanstack/intent@{{INTENT_VERSION}} -- intent stale --github-review --package-label "{{PACKAGE_LABEL}}"
 
       - name: Open or update review PR
         if: steps.stale.outputs.has_review == 'true'

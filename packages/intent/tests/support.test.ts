@@ -26,7 +26,7 @@ function seedMeta(pkgDir: string): string {
   mkdirSync(metaDir, { recursive: true })
   writeFileSync(
     join(metaDir, 'check-skills.yml'),
-    '# intent-workflow-version: 4\n',
+    '# intent-workflow-version: 5\n',
   )
   return join(pkgDir, 'meta')
 }

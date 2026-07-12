@@ -45,6 +45,7 @@ function workflowStatusMessage(root: string, plan: SetupWorkflowPlan): string {
 export async function runSetupCommand(
   root: string,
   metaDir: string,
+  intentVersion: string,
   options: SetupCommandOptions,
 ): Promise<void> {
   const modes = [options.dryRun, options.write, options.check].filter(Boolean)
@@ -68,7 +69,7 @@ export async function runSetupCommand(
   } = await import('../../setup/index.js')
   const plans = flattenPlans(planEditPackageJsonAll(root))
   if (plans.length === 0) fail('No package.json was found for Intent setup.')
-  const workflowPlan = planSetupWorkflow(root, metaDir)
+  const workflowPlan = planSetupWorkflow(root, metaDir, intentVersion)
 
   const pending = plans.filter((plan) => plan.added.length > 0)
   if (options.check) {

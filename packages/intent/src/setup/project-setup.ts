@@ -55,6 +55,7 @@ export interface MonorepoResult<T> {
 }
 
 interface TemplateVars {
+  INTENT_VERSION: string
   PACKAGE_NAME: string
   PACKAGE_LABEL: string
   PAYLOAD_PACKAGE: string
@@ -120,6 +121,11 @@ function readPackageJson(root: string): Record<string, unknown> {
     }
     return {}
   }
+}
+
+function readBundledIntentVersion(metaDir: string): string {
+  const pkgJson = readPackageJson(dirname(metaDir))
+  return typeof pkgJson.version === 'string' ? pkgJson.version : '0.0.0'
 }
 
 function detectRepo(
@@ -199,7 +205,11 @@ function buildWatchPaths(root: string, packageDirs: Array<string>): string {
     .join('\n')
 }
 
-function detectVars(root: string, packageDirs?: Array<string>): TemplateVars {
+function detectVars(
+  root: string,
+  packageDirs?: Array<string>,
+  intentVersion = '0.0.0',
+): TemplateVars {
   const pkgJson = readPackageJson(root)
   const rawName = typeof pkgJson.name === 'string' ? pkgJson.name : 'unknown'
   const docs =
@@ -239,6 +249,7 @@ function detectVars(root: string, packageDirs?: Array<string>): TemplateVars {
         .join('\n')
 
   return {
+    INTENT_VERSION: intentVersion,
     PACKAGE_NAME: packageName,
     PACKAGE_LABEL: packageName,
     PAYLOAD_PACKAGE: packageName,
@@ -255,6 +266,7 @@ function detectVars(root: string, packageDirs?: Array<string>): TemplateVars {
 
 function applyVars(content: string, vars: TemplateVars): string {
   return content
+    .replace(/\{\{INTENT_VERSION\}\}/g, vars.INTENT_VERSION)
     .replace(/\{\{PACKAGE_NAME\}\}/g, vars.PACKAGE_NAME)
     .replace(/\{\{PACKAGE_LABEL\}\}/g, vars.PACKAGE_LABEL)
     .replace(/\{\{PAYLOAD_PACKAGE\}\}/g, vars.PAYLOAD_PACKAGE)
@@ -330,12 +342,14 @@ function copyTemplates(
 export function planSetupWorkflow(
   root: string,
   metaDir: string,
+  intentVersion = readBundledIntentVersion(metaDir),
 ): SetupWorkflowPlan {
   const workspaceRoot = findWorkspaceRoot(root) ?? root
   const packageDirs = findPackagesWithSkills(workspaceRoot)
   const vars = detectVars(
     workspaceRoot,
     packageDirs.length > 0 ? packageDirs : undefined,
+    intentVersion,
   )
   const templatePath = join(
     metaDir,
@@ -523,12 +537,14 @@ export function planEditPackageJsonAll(
 export function runSetupGithubActions(
   root: string,
   metaDir: string,
+  intentVersion = readBundledIntentVersion(metaDir),
 ): SetupGithubActionsResult {
   const workspaceRoot = findWorkspaceRoot(root) ?? root
   const packageDirs = findPackagesWithSkills(workspaceRoot)
   const vars = detectVars(
     workspaceRoot,
     packageDirs.length > 0 ? packageDirs : undefined,
+    intentVersion,
   )
   const result: SetupGithubActionsResult = { workflows: [], skipped: [] }
 

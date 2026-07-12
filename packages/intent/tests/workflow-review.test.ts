@@ -233,7 +233,11 @@ describe('workflow review helpers', () => {
       'utf8',
     )
 
-    expect(template).toContain('intent validate --github-summary')
+    expect(template).toContain(
+      'intent skills validate --release --github-summary',
+    )
+    expect(template).toContain('@tanstack/intent@{{INTENT_VERSION}}')
+    expect(template).not.toContain('@tanstack/intent@latest')
     expect(template).toContain(
       'intent stale --github-review --package-label "{{PACKAGE_LABEL}}"',
     )

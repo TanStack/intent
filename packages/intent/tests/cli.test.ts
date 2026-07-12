@@ -776,6 +776,12 @@ describe('cli commands', () => {
     expect(pkg.files).toEqual(['dist', 'skills', '!skills/_artifacts'])
     expect(workflow).toContain('# intent-workflow-managed: true')
     expect(workflow).toMatch(/intent-workflow-content-sha256: [a-f0-9]{64}/)
+    expect(workflow).toMatch(
+      /--package=@tanstack\/intent@\d+\.\d+\.\d+[^ ]* -- intent/,
+    )
+    expect(workflow).not.toContain('@tanstack/intent@latest')
+    expect(workflow).not.toContain('npm install -g')
+    expect(workflow).toMatch(/validate:\n(?:.|\n)*?contents: read/)
 
     logSpy.mockClear()
     const secondWriteExitCode = await main(['setup', '--write'])
