@@ -11,6 +11,7 @@ import type { InstallCommandOptions } from './commands/install/command.js'
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
 import type { SkillsApproveCommandOptions } from './commands/skills/approve.js'
+import type { SkillsGenerateManifestCommandOptions } from './commands/skills/generate-manifest.js'
 import type { SkillsScanCommandOptions } from './commands/skills/scan.js'
 import type { SkillsUpdateCommandOptions } from './commands/skills/update.js'
 import type { StaleCommandOptions } from './commands/stale.js'
@@ -214,10 +215,10 @@ function createCli(): CAC {
   cli
     .command(
       'skills [action] [source]',
-      'Scan, diff, approve, or update approved skills',
+      'Scan, diff, approve, update, or generate manifests for skills',
     )
     .usage(
-      'skills <scan|diff|approve|update> [source] [--json] [--all] [--yes] [--frozen] [--no-frozen]',
+      'skills <scan|diff|approve|update|generate-manifest> [source] [--json] [--all] [--yes] [--check] [--write] [--frozen] [--no-frozen]',
     )
     .option('--json', 'Output JSON')
     .option(
@@ -228,6 +229,8 @@ function createCli(): CAC {
       '--yes',
       'With `approve`/`update`, accept trust-bearing changes non-interactively',
     )
+    .option('--check', 'With `generate-manifest`, verify without writing')
+    .option('--write', 'With `generate-manifest`, write reviewed changes')
     .option(
       '--frozen',
       'Force frozen mode (fail if intent.lock is missing or stale)',
@@ -243,13 +246,16 @@ function createCli(): CAC {
     .example('skills approve --yes')
     .example('skills approve npm:@tanstack/query')
     .example('skills update --all')
+    .example('skills generate-manifest --check')
+    .example('skills generate-manifest --write')
     .action(
       async (
         action: string | undefined,
         source: string | undefined,
         options: SkillsScanCommandOptions &
           SkillsApproveCommandOptions &
-          SkillsUpdateCommandOptions,
+          SkillsUpdateCommandOptions &
+          SkillsGenerateManifestCommandOptions,
       ) => {
         const { scanPolicedIntentsOrFail, frozenOptionsFromGlobalFlags } =
           await import('./commands/support.js')
@@ -297,7 +303,19 @@ function createCli(): CAC {
           return
         }
 
-        fail('Unknown skills action: expected scan, diff, approve, or update.')
+        if (action === 'generate-manifest') {
+          const { runSkillsGenerateManifestCommand } =
+            await import('./commands/skills/generate-manifest.js')
+          await runSkillsGenerateManifestCommand(
+            { ...options, ...frozenOptions },
+            scanPolicedIntentsOrFail,
+          )
+          return
+        }
+
+        fail(
+          'Unknown skills action: expected scan, diff, approve, update, or generate-manifest.',
+        )
       },
     )
 

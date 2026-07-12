@@ -228,6 +228,9 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('--no-frozen')
+    expect(output).toContain('generate-manifest')
+    expect(output).toContain('--check')
+    expect(output).toContain('--write')
     expect(output).not.toContain(
       '--no-frozen  Force interactive mode, overriding INTENT_FROZEN/CI auto-detect (default: true)',
     )
@@ -3801,6 +3804,18 @@ describe('intent skills', () => {
     expect(exitCode).not.toBe(0)
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining('Unknown skills action'),
+    )
+  })
+
+  it('dispatches generate-manifest with explicit mode validation', async () => {
+    const root = makeSkillsProject()
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'generate-manifest'])
+
+    expect(exitCode).not.toBe(0)
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('either --check or --write'),
     )
   })
 })
