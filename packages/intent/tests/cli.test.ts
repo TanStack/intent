@@ -901,9 +901,9 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Hidden skill sources:')
-    expect(output).toContain('get-tsconfig')
+    expect(output).toContain('npm:get-tsconfig')
     expect(output).toContain('1 skill')
-    expect(stderr).toContain('get-tsconfig')
+    expect(stderr).toContain('npm:get-tsconfig')
     expect(stderr).toContain('Add to opt in')
   })
 

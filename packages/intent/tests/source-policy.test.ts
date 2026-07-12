@@ -66,7 +66,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
     )
     expect(names(result.packages)).toEqual(['@scope/a'])
     expect(result.notices).toEqual([
-      '1 discovered package ships skills but is not listed in intent.skills: @scope/b (provenance unknown). Add to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: npm:@scope/b (provenance unknown). Add to opt in.',
     ])
   })
 
@@ -85,7 +85,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
     )
 
     expect(result.notices).toEqual([
-      '1 discovered package ships skills but is not listed in intent.skills: @scope/b (via app -> @scope/parent -> @scope/b). Add to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: npm:@scope/b (via app -> @scope/parent -> @scope/b). Add to opt in.',
     ])
   })
 
@@ -101,7 +101,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
       { config: config(['@scope/a']), excludeMatchers: [] },
     )
     expect(result.notices).toEqual([
-      '2 discovered packages ship skills but are not listed in intent.skills: @scope/b (provenance unknown), @scope/c (provenance unknown). Add to opt in.',
+      '2 discovered packages ship skills but are not listed in intent.skills: npm:@scope/b (provenance unknown), npm:@scope/c (provenance unknown). Add to opt in.',
     ])
   })
 
@@ -123,7 +123,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
     )
     expect(names(result.packages)).toEqual([])
     expect(result.notices).toEqual([
-      '1 discovered package ships skills but is not listed in intent.skills: foo (provenance unknown). Add to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: npm:foo (provenance unknown). Add to opt in.',
       '"workspace:foo" is declared in intent.skills but was not discovered.',
     ])
   })
@@ -137,6 +137,35 @@ describe('applySourcePolicy — allowlist matrix', () => {
     expect(result.notices).toEqual([])
   })
 
+  it('distinguishes hidden npm and workspace sources with the same name', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [
+          pkg('@scope/listed', ['listed']),
+          pkg('foo', ['npm-skill'], 'npm'),
+          pkg('foo', ['workspace-skill'], 'workspace'),
+        ],
+      },
+      { config: config(['@scope/listed']), excludeMatchers: [] },
+    )
+
+    expect(result.hiddenSources).toEqual([
+      {
+        kind: 'npm',
+        name: 'foo',
+        skillCount: 1,
+      },
+      {
+        kind: 'workspace',
+        name: 'foo',
+        skillCount: 1,
+      },
+    ])
+    expect(result.notices).toEqual([
+      '2 discovered packages ship skills but are not listed in intent.skills: npm:foo (provenance unknown), workspace:foo (provenance unknown). Add to opt in.',
+    ])
+  })
+
   it('does not trust a discovered dependency just because its dependent is listed', () => {
     const result = applySourcePolicy(
       { packages: [pkg('@scope/listed', ['x']), pkg('@scope/dep', ['y'])] },
@@ -144,7 +173,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
     )
     expect(names(result.packages)).toEqual(['@scope/listed'])
     expect(result.notices).toEqual([
-      '1 discovered package ships skills but is not listed in intent.skills: @scope/dep (provenance unknown). Add to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: npm:@scope/dep (provenance unknown). Add to opt in.',
     ])
   })
 
@@ -157,7 +186,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
       },
     )
     expect(result.notices).toEqual([
-      '1 discovered package ships skills but is not listed in intent.skills: @scope/unlisted (provenance unknown). Add to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: npm:@scope/unlisted (provenance unknown). Add to opt in.',
       '"@scope/missing" is declared in intent.skills but was not discovered.',
     ])
   })

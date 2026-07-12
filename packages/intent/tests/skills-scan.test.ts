@@ -96,11 +96,12 @@ describe('runSkillsScanCommand', () => {
             hiddenSourceCount: 2,
             hiddenSources: [
               {
+                kind: 'workspace',
                 name: 'leaf',
                 skillCount: 1,
                 provenance: [['app', 'parent', 'leaf']],
               },
-              { name: 'unknown', skillCount: 1 },
+              { kind: 'npm', name: 'unknown', skillCount: 1 },
             ],
           }),
         ),
@@ -109,8 +110,8 @@ describe('runSkillsScanCommand', () => {
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(output).toContain('2 discovered skill-bearing source(s)')
-    expect(output).toContain('leaf (via app -> parent -> leaf)')
-    expect(output).toContain('unknown (provenance unknown)')
+    expect(output).toContain('workspace:leaf (via app -> parent -> leaf)')
+    expect(output).toContain('npm:unknown (provenance unknown)')
     expect(output).toContain('intent.lock is up to date')
   })
 
@@ -216,6 +217,7 @@ describe('runSkillsScanCommand', () => {
               hiddenSourceCount: 1,
               hiddenSources: [
                 {
+                  kind: 'workspace',
                   name: 'leaf',
                   skillCount: 1,
                   provenance: [['app', 'parent', 'leaf']],
@@ -227,7 +229,7 @@ describe('runSkillsScanCommand', () => {
       ),
     ).rejects.toMatchObject({
       message: expect.stringMatching(
-        /unlisted skill-bearing source.*leaf \(via app -> parent -> leaf\)/,
+        /unlisted skill-bearing source.*workspace:leaf \(via app -> parent -> leaf\)/,
       ),
       exitCode: 3,
     })

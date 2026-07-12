@@ -110,14 +110,16 @@ export function formatHiddenSourceDetails(
   if (hiddenSources.length === 0) return ''
 
   const details = hiddenSources
-    .toSorted((a, b) => a.name.localeCompare(b.name))
+    .toSorted((a, b) =>
+      `${a.kind}:${a.name}`.localeCompare(`${b.kind}:${b.name}`),
+    )
     .map((source) => {
       const provenance = source.provenance
         ?.map((path) => path.join(' -> '))
         .join('; ')
       return provenance
-        ? `${source.name} (via ${provenance})`
-        : `${source.name} (provenance unknown)`
+        ? `${source.kind}:${source.name} (via ${provenance})`
+        : `${source.kind}:${source.name} (provenance unknown)`
     })
     .join(', ')
 

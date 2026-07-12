@@ -121,7 +121,11 @@ function formatUnlistedNotice(
   hiddenSources: Array<IntentHiddenSourceSummary>,
   audience: IntentAudience,
 ): string {
-  const sorted = hiddenSources.toSorted((a, b) => a.name.localeCompare(b.name))
+  const sorted = hiddenSources.toSorted((a, b) =>
+    sourceIdentityKey({ kind: a.kind, id: a.name }).localeCompare(
+      sourceIdentityKey({ kind: b.kind, id: b.name }),
+    ),
+  )
   const sourceCount = sorted.length
   const skillCount = sorted.reduce((sum, source) => sum + source.skillCount, 0)
 
@@ -136,8 +140,8 @@ function formatUnlistedNotice(
         ?.map((path) => path.join(' -> '))
         .join('; ')
       return provenance
-        ? `${source.name} (via ${provenance})`
-        : `${source.name} (provenance unknown)`
+        ? `${source.kind}:${source.name} (via ${provenance})`
+        : `${source.kind}:${source.name} (provenance unknown)`
     })
     .join(', ')
   return `${sourceCount} discovered ${noun} skills but ${sourceCount === 1 ? 'is' : 'are'} not listed in intent.skills: ${sources}. Add to opt in.`
@@ -174,6 +178,7 @@ export function applySourcePolicy(
     if (!isSourcePermitted(config, pkg.name, pkg.kind)) {
       if (config.mode === 'explicit' || config.mode === 'empty') {
         hiddenSources.push({
+          kind: pkg.kind,
           name: pkg.name,
           skillCount: pkg.skills.length,
           ...(pkg.provenance ? { provenance: pkg.provenance } : {}),

@@ -270,10 +270,10 @@ describe('listIntentSkills', () => {
     expect(result.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
     expect(result.hiddenSourceCount).toBe(1)
     expect(result.hiddenSources).toEqual([
-      { name: '@tanstack/unlisted', skillCount: 1 },
+      { kind: 'npm', name: '@tanstack/unlisted', skillCount: 1 },
     ])
     expect(result.notices).toEqual([
-      '1 discovered package ships skills but is not listed in intent.skills: @tanstack/unlisted (provenance unknown). Add to opt in.',
+      '1 discovered package ships skills but is not listed in intent.skills: npm:@tanstack/unlisted (provenance unknown). Add to opt in.',
     ])
   })
 

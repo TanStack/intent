@@ -18,6 +18,7 @@ export interface IntentCoreOptions {
 export type IntentAudience = 'agent' | 'human'
 
 export interface IntentHiddenSourceSummary {
+  kind: IntentPackage['kind']
   name: string
   skillCount: number
   provenance?: Array<Array<string>>
