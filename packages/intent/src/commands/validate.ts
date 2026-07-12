@@ -13,6 +13,7 @@ import {
   writeIntentManifest,
 } from '../core/manifest.js'
 import { resolveProjectContext } from '../core/project-context.js'
+import { findSkillSecretFindings } from '../core/secrets.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
 import { printWarnings } from './support.js'
 import type { ProjectContext } from '../core/project-context.js'
@@ -780,6 +781,16 @@ async function runValidateCommandInternal(
         errors.push({
           file: rel,
           message: `Exceeds 500 line limit (${lineCount} lines). Rewrite for conciseness: move API tables to references/, trim verbose examples, and remove content an agent already knows. Do not simply raise the limit.`,
+        })
+      }
+
+      const packageRoot = validateContext.packageRoot ?? skillsDir
+      for (const finding of findSkillSecretFindings(packageRoot, [
+        { path: filePath },
+      ])) {
+        errors.push({
+          file: relative(process.cwd(), join(packageRoot, finding.path)),
+          message: `${finding.patternName} literal-secret heuristic match; remove the literal value`,
         })
       }
     }

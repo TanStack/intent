@@ -7,6 +7,7 @@ import {
   writeIntentManifest,
 } from '../../core/manifest.js'
 import { resolveProjectContext } from '../../core/project-context.js'
+import { findSkillSecretFindings } from '../../core/secrets.js'
 import { findWorkspacePackages } from '../../setup/workspace-patterns.js'
 import { fail } from '../../shared/cli-error.js'
 import { isFrozenMode } from '../../shared/mode.js'
@@ -98,6 +99,16 @@ export async function runSkillsGenerateManifestCommand(
   }
 
   const results = scan.packages.map((pkg): GenerateManifestResult => {
+    const secretFindings = findSkillSecretFindings(
+      pkg.packageRoot,
+      pkg.skills,
+      scan.readFs,
+    )
+    if (secretFindings.length > 0) {
+      fail(
+        `Literal-secret heuristic matched skill content:\n${secretFindings.map((finding) => `  ${finding.path}: ${finding.patternName}`).join('\n')}\nRemove literal values before generating the manifest. This heuristic is incomplete and does not prove other content is secret-free.`,
+      )
+    }
     const manifestPath = join(pkg.packageRoot, 'skills', 'intent.manifest.json')
     const existing = readIntentManifest(manifestPath)
     const generated = generateManifest(

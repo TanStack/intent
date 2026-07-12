@@ -123,6 +123,24 @@ describe('runSkillsGenerateManifestCommand', () => {
     expect(logSpy.mock.calls.flat().join('\n')).toContain('up to date')
   })
 
+  it('refuses to write a manifest containing a literal secret', async () => {
+    const pkg = makePackage()
+    const referencePath = join(
+      pkg.packageRoot,
+      'skills',
+      'core',
+      'references',
+      'auth.md',
+    )
+    mkdirSync(dirname(referencePath), { recursive: true })
+    writeFileSync(referencePath, `token = "ghp_${'a'.repeat(20)}"`)
+
+    await expect(run(pkg, { write: true })).rejects.toThrow(
+      /references\/auth\.md.*github-token/,
+    )
+    expect(existsSync(manifestPath(pkg))).toBe(false)
+  })
+
   it('--write preserves authored declarations', async () => {
     const pkg = makePackage()
     const existing: IntentManifest = {

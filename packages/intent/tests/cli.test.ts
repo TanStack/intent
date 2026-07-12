@@ -2225,6 +2225,30 @@ describe('cli commands', () => {
     expect(readFileSync(skillPath, 'utf8')).toBe(original)
   })
 
+  it('rejects literal secrets in skill supporting files', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-secret-'))
+    tempDirs.push(root)
+    const skillDir = join(root, 'skills', 'core')
+    writeSkillMd(skillDir, {
+      name: 'core',
+      description: 'Core concepts',
+    })
+    const referencePath = join(skillDir, 'references', 'auth.md')
+    mkdirSync(dirname(referencePath), { recursive: true })
+    writeFileSync(referencePath, '-----BEGIN PRIVATE KEY-----')
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'validate'])
+
+    expect(exitCode).not.toBe(0)
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('references/auth.md: private-key-block'),
+    )
+    expect(errorSpy.mock.calls.flat().join('\n')).not.toContain(
+      '-----BEGIN PRIVATE KEY-----',
+    )
+  })
+
   it('keeps nested Intent skill names valid without Agent Skills spec warnings', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-nested-'))
     tempDirs.push(root)
