@@ -362,7 +362,17 @@ function createCli(): CAC {
       command.outputHelp()
     })
 
-  cli.help()
+  cli.help((sections) =>
+    sections.map((section) => ({
+      ...section,
+      // CAC always annotates negated flags as defaulting to true. Intent reads
+      // raw argv for this tri-state flag, so that generated suffix is false.
+      body: section.body.replace(
+        /^(\s*--no-frozen\b[^\n]*?) \(default: true\)$/m,
+        '$1',
+      ),
+    })),
+  )
 
   return cli
 }

@@ -222,6 +222,17 @@ describe('cli commands', () => {
     expect(output).toContain('--show-hidden')
   })
 
+  it('does not claim --no-frozen defaults to true in skills help', async () => {
+    const exitCode = await main(['skills', '--help'])
+    const output = getHelpOutput()
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('--no-frozen')
+    expect(output).not.toContain(
+      '--no-frozen  Force interactive mode, overriding INTENT_FROZEN/CI auto-detect (default: true)',
+    )
+  })
+
   it('prints the install prompt', async () => {
     const exitCode = await main(['install', '--print-prompt'])
     const output = String(logSpy.mock.calls[0]?.[0])
