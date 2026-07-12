@@ -7,12 +7,14 @@ import {
 } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { basename, dirname, join, relative } from 'node:path'
+import { applyEdits, modify } from 'jsonc-parser'
 import { resolveProjectContext } from '../core/project-context.js'
 import {
   findPackagesWithSkills,
   findWorkspaceRoot,
   readWorkspacePatterns,
 } from './workspace-patterns.js'
+import type { FormattingOptions } from 'jsonc-parser'
 
 export {
   findPackagesWithSkills,
@@ -68,6 +70,24 @@ interface TemplateVars {
 const workflowHashPlaceholder = '{{WORKFLOW_CONTENT_SHA256}}'
 const workflowHashPattern =
   /^(# intent-workflow-content-sha256: )([a-f0-9]{64})$/m
+
+function detectJsonFormatting(content: string): FormattingOptions {
+  const indentation = content.match(/\r?\n([ \t]+)"/)?.[1] ?? '  '
+  return {
+    eol: content.includes('\r\n') ? '\r\n' : '\n',
+    insertSpaces: !indentation.startsWith('\t'),
+    tabSize: indentation.startsWith('\t') ? 1 : indentation.length,
+  }
+}
+
+function setJsonValue(
+  content: string,
+  path: Array<string>,
+  value: unknown,
+  formattingOptions: FormattingOptions,
+): string {
+  return applyEdits(content, modify(content, path, value, { formattingOptions }))
+}
 
 function isGenericWorkspaceName(name: string, root: string): boolean {
   const normalized = name.trim().toLowerCase()
@@ -418,10 +438,6 @@ export function planEditPackageJson(root: string): EditPackageJsonPlan | null {
     return null
   }
 
-  // Detect indent size from existing file
-  const indentMatch = raw.match(/^(\s+)"/m)
-  const indentSize = indentMatch?.[1] ? indentMatch[1].length : 2
-
   // --- keywords array ---
   if (!Array.isArray(pkg.keywords)) {
     pkg.keywords = []
@@ -455,10 +471,19 @@ export function planEditPackageJson(root: string): EditPackageJsonPlan | null {
     }
   }
 
+  const formattingOptions = detectJsonFormatting(raw)
+  let content = raw
+  if (result.added.some((entry) => entry.startsWith('keywords:'))) {
+    content = setJsonValue(content, ['keywords'], keywords, formattingOptions)
+  }
+  if (result.added.some((entry) => entry.startsWith('files:'))) {
+    content = setJsonValue(content, ['files'], files, formattingOptions)
+  }
+
   return {
     ...result,
     packageJsonPath: pkgPath,
-    content: JSON.stringify(pkg, null, indentSize) + '\n',
+    content,
   }
 }
 

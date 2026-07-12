@@ -244,6 +244,29 @@ describe('runEditPackageJson', () => {
     expect(raw).toContain('    "name"')
     expect(raw).not.toMatch(/^ {2}"name"/m)
   })
+
+  it('preserves unrelated package.json bytes and CRLF line endings', () => {
+    const raw = [
+      '{',
+      '\t"name": "test-pkg",',
+      '\t"custom": { "keep" : [1,2] },',
+      '\t"files": ["dist"]',
+      '}',
+      '',
+    ].join('\r\n')
+    writeFileSync(join(root, 'package.json'), raw)
+
+    runEditPackageJson(root)
+
+    const updated = readFileSync(join(root, 'package.json'), 'utf8')
+    expect(updated).toContain('\t"custom": { "keep" : [1,2] },\r\n')
+    expect(updated.replaceAll('\r\n', '')).not.toContain('\n')
+    expect(JSON.parse(updated)).toMatchObject({
+      custom: { keep: [1, 2] },
+      files: ['dist', 'skills', '!skills/_artifacts'],
+      keywords: ['tanstack-intent'],
+    })
+  })
 })
 
 describe('planSetupWorkflow', () => {
