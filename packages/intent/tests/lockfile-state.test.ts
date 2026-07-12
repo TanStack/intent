@@ -141,6 +141,34 @@ describe('buildCurrentLockfileSources', () => {
     expect(entry!.capabilities).toEqual([])
   })
 
+  it('projects manifest declarations into deterministic lock state', () => {
+    const root = createRoot()
+    const firstSkillPath = writeSkill(root, 'first', 'first guidance')
+    const secondSkillPath = writeSkill(root, 'second', 'second guidance')
+    const pkg = createPackage({
+      name: '@acme/pkg',
+      kind: 'npm',
+      packageRoot: root,
+      skills: [
+        { name: 'first', path: firstSkillPath, description: 'first' },
+        { name: 'second', path: secondSkillPath, description: 'second' },
+      ],
+    })
+    const manifest = createManifest(pkg)
+    manifest.skills[0]!.declaredSecrets = ['Z_TOKEN', 'A_TOKEN']
+    manifest.skills[0]!.mcpTools = [{ name: 'zeta' }, { name: 'alpha' }]
+    manifest.skills[1]!.declaredSecrets = ['A_TOKEN']
+    manifest.skills[1]!.mcpTools = [
+      { name: 'alpha', description: 'duplicate declaration' },
+    ]
+    writeIntentManifest(join(root, 'skills', 'intent.manifest.json'), manifest)
+
+    const [entry] = buildCurrentLockfileSources([pkg])
+
+    expect(entry!.declaredSecrets).toEqual(['A_TOKEN', 'Z_TOKEN'])
+    expect(entry!.mcpTools).toEqual(['alpha', 'zeta'])
+  })
+
   it('fails when an existing manifest is malformed', () => {
     const root = createRoot()
     const skillPath = writeSkill(root, 'core', 'body')

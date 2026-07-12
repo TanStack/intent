@@ -35,14 +35,16 @@ function buildResolution(pkg: IntentPackage): string | null {
 
 // manifestHash/capabilities stay null when a package ships no M3 manifest —
 // reserved-nullable by design, so the lockfile works before every package
-// adopts a manifest. When a manifest is present, its declared capabilities
-// (unioned across skills) and hash join the lockfile source entry.
+// adopts a manifest. When a manifest is present, its declarations (unioned
+// across skills) and hash join the lockfile source entry.
 function readManifestFields(
   pkg: IntentPackage,
   fs: ReadFs,
 ): {
   manifestHash: string | null
   capabilities: Array<string> | null
+  declaredSecrets?: Array<string>
+  mcpTools?: Array<string>
 } {
   const manifest = readIntentManifest(
     join(pkg.packageRoot, 'skills', 'intent.manifest.json'),
@@ -63,10 +65,22 @@ function readManifestFields(
   const capabilities = [
     ...new Set(manifest.skills.flatMap((skill) => skill.capabilities)),
   ].sort(compareStrings)
+  const declaredSecrets = [
+    ...new Set(manifest.skills.flatMap((skill) => skill.declaredSecrets)),
+  ].sort(compareStrings)
+  const mcpTools = [
+    ...new Set(
+      manifest.skills.flatMap((skill) =>
+        skill.mcpTools.map((tool) => tool.name),
+      ),
+    ),
+  ].sort(compareStrings)
 
   return {
     manifestHash: computeManifestHash(manifest),
     capabilities,
+    declaredSecrets,
+    mcpTools,
   }
 }
 
@@ -92,7 +106,7 @@ export function buildCurrentLockfileSources(
   const sources = packages
     .map((pkg): IntentLockfileSource => {
       const { skills, contentHash } = buildSourceContent(pkg, fs)
-      const { manifestHash, capabilities } = readManifestFields(pkg, fs)
+      const manifestFields = readManifestFields(pkg, fs)
       return {
         id: pkg.name,
         kind: pkg.kind,
@@ -100,8 +114,7 @@ export function buildCurrentLockfileSources(
         resolution: buildResolution(pkg),
         skills,
         contentHash,
-        manifestHash,
-        capabilities,
+        ...manifestFields,
       }
     })
     .sort((a, b) => compareStrings(sourceIdentityKey(a), sourceIdentityKey(b)))
