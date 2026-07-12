@@ -3,37 +3,40 @@ title: intent scaffold
 id: intent-scaffold
 ---
 
-`intent scaffold` prints a phased scaffold prompt for generating skills.
+`intent scaffold` prints a phased prompt for a coding agent to generate library skills. It prints instructions to stdout and does not create files itself.
 
 ```bash
-npx @tanstack/intent@latest scaffold
+intent scaffold
 ```
 
-## Behavior
+Run [setup](./intent-setup) first so package and managed workflow configuration is previewed and applied before authoring begins.
 
-- Prints prompt text to stdout
-- Does not create files
+## Prompt phases
 
-## Output
+The generated prompt directs the agent through three ordered phases:
 
-The printed prompt defines three ordered phases:
+1. `domain-discovery` produces the reviewed domain map and skill specification.
+2. `tree-generator` produces the reviewed skill tree.
+3. `generate-skill` produces package-owned `SKILL.md` files.
 
-1. `domain-discovery`
-2. `tree-generator`
-3. `generate-skill`
+Each planning phase includes a maintainer review stop. In monorepos, artifacts remain at the workspace root while skills live inside their owning packages.
 
-Each phase includes a stop gate before continuing.
+## Post-generation checks
 
-The prompt also includes a post-generation checklist:
+The prompt ends with this reviewable sequence:
 
-- Run `npx @tanstack/intent@latest validate` and fix issues
-- Commit generated `skills/` and `skills/_artifacts/`
-- Ensure `@tanstack/intent` is in `devDependencies`
-- Run setup commands as needed:
-  - `npx @tanstack/intent@latest edit-package-json`
-  - `npx @tanstack/intent@latest setup`
+```bash
+intent skills generate-manifest --write
+intent skills validate --fix
+intent setup --dry-run
+intent setup --write
+intent setup --check
+intent skills validate --release
+```
+
+Review manifest changes and mechanical fixes before committing. Release validation checks the file inventory npm would package; it does not publish anything.
 
 ## Related
 
+- [intent setup](./intent-setup)
 - [intent validate](./intent-validate)
-- [setup commands](./intent-setup)

@@ -16,22 +16,32 @@ angular: @tanstack/intent
 lit: @tanstack/intent
 <!-- ::end:tabs -->
 
-Or run commands without installing:
-
-```bash
-npx @tanstack/intent@latest scaffold
-```
+Run commands through the project-local package binary. The examples below use `intent` for that binary; use your package manager's local-exec command when it is not already on `PATH`. Keeping Intent as a project dependency records its version in the lockfile, so local development and CI run the same reviewed release instead of executing an unreviewed `@latest` version during setup or publishing.
 
 ---
 
-## Initial Setup (With Agent)
+## Initial Setup
 
-### 1. Scaffold skills
+### 1. Preview and apply package setup
+
+Preview the package and managed workflow changes before writing:
+
+```bash
+intent setup --dry-run
+intent setup --write
+```
+
+Setup adds the package publishing fields required for skills and creates or updates an untouched managed `check-skills.yml`. It never overwrites a custom or modified workflow.
+
+> [!NOTE]
+> Migrating from an older release: bare `intent setup` no longer writes files. `intent edit-package-json` and `intent setup-github-actions` remain as deprecated compatibility commands for one release window. Preview the combined replacement with `intent setup --dry-run` before writing.
+
+### 2. Scaffold skills with an agent
 
 Start the scaffolding process **with your AI agent**:
 
 ```bash
-npx @tanstack/intent@latest scaffold
+intent scaffold
 ```
 
 This prints a comprehensive prompt that walks you and your agent through three phases:
@@ -54,12 +64,20 @@ This prints a comprehensive prompt that walks you and your agent through three p
 > [!NOTE]
 > This is a context-heavy process that involves domain discovery, GitHub issues analysis, and interactive maintainer interviews. The agent will scan your documentation, recent issues and discussions, and ask targeted questions to surface implicit knowledge and common failure modes. The more information you provide about your library's patterns, pitfalls, and real-world usage problems, the better the generated skills will be. Expect multiple rounds of refinement and regular context compaction before completion.
 
-### 2. Validate skills
+### 3. Generate the manifest and validate skills
 
-After scaffolding, validate that all SKILL.md files are well-formed:
+After scaffolding, generate the package manifest, apply only mechanical fixes, and review both changes:
 
 ```bash
-npx @tanstack/intent@latest validate
+intent skills generate-manifest --write
+intent skills validate --fix
+```
+
+Run setup again after scaffolding so monorepos configure every package that now owns skills:
+
+```bash
+intent setup --dry-run
+intent setup --write
 ```
 
 This checks:
@@ -71,10 +89,19 @@ This checks:
 - Line count limits (500 lines max per skill)
 - Framework skills have a `requires` array
 - Artifact files exist and are non-empty
+- Manifest entries and content hashes match the authored skills
+- Literal-secret and capability-disclosure heuristics
 
 If any artifacts are present (domain_map.yaml, skill_spec.md, skill_tree.yaml), they must parse as valid YAML.
 
-### 3. Commit skills and artifacts
+Before committing, verify setup and the actual npm package inventory:
+
+```bash
+intent setup --check
+intent skills validate --release
+```
+
+### 4. Commit reviewed outputs
 
 Commit both generated skills and the artifacts used to create them:
 
@@ -82,42 +109,18 @@ Commit both generated skills and the artifacts used to create them:
 skills/
   core/SKILL.md
   react/SKILL.md
+  intent.manifest.json
   _artifacts/
     domain_map.yaml
     skill_spec.md
     skill_tree.yaml
 ```
 
-Artifacts enforce a consistent skill structure across versions, making it easier to audit, refresh, or extend the skill set without starting from scratch.
+Also commit the reviewed `package.json` and managed workflow changes. Artifacts preserve the reviewed skill structure across versions, making it easier to audit, refresh, or extend the skill set without starting from scratch.
 
 ---
 
-## Publish Configuration
-
-### 4. Configure your package for publishing
-
-Run these commands to prepare your package for skill publishing:
-
-```bash
-# Update package.json with required fields
-npx @tanstack/intent@latest edit-package-json
-
-# Copy the CI workflow template
-npx @tanstack/intent@latest setup
-```
-
-**What these do:**
-
-- `edit-package-json` adds:
-  - `tanstack-intent` keyword (used for package detection and registry discovery)
-  - `files` array entries for `skills/`
-  - For single packages: also adds `!skills/_artifacts` to exclude artifacts from npm
-  - For monorepos: skips the artifacts exclusion (artifacts live at repo root)
-- `setup` copies `check-skills.yml` to `.github/workflows/` for automated validation and staleness checking
-
-`setup` does not overwrite existing workflow files. To pick up newer generated workflows, delete or move the old generated files in `.github/workflows/`, then rerun `npx @tanstack/intent@latest setup`.
-
-If your repo already has an older generated `validate-skills.yml`, remove it after adopting the current `check-skills.yml`; PR validation now runs from `check-skills.yml`.
+## Publish
 
 ### 5. Ship skills with your package
 
@@ -129,21 +132,21 @@ npm publish
 
 Consumers who install your library automatically get the skills. They discover local installed skills with `intent list`, add loading guidance with `intent install`, and load matching skills with `intent load`.
 
-**Version alignment:**
-- Skills version with your library releases
-- Agents always load the skill matching the installed library version
-- No drift between code and guidance
+Version skills with the library release that contains them. Consumers receive the skill files included in their installed package artifact; trust approval and lock enforcement remain separate consumer steps.
 
 ---
 
 ## Ongoing Maintenance (Manual or Agent-Assisted)
 
-### 6. Set up the CI workflow
+### 6. Use the managed CI workflow
 
 After running `setup`, you'll have `check-skills.yml` in `.github/workflows/`:
 
 **check-skills.yml** (runs on PRs touching skills/artifacts, release, or manual trigger)
 - Validates SKILL.md frontmatter and structure
+- Checks manifest freshness and release-package contents
+- Uses the exact Intent version recorded when the managed workflow was generated
+- Runs pull-request validation with read-only repository permissions
 - Ensures files stay under 500 lines
 - Automatically detects stale skills and coverage gaps after you publish a new release
 - Opens one grouped review PR with an agent-friendly prompt
@@ -157,7 +160,7 @@ When you publish a new release, `check-skills.yml` automatically opens a PR flag
 Manually check which skills need updates with:
 
 ```bash
-npx @tanstack/intent@latest stale
+intent stale
 ```
 
 When run from a package, this checks that package's shipped skills. When run from a monorepo root, it checks workspace packages with skills and flags public workspace packages missing skill or `_artifacts` coverage.
@@ -185,7 +188,7 @@ Private workspace packages are skipped automatically.
 2. Copy the agent prompt from the PR description
 3. Paste it into Claude Code, Cursor, or your coding agent
 4. The agent reads the stale skills and updates them based on library changes
-5. Run `npx @tanstack/intent@latest validate` locally to verify
+5. Run `intent skills generate-manifest --check` and `intent skills validate --release` locally
 6. Commit and merge the PR
 
 > [!NOTE]

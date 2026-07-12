@@ -1,55 +1,89 @@
 ---
-title: setup commands
+title: intent setup
 id: intent-setup
 ---
 
-Intent exposes publishing setup as two commands.
+`intent setup` previews, checks, or applies the package and managed workflow configuration required to publish Intent skills.
+
+> [!NOTE]
+> Migration: bare `intent setup` is now non-mutating. Choose `--dry-run`, `--write`, or `--check`. The previous package-only and workflow-copy commands remain available for one compatibility window and print deprecation warnings.
+
+Run the project-local Intent CLI. Its lockfile-recorded version keeps local and CI setup on the same reviewed release. The examples below use its binary name directly.
 
 ```bash
-npx @tanstack/intent@latest edit-package-json
-npx @tanstack/intent@latest setup
+intent setup --dry-run
+intent setup --write
+intent setup --check
 ```
 
-## Commands
+## Options
 
-- `edit-package-json`: add or normalize `package.json` entries needed to publish skills
-- `setup`: copy workflow templates to `.github/workflows`
-- `setup-github-actions`: legacy alias for `setup`
+- `--dry-run`: print proposed `package.json` and managed workflow changes without writing.
+- `--write`: apply exactly the planned changes.
+- `--check`: fail when package or managed workflow changes are pending.
 
-## What each command changes
+Use exactly one mode. Running `intent setup` without a mode writes nothing and prints the preview/write commands.
 
-- `edit-package-json`
-  - Requires a valid `package.json` in current directory
-  - Ensures `keywords` includes `tanstack-intent`
-  - Ensures `files` includes required publish entries
-  - Preserves existing indentation
-- `setup`
-  - Copies the `check-skills.yml` workflow template from `@tanstack/intent/meta/templates/workflows` to `.github/workflows`
-  - Applies variable substitution (`PACKAGE_NAME`, `PACKAGE_LABEL`, `PAYLOAD_PACKAGE`, `REPO`, `DOCS_PATH`, `SRC_PATH`, `WATCH_PATHS`)
-  - Detects the workspace root in monorepos and writes repo-level workflows there
-  - Skips files that already exist at destination
+## Package configuration
 
-## Required `files` entries
+Setup ensures each package that owns skills has:
 
-`edit-package-json` enforces different `files` sets based on package location:
+- `tanstack-intent` in `keywords`;
+- `skills` in `files`;
+- `!skills/_artifacts` in `files` for single-package repositories.
 
-- Monorepo package: `skills`
-- Non-monorepo package: `skills`, `!skills/_artifacts`
+Monorepo packages omit the artifact exclusion because their reviewed `_artifacts` directory lives at the workspace root. Existing package fields and indentation are preserved.
 
-## Common errors
+## Managed workflow
 
-- Missing or invalid `package.json` when running `edit-package-json`
-- Missing template source when running `setup`
+Setup manages `.github/workflows/check-skills.yml` at the workspace root.
 
-## Notes
+The workflow is classified as:
 
-- `setup` skips existing files
-- `check-skills.yml` validates skills on PRs and opens review PRs from release/manual runs
-- To adopt updated workflow templates, delete or move the old generated workflow files first, then rerun `setup`
-- If your repo has an older generated `validate-skills.yml`, remove it after adopting the current `check-skills.yml`; PR validation now lives in `check-skills.yml`
-- In monorepos, run `setup` from either the repo root or a package directory; Intent writes workflows to the workspace root
+- missing: safe to create;
+- current: no change required;
+- stale and fingerprinted: safe to update;
+- custom or modified: reported as a conflict and never overwritten.
+
+New managed workflows use an exact Intent version, disable npm install lifecycle scripts for the compatibility bridge, validate release-package contents with read-only repository access, and grant write permissions only to the review job.
+
+## First run
+
+```bash
+intent setup --dry-run
+intent setup --write
+intent scaffold
+```
+
+Fresh monorepos may not have skill-owning packages yet. In that case setup creates the managed workflow and defers package fields. Run `setup --dry-run` and `setup --write` again after scaffolding creates package skill directories. Review all written files before committing them.
+
+## Verify
+
+```bash
+intent setup --check
+intent skills validate --release
+```
+
+## Compatibility commands
+
+- `intent edit-package-json` retains the previous package-only write behavior.
+- `intent setup-github-actions` retains the previous create-if-missing workflow behavior.
+
+| Previous invocation | Replacement |
+| --- | --- |
+| `intent setup` | Choose `intent setup --dry-run`, `--write`, or `--check` |
+| `intent edit-package-json` | `intent setup --dry-run`, then `intent setup --write` |
+| `intent setup-github-actions` | `intent setup --dry-run`, then `intent setup --write` |
+
+Both compatibility commands are deprecated and remain for one release window. Prefer explicit `intent setup` modes because they preview changes and protect modified workflows. Their exact removal version is not yet assigned.
+
+## Troubleshooting
+
+- If a workflow conflict is reported, move or reconcile the existing file before running `--write` again.
+- If the bundled workflow template is unavailable, reinstall the project-local `@tanstack/intent` package.
+- If no package is found, run setup from the package or workspace containing the skills.
 
 ## Related
 
-- [intent validate](./intent-validate)
 - [intent scaffold](./intent-scaffold)
+- [intent validate](./intent-validate)

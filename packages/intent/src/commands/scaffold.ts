@@ -61,12 +61,12 @@ This produces: individual SKILL.md files.
 
 ## After all skills are generated
 
-1. Run \`intent validate\` in each package directory
-2. Commit skills/ and artifacts
-3. For each publishable package, run: \`npx @tanstack/intent edit-package-json\`
-4. Ensure each package has \`@tanstack/intent\` as a devDependency
-5. Create a \`skill:<skill-name>\` label on the GitHub repo for each skill (use \`gh label create\`)
-6. Add a README note: "If you use an AI agent, run \`npx @tanstack/intent@latest install\`"
+1. Run \`intent skills generate-manifest --write\` and review every manifest change
+2. Run \`intent skills validate --fix\` and review every mechanical rewrite
+3. Run \`intent setup --dry-run\`, then \`intent setup --write\`, to configure every package that now owns skills
+4. Run \`intent setup --check\` to verify package and managed workflow state
+5. Run \`intent skills validate --release\` to verify the npm package contents
+6. Commit the reviewed skills, artifacts, manifests, package configuration, and workflow changes
 `
 
   console.log(prompt)

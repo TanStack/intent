@@ -700,6 +700,15 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('## Step 1')
     expect(output).toContain(join('meta', 'domain-discovery', 'SKILL.md'))
+    expect(output).toContain('intent skills generate-manifest --write')
+    expect(output).toContain('intent skills validate --fix')
+    expect(output).toContain('intent setup --dry-run')
+    expect(output).toContain('intent setup --write')
+    expect(output).toContain('intent setup --check')
+    expect(output).toContain('intent skills validate --release')
+    expect(output).not.toContain('intent edit-package-json')
+    expect(output).not.toContain('@latest')
+    expect(output).not.toContain('gh label create')
   })
 
   it('updates package.json for skill publishing', async () => {
@@ -726,6 +735,9 @@ describe('cli commands', () => {
     expect(pkg.files).toContain('skills')
     expect(pkg.files).toContain('!skills/_artifacts')
     expect(output).toContain('Added keywords: "tanstack-intent"')
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+      'Deprecated: `intent edit-package-json`',
+    )
   })
 
   it('previews, checks, and writes package setup idempotently', async () => {
@@ -744,6 +756,8 @@ describe('cli commands', () => {
     const dryRunOutput = logSpy.mock.calls.flat().join('\n')
 
     expect(dryRunExitCode).toBe(0)
+    expect(errorSpy.mock.calls.flat().join('\n')).not.toContain('Deprecated')
+    expect(errorSpy.mock.calls.flat().join('\n')).not.toContain('Migration:')
     expect(dryRunOutput).toContain('package.json')
     expect(dryRunOutput).toContain('keywords: "tanstack-intent"')
     expect(dryRunOutput).toContain('files: "skills"')
@@ -782,6 +796,9 @@ describe('cli commands', () => {
     expect(workflow).not.toContain('@tanstack/intent@latest')
     expect(workflow).not.toContain('npm install -g')
     expect(workflow).toMatch(/validate:\n(?:.|\n)*?contents: read/)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'Next: run `intent scaffold`',
+    )
 
     logSpy.mockClear()
     const secondWriteExitCode = await main(['setup', '--write'])
@@ -817,6 +834,9 @@ describe('cli commands', () => {
     expect(logSpy.mock.calls.flat().join('\n')).toContain(
       'intent setup --dry-run',
     )
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+      'Migration: `intent setup` no longer writes files',
+    )
   })
 
   it('writes setup to skill-owning workspace packages', async () => {
@@ -851,6 +871,28 @@ describe('cli commands', () => {
     expect(workspacePackage.files).toContain('skills')
     expect(workspacePackage.files).not.toContain('!skills/_artifacts')
     expect(workspaceRoot.files).toBeUndefined()
+  })
+
+  it('sets up a fresh workspace before skill packages exist', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-setup-fresh-workspace-'),
+    )
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['setup', '--write'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(
+      existsSync(join(root, '.github', 'workflows', 'check-skills.yml')),
+    ).toBe(true)
+    expect(output).toContain('package setup is deferred')
+    expect(output).toContain('Next: run `intent scaffold`')
   })
 
   it('refuses to overwrite a custom setup workflow', async () => {
@@ -893,6 +935,9 @@ describe('cli commands', () => {
     expect(existsSync(workflowsDir)).toBe(true)
     expect(output).toContain('Copied workflow:')
     expect(output).toContain('Template variables applied:')
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+      'Deprecated: `intent setup-github-actions`',
+    )
   })
 
   it('copies github workflow templates to the workspace root', async () => {

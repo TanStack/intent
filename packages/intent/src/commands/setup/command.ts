@@ -55,6 +55,9 @@ export async function runSetupCommand(
     )
   }
   if (modes.length === 0) {
+    console.error(
+      'Migration: `intent setup` no longer writes files without an explicit mode.',
+    )
     console.log(
       'Preview package setup with `intent setup --dry-run`, then apply it with `intent setup --write`.',
     )
@@ -67,8 +70,11 @@ export async function runSetupCommand(
     writeEditPackageJsonPlan,
     writeSetupWorkflowPlan,
   } = await import('../../setup/index.js')
-  const plans = flattenPlans(planEditPackageJsonAll(root))
-  if (plans.length === 0) fail('No package.json was found for Intent setup.')
+  const packagePlanResult = planEditPackageJsonAll(root)
+  if (packagePlanResult === null) {
+    fail('No package.json was found for Intent setup.')
+  }
+  const plans = flattenPlans(packagePlanResult)
   const workflowPlan = planSetupWorkflow(root, metaDir, intentVersion)
 
   const pending = plans.filter((plan) => plan.added.length > 0)
@@ -90,6 +96,11 @@ export async function runSetupCommand(
   }
 
   for (const plan of plans) printPlan(root, plan)
+  if (plans.length === 0) {
+    console.log(
+      'No workspace packages with skills found; package setup is deferred until after scaffolding.',
+    )
+  }
   console.log(workflowStatusMessage(root, workflowPlan))
   if (options.dryRun) return
 
@@ -108,4 +119,5 @@ export async function runSetupCommand(
   if (workflowPlan.status !== 'current') {
     console.log('✅ Updated managed workflow')
   }
+  console.log('Next: run `intent scaffold` with your coding agent.')
 }

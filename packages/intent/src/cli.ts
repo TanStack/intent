@@ -356,6 +356,9 @@ function createCli(): CAC {
     )
     .usage('edit-package-json')
     .action(async () => {
+      console.error(
+        'Deprecated: `intent edit-package-json` will be removed after the compatibility window. Use `intent setup --dry-run`, then `intent setup --write`.',
+      )
       const { runEditPackageJsonCommand } =
         await import('./commands/setup/edit-package-json.js')
       await runEditPackageJsonCommand(process.cwd())
@@ -391,6 +394,9 @@ function createCli(): CAC {
     )
     .usage('setup-github-actions')
     .action(async () => {
+      console.error(
+        'Deprecated: `intent setup-github-actions` will be removed after the compatibility window. Use `intent setup --dry-run`, then `intent setup --write`.',
+      )
       const [{ getMetaDir }, { runSetupGithubActionsCommand }] =
         await Promise.all([
           import('./commands/support.js'),
