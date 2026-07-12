@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { INSTALL_PROMPT } from '../src/commands/install/command.js'
 import { isMainModule, main } from '../src/cli.js'
+import { computeSkillFolderHash } from '../src/core/lockfile/hash.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const metaDir = join(thisDir, '..', 'meta')
@@ -2034,6 +2035,99 @@ describe('cli commands', () => {
     )
     expect(errorSpy).not.toHaveBeenCalledWith(
       expect.stringContaining('Use `intent skills validate`'),
+    )
+  })
+
+  it('fails canonical validation when a package manifest is missing', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-manifest-missing-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@acme/pkg',
+      version: '1.0.0',
+    })
+    writeSkillMd(join(root, 'skills', 'core'), {
+      name: 'core',
+      description: 'Core concepts',
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'validate'])
+
+    expect(exitCode).not.toBe(0)
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('intent skills generate-manifest --write'),
+    )
+    expect(existsSync(join(root, 'skills', 'intent.manifest.json'))).toBe(false)
+  })
+
+  it('fails canonical validation when the package manifest is stale', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-manifest-stale-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@acme/pkg',
+      version: '1.0.0',
+    })
+    writeSkillMd(join(root, 'skills', 'core'), {
+      name: 'core',
+      description: 'Core concepts',
+    })
+    writeJson(join(root, 'skills', 'intent.manifest.json'), {
+      manifestVersion: 1,
+      package: '@acme/pkg',
+      packageVersion: '1.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          contentHash: 'sha256-stale',
+          capabilities: [],
+          declaredSecrets: [],
+          mcpTools: [],
+        },
+      ],
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'validate', '--check'])
+
+    expect(exitCode).not.toBe(0)
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('skill hash'))
+  })
+
+  it('accepts a package manifest that matches the authored skills', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-manifest-valid-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@acme/pkg',
+      version: '1.0.0',
+    })
+    const skillDir = join(root, 'skills', 'core')
+    writeSkillMd(skillDir, {
+      name: 'core',
+      description: 'Core concepts',
+    })
+    writeJson(join(root, 'skills', 'intent.manifest.json'), {
+      manifestVersion: 1,
+      package: '@acme/pkg',
+      packageVersion: '1.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          contentHash: computeSkillFolderHash(skillDir, root),
+          capabilities: [],
+          declaredSecrets: [],
+          mcpTools: [],
+        },
+      ],
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'validate'])
+
+    expect(exitCode).toBe(0)
+    expect(logSpy).toHaveBeenCalledWith(
+      '✅ Validated 1 skill files — all passed',
     )
   })
 

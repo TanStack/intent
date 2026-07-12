@@ -6,6 +6,10 @@ import {
 } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fail, isCliFailure } from '../shared/cli-error.js'
+import {
+  assertManifestMatchesPackage,
+  readIntentManifest,
+} from '../core/manifest.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
 import { printWarnings } from './support.js'
@@ -134,6 +138,63 @@ function collectPackagingWarnings(context: ProjectContext): Array<string> {
   }
 
   return warnings
+}
+
+function collectManifestErrors(
+  context: ProjectContext,
+  skillFiles: Array<string>,
+): Array<ValidationError> {
+  if (!context.packageRoot || !context.targetPackageJsonPath) return []
+
+  let pkgJson: Record<string, unknown>
+  try {
+    pkgJson = JSON.parse(
+      readFileSync(context.targetPackageJsonPath, 'utf8'),
+    ) as Record<string, unknown>
+  } catch {
+    return []
+  }
+
+  if (typeof pkgJson.name !== 'string' || typeof pkgJson.version !== 'string') {
+    return []
+  }
+
+  const manifestPath = join(
+    context.packageRoot,
+    'skills',
+    'intent.manifest.json',
+  )
+  const remediation = 'Run `intent skills generate-manifest --write`.'
+
+  try {
+    const manifest = readIntentManifest(manifestPath)
+    if (!manifest) {
+      return [
+        {
+          file: relative(process.cwd(), manifestPath),
+          message: `Missing package manifest. ${remediation}`,
+        },
+      ]
+    }
+
+    assertManifestMatchesPackage(
+      manifest,
+      context.packageRoot,
+      pkgJson.name,
+      pkgJson.version,
+      skillFiles.map((path) => ({ name: '', path, description: '' })),
+    )
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    return [
+      {
+        file: relative(process.cwd(), manifestPath),
+        message: `${detail} ${remediation}`,
+      },
+    ]
+  }
+
+  return []
 }
 
 function formatWarning({ file, message }: ValidationWarning): string {
@@ -562,6 +623,8 @@ async function runValidateCommandInternal(
         })
       }
     }
+
+    errors.push(...collectManifestErrors(validateContext, skillFiles))
 
     // In monorepos, _artifacts lives at the workspace root, not under each package's skills/ dir.
     const artifactsDir = join(skillsDir, '_artifacts')
