@@ -9,5 +9,4 @@ Add consumer-managed `intent.lock` files for reviewing and pinning the exact ski
 - Hash each skill’s `SKILL.md` plus supported `references/`, `assets/`, and `scripts/` files with deterministic SHA-256 content hashes.
 - Add frozen-mode enforcement for CI through `--frozen`, `INTENT_FROZEN`, and non-interactive `CI` detection. Frozen mode rejects missing or malformed lockfiles, unapproved source changes, hidden skill-bearing sources, and lockfile mutations.
 - Validate manifests against the installed package identity, skill paths, and content hashes. Manifest metadata changes appear in lockfile diffs and require approval before frozen checks pass.
-- Add `intent skills stale` to surface lockfile drift and Git-baseline skill changes for review.
 - Export lockfile metadata types from `@tanstack/intent`.

@@ -36,12 +36,12 @@ This is tamper-evidence, not semantic validation. Approving a source means **a h
 - **`contentHash`** is a `sha256-` digest over each listed `SKILL.md` plus files under that skill's `references/`, `assets/`, and `scripts/` directories. Text line endings normalize to LF; binary bytes remain exact. A file rename with identical bytes changes the hash.
 - **`manifestHash`** and **`capabilities`** are `null` until the package ships a `skills/intent.manifest.json`. An existing manifest must parse and match the installed package identity, skill paths, and per-skill hashes. Once it does, `manifestHash` is populated and `capabilities` is always an array: `[]` means the manifest declares none; a non-empty array is the union of declared capabilities. Manifest authoring remains M3 work. `declaredSecrets`, `mcpTools`, and `mcpPolicy` remain reserved fields for the current lockfile version.
 - **`policy.ignores`** is a reserved block; nothing writes to it yet, but it's round-tripped verbatim if present.
-- **`staleness.baseline`** (`{ kind: "tag", ref, commit }`) is a reserved, optional field read by [`intent skills stale`](../cli/intent-skills#intent-skills-stale) as one input to baseline resolution. Nothing currently writes it — when absent, `stale` falls back to the nearest local git tag.
+- **`staleness.baseline`** (`{ kind: "tag", ref, commit }`) is reserved for the M7 staleness workflow. M2 validates and preserves it when rewriting an existing lockfile, but no M2 command derives behavior from it.
 - A `lockfileVersion` newer than this Intent version supports, an undeclared field, a duplicate `(kind, id)` entry, a non-canonical skill path, or any other structural problem is a **malformed lockfile**. Intent fails closed and never silently treats it as an empty lock.
 
 ## Commands
 
-`intent.lock` is managed entirely by the [`intent skills`](../cli/intent-skills) command group: `scan`/`diff`/`stale` (read-only) and `approve`/`update` (mutating).
+`intent.lock` is managed entirely by the [`intent skills`](../cli/intent-skills) command group: `scan`/`diff` (read-only) and `approve`/`update` (mutating).
 
 ## Frozen mode
 
@@ -63,7 +63,7 @@ Frozen mode is the CI gate: it turns "an allowlisted source's content silently d
 - Fails on a discovered skill-bearing source that isn't in `intent.lock` (exit `3`).
 - Fails if there's no `intent.lock` at all (exit `4`) — run `approve --all` interactively first.
 - Fails closed on a malformed or unsupported `intent.lock` (exit `6`).
-- `scan` and `diff` make zero network calls and skip subprocess-based global package-manager detection. `skills stale` may use the read-only Git adapter for baseline comparison.
+- `scan` and `diff` make zero network calls and skip subprocess-based global package-manager detection.
 
 See [`intent skills`](../cli/intent-skills#exit-codes) for the full exit-code table.
 

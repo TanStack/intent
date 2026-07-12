@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve, win32 } from 'node:path'
+import { isAbsolute, win32 } from 'node:path'
 
 export function assertCanonicalPackageRelativePath(
   path: string,
@@ -43,20 +43,4 @@ export function assertCanonicalPackageRelativePaths(
     }
     seen.add(path)
   }
-}
-
-export function resolveCanonicalPackagePath(
-  packageRoot: string,
-  path: string,
-  label: string,
-): string {
-  assertCanonicalPackageRelativePath(path, label)
-  const resolvedPath = resolve(packageRoot, path)
-  const packageRelativePath = relative(packageRoot, resolvedPath)
-  if (packageRelativePath.startsWith('..') || isAbsolute(packageRelativePath)) {
-    throw new Error(
-      `Invalid ${label}: path escapes the package root, got "${path}".`,
-    )
-  }
-  return resolvedPath
 }
