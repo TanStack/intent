@@ -61,7 +61,7 @@ function formatDisclosures(source: IntentLockfileSource): string {
 }
 
 function describeChange(change: PendingChange): string {
-  const label = `${change.source.kind}:${escapeReviewValue(change.source.id)}@${escapeReviewValue(change.source.version)}`
+  const label = `${change.source.kind}:${escapeReviewValue(change.source.id)}@${escapeReviewValue(String(change.source.version))}`
   switch (change.kind) {
     case 'add':
       return `Approve new source ${label}?${formatDisclosures(change.source)}`
@@ -81,7 +81,7 @@ function describeChange(change: PendingChange): string {
 
 function printRemovedSourceReview(source: IntentLockfileSource): void {
   console.log(
-    `Reviewing removal ${source.kind}:${escapeReviewValue(source.id)}@${escapeReviewValue(source.version)} (no longer discovered)`,
+    `Reviewing removal ${source.kind}:${escapeReviewValue(source.id)}@${escapeReviewValue(String(source.version))} (no longer discovered)`,
   )
   console.log(
     `  Locked skills: ${source.skills.length > 0 ? source.skills.map(escapeReviewValue).join(', ') : '(none)'}`,

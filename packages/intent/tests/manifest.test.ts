@@ -122,7 +122,7 @@ describe('parseManifest', () => {
     [{ name: 'fetch', description: 1 }],
     [{ name: 'fetch', inputSchema: [] }],
     [{ name: 'fetch', inputSchema: { type: undefined } }],
-    [{ name: 'fetch' }, { name: 'fetch' }],
+    [[{ name: 'fetch' }, { name: 'fetch' }]],
     [{ name: 'fetch', command: 'curl' }],
   ])('rejects invalid MCP tool metadata', (mcpTools) => {
     expect(() =>

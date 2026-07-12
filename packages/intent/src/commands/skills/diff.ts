@@ -26,7 +26,7 @@ export interface SkillsDiffCommandOptions {
 }
 
 function formatSourceLabel(source: IntentLockfileSource): string {
-  return `${source.kind}:${escapeReviewValue(source.id)}@${escapeReviewValue(source.version)}`
+  return `${source.kind}:${escapeReviewValue(source.id)}@${escapeReviewValue(String(source.version))}`
 }
 
 function formatChangeLabel(change: LockfileSourceChange): string {
