@@ -273,6 +273,12 @@ function readSkillEntry(
     typeof fm?.description === 'string'
       ? fm.description.replace(/\s+/g, ' ').trim()
       : ''
+  const sources = Array.isArray(fm?.sources)
+    ? fm.sources.filter((value): value is string => typeof value === 'string')
+    : undefined
+  const requires = Array.isArray(fm?.requires)
+    ? fm.requires.filter((value): value is string => typeof value === 'string')
+    : undefined
 
   return {
     name: relName,
@@ -280,6 +286,8 @@ function readSkillEntry(
     description: desc,
     type: readScalarField(fm, 'type'),
     framework: readScalarField(fm, 'framework'),
+    sources,
+    requires,
   }
 }
 

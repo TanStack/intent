@@ -81,6 +81,8 @@ export interface SkillEntry {
   description: string
   type?: string
   framework?: string
+  sources?: Array<string>
+  requires?: Array<string>
 }
 
 // ---------------------------------------------------------------------------

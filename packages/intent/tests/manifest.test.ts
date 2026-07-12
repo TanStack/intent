@@ -42,6 +42,19 @@ function manifestFixture(): IntentManifest {
 }
 
 describe('parseManifest', () => {
+  it.each(['sources', 'requires'])(
+    'rejects malformed %s declarations',
+    (field) => {
+      const manifest = manifestFixture()
+      expect(() =>
+        parseManifest({
+          ...manifest,
+          skills: [{ ...manifest.skills[0], [field]: 'not-an-array' }],
+        }),
+      ).toThrow(/array of strings/)
+    },
+  )
+
   it.each([
     [
       'root',
@@ -221,6 +234,10 @@ describe('generateManifest', () => {
         inputSchema: { type: 'object' },
       },
     ]
+    existing.skills[0]!.sources = ['authored/source.ts']
+    existing.skills[0]!.requires = ['authored/setup']
+    skill.sources = ['legacy/source.ts']
+    skill.requires = ['legacy/setup']
 
     const result = generateManifest(
       packageRoot,
@@ -239,6 +256,8 @@ describe('generateManifest', () => {
           path: 'skills/core/SKILL.md',
           capabilities: ['uses_network'],
           declaredSecrets: ['API_TOKEN'],
+          sources: ['authored/source.ts'],
+          requires: ['authored/setup'],
           mcpTools: [
             {
               name: 'fetch',
@@ -259,6 +278,8 @@ describe('generateManifest', () => {
 
   it('reports added and removed skills with conservative declarations', () => {
     const added = writeSkill('skills/new', '# New\n\nGuidance.')
+    added.sources = ['src/zeta.ts', 'src/alpha.ts', 'src/zeta.ts']
+    added.requires = ['shared/zeta', 'shared/alpha', 'shared/zeta']
     const existing = manifestFixture()
 
     const result = generateManifest(
@@ -276,6 +297,8 @@ describe('generateManifest', () => {
         capabilities: [],
         declaredSecrets: [],
         mcpTools: [],
+        sources: ['src/alpha.ts', 'src/zeta.ts'],
+        requires: ['shared/alpha', 'shared/zeta'],
       },
     ])
     expect(result.changes).toEqual({

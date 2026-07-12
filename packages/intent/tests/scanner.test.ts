@@ -114,6 +114,10 @@ describe('scanForIntents', () => {
       description: 'Core database concepts',
       type: 'core',
     })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      '---\nname: db-core\ndescription: Core database concepts\ntype: core\nsources:\n  - src/query.ts\n  - src/client.ts\nrequires:\n  - shared/setup\n---\n\nSkill content here.\n',
+    )
 
     const result = scanForIntents(root)
     expect(result.packages).toHaveLength(1)
@@ -126,6 +130,11 @@ describe('scanForIntents', () => {
     expect(result.packages[0]!.skills[0]!.description).toBe(
       'Core database concepts',
     )
+    expect(result.packages[0]!.skills[0]!.sources).toEqual([
+      'src/query.ts',
+      'src/client.ts',
+    ])
+    expect(result.packages[0]!.skills[0]!.requires).toEqual(['shared/setup'])
     expect(result.stats).toEqual(
       expect.objectContaining({
         packageJsonReadCount: expect.any(Number),

@@ -40,6 +40,8 @@ const MANIFEST_SKILL_FIELDS = new Set([
   'mcpTools',
   'name',
   'path',
+  'requires',
+  'sources',
 ])
 
 interface IntentManifestSkill {
@@ -49,6 +51,8 @@ interface IntentManifestSkill {
   capabilities: Array<IntentManifestCapability>
   declaredSecrets: Array<string>
   mcpTools: Array<IntentManifestMcpTool>
+  requires?: Array<string>
+  sources?: Array<string>
 }
 
 interface IntentManifestMcpTool {
@@ -87,6 +91,10 @@ function compareStrings(a: string, b: string): number {
 
 function toPosixPath(path: string): string {
   return path.split('\\').join('/')
+}
+
+function canonicalStringArray(values: ReadonlyArray<string>): Array<string> {
+  return [...new Set(values)].sort(compareStrings)
 }
 
 export function generateManifest(
@@ -129,6 +137,10 @@ export function generateManifest(
       capabilities: existing ? [...existing.capabilities] : [],
       declaredSecrets: existing ? [...existing.declaredSecrets] : [],
       mcpTools: existing ? structuredClone(existing.mcpTools) : [],
+      requires: canonicalStringArray(
+        existing?.requires ?? skill.requires ?? [],
+      ),
+      sources: canonicalStringArray(existing?.sources ?? skill.sources ?? []),
     }
   })
 
@@ -168,6 +180,8 @@ function canonicalManifest(manifest: IntentManifest): IntentManifest {
         capabilities: skill.capabilities.toSorted(compareStrings),
         declaredSecrets: skill.declaredSecrets.toSorted(compareStrings),
         mcpTools: canonicalMcpTools(skill.mcpTools, 'mcpTools'),
+        requires: canonicalStringArray(skill.requires ?? []),
+        sources: canonicalStringArray(skill.sources ?? []),
       })),
   }
 }
@@ -364,6 +378,18 @@ export function parseManifest(raw: unknown): IntentManifest {
       mcpTools: canonicalMcpTools(
         skillRecord.mcpTools ?? [],
         `skills[${index}].mcpTools`,
+      ),
+      requires: canonicalStringArray(
+        assertStringArray(
+          skillRecord.requires ?? [],
+          `skills[${index}].requires`,
+        ),
+      ),
+      sources: canonicalStringArray(
+        assertStringArray(
+          skillRecord.sources ?? [],
+          `skills[${index}].sources`,
+        ),
       ),
     }
   })
