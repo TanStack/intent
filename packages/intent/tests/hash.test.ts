@@ -241,6 +241,25 @@ describe('computeSourceContentHash', () => {
     ).toMatch(/^sha256-[0-9a-f]{64}$/)
   })
 
+  it('keeps non-UTF-8 binary bytes exact when no NUL byte is present', () => {
+    const root = createRoot()
+    const filePath = writeFile(
+      root,
+      'assets/data.bin',
+      Buffer.from([0xff, 0x0d, 0x0a]),
+    )
+    const entries = [
+      { relativePath: 'assets/data.bin', absolutePath: filePath },
+    ]
+    const withCrLf = computeSourceContentHash(root, entries).contentHash
+
+    writeFileSync(filePath, Buffer.from([0xff, 0x0a]))
+
+    expect(computeSourceContentHash(root, entries).contentHash).not.toBe(
+      withCrLf,
+    )
+  })
+
   it('is identical across different physical roots for identical relative paths and bytes', () => {
     const rootA = createRoot()
     const rootB = createRoot()

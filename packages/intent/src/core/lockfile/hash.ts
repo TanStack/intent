@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { isUtf8 } from 'node:buffer'
 import { dirname, isAbsolute, join, relative } from 'node:path'
 import { assertCanonicalPackageRelativePaths } from '../skill-path.js'
 import { nodeReadFs } from '../../shared/utils.js'
@@ -44,10 +45,10 @@ function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }
 
-// Full-buffer scan, not a fixed prefix: a partial scan can miss a NUL byte
-// in a large binary asset, letting normalizeLineEndings corrupt real bytes.
+// Only valid UTF-8 without a NUL byte is normalized as text. Other content is
+// binary for hashing purposes and must remain byte-exact.
 function isBinaryContent(content: Buffer): boolean {
-  return content.indexOf(0) !== -1
+  return content.indexOf(0) !== -1 || !isUtf8(content)
 }
 
 // 'latin1' round-trips 1 byte to 1 codepoint, so replacing on the decoded
