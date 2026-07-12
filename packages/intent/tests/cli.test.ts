@@ -2131,6 +2131,100 @@ describe('cli commands', () => {
     )
   })
 
+  it('migrates structured frontmatter into the manifest atomically', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-array-migration-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@acme/pkg',
+      version: '1.0.0',
+    })
+    const skillDir = join(root, 'skills', 'core')
+    mkdirSync(skillDir, { recursive: true })
+    const skillPath = join(skillDir, 'SKILL.md')
+    writeFileSync(
+      skillPath,
+      '---\nname: core\ndescription: Core concepts\nsources:\n  - src/legacy.ts\nrequires:\n  - shared/legacy\n---\n\nGuidance.\n',
+    )
+    const manifestPath = join(root, 'skills', 'intent.manifest.json')
+    writeJson(manifestPath, {
+      manifestVersion: 1,
+      package: '@acme/pkg',
+      packageVersion: '1.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          contentHash: computeSkillFolderHash(skillDir, root),
+          capabilities: ['uses_network'],
+          declaredSecrets: ['API_TOKEN'],
+          mcpTools: [],
+          sources: ['src/authored.ts'],
+          requires: ['shared/authored'],
+        },
+      ],
+    })
+    process.chdir(root)
+
+    const originalSkill = readFileSync(skillPath, 'utf8')
+    const originalManifest = readFileSync(manifestPath, 'utf8')
+    const checkExitCode = await main(['skills', 'validate', '--check'])
+
+    expect(checkExitCode).not.toBe(0)
+    expect(readFileSync(skillPath, 'utf8')).toBe(originalSkill)
+    expect(readFileSync(manifestPath, 'utf8')).toBe(originalManifest)
+
+    const fixExitCode = await main(['skills', 'validate', '--fix'])
+    const fixedSkill = readFileSync(skillPath, 'utf8')
+    const fixedManifest = readFileSync(manifestPath, 'utf8')
+    const parsedManifest = JSON.parse(fixedManifest) as {
+      skills: Array<{
+        capabilities: Array<string>
+        contentHash: string
+        declaredSecrets: Array<string>
+        requires: Array<string>
+        sources: Array<string>
+      }>
+    }
+
+    expect(fixExitCode).toBe(0)
+    expect(fixedSkill).not.toContain('sources:')
+    expect(fixedSkill).not.toContain('requires:')
+    expect(parsedManifest.skills[0]).toMatchObject({
+      capabilities: ['uses_network'],
+      declaredSecrets: ['API_TOKEN'],
+      sources: ['src/authored.ts', 'src/legacy.ts'],
+      requires: ['shared/authored', 'shared/legacy'],
+      contentHash: computeSkillFolderHash(skillDir, root),
+    })
+
+    const secondExitCode = await main(['skills', 'validate', '--fix'])
+    expect(secondExitCode).toBe(0)
+    expect(readFileSync(skillPath, 'utf8')).toBe(fixedSkill)
+    expect(readFileSync(manifestPath, 'utf8')).toBe(fixedManifest)
+  })
+
+  it('rejects invalid structured frontmatter without writing', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-array-invalid-'))
+    tempDirs.push(root)
+    const skillDir = join(root, 'skills', 'core')
+    mkdirSync(skillDir, { recursive: true })
+    const skillPath = join(skillDir, 'SKILL.md')
+    writeFileSync(
+      skillPath,
+      '---\nname: core\ndescription: Core concepts\nsources: invalid\n---\n\nGuidance.\n',
+    )
+    process.chdir(root)
+    const original = readFileSync(skillPath, 'utf8')
+
+    const exitCode = await main(['skills', 'validate', '--fix'])
+
+    expect(exitCode).not.toBe(0)
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('sources must be an array of strings'),
+    )
+    expect(readFileSync(skillPath, 'utf8')).toBe(original)
+  })
+
   it('keeps nested Intent skill names valid without Agent Skills spec warnings', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-nested-'))
     tempDirs.push(root)
@@ -2730,7 +2824,7 @@ describe('cli commands', () => {
     expect(output).toContain('metadata must be a mapping')
   })
 
-  it('does not flag array-valued top-level keys as non-spec scalars', async () => {
+  it('rejects legacy array-valued top-level keys with migration guidance', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-array-key-'))
     tempDirs.push(root)
 
@@ -2758,11 +2852,10 @@ describe('cli commands', () => {
     process.chdir(root)
 
     const exitCode = await main(['validate'])
-    const output = logSpy.mock.calls.flat().join('\n')
-
-    expect(exitCode).toBe(0)
-    expect(output).toContain('✅ Validated 1 skill files — all passed')
-    expect(output).not.toContain('non-spec top-level key')
+    expect(exitCode).not.toBe(0)
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('intent skills validate --fix'),
+    )
   })
 
   it('fails for names with non-spec characters (uppercase)', async () => {

@@ -4,11 +4,13 @@ import {
   readFileSync,
   writeFileSync,
 } from 'node:fs'
-import { basename, dirname, join, relative, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { fail, isCliFailure } from '../shared/cli-error.js'
 import {
   assertManifestMatchesPackage,
+  generateManifest,
   readIntentManifest,
+  writeIntentManifest,
 } from '../core/manifest.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
@@ -29,6 +31,10 @@ interface FrontmatterFixPlan {
   file: string
   filePath: string
   changes: Array<string>
+  structuredMetadata?: {
+    requires?: Array<string>
+    sources?: Array<string>
+  }
 }
 
 interface SetVersionPlan {
@@ -215,6 +221,9 @@ function collectFrontmatterFixPlan({
   rel: string
 }): FrontmatterFixPlan | null {
   const changes: Array<string> = []
+  const structuredMetadata: NonNullable<
+    FrontmatterFixPlan['structuredMetadata']
+  > = {}
   const parentDir = basename(dirname(filePath))
 
   if (
@@ -242,7 +251,32 @@ function collectFrontmatterFixPlan({
     }
   }
 
-  return changes.length > 0 ? { file: rel, filePath, changes } : null
+  for (const key of intentArrayKeys) {
+    const value = fm[key]
+    if (
+      !Array.isArray(value) ||
+      value.some((item) => typeof item !== 'string')
+    ) {
+      continue
+    }
+    if (key === 'sources') {
+      structuredMetadata.sources = value as Array<string>
+    } else {
+      structuredMetadata.requires = value as Array<string>
+    }
+    changes.push(`move top-level "${key}" to intent.manifest.json`)
+  }
+
+  return changes.length > 0
+    ? {
+        file: rel,
+        filePath,
+        changes,
+        ...(Object.keys(structuredMetadata).length === 0
+          ? {}
+          : { structuredMetadata }),
+      }
+    : null
 }
 
 function normalizeLineEndings(value: string, lineEnding: string): string {
@@ -305,12 +339,119 @@ async function applyFrontmatterFixes(
       }
     }
 
+    if (plan.structuredMetadata) {
+      for (const key of intentArrayKeys) doc.delete(key)
+    }
+
     const nextFrontmatter = normalizeLineEndings(
       doc.toString().replace(/\r?\n$/, ''),
       openingLineEnding,
     )
     const nextContent = `---${openingLineEnding}${nextFrontmatter}${closingLineEnding}---${afterClose}${body}`
     writeFileSync(plan.filePath, nextContent)
+  }
+}
+
+function readMigrationPackage(plan: FrontmatterFixPlan): {
+  packageRoot: string
+  packageName: string
+  packageVersion: string
+} {
+  const context = resolveProjectContext({
+    cwd: process.cwd(),
+    targetPath: plan.filePath,
+  })
+  if (!context.packageRoot || !context.targetPackageJsonPath) {
+    fail(
+      `Cannot migrate structured metadata for ${plan.file}: no owning package.`,
+    )
+  }
+  const pkgJson = JSON.parse(
+    readFileSync(context.targetPackageJsonPath, 'utf8'),
+  ) as Record<string, unknown>
+  if (typeof pkgJson.name !== 'string' || typeof pkgJson.version !== 'string') {
+    fail(
+      `Cannot migrate structured metadata for ${plan.file}: package.json requires string name and version fields.`,
+    )
+  }
+  return {
+    packageRoot: context.packageRoot,
+    packageName: pkgJson.name,
+    packageVersion: pkgJson.version,
+  }
+}
+
+function preflightStructuredMigrations(
+  fixPlans: Array<FrontmatterFixPlan>,
+): void {
+  for (const plan of fixPlans) {
+    if (!plan.structuredMetadata) continue
+    const { packageRoot } = readMigrationPackage(plan)
+    const manifestPath = join(packageRoot, 'skills', 'intent.manifest.json')
+    const manifest = readIntentManifest(manifestPath)
+    const skillPath = relative(packageRoot, plan.filePath).split('\\').join('/')
+    if (!manifest?.skills.some((skill) => skill.path === skillPath)) {
+      fail(
+        `Cannot migrate structured metadata for ${plan.file}: matching manifest entry not found. Run \`intent skills generate-manifest --write\` first.`,
+      )
+    }
+  }
+}
+
+function refreshManifestsAfterFix(
+  skillsDirs: Array<string>,
+  fixPlans: Array<FrontmatterFixPlan>,
+  findSkillFiles: (root: string) => Array<string>,
+): void {
+  const structuredPlans = fixPlans.filter((plan) => plan.structuredMetadata)
+  if (structuredPlans.length === 0) return
+
+  for (const skillsDir of skillsDirs) {
+    const plans = structuredPlans.filter((plan) =>
+      plan.filePath.startsWith(`${skillsDir}${sep}`),
+    )
+    if (plans.length === 0) continue
+
+    const { packageRoot, packageName, packageVersion } = readMigrationPackage(
+      plans[0]!,
+    )
+    const manifestPath = join(packageRoot, 'skills', 'intent.manifest.json')
+    const manifest = readIntentManifest(manifestPath)!
+
+    for (const plan of plans) {
+      const skillPath = relative(packageRoot, plan.filePath)
+        .split('\\')
+        .join('/')
+      const entry = manifest.skills.find((skill) => skill.path === skillPath)!
+      entry.requires = [
+        ...new Set([
+          ...(entry.requires ?? []),
+          ...(plan.structuredMetadata?.requires ?? []),
+        ]),
+      ]
+      entry.sources = [
+        ...new Set([
+          ...(entry.sources ?? []),
+          ...(plan.structuredMetadata?.sources ?? []),
+        ]),
+      ]
+    }
+
+    const skills = findSkillFiles(skillsDir).map((path) => ({
+      name: basename(dirname(path)),
+      path,
+      description: '',
+    }))
+    writeIntentManifest(
+      manifestPath,
+      generateManifest(
+        packageRoot,
+        packageName,
+        packageVersion,
+        skills,
+        manifest,
+      ).manifest,
+    )
   }
 }
 
@@ -601,6 +742,25 @@ async function runValidateCommandInternal(
         })
       }
 
+      for (const key of intentArrayKeys) {
+        const value = fm[key]
+        if (value === undefined) continue
+        if (
+          !Array.isArray(value) ||
+          value.some((item) => typeof item !== 'string')
+        ) {
+          errors.push({
+            file: rel,
+            message: `${key} must be an array of strings`,
+          })
+        } else if (!options.fix) {
+          errors.push({
+            file: rel,
+            message: `non-spec top-level key "${key}" — run \`intent skills validate --fix\` to move it to intent.manifest.json`,
+          })
+        }
+      }
+
       if (
         readScalarField(fm, 'type') === 'framework' &&
         !Array.isArray(fm.requires)
@@ -693,7 +853,9 @@ async function runValidateCommandInternal(
       )
     }
     if (willFix) {
+      preflightStructuredMigrations(fixPlans)
       await applyFrontmatterFixes(fixPlans)
+      refreshManifestsAfterFix(skillsDirs, fixPlans, findSkillFiles)
       console.log(`✅ Fixed ${fixPlans.length} skill files`)
     }
     await runValidateCommandInternal(dir, {
