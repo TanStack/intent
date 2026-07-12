@@ -27,7 +27,7 @@
   "targetDefaults": {
     "test:lib": {
       "cache": true,
-      "dependsOn": ["^build"],
+      "dependsOn": ["build", "^build"],
       "inputs": ["default", "^production"],
       "outputs": ["{projectRoot}/coverage"]
     },
@@ -43,7 +43,7 @@
     },
     "test:types": {
       "cache": true,
-      "dependsOn": ["^build"],
+      "dependsOn": ["build", "^build"],
       "inputs": ["default", "^production"]
     },
     "build": {
