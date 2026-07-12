@@ -57,10 +57,7 @@ function createManifest(
     skills: pkg.skills.map((skill) => ({
       name: skill.name,
       path: relative(pkg.packageRoot, skill.path).split('\\').join('/'),
-      contentHash: computeSkillFolderHash(
-        dirname(skill.path),
-        pkg.packageRoot,
-      ),
+      contentHash: computeSkillFolderHash(dirname(skill.path), pkg.packageRoot),
       capabilities,
       declaredSecrets: [],
       mcpTools: [],
