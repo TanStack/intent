@@ -199,6 +199,7 @@ describe('readIntentManifest', () => {
   it('writes and reads back a manifest file', () => {
     const manifest = manifestFixture()
     const manifestPath = join(packageRoot, 'skills', 'intent.manifest.json')
+    mkdirSync(dirname(manifestPath), { recursive: true })
 
     writeIntentManifest(manifestPath, manifest)
 
