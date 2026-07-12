@@ -72,12 +72,81 @@ export interface IntentManifest {
   skills: Array<IntentManifestSkill>
 }
 
+export interface ManifestGenerationResult {
+  manifest: IntentManifest
+  changes: {
+    added: Array<string>
+    removed: Array<string>
+    updated: Array<string>
+  }
+}
+
 function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }
 
 function toPosixPath(path: string): string {
   return path.split('\\').join('/')
+}
+
+export function generateManifest(
+  packageRoot: string,
+  packageName: string,
+  packageVersion: string,
+  skills: ReadonlyArray<SkillEntry>,
+  existingManifest: IntentManifest | null = null,
+  fs: ReadFs = nodeReadFs,
+): ManifestGenerationResult {
+  const existingByPath = new Map(
+    existingManifest?.skills.map((skill) => [skill.path, skill]) ?? [],
+  )
+  const added: Array<string> = []
+  const updated: Array<string> = []
+  const generatedSkills = skills.map((skill): IntentManifestSkill => {
+    const path = toPosixPath(relative(packageRoot, skill.path))
+    assertCanonicalPackageRelativePath(path, 'manifest skill path')
+    const contentHash = computeSkillFolderHash(
+      dirname(skill.path),
+      packageRoot,
+      fs,
+    )
+    const existing = existingByPath.get(path)
+
+    if (!existing) {
+      added.push(path)
+    } else if (
+      existing.name !== skill.name ||
+      existing.contentHash !== contentHash
+    ) {
+      updated.push(path)
+    }
+
+    existingByPath.delete(path)
+    return {
+      name: skill.name,
+      path,
+      contentHash,
+      capabilities: existing ? [...existing.capabilities] : [],
+      declaredSecrets: existing ? [...existing.declaredSecrets] : [],
+      mcpTools: existing ? structuredClone(existing.mcpTools) : [],
+    }
+  })
+
+  return {
+    manifest: {
+      manifestVersion: 1,
+      package: packageName,
+      packageVersion,
+      skills: generatedSkills.toSorted((a, b) =>
+        compareStrings(a.path, b.path),
+      ),
+    },
+    changes: {
+      added: added.toSorted(compareStrings),
+      removed: [...existingByPath.keys()].toSorted(compareStrings),
+      updated: updated.toSorted(compareStrings),
+    },
+  }
 }
 
 // Deterministic: stable entry and key order with no generated timestamps.

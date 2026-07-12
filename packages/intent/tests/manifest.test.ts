@@ -4,12 +4,14 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   computeManifestHash,
+  generateManifest,
   parseManifest,
   readIntentManifest,
   serializeManifest,
   writeIntentManifest,
 } from '../src/core/manifest.js'
 import type { IntentManifest } from '../src/core/manifest.js'
+import type { SkillEntry } from '../src/shared/types.js'
 
 let packageRoot: string
 
@@ -192,6 +194,121 @@ describe('manifest serialization', () => {
 
     expect(serializeManifest(unsorted)).toBe(serializeManifest(sorted))
     expect(computeManifestHash(unsorted)).toBe(computeManifestHash(sorted))
+  })
+})
+
+describe('generateManifest', () => {
+  function writeSkill(relativeDir: string, content: string): SkillEntry {
+    const skillPath = join(packageRoot, relativeDir, 'SKILL.md')
+    mkdirSync(dirname(skillPath), { recursive: true })
+    writeFileSync(skillPath, content)
+    return {
+      name: relativeDir.split('/').at(-1)!,
+      path: skillPath,
+      description: '',
+    }
+  }
+
+  it('preserves authored declarations while refreshing generated fields', () => {
+    const skill = writeSkill('skills/core', '# Core\n\nUpdated guidance.')
+    const existing = manifestFixture()
+    existing.skills[0]!.capabilities = ['uses_network']
+    existing.skills[0]!.declaredSecrets = ['API_TOKEN']
+    existing.skills[0]!.mcpTools = [
+      {
+        name: 'fetch',
+        description: 'Fetch a resource.',
+        inputSchema: { type: 'object' },
+      },
+    ]
+
+    const result = generateManifest(
+      packageRoot,
+      '@acme/pkg',
+      '2.0.0',
+      [skill],
+      existing,
+    )
+
+    expect(result.manifest).toMatchObject({
+      package: '@acme/pkg',
+      packageVersion: '2.0.0',
+      skills: [
+        {
+          name: 'core',
+          path: 'skills/core/SKILL.md',
+          capabilities: ['uses_network'],
+          declaredSecrets: ['API_TOKEN'],
+          mcpTools: [
+            {
+              name: 'fetch',
+              description: 'Fetch a resource.',
+              inputSchema: { type: 'object' },
+            },
+          ],
+        },
+      ],
+    })
+    expect(result.manifest.skills[0]!.contentHash).not.toBe('sha256-core')
+    expect(result.changes).toEqual({
+      added: [],
+      removed: [],
+      updated: ['skills/core/SKILL.md'],
+    })
+  })
+
+  it('reports added and removed skills with conservative declarations', () => {
+    const added = writeSkill('skills/new', '# New\n\nGuidance.')
+    const existing = manifestFixture()
+
+    const result = generateManifest(
+      packageRoot,
+      '@acme/pkg',
+      '1.0.0',
+      [added],
+      existing,
+    )
+
+    expect(result.manifest.skills).toMatchObject([
+      {
+        name: 'new',
+        path: 'skills/new/SKILL.md',
+        capabilities: [],
+        declaredSecrets: [],
+        mcpTools: [],
+      },
+    ])
+    expect(result.changes).toEqual({
+      added: ['skills/new/SKILL.md'],
+      removed: ['skills/core/SKILL.md'],
+      updated: [],
+    })
+  })
+
+  it('is byte-identical on a second generation', () => {
+    const alpha = writeSkill('skills/alpha', '# Alpha\n\nGuidance.')
+    const zeta = writeSkill('skills/zeta', '# Zeta\n\nGuidance.')
+
+    const first = generateManifest(packageRoot, '@acme/pkg', '1.0.0', [
+      zeta,
+      alpha,
+    ])
+    const second = generateManifest(
+      packageRoot,
+      '@acme/pkg',
+      '1.0.0',
+      [alpha, zeta],
+      first.manifest,
+    )
+
+    expect(serializeManifest(second.manifest)).toBe(
+      serializeManifest(first.manifest),
+    )
+    expect(second.changes).toEqual({
+      added: [],
+      removed: [],
+      updated: [],
+    })
   })
 })
 
