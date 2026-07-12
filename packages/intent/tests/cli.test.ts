@@ -229,7 +229,11 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('--no-frozen')
     expect(output).toContain('generate-manifest')
+    expect(output).toContain('validate')
     expect(output).toContain('--check')
+    expect(output).toContain('--fix')
+    expect(output).toContain('--github-summary')
+    expect(output).toContain('--set-version')
     expect(output).toContain('--write')
     expect(output).not.toContain(
       '--no-frozen  Force interactive mode, overriding INTENT_FROZEN/CI auto-detect (default: true)',
@@ -2006,6 +2010,31 @@ describe('cli commands', () => {
     expect(logSpy).toHaveBeenCalledWith(
       '✅ Validated 1 skill files — all passed',
     )
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Use `intent skills validate`'),
+    )
+  })
+
+  it('validates through the canonical nested skills command', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-skills-validate-'))
+    tempDirs.push(root)
+
+    writeSkillMd(join(root, 'skills', 'db-core'), {
+      name: 'db-core',
+      description: 'Core database concepts',
+    })
+
+    process.chdir(root)
+
+    const exitCode = await main(['skills', 'validate'])
+
+    expect(exitCode).toBe(0)
+    expect(logSpy).toHaveBeenCalledWith(
+      '✅ Validated 1 skill files — all passed',
+    )
+    expect(errorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('Use `intent skills validate`'),
+    )
   })
 
   it('keeps nested Intent skill names valid without Agent Skills spec warnings', async () => {
@@ -2912,7 +2941,9 @@ describe('cli commands', () => {
     expect(logSpy).toHaveBeenCalledWith(
       'No skills/ directory found — skipping validation.',
     )
-    expect(errorSpy).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Use `intent skills validate`'),
+    )
   })
 
   it('writes a GitHub summary when validation fails', async () => {

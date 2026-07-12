@@ -116,6 +116,9 @@ function createCli(): CAC {
     .example('validate packages/query/skills --set-version 5.62.0')
     .action(
       async (dir: string | undefined, options: ValidateCommandOptions) => {
+        console.error(
+          'Migration: Use `intent skills validate` instead of `intent validate`.',
+        )
         const { runValidateCommand } = await import('./commands/validate.js')
         await runValidateCommand(dir, options)
       },
@@ -215,10 +218,10 @@ function createCli(): CAC {
   cli
     .command(
       'skills [action] [source]',
-      'Scan, diff, approve, update, or generate manifests for skills',
+      'Scan, diff, approve, update, generate manifests, or validate skills',
     )
     .usage(
-      'skills <scan|diff|approve|update|generate-manifest> [source] [--json] [--all] [--yes] [--check] [--write] [--frozen] [--no-frozen]',
+      'skills <scan|diff|approve|update|generate-manifest|validate> [source] [--json] [--all] [--yes] [--check] [--write] [--fix] [--github-summary] [--set-version <version>] [--frozen] [--no-frozen]',
     )
     .option('--json', 'Output JSON')
     .option(
@@ -229,8 +232,20 @@ function createCli(): CAC {
       '--yes',
       'With `approve`/`update`, accept trust-bearing changes non-interactively',
     )
-    .option('--check', 'With `generate-manifest`, verify without writing')
+    .option(
+      '--check',
+      'With `generate-manifest` or `validate`, verify without writing',
+    )
     .option('--write', 'With `generate-manifest`, write reviewed changes')
+    .option('--fix', 'With `validate`, rewrite fixable frontmatter issues')
+    .option(
+      '--github-summary',
+      'With `validate`, write a GitHub Actions step summary',
+    )
+    .option(
+      '--set-version <version>',
+      'With `validate`, set metadata.library_version before validation',
+    )
     .option(
       '--frozen',
       'Force frozen mode (fail if intent.lock is missing or stale)',
@@ -248,6 +263,8 @@ function createCli(): CAC {
     .example('skills update --all')
     .example('skills generate-manifest --check')
     .example('skills generate-manifest --write')
+    .example('skills validate')
+    .example('skills validate packages/query/skills --check')
     .action(
       async (
         action: string | undefined,
@@ -255,7 +272,8 @@ function createCli(): CAC {
         options: SkillsScanCommandOptions &
           SkillsApproveCommandOptions &
           SkillsUpdateCommandOptions &
-          SkillsGenerateManifestCommandOptions,
+          SkillsGenerateManifestCommandOptions &
+          ValidateCommandOptions,
       ) => {
         const { scanPolicedIntentsOrFail, frozenOptionsFromGlobalFlags } =
           await import('./commands/support.js')
@@ -313,8 +331,14 @@ function createCli(): CAC {
           return
         }
 
+        if (action === 'validate') {
+          const { runValidateCommand } = await import('./commands/validate.js')
+          await runValidateCommand(source, options)
+          return
+        }
+
         fail(
-          'Unknown skills action: expected scan, diff, approve, update, or generate-manifest.',
+          'Unknown skills action: expected scan, diff, approve, update, generate-manifest, or validate.',
         )
       },
     )
