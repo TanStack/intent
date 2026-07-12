@@ -1,17 +1,18 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { writeIntentLockfile } from '../src/core/lockfile/lockfile.js'
+import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
 import { runSkillsDiffCommand } from '../src/commands/skills/diff.js'
 import type { IntentLockfile } from '../src/core/lockfile/lockfile.js'
 import type { PolicedScan } from '../src/core/source-policy.js'
-import type { ScanResult } from '../src/shared/types.js'
+import type { IntentPackage, ScanResult } from '../src/shared/types.js'
 
-function emptyScanResult(): ScanResult {
+function emptyScanResult(packages: Array<IntentPackage> = []): ScanResult {
   return {
     packageManager: 'npm',
-    packages: [],
+    packages,
     warnings: [],
     notices: [],
     conflicts: [],
@@ -65,6 +66,44 @@ describe('runSkillsDiffCommand', () => {
     return dir
   }
 
+  function makeReviewPackage(cwd: string): IntentPackage {
+    const packageRoot = join(cwd, 'node_modules', 'foo')
+    const skillDir = join(packageRoot, 'skills', 'core')
+    mkdirSync(skillDir, { recursive: true })
+    const skillPath = join(skillDir, 'SKILL.md')
+    writeFileSync(skillPath, 'approved body\n')
+    return {
+      name: 'foo',
+      kind: 'npm',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'owner/repo', docs: 'docs/' },
+      packageRoot,
+      skills: [{ name: 'core', path: skillPath, description: 'Core' }],
+      source: 'local',
+    }
+  }
+
+  it('shows current exact text for a changed source', async () => {
+    const cwd = makeTempProject()
+    const pkg = makeReviewPackage(cwd)
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: buildCurrentLockfileSources([pkg]),
+    })
+    writeFileSync(pkg.skills[0]!.path, 'current exact body\n')
+
+    await runSkillsDiffCommand(
+      {},
+      () => Promise.resolve(policedScan({ scan: emptyScanResult([pkg]) })),
+      cwd,
+    )
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(output).toContain('Reviewing npm:foo@1.0.0')
+    expect(output).toContain('Text: skills/core/SKILL.md')
+    expect(output).toContain('current exact body')
+  })
+
   it('lists removed sources when the lockfile has an entry no longer present', async () => {
     const cwd = makeTempProject()
     writeIntentLockfile(join(cwd, 'intent.lock'), {
@@ -88,6 +127,8 @@ describe('runSkillsDiffCommand', () => {
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(output).toContain('Removed:')
     expect(output).toContain('npm:foo@1.0.0')
+    expect(output).toContain('skills: (none)')
+    expect(output).toContain('contentHash: sha256-aaa')
   })
 
   it('reports hidden (unlisted) sources even when nothing else has changed', async () => {

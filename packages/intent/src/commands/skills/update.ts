@@ -1,10 +1,17 @@
 import { getIntentPackageVersion } from '../support.js'
+import {
+  assertSourceContentReviewsMatch,
+  buildSourceContentReviews,
+} from '../../core/lockfile/content-review.js'
 import { writeIntentLockfile } from '../../core/lockfile/lockfile.js'
 import { sourceIdentityKey } from '../../core/types.js'
 import { isFrozenMode } from '../../shared/mode.js'
 import { fail } from '../../shared/cli-error.js'
 import {
   computeLockfileState,
+  escapeReviewValue,
+  formatReviewJson,
+  printSourceContentReviews,
   resolveLockfilePath,
   resolveSourceArg,
 } from './support.js'
@@ -35,7 +42,7 @@ function requiresApproval(change: LockfileSourceChange): boolean {
 }
 
 function formatChangeLabel(change: LockfileSourceChange): string {
-  return `${change.kind}:${change.id}`
+  return `${change.kind}:${escapeReviewValue(change.id)}`
 }
 
 function printUpdated(changes: ReadonlyArray<LockfileSourceChange>): void {
@@ -44,7 +51,7 @@ function printUpdated(changes: ReadonlyArray<LockfileSourceChange>): void {
     console.log(`  ~ ${formatChangeLabel(change)}`)
     for (const field of change.fields) {
       console.log(
-        `      ${field.field}: ${JSON.stringify(field.from)} -> ${JSON.stringify(field.to)}`,
+        `      ${field.field}: ${formatReviewJson(field.from)} -> ${formatReviewJson(field.to)}`,
       )
     }
   }
@@ -137,6 +144,21 @@ export async function runSkillsUpdateCommand(
     fail(
       'Trust-bearing source changes require `--yes`. Run `intent skills diff` to review, then re-run with `--yes` to update intent.lock.',
     )
+  }
+
+  const trustBearingIdentities = new Set(
+    targets
+      .filter(requiresApproval)
+      .map((change) => sourceIdentityKey({ kind: change.kind, id: change.id })),
+  )
+  if (trustBearingIdentities.size > 0) {
+    const reviews = buildSourceContentReviews(
+      scan.packages,
+      trustBearingIdentities,
+      scan.readFs,
+    )
+    assertSourceContentReviewsMatch(reviews, current)
+    printSourceContentReviews(reviews)
   }
 
   const currentByIdentity = new Map(

@@ -1,4 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -84,6 +90,35 @@ describe('runSkillsApproveCommand', () => {
     return dir
   }
 
+  function makeReviewPackage(cwd: string): IntentPackage {
+    const packageRoot = join(cwd, 'node_modules', 'foo')
+    const skillDir = join(packageRoot, 'skills', 'core')
+    mkdirSync(join(skillDir, 'assets'), { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      '---\nname: core\ndescription: Review fixture\n---\n\nExact review body.\n',
+    )
+    writeFileSync(
+      join(skillDir, 'assets', 'data.bin'),
+      Buffer.from([0xff, 0, 1]),
+    )
+    return {
+      name: 'foo',
+      kind: 'npm',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'owner/repo', docs: 'docs/' },
+      packageRoot,
+      skills: [
+        {
+          name: 'core',
+          path: join(skillDir, 'SKILL.md'),
+          description: 'Review fixture',
+        },
+      ],
+      source: 'local',
+    }
+  }
+
   it('refuses to run in frozen mode', async () => {
     const cwd = makeTempProject()
 
@@ -162,6 +197,53 @@ describe('runSkillsApproveCommand', () => {
         kind: 'npm',
       })
     }
+  })
+
+  it('--all displays exact text and binary summaries before first approval', async () => {
+    const cwd = makeTempProject()
+    const pkg = makeReviewPackage(cwd)
+
+    await runSkillsApproveCommand(
+      undefined,
+      { all: true },
+      () => Promise.resolve(policedScan({ scan: emptyScanResult([pkg]) })),
+      cwd,
+    )
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(output).toContain('Reviewing npm:foo@1.0.0')
+    expect(output).toContain('Text: skills/core/SKILL.md')
+    expect(output).toContain('Exact review body.')
+    expect(output).toMatch(
+      /Binary: skills\/core\/assets\/data\.bin \(3 bytes, sha256-[0-9a-f]{64}\)/,
+    )
+  })
+
+  it('escapes terminal and bidi controls in reviewed text', async () => {
+    const cwd = makeTempProject()
+    const pkg = makeReviewPackage(cwd)
+    writeFileSync(
+      pkg.skills[0]!.path,
+      'safe\u001b[31mred\u001b[0m\u202ereordered\n',
+    )
+    writeFileSync(
+      join(pkg.packageRoot, 'skills', 'core', 'assets', '\u001b[2J.bin'),
+      Buffer.from([0]),
+    )
+
+    await runSkillsApproveCommand(
+      undefined,
+      { all: true },
+      () => Promise.resolve(policedScan({ scan: emptyScanResult([pkg]) })),
+      cwd,
+    )
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(output).toContain('safe\\u001b[31mred\\u001b[0m')
+    expect(output).toContain('\\u202ereordered')
+    expect(output).toContain('assets/\\u001b[2J.bin')
+    expect(output).not.toContain('\u001b')
+    expect(output).not.toContain('\u202e')
   })
 
   it('--all removes a locked source that is no longer discovered', async () => {

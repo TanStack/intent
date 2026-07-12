@@ -25,4 +25,6 @@ One exception is sanctioned: in Yarn Plug'n'Play projects, Intent loads Yarn's P
 
 Intent matches allowlist entries by `(kind, id)`. `workspace:foo` authorizes only the workspace member named `foo`; it does not authorize an installed `npm:foo`. A bare `foo` entry is normalized to the npm source kind. Same-named workspace and npm packages remain distinct sources throughout discovery, locking, and approval.
 
+Source trust and content approval remain separate decisions. When `intent.lock` exists, ordinary skill loading and agent catalog generation reject installed content that differs from the approved hashes. A missing lockfile does not silently approve anything; outside frozen mode it preserves the bootstrap path until the user reviews content with `intent skills diff` and writes the first lock with `intent skills approve`.
+
 The `git:` source kind is reserved. Intent parses and validates the shape, then rejects it until a future version can pin the resolved ref and content hash. A git entry never loads silently.

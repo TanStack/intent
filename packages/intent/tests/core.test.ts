@@ -527,6 +527,92 @@ describe('loadIntentSkill', () => {
     }
   })
 
+  it('refuses changed content in ordinary mode when an approved lockfile exists', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    const packageRoot = join(root, 'node_modules', '@tanstack', 'query')
+    const skillPath = join(packageRoot, 'skills', 'fetching', 'SKILL.md')
+    writeIntentLockfile(join(root, 'intent.lock'), {
+      lockfileVersion: 1,
+      intentVersion: '0.0.0',
+      sources: buildCurrentLockfileSources([
+        {
+          name: '@tanstack/query',
+          version: '5.0.0',
+          intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+          skills: [
+            {
+              name: 'fetching',
+              path: skillPath,
+              description: 'Query data fetching patterns',
+            },
+          ],
+          packageRoot,
+          kind: 'npm',
+          source: 'local',
+        },
+      ]),
+      policy: { ignores: [] },
+    })
+    writeFileSync(skillPath, 'changed guidance')
+
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow('intent.lock is out of date')
+  })
+
+  it('refuses a drifted agent catalog when an approved lockfile exists', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    const packageRoot = join(root, 'node_modules', '@tanstack', 'query')
+    const skillPath = join(packageRoot, 'skills', 'fetching', 'SKILL.md')
+    writeIntentLockfile(join(root, 'intent.lock'), {
+      lockfileVersion: 1,
+      intentVersion: '0.0.0',
+      sources: buildCurrentLockfileSources([
+        {
+          name: '@tanstack/query',
+          version: '5.0.0',
+          intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+          skills: [
+            {
+              name: 'fetching',
+              path: skillPath,
+              description: 'Query data fetching patterns',
+            },
+          ],
+          packageRoot,
+          kind: 'npm',
+          source: 'local',
+        },
+      ]),
+      policy: { ignores: [] },
+    })
+    writeFileSync(skillPath, 'changed guidance')
+
+    expect(() => listIntentSkills({ audience: 'agent', cwd: root })).toThrow(
+      'intent.lock is out of date',
+    )
+  })
+
   it('does not change process cwd when loading from an explicit cwd', () => {
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',

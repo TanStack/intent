@@ -1,8 +1,16 @@
+import {
+  assertSourceContentReviewsMatch,
+  buildSourceContentReviews,
+} from '../../core/lockfile/content-review.js'
+import { sourceIdentityKey } from '../../core/types.js'
 import { isFrozenMode } from '../../shared/mode.js'
 import {
-  buildSkillsDiff,
+  computeLockfileState,
   enforceFrozenMode,
+  escapeReviewValue,
   formatHiddenSourceDetails,
+  formatReviewJson,
+  printSourceContentReviews,
 } from './support.js'
 import type {
   LockfileDiffResult,
@@ -19,11 +27,11 @@ export interface SkillsDiffCommandOptions {
 }
 
 function formatSourceLabel(source: IntentLockfileSource): string {
-  return `${source.kind}:${source.id}@${source.version}`
+  return `${source.kind}:${escapeReviewValue(source.id)}@${escapeReviewValue(source.version)}`
 }
 
 function formatChangeLabel(change: LockfileSourceChange): string {
-  return `${change.kind}:${change.id}`
+  return `${change.kind}:${escapeReviewValue(change.id)}`
 }
 
 function printDiffDetails(
@@ -61,6 +69,10 @@ function printDiffDetails(
     console.log('Removed:')
     for (const source of diff.removed) {
       console.log(`  - ${formatSourceLabel(source)}`)
+      console.log(
+        `      skills: ${source.skills.length > 0 ? source.skills.map(escapeReviewValue).join(', ') : '(none)'}`,
+      )
+      console.log(`      contentHash: ${source.contentHash}`)
     }
     console.log()
   }
@@ -71,7 +83,7 @@ function printDiffDetails(
       console.log(`  ~ ${formatChangeLabel(change)}`)
       for (const field of change.fields) {
         console.log(
-          `      ${field.field}: ${JSON.stringify(field.from)} -> ${JSON.stringify(field.to)}`,
+          `      ${field.field}: ${formatReviewJson(field.from)} -> ${formatReviewJson(field.to)}`,
         )
       }
     }
@@ -88,12 +100,29 @@ export async function runSkillsDiffCommand(
     noFrozen: options.noFrozen,
   })
   const { scan, hiddenSourceCount, hiddenSources } = await scanPolicedIntents()
-  const diff = buildSkillsDiff(scan, cwd)
+  const { current, diff } = computeLockfileState(scan, cwd)
 
   if (options.json) {
     console.log(JSON.stringify({ frozen, hiddenSourceCount, ...diff }, null, 2))
   } else {
     printDiffDetails(diff, hiddenSourceCount, hiddenSources)
+    const reviewIdentities = new Set(
+      diff.hasLockfile
+        ? [
+            ...diff.added.map(sourceIdentityKey),
+            ...diff.changed.map(sourceIdentityKey),
+          ]
+        : scan.packages.map((pkg) =>
+            sourceIdentityKey({ kind: pkg.kind, id: pkg.name }),
+          ),
+    )
+    const reviews = buildSourceContentReviews(
+      scan.packages,
+      reviewIdentities,
+      scan.readFs,
+    )
+    assertSourceContentReviewsMatch(reviews, current)
+    printSourceContentReviews(reviews)
   }
 
   enforceFrozenMode(diff, frozen, hiddenSourceCount, hiddenSources)

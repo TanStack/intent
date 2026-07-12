@@ -22,6 +22,7 @@ import {
 import type { ResolveSkillResult } from '../skills/resolver.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { ReadFs } from '../shared/utils.js'
+import type { ReadIntentLockfileResult } from './lockfile/lockfile.js'
 import type {
   IntentPackage,
   ScanOptions,
@@ -117,6 +118,15 @@ export function listIntentSkills(
       context: projectContext,
     })
   const packages = scan.packages
+  if (options.audience === 'agent') {
+    assertApprovedLockState(
+      cwd,
+      scan,
+      hiddenSourceCount,
+      readProjectLockfile(cwd),
+      { rejectHiddenSources: false, requireLockfile: false },
+    )
+  }
   const skills = packages.flatMap((pkg) =>
     pkg.skills.map((skill): IntentSkillSummary => {
       return {
@@ -269,26 +279,37 @@ function createLoadedSkillDebug({
   }
 }
 
-function assertFrozenLoadLockfile(
+function readProjectLockfile(cwd: string): ReadIntentLockfileResult {
+  const context = resolveProjectContext({ cwd })
+  const root = context.workspaceRoot ?? context.packageRoot ?? cwd
+  return readIntentLockfile(join(root, 'intent.lock'))
+}
+
+function assertApprovedLockState(
   cwd: string,
   scan: ScanResult,
   hiddenSourceCount: number,
+  lockedResult: ReadIntentLockfileResult,
+  options: {
+    rejectHiddenSources: boolean
+    requireLockfile: boolean
+  },
 ): void {
-  if (hiddenSourceCount > 0) {
+  if (options.rejectHiddenSources && hiddenSourceCount > 0) {
     throw new IntentCoreError(
       'package-not-listed',
       `Frozen mode found ${hiddenSourceCount} unlisted skill-bearing source(s) not in intent.skills. Add them to intent.skills or intent.exclude, then re-run outside frozen mode.`,
     )
   }
 
-  const context = resolveProjectContext({ cwd })
-  const root = context.workspaceRoot ?? context.packageRoot ?? cwd
-  const lockedResult = readIntentLockfile(join(root, 'intent.lock'))
   if (lockedResult.status === 'missing') {
-    throw new IntentCoreError(
-      'package-not-listed',
-      'Frozen mode requires intent.lock. Run `intent skills approve --all` outside frozen mode first.',
-    )
+    if (options.requireLockfile) {
+      throw new IntentCoreError(
+        'package-not-listed',
+        'Frozen mode requires intent.lock. Run `intent skills approve --all` outside frozen mode first.',
+      )
+    }
+    return
   }
 
   const packages = scan.packages.map(
@@ -345,9 +366,17 @@ function resolveIntentSkillInCwd(
   const scanOptions = toScanOptions(options)
   const scope = getScanScope(scanOptions)
   const frozen = isFrozenMode()
-  const fastPathResolved = frozen
-    ? null
-    : resolveSkillUseFastPath(parsedUse, options, projectContext, cwd, fsCache)
+  const lockedResult = readProjectLockfile(cwd)
+  const fastPathResolved =
+    frozen || lockedResult.status === 'found'
+      ? null
+      : resolveSkillUseFastPath(
+          parsedUse,
+          options,
+          projectContext,
+          cwd,
+          fsCache,
+        )
   if (fastPathResolved) {
     const lateRefusal = checkLoadAllowed(use, parsedUse, {
       config,
@@ -401,8 +430,11 @@ function resolveIntentSkillInCwd(
     throw err
   }
 
-  if (frozen) {
-    assertFrozenLoadLockfile(cwd, scanResult, hiddenSourceCount)
+  if (frozen || lockedResult.status === 'found') {
+    assertApprovedLockState(cwd, scanResult, hiddenSourceCount, lockedResult, {
+      rejectHiddenSources: frozen,
+      requireLockfile: frozen,
+    })
   }
 
   return toResolvedIntentSkill(

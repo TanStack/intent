@@ -1,11 +1,18 @@
 import { createInterface } from 'node:readline/promises'
 import { getIntentPackageVersion } from '../support.js'
+import {
+  assertSourceContentReviewsMatch,
+  buildSourceContentReviews,
+} from '../../core/lockfile/content-review.js'
 import { writeIntentLockfile } from '../../core/lockfile/lockfile.js'
 import { sourceIdentityKey } from '../../core/types.js'
 import { isFrozenMode } from '../../shared/mode.js'
 import { fail } from '../../shared/cli-error.js'
 import {
   computeLockfileState,
+  escapeReviewValue,
+  formatReviewJson,
+  printSourceContentReviews,
   resolveLockfilePath,
   resolveSourceArg,
 } from './support.js'
@@ -39,19 +46,23 @@ function compareStrings(a: string, b: string): number {
 function formatDisclosures(source: IntentLockfileSource): string {
   const parts: Array<string> = []
   if (source.capabilities && source.capabilities.length > 0) {
-    parts.push(`capabilities: ${source.capabilities.join(', ')}`)
+    parts.push(
+      `capabilities: ${source.capabilities.map(escapeReviewValue).join(', ')}`,
+    )
   }
   if (source.declaredSecrets && source.declaredSecrets.length > 0) {
-    parts.push(`declaredSecrets: ${source.declaredSecrets.join(', ')}`)
+    parts.push(
+      `declaredSecrets: ${source.declaredSecrets.map(escapeReviewValue).join(', ')}`,
+    )
   }
   if (source.mcpTools && source.mcpTools.length > 0) {
-    parts.push(`mcpTools: ${source.mcpTools.join(', ')}`)
+    parts.push(`mcpTools: ${source.mcpTools.map(escapeReviewValue).join(', ')}`)
   }
   return parts.length > 0 ? ` [${parts.join('; ')}]` : ''
 }
 
 function describeChange(change: PendingChange): string {
-  const label = `${change.source.kind}:${change.source.id}@${change.source.version}`
+  const label = `${change.source.kind}:${escapeReviewValue(change.source.id)}@${escapeReviewValue(change.source.version)}`
   switch (change.kind) {
     case 'add':
       return `Approve new source ${label}?${formatDisclosures(change.source)}`
@@ -61,11 +72,57 @@ function describeChange(change: PendingChange): string {
       const fieldSummary = change.fields
         .map(
           (field) =>
-            `${field.field}: ${JSON.stringify(field.from)} -> ${JSON.stringify(field.to)}`,
+            `${field.field}: ${formatReviewJson(field.from)} -> ${formatReviewJson(field.to)}`,
         )
         .join('; ')
       return `Approve change to ${label}? (${fieldSummary})`
     }
+  }
+}
+
+function printRemovedSourceReview(source: IntentLockfileSource): void {
+  console.log(
+    `Reviewing removal ${source.kind}:${escapeReviewValue(source.id)}@${escapeReviewValue(source.version)} (no longer discovered)`,
+  )
+  console.log(
+    `  Locked skills: ${source.skills.length > 0 ? source.skills.map(escapeReviewValue).join(', ') : '(none)'}`,
+  )
+  console.log(`  Locked content hash: ${source.contentHash}`)
+  console.log()
+}
+
+function printPendingReviews(
+  changes: ReadonlyArray<PendingChange>,
+  scan: PolicedScan['scan'],
+  current: ReadonlyArray<IntentLockfileSource>,
+): void {
+  const currentIdentities = new Set(
+    changes
+      .filter((change) => change.kind !== 'remove')
+      .map((change) => change.identity),
+  )
+  const reviews = buildSourceContentReviews(
+    scan.packages,
+    currentIdentities,
+    scan.readFs,
+  )
+  assertSourceContentReviewsMatch(reviews, current)
+  const reviewByIdentity = new Map(
+    reviews.map((review) => [sourceIdentityKey(review), review]),
+  )
+
+  for (const change of changes) {
+    if (change.kind === 'remove') {
+      printRemovedSourceReview(change.source)
+      continue
+    }
+    const review = reviewByIdentity.get(change.identity)
+    if (!review) {
+      throw new Error(
+        `Internal error: no content review found for ${change.identity}.`,
+      )
+    }
+    printSourceContentReviews([review])
   }
 }
 
@@ -163,7 +220,7 @@ export async function runSkillsApproveCommand(
           })),
         ]
 
-  let toApply: Array<PendingChange>
+  let candidates: Array<PendingChange>
 
   if (sourceArg) {
     const identity = sourceIdentityKey(resolveSourceArg(sourceArg, current))
@@ -173,12 +230,19 @@ export async function runSkillsApproveCommand(
         `No pending change for "${sourceArg}". Run \`intent skills diff\` to see pending changes.`,
       )
     }
-    toApply = [match]
+    candidates = [match]
   } else if (changes.length === 0) {
     console.log('intent.lock is up to date. Nothing to approve.')
     return
-  } else if (options.all || options.yes) {
-    toApply = changes
+  } else {
+    candidates = changes
+  }
+
+  printPendingReviews(candidates, scan, current)
+
+  let toApply: Array<PendingChange>
+  if (sourceArg || options.all || options.yes) {
+    toApply = candidates
   } else {
     if (confirm === defaultConfirm && process.stdin.isTTY !== true) {
       fail(
@@ -186,7 +250,7 @@ export async function runSkillsApproveCommand(
       )
     }
     toApply = []
-    for (const change of changes) {
+    for (const change of candidates) {
       if (await confirm(describeChange(change))) {
         toApply.push(change)
       }

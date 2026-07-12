@@ -5,7 +5,9 @@ id: lockfile
 
 `intent.lock` is a committed, per-project record of which skill-bearing sources you've approved and what their content looked like when you approved it. It closes the gap [source trust](../concepts/trust-model) leaves open: `package.json#intent.skills` controls which packages *may* contribute skills, but nothing records what those sources *contained* when you allowed them — so an allowlisted package could silently change its skill content and nothing would notice. `intent.lock` is that record.
 
-This is tamper-evidence, not semantic validation. Approving a source means **a human reviewed this exact change** — never "Intent verified this skill is safe."
+This is tamper-evidence, not semantic validation. Before approval, Intent displays the complete current canonical text for every added or changed skill file. Binary files are identified by path, byte length, and hash. Approving a source means **a human reviewed the displayed content** — never "Intent verified this skill is safe."
+
+The lockfile stores hashes and paths, not historical file contents. Intent therefore cannot reconstruct a unified old/new text diff after a dependency update. For changed sources it displays the complete current content being approved; for removed sources it displays the locked paths and aggregate hash. This keeps the lockfile compact and preserves offline operation without pretending old bytes are available.
 
 ## What's in the file
 
@@ -42,6 +44,12 @@ This is tamper-evidence, not semantic validation. Approving a source means **a h
 ## Commands
 
 `intent.lock` is managed entirely by the [`intent skills`](../cli/intent-skills) command group: `scan`/`diff` (read-only) and `approve`/`update` (mutating).
+
+## Activation enforcement
+
+When `intent.lock` exists, ordinary `intent load` verifies the installed allowlisted sources against it before returning skill content. Agent-audience `intent list` does the same before producing the catalog used by Intent hooks. Any added, removed, or changed approved source blocks activation and points the user to `intent skills diff` and `intent skills approve`.
+
+A project without `intent.lock` retains bootstrap behavior outside frozen mode: listed skills can load and appear in agent catalogs until the project creates its first lock. Human `intent list` remains diagnostic so a user can inspect the project while resolving drift.
 
 ## Frozen mode
 
@@ -80,7 +88,7 @@ The generated `Check Skills` workflow is for library-maintainer validation and r
 
 ## What this does and doesn't solve
 
-- **Solves:** an allowlisted package's skill content changing without a human noticing, in CI.
+- **Solves:** an allowlisted package's approved skill content changing silently during ordinary agent loading or in CI.
 - **Solves:** distinguishing a `workspace:foo` package from a same-named `npm:foo` package — they're separate approvals.
 - **Does not solve:** deciding whether a package should be trusted in the first place — that's still `package.json#intent.skills`, a human decision.
 - **Does not solve:** validating that skill content is semantically safe or correct — approving is "a human reviewed this," not "Intent verified this."

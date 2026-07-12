@@ -39,6 +39,28 @@ type HashCollectionState = {
 type ReadSkillContent = {
   content: Buffer
   bytesRead: number
+  isBinary: boolean
+}
+
+export type SourceContentReviewEntry = {
+  relativePath: string
+  content: Buffer
+  contentHash: string
+  isBinary: boolean
+  byteLength: number
+}
+
+export function computeReviewedSourceContentHash(
+  entries: ReadonlyArray<
+    Pick<SourceContentReviewEntry, 'relativePath' | 'content'>
+  >,
+): string {
+  return hashEntries(
+    entries.map((entry) => ({
+      key: entry.relativePath,
+      value: entry.content,
+    })),
+  )
 }
 
 function compareStrings(a: string, b: string): number {
@@ -174,9 +196,11 @@ function readSkillMdContent(
       `Hash file size limit (${HASH_LIMITS.maxFileBytes} bytes) exceeded by "${logicalRelativePath}".`,
     )
   }
+  const isBinary = isBinaryContent(raw)
   return {
-    content: isBinaryContent(raw) ? raw : normalizeLineEndings(raw),
+    content: isBinary ? raw : normalizeLineEndings(raw),
     bytesRead: raw.byteLength,
+    isBinary,
   }
 }
 
@@ -184,10 +208,15 @@ function readHashEntries(
   entries: ReadonlyArray<SkillContentEntry>,
   fs: ReadFs,
   realPackageRoot: string,
-): Array<{ key: string; value: Buffer }> {
+): Array<{
+  key: string
+  value: Buffer
+  isBinary: boolean
+  byteLength: number
+}> {
   let totalBytes = 0
   return entries.map((entry) => {
-    const { content, bytesRead } = readSkillMdContent(
+    const { content, bytesRead, isBinary } = readSkillMdContent(
       fs,
       entry.absolutePath,
       realPackageRoot,
@@ -199,7 +228,12 @@ function readHashEntries(
         `Hash total size limit (${HASH_LIMITS.maxTotalBytes} bytes) exceeded.`,
       )
     }
-    return { key: entry.relativePath, value: content }
+    return {
+      key: entry.relativePath,
+      value: content,
+      isBinary,
+      byteLength: bytesRead,
+    }
   })
 }
 
@@ -421,8 +455,46 @@ export function computeSourceContentHash(
 
   return {
     skills: entries.map((entry) => entry.relativePath).toSorted(compareStrings),
-    contentHash: hashEntries(hashed),
+    contentHash: computeReviewedSourceContentHash(
+      hashed.map((entry) => ({
+        relativePath: entry.key,
+        content: entry.value,
+      })),
+    ),
   }
+}
+
+export function readSourceContentForReview(
+  packageRoot: string,
+  entries: ReadonlyArray<SkillContentEntry>,
+  fs: ReadFs = nodeReadFs,
+): Array<SourceContentReviewEntry> {
+  assertCanonicalPackageRelativePaths(
+    entries.map((entry) => entry.relativePath),
+    'skill path',
+  )
+
+  const realPackageRoot = fs.realpathSync(packageRoot)
+  const contentEntries = collectSkillContentEntries(
+    fs,
+    packageRoot,
+    entries,
+    realPackageRoot,
+  )
+  assertNoDuplicateKeys(
+    contentEntries.map((entry) => entry.relativePath),
+    'skill content path',
+  )
+
+  return readHashEntries(contentEntries, fs, realPackageRoot)
+    .map((entry) => ({
+      relativePath: entry.key,
+      content: entry.value,
+      contentHash: `sha256-${createHash('sha256').update(entry.value).digest('hex')}`,
+      isBinary: entry.isBinary,
+      byteLength: entry.byteLength,
+    }))
+    .toSorted((a, b) => compareStrings(a.relativePath, b.relativePath))
 }
 
 function toPosixRelative(baseDir: string, absolutePath: string): string {

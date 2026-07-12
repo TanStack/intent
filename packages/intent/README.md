@@ -133,8 +133,8 @@ The real risk with any derived artifact is staleness. `npx @tanstack/intent@late
 | `npx @tanstack/intent@latest setup`                | Copy CI templates into your repo                    |
 | `npx @tanstack/intent@latest stale [dir] [--json]` | Check skills for version drift                      |
 | `npx @tanstack/intent@latest skills scan`          | Discover sources and diff against `intent.lock`     |
-| `npx @tanstack/intent@latest skills diff`          | Show pending `intent.lock` changes                  |
-| `npx @tanstack/intent@latest skills approve`       | Approve pending changes into `intent.lock`          |
+| `npx @tanstack/intent@latest skills diff`          | Review pending metadata and current skill content   |
+| `npx @tanstack/intent@latest skills approve`       | Review and approve changes into `intent.lock`       |
 | `npx @tanstack/intent@latest skills update`        | Re-sync already-locked sources to installed state   |
 
 See [Lockfile and frozen mode](https://tanstack.com/intent/latest/docs/security/lockfile) and [`intent skills`](https://tanstack.com/intent/latest/docs/cli/intent-skills) for what `intent.lock` is and full command details.

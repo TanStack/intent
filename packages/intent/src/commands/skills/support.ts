@@ -5,6 +5,7 @@ import { readIntentLockfile } from '../../core/lockfile/lockfile.js'
 import { resolveProjectContext } from '../../core/project-context.js'
 import { fail } from '../../shared/cli-error.js'
 import type { LockfileDiffResult } from '../../core/lockfile/lockfile-diff.js'
+import type { SourceContentReview } from '../../core/lockfile/content-review.js'
 import type {
   IntentLockfileSource,
   ReadIntentLockfileResult,
@@ -124,6 +125,66 @@ export function formatHiddenSourceDetails(
     .join(', ')
 
   return `: ${details}`
+}
+
+function escapeUnsafeUnicode(value: string): string {
+  return value.replace(
+    /[\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu,
+    (character) =>
+      `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  )
+}
+
+export function formatReviewJson(value: unknown): string {
+  return escapeUnsafeUnicode(String(JSON.stringify(value)))
+}
+
+export function escapeReviewValue(value: string): string {
+  // JSON escaping neutralizes terminal control bytes. Escape additional
+  // bidi/C1 controls that JSON permits literally so untrusted skill content
+  // and paths cannot visually reorder or overwrite the review output.
+  return formatReviewJson(value).slice(1, -1)
+}
+
+function formatCanonicalText(content: Buffer): string {
+  return content
+    .toString('utf8')
+    .split('\n')
+    .map((line, index) => {
+      const escaped = escapeReviewValue(line)
+      return `    ${String(index + 1).padStart(4)} | ${escaped}`
+    })
+    .join('\n')
+}
+
+export function printSourceContentReviews(
+  reviews: ReadonlyArray<SourceContentReview>,
+): void {
+  for (const review of reviews) {
+    console.log(
+      `Reviewing ${review.kind}:${escapeReviewValue(review.id)}@${escapeReviewValue(review.version)}`,
+    )
+    if (review.files.length === 0) {
+      console.log('  No skill content files.')
+      console.log()
+      continue
+    }
+
+    for (const file of review.files) {
+      if (file.isBinary) {
+        console.log(
+          `  Binary: ${escapeReviewValue(file.relativePath)} (${file.byteLength} bytes, ${file.contentHash})`,
+        )
+        continue
+      }
+
+      console.log(
+        `  Text: ${escapeReviewValue(file.relativePath)} (canonical UTF-8, ${file.content.length} bytes)`,
+      )
+      console.log(formatCanonicalText(file.content))
+    }
+    console.log()
+  }
 }
 
 export function enforceFrozenMode(

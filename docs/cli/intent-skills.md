@@ -31,7 +31,7 @@ Read-only. Discovers current skill-bearing sources, computes each source's `cont
 npx intent skills diff [--json] [--frozen] [--no-frozen]
 ```
 
-Read-only. Same underlying computation as `scan`, but change-focused: prints only `Added:`/`Removed:`/`Changed:` sections with per-field diffs (`version`, `resolution`, `skills`, `contentHash`, `manifestHash`, `capabilities`). Unchanged sources are omitted.
+Read-only. Same underlying computation as `scan`, but change-focused: prints `Added:`/`Removed:`/`Changed:` sections with per-field diffs (`version`, `resolution`, `skills`, `contentHash`, `manifestHash`, `capabilities`). It then displays the complete current canonical text for every added or changed source. Binary files are summarized by path, byte length, and hash. Control and bidirectional characters are escaped in the line-numbered text display so package content cannot manipulate terminal output. Unchanged sources are omitted.
 
 ```
 Changed:
@@ -47,10 +47,10 @@ Changed:
 npx intent skills approve [source] [--all] [--yes]
 ```
 
-Writes `intent.lock`. This is the trust decision — approving means a human reviewed this exact change.
+Writes `intent.lock`. This is the trust decision. Before any prompt or non-interactive write, Intent displays the current canonical text and binary summaries for the affected sources. Removed sources display their locked skill paths and aggregate hash because the old file bytes are not stored in `intent.lock`.
 
 - **No arg, no `--all`/`--yes`:** interactive per-pending-change prompt (approve/skip each). Fails if stdin isn't a TTY.
-- **`--all` or `--yes`:** accepts every pending change (added, removed, changed) without prompting. This is the first-run path that creates the initial lock.
+- **`--all` or `--yes`:** displays every pending change, then accepts them without prompting. This is the first-run path that creates the initial lock.
 - **A single source:** `approve npm:@tanstack/query`, `approve workspace:my-package`, or a bare name (`approve foo`) if it resolves unambiguously against currently-discovered sources. Two sources sharing a bare name across kinds (`npm:foo` and `workspace:foo`) error instead of guessing — pass `kind:id` explicitly.
 - Re-serializes the whole file deterministically: identical inputs produce a byte-identical `intent.lock`.
 - Only touches the targeted entry (single-source form) or all pending changes (`--all`/`--yes`) — never silently drops an entry you didn't act on.
@@ -62,7 +62,7 @@ Writes `intent.lock`. This is the trust decision — approving means a human rev
 npx intent skills update [source] [--all] [--yes]
 ```
 
-Writes `intent.lock`. It mechanically re-syncs version and resolution for matching **already-locked** entries. Changes to skills, content hashes, manifests, capabilities, declared secrets, or MCP metadata require `--yes` after reviewing `intent skills diff`.
+Writes `intent.lock`. It mechanically re-syncs version and resolution for matching **already-locked** entries. Changes to skills, content hashes, manifests, capabilities, declared secrets, or MCP metadata require `--yes`; before writing them, `update` displays the same current content review as `diff` and `approve`.
 
 - Only touches sources present in **both** the lock and the current scan. It never adds a newly-discovered source (that's `approve`'s job) and never drops a source that's no longer discovered (also `approve`'s job — removing a source from the trust boundary is itself a trust decision).
 - Reports pending added/removed drift it didn't touch: `N added, M removed source(s) still pending. Run \`intent skills approve\` to review.`

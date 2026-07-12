@@ -1,4 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -84,6 +90,49 @@ describe('runSkillsUpdateCommand', () => {
     writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x' }))
     return dir
   }
+
+  function makeReviewPackage(cwd: string): IntentPackage {
+    const packageRoot = join(cwd, 'node_modules', 'foo')
+    const skillDir = join(packageRoot, 'skills', 'core')
+    mkdirSync(skillDir, { recursive: true })
+    const skillPath = join(skillDir, 'SKILL.md')
+    writeFileSync(skillPath, 'current update content\n')
+    return {
+      name: 'foo',
+      kind: 'npm',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'owner/repo', docs: 'docs/' },
+      packageRoot,
+      skills: [{ name: 'core', path: skillPath, description: 'Core' }],
+      source: 'local',
+    }
+  }
+
+  it('displays current content before --yes accepts a trust-bearing update', async () => {
+    const cwd = makeTempProject()
+    const pkg = makeReviewPackage(cwd)
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      ...baseLockfile(),
+      sources: [
+        lockedSource({
+          skills: ['skills/core/SKILL.md'],
+          contentHash: 'sha256-previous',
+        }),
+      ],
+    })
+
+    await runSkillsUpdateCommand(
+      undefined,
+      { yes: true },
+      () => Promise.resolve(policedScan({ scan: emptyScanResult([pkg]) })),
+      cwd,
+    )
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(output).toContain('Reviewing npm:foo@1.0.0')
+    expect(output).toContain('Text: skills/core/SKILL.md')
+    expect(output).toContain('current update content')
+  })
 
   it('refuses to run in frozen mode', async () => {
     const cwd = makeTempProject()
