@@ -2,13 +2,16 @@
 // resolves, requires, or executes any discovered package.
 
 /**
- * `kind` + `id` is the identity M2's lockfile reuses; `ref` exists only on
- * `git`. The `git` variant is never constructed in M1 (git entries are rejected
- * at parse time) but is defined here so M2 builds on this shape.
+ * Exact entries keep the `kind` + `id` identity M2's lockfile reuses. Patterns
+ * select multiple discovered identities and remain distinct from exact entries.
+ * The `git` variant is never constructed in M1 (git entries are rejected at
+ * parse time) but is defined here so M2 builds on this shape.
  */
 type SkillSource =
-  | { raw: string; id: string; kind: 'npm' }
-  | { raw: string; id: string; kind: 'workspace' }
+  | ({ raw: string; kind: 'npm' | 'workspace' } & (
+      | { id: string }
+      | { pattern: string }
+    ))
   | { raw: string; id: string; kind: 'git'; ref: string }
 
 /**
@@ -94,19 +97,17 @@ export function parseSkillSources(value: unknown): SkillSourcesConfig {
       continue
     }
 
-    // The wildcard is a trust-all switch, so it must be the exact string `"*"`.
-    // Any other entry containing `*` (whitespace-wrapped, or a glob like
-    // `@scope/*`) is rejected rather than silently flipping to allow-all or
-    // becoming a bogus source — `intent.skills` is not glob-matched.
-    if (entry.includes('*')) {
-      if (entry === '*') {
-        allowAll = true
-        continue
-      }
+    if (entry === '*') {
+      allowAll = true
+      continue
+    }
+
+    // Only the exact raw entry is the trust-all switch. Whitespace must not
+    // turn a package pattern into allow-all after normalization.
+    if (trimmed === '*') {
       issues.push({
         raw: entry,
-        message:
-          'The "*" wildcard must be the exact entry "*"; globs are not supported in intent.skills.',
+        message: 'The "*" wildcard must be the exact entry "*".',
       })
       continue
     }
@@ -117,7 +118,8 @@ export function parseSkillSources(value: unknown): SkillSourcesConfig {
       continue
     }
 
-    const identity = `${parsed.kind}\u0000${parsed.id}`
+    const selector = 'pattern' in parsed ? parsed.pattern : parsed.id
+    const identity = `${parsed.kind}\u0000${selector}`
     if (seenIdentity.has(identity)) continue
     seenIdentity.add(identity)
     sources.push(parsed)
@@ -145,7 +147,7 @@ function parseEntry(
     const invalid = validateId(trimmed)
     if (invalid)
       return { raw, message: `Invalid npm source "${trimmed}": ${invalid}` }
-    return { raw, id: trimmed, kind: 'npm' }
+    return packageSource(raw, trimmed, 'npm')
   }
 
   const prefix = trimmed.slice(0, colon)
@@ -166,7 +168,7 @@ function parseEntry(
           message: `Invalid workspace source "${trimmed}": ${invalid}`,
         }
       }
-      return { raw, id: rest, kind: 'workspace' }
+      return packageSource(raw, rest, 'workspace')
     }
     case 'git':
       return {
@@ -179,6 +181,14 @@ function parseEntry(
         message: `Unknown source prefix "${prefix}" in "${trimmed}".`,
       }
   }
+}
+
+function packageSource(
+  raw: string,
+  id: string,
+  kind: 'npm' | 'workspace',
+): SkillSource {
+  return id.includes('*') ? { raw, pattern: id, kind } : { raw, id, kind }
 }
 
 function validateId(id: string): string | null {
