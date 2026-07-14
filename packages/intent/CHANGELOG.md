@@ -1,5 +1,11 @@
 # @tanstack/intent
 
+## 0.3.6
+
+### Patch Changes
+
+- [#201](https://github.com/TanStack/intent/pull/201) [`ca0c761`](https://github.com/TanStack/intent/commit/ca0c7613f0fb2071db6c9efad2079aeecc95b13b) - Support `*` package patterns such as `@tanstack/*` in `intent.skills` allowlists.
+
 ## 0.3.5
 
 ### Patch Changes
