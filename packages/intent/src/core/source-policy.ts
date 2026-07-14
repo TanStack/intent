@@ -53,16 +53,55 @@ type ExplicitSkillSource = Extract<
   { mode: 'explicit' }
 >['sources'][number]
 
-function sourceMatchesPackage(
+interface SkillSourceMatcher {
+  source: ExplicitSkillSource
+  matchesPackage: (
+    packageName: string,
+    packageKind?: 'npm' | 'workspace',
+  ) => boolean
+}
+
+function compileSkillSourceMatcher(
   source: ExplicitSkillSource,
-  packageName: string,
-  packageKind?: 'npm' | 'workspace',
-): boolean {
-  if (source.kind === 'git') return false
-  if (packageKind !== undefined && source.kind !== packageKind) return false
-  return 'pattern' in source
-    ? compileWildcardPattern(source.pattern)(packageName)
-    : source.id === packageName
+): SkillSourceMatcher {
+  if (source.kind === 'git') {
+    return { source, matchesPackage: () => false }
+  }
+
+  const matchesName =
+    'pattern' in source
+      ? compileWildcardPattern(source.pattern)
+      : (packageName: string) => source.id === packageName
+
+  return {
+    source,
+    matchesPackage: (packageName, packageKind) =>
+      (packageKind === undefined || source.kind === packageKind) &&
+      matchesName(packageName),
+  }
+}
+
+function compileSkillSourcePolicy(config: SkillSourcesConfig): {
+  matchers: Array<SkillSourceMatcher>
+  permits: (packageName: string, packageKind?: 'npm' | 'workspace') => boolean
+} {
+  switch (config.mode) {
+    case 'absent':
+    case 'allow-all':
+      return { matchers: [], permits: () => true }
+    case 'empty':
+      return { matchers: [], permits: () => false }
+    case 'explicit': {
+      const matchers = config.sources.map(compileSkillSourceMatcher)
+      return {
+        matchers,
+        permits: (packageName, packageKind) =>
+          matchers.some((matcher) =>
+            matcher.matchesPackage(packageName, packageKind),
+          ),
+      }
+    }
+  }
 }
 
 export function isSourcePermitted(
@@ -70,17 +109,7 @@ export function isSourcePermitted(
   packageName: string,
   packageKind?: 'npm' | 'workspace',
 ): boolean {
-  switch (config.mode) {
-    case 'absent':
-    case 'allow-all':
-      return true
-    case 'empty':
-      return false
-    case 'explicit':
-      return config.sources.some((source) =>
-        sourceMatchesPackage(source, packageName, packageKind),
-      )
-  }
+  return compileSkillSourcePolicy(config).permits(packageName, packageKind)
 }
 
 export function packageNotListedRefusal(
@@ -161,6 +190,7 @@ export function applySourcePolicy(
 ): SourcePolicyResult {
   const { config, excludeMatchers } = options
   const audience = options.audience ?? 'human'
+  const sourcePolicy = compileSkillSourcePolicy(config)
   const seen = new Set<string>()
   const notices: Array<string> = []
 
@@ -176,7 +206,7 @@ export function applySourcePolicy(
   for (const pkg of scanResult.packages) {
     if (isPackageExcluded(pkg.name, excludeMatchers)) continue
 
-    if (!isSourcePermitted(config, pkg.name, pkg.kind)) {
+    if (!sourcePolicy.permits(pkg.name, pkg.kind)) {
       if (config.mode === 'explicit') {
         hiddenSources.push({ name: pkg.name, skillCount: pkg.skills.length })
       }
@@ -196,13 +226,13 @@ export function applySourcePolicy(
   }
 
   if (config.mode === 'explicit') {
-    for (const source of config.sources) {
+    for (const matcher of sourcePolicy.matchers) {
       const notDiscovered = !scanResult.packages.some((pkg) =>
-        sourceMatchesPackage(source, pkg.name, pkg.kind),
+        matcher.matchesPackage(pkg.name, pkg.kind),
       )
       if (notDiscovered) {
         emit(
-          `"${source.raw}" is declared in intent.skills but was not discovered.`,
+          `"${matcher.source.raw}" is declared in intent.skills but was not discovered.`,
         )
       }
     }

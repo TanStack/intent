@@ -7,8 +7,11 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { compileExcludePatterns } from '../src/core/excludes.js'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  compileExcludePatterns,
+  compileWildcardPattern,
+} from '../src/core/excludes.js'
 import {
   ALLOW_ALL_NOTICE,
   EMPTY_NOTE,
@@ -17,7 +20,16 @@ import {
   readSkillSourcesConfig,
 } from '../src/core/source-policy.js'
 import { parseSkillSources } from '../src/core/skill-sources.js'
+import type * as Excludes from '../src/core/excludes.js'
 import type { IntentPackage, SkillEntry } from '../src/shared/types.js'
+
+vi.mock('../src/core/excludes.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof Excludes>()
+  return {
+    ...actual,
+    compileWildcardPattern: vi.fn(actual.compileWildcardPattern),
+  }
+})
 
 const realTmpdir = realpathSync(tmpdir())
 
@@ -104,6 +116,27 @@ describe('applySourcePolicy — allowlist matrix', () => {
       '1 discovered package ships skills but is not listed in intent.skills: @other/package. Add to opt in.',
       '"@tanstack/*" is declared in intent.skills but was not discovered.',
     ])
+  })
+
+  it('compiles each allowlist glob once per policy application', () => {
+    const compile = vi.mocked(compileWildcardPattern)
+    compile.mockClear()
+
+    applySourcePolicy(
+      {
+        packages: [
+          pkg('@scope/one', ['one']),
+          pkg('@scope/two', ['two']),
+          pkg('@other/three', ['three']),
+        ],
+      },
+      {
+        config: config(['@scope/*', '@other/*']),
+        excludeMatchers: [],
+      },
+    )
+
+    expect(compile).toHaveBeenCalledTimes(2)
   })
 
   it('drops an unlisted discovered package and warns', () => {
