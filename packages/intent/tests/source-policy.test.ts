@@ -59,6 +59,53 @@ describe('applySourcePolicy — allowlist matrix', () => {
     expect(result.notices).toEqual([])
   })
 
+  it('includes every package matched by an npm allowlist glob', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [
+          pkg('@tanstack/query', ['query']),
+          pkg('@tanstack/router', ['router']),
+          pkg('@other/package', ['other']),
+        ],
+      },
+      { config: config(['@tanstack/*']), excludeMatchers: [] },
+    )
+    expect(names(result.packages)).toEqual([
+      '@tanstack/query',
+      '@tanstack/router',
+    ])
+    expect(result.notices).toEqual([
+      '1 discovered package ships skills but is not listed in intent.skills: @other/package. Add to opt in.',
+    ])
+  })
+
+  it('keeps workspace allowlist globs kind-specific', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [
+          pkg('@scope/workspace', ['workspace'], 'workspace'),
+          pkg('@scope/npm', ['npm']),
+        ],
+      },
+      { config: config(['workspace:@scope/*']), excludeMatchers: [] },
+    )
+    expect(names(result.packages)).toEqual(['@scope/workspace'])
+    expect(result.notices).toEqual([
+      '1 discovered package ships skills but is not listed in intent.skills: @scope/npm. Add to opt in.',
+    ])
+  })
+
+  it('warns when an allowlist glob matches no discovered package', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@other/package', ['other'])] },
+      { config: config(['@tanstack/*']), excludeMatchers: [] },
+    )
+    expect(result.notices).toEqual([
+      '1 discovered package ships skills but is not listed in intent.skills: @other/package. Add to opt in.',
+      '"@tanstack/*" is declared in intent.skills but was not discovered.',
+    ])
+  })
+
   it('drops an unlisted discovered package and warns', () => {
     const result = applySourcePolicy(
       { packages: [pkg('@scope/a', ['x']), pkg('@scope/b', ['y'])] },

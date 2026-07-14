@@ -3,6 +3,7 @@ import { detectIntentAudience } from '../shared/environment.js'
 import { ALLOW_ALL_NOTICE } from '../shared/cli-output.js'
 import {
   compileExcludePatterns,
+  compileWildcardPattern,
   getConfigDirs,
   getEffectiveExcludePatterns,
   isPackageExcluded,
@@ -12,7 +13,6 @@ import {
 import { readPackageJson } from './package-json.js'
 import { parseSkillSources } from './skill-sources.js'
 import { resolveProjectContext } from './project-context.js'
-import { sourceIdentityKey } from './types.js'
 import type { SkillUse } from '../skills/use.js'
 import type { IntentPackage, ScanOptions, ScanResult } from '../shared/types.js'
 import type { ExcludeMatcher } from './excludes.js'
@@ -48,6 +48,23 @@ export interface LoadRefusal {
   message: string
 }
 
+type ExplicitSkillSource = Extract<
+  SkillSourcesConfig,
+  { mode: 'explicit' }
+>['sources'][number]
+
+function sourceMatchesPackage(
+  source: ExplicitSkillSource,
+  packageName: string,
+  packageKind?: 'npm' | 'workspace',
+): boolean {
+  if (source.kind === 'git') return false
+  if (packageKind !== undefined && source.kind !== packageKind) return false
+  return 'pattern' in source
+    ? compileWildcardPattern(source.pattern)(packageName)
+    : source.id === packageName
+}
+
 export function isSourcePermitted(
   config: SkillSourcesConfig,
   packageName: string,
@@ -60,10 +77,9 @@ export function isSourcePermitted(
     case 'empty':
       return false
     case 'explicit':
-      return config.sources.some((source) => {
-        if (source.id !== packageName) return false
-        return packageKind === undefined || source.kind === packageKind
-      })
+      return config.sources.some((source) =>
+        sourceMatchesPackage(source, packageName, packageKind),
+      )
   }
 }
 
@@ -180,20 +196,10 @@ export function applySourcePolicy(
   }
 
   if (config.mode === 'explicit') {
-    const discoveredKeys = new Set(
-      scanResult.packages.map((pkg) =>
-        sourceIdentityKey({ kind: pkg.kind, id: pkg.name }),
-      ),
-    )
     for (const source of config.sources) {
-      // git sources can't appear in config yet (parseSkillSources rejects them),
-      // and IntentPackage.kind excludes 'git', so treat as always-not-discovered
-      // until git discovery lands — revisit this line then.
-      const notDiscovered =
-        source.kind === 'git' ||
-        !discoveredKeys.has(
-          sourceIdentityKey({ kind: source.kind, id: source.id }),
-        )
+      const notDiscovered = !scanResult.packages.some((pkg) =>
+        sourceMatchesPackage(source, pkg.name, pkg.kind),
+      )
       if (notDiscovered) {
         emit(
           `"${source.raw}" is declared in intent.skills but was not discovered.`,

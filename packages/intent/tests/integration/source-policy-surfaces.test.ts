@@ -87,6 +87,24 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     )
   })
 
+  it('list and load accept packages matched by an allowlist glob', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['@scope/*'] },
+    })
+    writeIntentPackage(root, LISTED, 'core')
+    writeIntentPackage(root, UNLISTED, 'core')
+    writeIntentPackage(root, '@other/hidden', 'core')
+
+    const listed = listIntentSkills({ cwd: root })
+
+    expect(listed.packages.map((pkg) => pkg.name)).toEqual([LISTED, UNLISTED])
+    expect(loadIntentSkill(`${UNLISTED}#core`, { cwd: root }).packageName).toBe(
+      UNLISTED,
+    )
+  })
+
   it('load refuses the unlisted and excluded packages but allows the listed one', () => {
     writeStandaloneFixture()
 
