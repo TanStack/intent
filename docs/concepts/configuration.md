@@ -28,9 +28,10 @@ Each array entry names one source:
 | ----- | ---- | ------- |
 | `@scope/pkg` or `pkg` | npm | A package reachable through the dependency tree, direct or transitive. |
 | `workspace:@scope/pkg` | workspace | A package in the current workspace. |
+| `@scope/*` or `workspace:@scope/*` | npm or workspace | Every discovered package of that kind whose name matches the pattern. |
 | `git:<host>/<repo>#<ref>` | git | Reserved. Not yet supported, and rejected until a future version adds it. |
 
-A malformed entry fails the whole command, and every bad entry is reported at once. Intent currently matches an allowlist entry against a discovered package by name. This matching will tighten in a future version.
+A malformed entry fails the whole command, and every bad entry is reported at once. Package patterns support `*` wildcards, including scoped patterns such as `@tanstack/*`. Intent matches allowlist entries against discovered package names. This matching will tighten in a future version.
 
 ### Special forms
 
@@ -38,7 +39,7 @@ The list as a whole has three special forms:
 
 - **Absent.** No `intent.skills` key. Every discovered package is surfaced, and Intent prints a deprecation notice to stderr on each run until you set `intent.skills`. This is the upgrade path for existing projects. A future version will require an explicit allowlist.
 - **Empty.** `"skills": []`. No package is surfaced. Intent prints an info notice to stderr.
-- **Wildcard.** `"skills": ["*"]`. Every discovered package is surfaced. Intent prints an acknowledged-risk notice to stderr, since unvetted skills may reach your agent.
+- **Wildcard.** `"skills": ["*"]`. Every discovered package is surfaced. Unlike a package pattern such as `@tanstack/*`, this exact entry crosses package scopes and source kinds. Intent prints an acknowledged-risk notice to stderr, since unvetted skills may reach your agent.
 
 A package that ships skills but is not listed is dropped. When packages are dropped this way, Intent prints one summary line naming them so you can opt in. A listed package that was not discovered is reported as well.
 
