@@ -9,6 +9,7 @@ const taskId = requiredEnv('INTENT_DISCOVERY_TASK_ID')
 const fixture = requiredEnv('INTENT_DISCOVERY_FIXTURE')
 const prompt = requiredEnv('INTENT_DISCOVERY_PROMPT')
 const runId = requiredEnv('INTENT_DISCOVERY_RUN_ID')
+const sessionId = process.env.INTENT_DISCOVERY_SESSION_ID
 const sharePath = join(
   workspace,
   '.intent-eval',
@@ -40,6 +41,10 @@ const args = [
   '--share',
   sharePath,
 ]
+
+if (sessionId) {
+  args.push('--session-id', sessionId)
+}
 
 const result = spawnSync('copilot', args, {
   cwd: workspace,

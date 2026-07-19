@@ -3,8 +3,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { parseIntentCommand } from './parse-intent-commands'
-import { prepareGateRun } from './prepare-copilot-home'
-import type { GateRun } from './prepare-copilot-home'
+import { prepareHookRun } from './prepare-copilot-home'
+import type { HookRun } from './prepare-copilot-home'
 import type { IntentDiscoveryTask } from '../corpus/tasks'
 import type {
   NormalizedMessage,
@@ -32,6 +32,8 @@ export type RunCopilotTaskInput = {
   runId: string
   sourcePath: string
   workspacePath: string
+  copilotHome?: string
+  sessionId?: string
 }
 
 export type CopilotTaskRun = {
@@ -58,12 +60,10 @@ export async function runCopilotTask(
     throw new LiveCopilotRunnerUnavailableError()
   }
 
-  const gateState =
-    input.task.condition === 'hooked-intent'
-      ? prepareGateRun(sanitizeFileName(input.runId))
-      : undefined
+  const hookRun =
+    input.task.condition === 'hooked-intent' ? prepareHookRun() : undefined
 
-  const result = await runCommand({ command, input, gateState })
+  const result = await runCommand({ command, input, hookRun })
   const transcript = transcriptFromCommandResult(result)
   const transcriptPath = writeTranscript(input.runId, transcript)
   const intentCommandCaptures = captureIntentCommands(transcript)
@@ -130,11 +130,11 @@ type IntentCommandCapture = {
 async function runCommand({
   command,
   input,
-  gateState,
+  hookRun,
 }: {
   command: string
   input: RunCopilotTaskInput
-  gateState?: GateRun
+  hookRun?: HookRun
 }): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     let settled = false
@@ -143,11 +143,13 @@ async function runCommand({
       shell: true,
       env: {
         ...process.env,
-        ...(gateState
+        ...(input.copilotHome || hookRun
           ? {
-              COPILOT_HOME: gateState.copilotHome,
-              INTENT_DISCOVERY_GATE_STATE: gateState.stateFile,
+              COPILOT_HOME: input.copilotHome ?? hookRun?.copilotHome,
             }
+          : {}),
+        ...(input.sessionId
+          ? { INTENT_DISCOVERY_SESSION_ID: input.sessionId }
           : {}),
         INTENT_DISCOVERY_TASK_ID: input.task.id,
         INTENT_DISCOVERY_FIXTURE: input.task.fixture,

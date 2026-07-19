@@ -43,6 +43,7 @@ Live Router runs compare four setup conditions:
 - `no-intent`: no Intent guidance or allowlist is added.
 - `current-intent`: `package.json#intent.skills` plus the current install-style `AGENTS.md` skill-loading guidance.
 - `mapped-intent`: `package.json#intent.skills` plus `AGENTS.md` task-to-skill mappings like `install --map`.
+- `hooked-intent`: `package.json#intent.skills` plus Copilot `sessionStart` and `subagentStart` hooks that inject the compact cached catalogue. It has no static mapping block or edit gate.
 - `explicit-intent-control`: current install-style setup plus a prompt that explicitly asks the agent to run Intent. This condition is diagnostic and excluded from autonomous scoring.
 
 The live Copilot harness can run an opt-in command backend through `INTENT_DISCOVERY_COPILOT_COMMAND`. When that environment variable is unset, it returns a normalized `unsupported` run with no tool calls and an explicit `LiveCopilotRunnerUnavailableError`. The command runs inside a prepared fixture workspace with task metadata in `INTENT_DISCOVERY_TASK_ID`, `INTENT_DISCOVERY_FIXTURE`, `INTENT_DISCOVERY_PROMPT`, `INTENT_DISCOVERY_RUN_ID`, and `INTENT_DISCOVERY_WORKSPACE`.

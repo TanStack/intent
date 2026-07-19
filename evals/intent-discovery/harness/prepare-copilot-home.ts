@@ -2,59 +2,88 @@ import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildHookRunnerScript } from '../../../packages/intent/src/hooks/install.js'
 
 const harnessDir = dirname(fileURLToPath(import.meta.url))
-const hooksSourceDir = join(harnessDir, 'intent-hooks')
+const intentCliPath = join(
+  harnessDir,
+  '..',
+  '..',
+  '..',
+  'packages',
+  'intent',
+  'dist',
+  'cli.mjs',
+)
 const runsDir = join(dirname(harnessDir), 'runs')
-const gateHomeDir = join(runsDir, '.copilot-homes', 'gate')
-const gateStateDir = join(runsDir, 'latest', 'gate-state')
+const hookHomeDir = join(runsDir, '.copilot-homes', 'catalogue')
+const noHookHomeDir = join(runsDir, '.copilot-homes', 'no-hooks')
 
-export type GateRun = {
+export type HookRun = {
   copilotHome: string
-  stateFile: string
 }
 
-let builtGateHome: string | undefined
+let builtHookHome: string | undefined
+let builtNoHookHome: string | undefined
 
-export function prepareGateRun(runId: string): GateRun {
-  const copilotHome = buildGateHome()
-
-  mkdirSync(gateStateDir, { recursive: true })
-  const stateFile = join(gateStateDir, `${runId}.jsonl`)
-  rmSync(stateFile, { force: true })
-
-  return { copilotHome, stateFile }
+export function prepareHookRun(): HookRun {
+  return { copilotHome: buildHookHome() }
 }
 
-function buildGateHome(): string {
-  if (builtGateHome) {
-    return builtGateHome
-  }
+export function prepareNoHookRun(): HookRun {
+  if (builtNoHookHome) return { copilotHome: builtNoHookHome }
 
   const realHome = join(homedir(), '.copilot')
-
-  mkdirSync(join(gateHomeDir, 'hooks'), { recursive: true })
-  copyIfPresent(join(realHome, 'config.json'), join(gateHomeDir, 'config.json'))
+  rmSync(noHookHomeDir, { recursive: true, force: true })
+  mkdirSync(noHookHomeDir, { recursive: true })
+  copyIfPresent(
+    join(realHome, 'config.json'),
+    join(noHookHomeDir, 'config.json'),
+  )
   copyIfPresent(
     join(realHome, 'permissions-config.json'),
-    join(gateHomeDir, 'permissions-config.json'),
+    join(noHookHomeDir, 'permissions-config.json'),
   )
-  copyIfPresent(join(realHome, 'ide'), join(gateHomeDir, 'ide'))
+  copyIfPresent(join(realHome, 'ide'), join(noHookHomeDir, 'ide'))
+  builtNoHookHome = noHookHomeDir
+  return { copilotHome: noHookHomeDir }
+}
 
-  const command = `node ${join(hooksSourceDir, 'gate.mjs')}`
+function buildHookHome(): string {
+  if (builtHookHome) return builtHookHome
 
+  const realHome = join(homedir(), '.copilot')
+  const hooksDir = join(hookHomeDir, 'hooks')
+  const scriptPath = join(hooksDir, 'intent-copilot-catalog.mjs')
+  mkdirSync(hooksDir, { recursive: true })
+  copyIfPresent(join(realHome, 'config.json'), join(hookHomeDir, 'config.json'))
+  copyIfPresent(
+    join(realHome, 'permissions-config.json'),
+    join(hookHomeDir, 'permissions-config.json'),
+  )
+  copyIfPresent(join(realHome, 'ide'), join(hookHomeDir, 'ide'))
   writeFileSync(
-    join(gateHomeDir, 'hooks', 'hooks.json'),
-    `${JSON.stringify({ hooks: { PreToolUse: [{ command }] } }, null, 2)}\n`,
+    scriptPath,
+    buildHookRunnerScript('copilot', `node "${intentCliPath}" catalog --json`),
   )
-
-  builtGateHome = gateHomeDir
-
-  return gateHomeDir
+  writeFileSync(
+    join(hooksDir, 'hooks.json'),
+    `${JSON.stringify(
+      {
+        version: 1,
+        hooks: {
+          sessionStart: [{ type: 'command', command: `node "${scriptPath}"` }],
+          subagentStart: [{ type: 'command', command: `node "${scriptPath}"` }],
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  builtHookHome = hookHomeDir
+  return hookHomeDir
 }
 
 function copyIfPresent(source: string, destination: string): void {
-  if (existsSync(source)) {
-    cpSync(source, destination, { recursive: true })
-  }
+  if (existsSync(source)) cpSync(source, destination, { recursive: true })
 }

@@ -32,7 +32,9 @@ export function applyIntentCondition({
 
   const filesWritten = [
     writePackageAllowlist(workspacePath, expectedSkillAreas),
-    writeAgentsFile({ condition, expectedSkillAreas, workspacePath }),
+    ...(condition === 'hooked-intent'
+      ? []
+      : [writeAgentsFile({ condition, expectedSkillAreas, workspacePath })]),
     ...writeSkillPackages(workspacePath, expectedSkillAreas),
   ]
 
@@ -116,7 +118,7 @@ function writeAgentsFile({
 }): string {
   const agentsPath = join(workspacePath, 'AGENTS.md')
   const block =
-    condition === 'mapped-intent' || condition === 'hooked-intent'
+    condition === 'mapped-intent'
       ? mappedGuidanceBlock(expectedSkillAreas)
       : loadingGuidanceBlock()
 

@@ -45,8 +45,9 @@ describe('Intent discovery condition setup', () => {
       )
 
       expect(result.filesWritten).toHaveLength(4)
-      expect(agents).toContain('Skill Loading')
-      expect(agents).toContain('npx @tanstack/intent@latest list')
+      expect(agents).toContain('TanStack Intent skills')
+      expect(agents).toContain('Do not run `intent list` for every task.')
+      expect(agents).toContain('npx @tanstack/intent@latest list` once')
       expect(agents).not.toContain('\ntanstackIntent:\n')
       expect(packageJson).toContain('"@tanstack/router"')
       expect(

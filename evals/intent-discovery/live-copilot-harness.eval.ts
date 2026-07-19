@@ -1,4 +1,11 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -12,6 +19,11 @@ import { classifyFailure } from './graders/failure-classifier'
 import { referenceOnly } from './graders/reference-only'
 import { strictIntentInvocation } from './graders/strict-invocation'
 import { liveCopilotHarness } from './harness/live-copilot-harness'
+import { parseIntentCommand } from './harness/parse-intent-commands'
+import { prepareNoHookRun } from './harness/prepare-copilot-home'
+import { prepareFixtureWorkspace } from './harness/prepare-fixture'
+import { runCopilotTask } from './harness/run-copilot-task'
+import { applyIntentCondition } from './harness/setup-intent-condition'
 import type { IntentDiscoveryTask } from './corpus/tasks'
 import type { LiveCopilotOutput } from './harness/live-copilot-harness'
 import type { HarnessContext, HarnessRun } from 'vitest-evals'
@@ -26,6 +38,46 @@ if (!routerTask) {
 }
 
 describe('Intent discovery live Copilot harness', () => {
+  it('passes an explicit session and Copilot home to the command backend', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'intent-eval-session-'))
+    const fakeRunnerPath = join(tempDir, 'fake-runner.mjs')
+    const copilotHome = join(tempDir, 'copilot-home')
+    const prepared = prepareFixtureWorkspace({
+      fixture: routerTask.fixture,
+      parentDir: tempDir,
+    })
+    const previousCommand = process.env.INTENT_DISCOVERY_COPILOT_COMMAND
+
+    writeFileSync(
+      fakeRunnerPath,
+      'console.log(`FINAL_ANSWER: ${process.env.INTENT_DISCOVERY_SESSION_ID}|${process.env.COPILOT_HOME}`)',
+    )
+    process.env.INTENT_DISCOVERY_COPILOT_COMMAND = `node ${fakeRunnerPath}`
+
+    try {
+      const result = await runCopilotTask({
+        task: routerTask,
+        runId: 'live:explicit-session',
+        sourcePath: prepared.sourcePath,
+        workspacePath: prepared.workspacePath,
+        copilotHome,
+        sessionId: '11111111-1111-4111-8111-111111111111',
+      })
+
+      expect(result.finalAnswer).toBe(
+        `11111111-1111-4111-8111-111111111111|${copilotHome}`,
+      )
+    } finally {
+      if (previousCommand === undefined) {
+        delete process.env.INTENT_DISCOVERY_COPILOT_COMMAND
+      } else {
+        process.env.INTENT_DISCOVERY_COPILOT_COMMAND = previousCommand
+      }
+      prepared.cleanup()
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
   it('returns an explicit unsupported result until live capture is wired', async () => {
     const result = await withoutCopilotCommand(() => runLiveHarness(routerTask))
 
@@ -97,6 +149,82 @@ describe('Intent discovery live Copilot harness', () => {
       rmSync(tempDir, { recursive: true, force: true })
     }
   })
+})
+
+describe('Intent discovery live multi-turn runs', () => {
+  it.skipIf(process.env.INTENT_DISCOVERY_RUN_LIVE !== '1')(
+    'reuses fallback discovery across turns without hooks',
+    async () => {
+      const prepared = prepareFixtureWorkspace({
+        fixture: routerTask.fixture,
+      })
+      const sessionId = randomUUID()
+      const { copilotHome } = prepareNoHookRun()
+      const firstTask: IntentDiscoveryTask = {
+        ...routerTask,
+        id: 'live-router-multiturn-first',
+        prompt: 'Add a route that loads user data before rendering the page.',
+      }
+      const secondTask: IntentDiscoveryTask = {
+        ...routerTask,
+        id: 'live-router-multiturn-second',
+        prompt:
+          'Add a validated tab search parameter to the user route and render the active tab.',
+      }
+
+      try {
+        applyIntentCondition({
+          condition: 'current-intent',
+          expectedSkillAreas: ['router'],
+          workspacePath: prepared.workspacePath,
+        })
+
+        const first = await runCopilotTask({
+          task: firstTask,
+          runId: 'live:router-multiturn-first',
+          sourcePath: prepared.sourcePath,
+          workspacePath: prepared.workspacePath,
+          copilotHome,
+          sessionId,
+        })
+        const second = await runCopilotTask({
+          task: secondTask,
+          runId: 'live:router-multiturn-second',
+          sourcePath: prepared.sourcePath,
+          workspacePath: prepared.workspacePath,
+          copilotHome,
+          sessionId,
+        })
+        const secondTranscript = readFileSync(
+          second.transcriptPath ?? '',
+          'utf8',
+        )
+        const firstListCommands = first.intentCommandsInvoked.filter(
+          (command) =>
+            parseIntentCommand(command, 'tool-message')?.action === 'list',
+        )
+        const sessionCommands = secondTranscript.includes(firstTask.prompt)
+          ? second.intentCommandsInvoked
+          : [...first.intentCommandsInvoked, ...second.intentCommandsInvoked]
+        const listCommands = sessionCommands.filter(
+          (command) =>
+            parseIntentCommand(command, 'tool-message')?.action === 'list',
+        )
+
+        expect(first.agentErrors).toEqual([])
+        expect(second.agentErrors).toEqual([])
+        expect(first.finalAnswer).not.toBe('')
+        expect(second.finalAnswer).not.toBe('')
+        expect(second.fileDiff).not.toBe('')
+        expect(firstListCommands).toHaveLength(1)
+        expect(first.loadedSkills).toContain('@tanstack/router#routing')
+        expect(listCommands).toHaveLength(1)
+      } finally {
+        prepared.cleanup()
+      }
+    },
+    600_000,
+  )
 })
 
 describe.concurrent('Intent discovery live runs', () => {

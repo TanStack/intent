@@ -184,6 +184,20 @@ describe('Intent discovery harness capture', () => {
     ).toBeUndefined()
   })
 
+  it('parses Intent invocations inside compound shell commands', () => {
+    expect(
+      parseIntentCommand(
+        '$ cd /tmp/router-basic && cat package.json; echo "---"; npx @tanstack/intent@latest list 2>&1 | head -50',
+        'tool-message',
+      ),
+    ).toEqual({
+      raw: 'npx @tanstack/intent@latest list',
+      executable: 'npx @tanstack/intent@latest',
+      action: 'list',
+      source: 'tool-message',
+    })
+  })
+
   it('does not treat user prompt skill mentions as reference-only evidence', () => {
     expect(
       referenceOnly(
