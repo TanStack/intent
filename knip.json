@@ -7,7 +7,7 @@
         "evals/intent-discovery/**/*.ts",
         "evals/intent-discovery/**/*.mjs"
       ],
-      "ignoreBinaries": ["copilot", "diff"],
+      "ignoreBinaries": ["copilot"],
       "ignoreFiles": ["evals/intent-discovery/fixtures/**/src/**/*"]
     },
     "packages/intent": {

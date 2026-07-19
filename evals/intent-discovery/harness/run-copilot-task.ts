@@ -280,7 +280,15 @@ async function runDiff(
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     let settled = false
-    const child = spawn('diff', ['-ruN', sourcePath, workspacePath])
+    const child = spawn('git', [
+      'diff',
+      '--no-index',
+      '--no-ext-diff',
+      '--binary',
+      '--',
+      sourcePath,
+      workspacePath,
+    ])
     const stdoutChunks: Array<Buffer> = []
     const stderrChunks: Array<Buffer> = []
     const timeout = setTimeout(() => {

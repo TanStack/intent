@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:perf": "vitest bench --config ./vitest.config.ts ./*.bench.ts"
+    "test:perf": "vitest bench --config ./vitest.config.ts"
   },
   "devDependencies": {
     "@codspeed/vitest-plugin": "^5.5.0",

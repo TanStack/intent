@@ -40,7 +40,7 @@
   "scripts": {
     "prepack": "npm run build",
     "build": "tsdown src/index.ts src/cli.ts src/setup.ts src/core.ts --format esm --dts",
-    "test:smoke": "pnpm run build && node dist/cli.mjs --help > /dev/null && node dist/cli.mjs load --help > /dev/null",
+    "test:smoke": "pnpm run build && node dist/cli.mjs --help && node dist/cli.mjs load --help",
     "test:lib": "vitest run --exclude 'tests/integration/**'",
     "test:integration": "vitest run tests/integration/",
     "test:types": "tsc --noEmit",
