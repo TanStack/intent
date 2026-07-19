@@ -14,6 +14,10 @@ import {
 const consoleSilencer = createConsoleSilencer()
 const root = createTempDir('catalog')
 const runner = createCliRunner({ cwd: root })
+let getIntentCatalogContext: (options: {
+  cwd: string
+  refresh?: boolean
+}) => Promise<unknown>
 
 function createFixture(): void {
   writeJson(join(root, 'package.json'), {
@@ -38,6 +42,8 @@ async function setup(): Promise<void> {
   consoleSilencer.silence()
   createFixture()
   await runner.setup()
+  const catalog = await import('../../packages/intent/dist/catalog.mjs')
+  getIntentCatalogContext = catalog.getIntentCatalogContext
 }
 
 async function teardown(): Promise<void> {
@@ -51,7 +57,7 @@ describe('intent catalog', () => {
   afterAll(teardown)
 
   bench(
-    'cold catalogue generation',
+    'cold catalogue generation through CLI',
     async () => {
       await runner.run(['catalog', '--json', '--refresh'])
     },
@@ -59,9 +65,25 @@ describe('intent catalog', () => {
   )
 
   bench(
-    'warm cached catalogue retrieval',
+    'warm cached catalogue retrieval through CLI',
     async () => {
       await runner.run(['catalog', '--json'])
+    },
+    createBenchOptions(setup, teardown),
+  )
+
+  bench(
+    'cold catalogue generation through API',
+    async () => {
+      await getIntentCatalogContext({ cwd: root, refresh: true })
+    },
+    createBenchOptions(setup, teardown),
+  )
+
+  bench(
+    'warm cached catalogue retrieval through API',
+    async () => {
+      await getIntentCatalogContext({ cwd: root })
     },
     createBenchOptions(setup, teardown),
   )

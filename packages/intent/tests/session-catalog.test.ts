@@ -267,7 +267,23 @@ describe('session catalogue formatting', () => {
 })
 
 describe('session catalogue cache', () => {
-  it('reuses a valid workspace cache and refreshes after dependency changes', () => {
+  it('rejects synchronous discovery failures through its promise', async () => {
+    const root = tempRoot('intent-session-catalog-discovery-error-')
+    const cacheDir = tempRoot('intent-session-catalog-error-cache-')
+    writeFileSync(join(root, 'package.json'), '{}')
+
+    const result = getSessionCatalogue({
+      cacheDir,
+      root,
+      discover: () => {
+        throw new Error('discovery failure')
+      },
+    })
+
+    await expect(result).rejects.toThrow('discovery failure')
+  })
+
+  it('reuses a valid workspace cache and refreshes after dependency changes', async () => {
     const root = tempRoot('intent-session-catalog-root-')
     const cacheDir = tempRoot('intent-session-catalog-cache-')
     writeFileSync(
@@ -287,23 +303,27 @@ describe('session catalogue cache', () => {
         ]),
       )
 
-    const first = getSessionCatalogue({ cacheDir, discover, root })
-    const second = getSessionCatalogue({ cacheDir, discover, root })
+    const first = await getSessionCatalogue({ cacheDir, discover, root })
+    const second = await getSessionCatalogue({ cacheDir, discover, root })
 
     expect(first.cacheStatus).toBe('miss')
     expect(second.cacheStatus).toBe('hit')
     expect(discover).toHaveBeenCalledTimes(1)
 
     writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9\nchanged\n')
-    const refreshed = getSessionCatalogue({ cacheDir, discover, root })
-    const hitAfterRefresh = getSessionCatalogue({ cacheDir, discover, root })
+    const refreshed = await getSessionCatalogue({ cacheDir, discover, root })
+    const hitAfterRefresh = await getSessionCatalogue({
+      cacheDir,
+      discover,
+      root,
+    })
 
     expect(refreshed.cacheStatus).toBe('refresh')
     expect(hitAfterRefresh.cacheStatus).toBe('hit')
     expect(discover).toHaveBeenCalledTimes(2)
   })
 
-  it('refreshes after Intent allowlist or exclusion configuration changes', () => {
+  it('refreshes after Intent allowlist or exclusion configuration changes', async () => {
     const root = tempRoot('intent-session-catalog-config-root-')
     const cacheDir = tempRoot('intent-session-catalog-config-cache-')
     const packagePath = join(root, 'package.json')
@@ -315,7 +335,7 @@ describe('session catalogue cache', () => {
       .fn<() => IntentSkillList>()
       .mockReturnValue(skillList([]))
 
-    getSessionCatalogue({ cacheDir, discover, root })
+    await getSessionCatalogue({ cacheDir, discover, root })
     writeFileSync(
       packagePath,
       JSON.stringify({
@@ -325,13 +345,13 @@ describe('session catalogue cache', () => {
         },
       }),
     )
-    const refreshed = getSessionCatalogue({ cacheDir, discover, root })
+    const refreshed = await getSessionCatalogue({ cacheDir, discover, root })
 
     expect(refreshed.cacheStatus).toBe('refresh')
     expect(discover).toHaveBeenCalledTimes(2)
   })
 
-  it('ignores malformed cache files and survives cache write failures', () => {
+  it('ignores malformed cache files and survives cache write failures', async () => {
     const root = tempRoot('intent-session-catalog-invalid-root-')
     const cacheDir = tempRoot('intent-session-catalog-invalid-cache-')
     writeFileSync(join(root, 'package.json'), '{}')
@@ -339,23 +359,23 @@ describe('session catalogue cache', () => {
       .fn<() => IntentSkillList>()
       .mockReturnValue(skillList([skill('pkg#core', 'Core guidance')]))
 
-    const first = getSessionCatalogue({ cacheDir, discover, root })
+    const first = await getSessionCatalogue({ cacheDir, discover, root })
     const cachePath = first.cachePath
     writeFileSync(cachePath, '{partial')
-    const recovered = getSessionCatalogue({ cacheDir, discover, root })
+    const recovered = await getSessionCatalogue({ cacheDir, discover, root })
 
     expect(recovered.cacheStatus).toBe('miss')
     expect(discover).toHaveBeenCalledTimes(2)
 
     rmSync(cacheDir, { recursive: true, force: true })
     writeFileSync(cacheDir, 'not a directory')
-    const uncached = getSessionCatalogue({ cacheDir, discover, root })
+    const uncached = await getSessionCatalogue({ cacheDir, discover, root })
 
     expect(uncached.catalogue.skills).toHaveLength(1)
     expect(readFileSync(cacheDir, 'utf8')).toBe('not a directory')
   })
 
-  it('keeps separate workspaces in separate cache entries', () => {
+  it('keeps separate workspaces in separate cache entries', async () => {
     const firstRoot = tempRoot('intent-session-catalog-first-root-')
     const secondRoot = tempRoot('intent-session-catalog-second-root-')
     const cacheDir = tempRoot('intent-session-catalog-shared-cache-')
@@ -365,14 +385,22 @@ describe('session catalogue cache', () => {
       .fn<() => IntentSkillList>()
       .mockReturnValue(skillList([]))
 
-    const first = getSessionCatalogue({ cacheDir, discover, root: firstRoot })
-    const second = getSessionCatalogue({ cacheDir, discover, root: secondRoot })
+    const first = await getSessionCatalogue({
+      cacheDir,
+      discover,
+      root: firstRoot,
+    })
+    const second = await getSessionCatalogue({
+      cacheDir,
+      discover,
+      root: secondRoot,
+    })
 
     expect(first.cachePath).not.toBe(second.cachePath)
     expect(discover).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps nested package policy scopes in separate cache entries', () => {
+  it('keeps nested package policy scopes in separate cache entries', async () => {
     const root = tempRoot('intent-session-catalog-policy-root-')
     const firstPackage = join(root, 'packages', 'first')
     const secondPackage = join(root, 'packages', 'second')
@@ -386,13 +414,13 @@ describe('session catalogue cache', () => {
       .fn<() => IntentSkillList>()
       .mockReturnValue(skillList([]))
 
-    const first = getSessionCatalogue({
+    const first = await getSessionCatalogue({
       cacheDir,
       discover,
       policyRoot: firstPackage,
       root,
     })
-    const second = getSessionCatalogue({
+    const second = await getSessionCatalogue({
       cacheDir,
       discover,
       policyRoot: secondPackage,
@@ -403,7 +431,7 @@ describe('session catalogue cache', () => {
     expect(discover).toHaveBeenCalledTimes(2)
   })
 
-  it('refreshes when a nested policy manifest changes', () => {
+  it('refreshes when a nested policy manifest changes', async () => {
     const root = tempRoot('intent-session-catalog-nested-refresh-root-')
     const policyRoot = join(root, 'packages', 'nested')
     const cacheDir = tempRoot('intent-session-catalog-nested-refresh-cache-')
@@ -417,12 +445,12 @@ describe('session catalogue cache', () => {
       .fn<() => IntentSkillList>()
       .mockReturnValue(skillList([skill('@scope/pkg#core', 'Core guidance')]))
 
-    getSessionCatalogue({ cacheDir, discover, policyRoot, root })
+    await getSessionCatalogue({ cacheDir, discover, policyRoot, root })
     writeFileSync(
       join(policyRoot, 'package.json'),
       JSON.stringify({ intent: { skills: [] } }),
     )
-    const refreshed = getSessionCatalogue({
+    const refreshed = await getSessionCatalogue({
       cacheDir,
       discover,
       policyRoot,
@@ -433,7 +461,7 @@ describe('session catalogue cache', () => {
     expect(discover).toHaveBeenCalledTimes(2)
   })
 
-  it('refreshes when deno.lock changes', () => {
+  it('refreshes when deno.lock changes', async () => {
     const root = tempRoot('intent-session-catalog-deno-root-')
     const cacheDir = tempRoot('intent-session-catalog-deno-cache-')
     writeFileSync(join(root, 'package.json'), '{}')
@@ -442,9 +470,9 @@ describe('session catalogue cache', () => {
       .fn<() => IntentSkillList>()
       .mockReturnValue(skillList([]))
 
-    getSessionCatalogue({ cacheDir, discover, root })
+    await getSessionCatalogue({ cacheDir, discover, root })
     writeFileSync(join(root, 'deno.lock'), '{"version":"4","changed":true}\n')
-    const refreshed = getSessionCatalogue({ cacheDir, discover, root })
+    const refreshed = await getSessionCatalogue({ cacheDir, discover, root })
 
     expect(refreshed.cacheStatus).toBe('refresh')
     expect(discover).toHaveBeenCalledTimes(2)

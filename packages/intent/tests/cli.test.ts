@@ -222,6 +222,31 @@ describe('cli commands', () => {
     expect(output).toContain('--show-hidden')
   })
 
+  it('preserves catalog JSON field names', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-catalog-json-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), { name: 'app', private: true })
+    process.chdir(root)
+
+    const exitCode = await main(['catalog', '--json', '--refresh'])
+    const output = JSON.parse(String(logSpy.mock.calls[0]?.[0])) as Record<
+      string,
+      unknown
+    >
+
+    expect(exitCode).toBe(0)
+    expect(output).toMatchObject({
+      cacheStatus: 'miss',
+      context: expect.any(String),
+      durationMs: expect.any(Number),
+      packageCount: 0,
+      packageJsonReadCount: expect.any(Number),
+      skillCount: 0,
+      sizeBytes: expect.any(Number),
+    })
+    expect(output).not.toHaveProperty('discoveryPackageJsonReadCount')
+  })
+
   it('prints the install prompt', async () => {
     const exitCode = await main(['install', '--print-prompt'])
     const output = String(logSpy.mock.calls[0]?.[0])

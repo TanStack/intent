@@ -197,7 +197,7 @@ function computeCatalogueFingerprint(root: string, policyRoot: string): string {
   return hash.digest('hex')
 }
 
-export function getSessionCatalogue({
+export async function getSessionCatalogue({
   cacheDir = join(tmpdir(), 'tanstack-intent', 'catalogues'),
   discover,
   refresh = false,
@@ -205,11 +205,11 @@ export function getSessionCatalogue({
   policyRoot = root,
 }: {
   cacheDir?: string
-  discover: () => IntentSkillList
+  discover: () => IntentSkillList | Promise<IntentSkillList>
   refresh?: boolean
   root: string
   policyRoot?: string
-}): SessionCatalogueResult {
+}): Promise<SessionCatalogueResult> {
   const workspaceRoot = normalizeRoot(root)
   const normalizedPolicyRoot = normalizeRoot(policyRoot)
   const dependencyFingerprint = computeCatalogueFingerprint(
@@ -237,7 +237,7 @@ export function getSessionCatalogue({
     }
   }
 
-  const catalogue = buildSessionCatalogue(discover())
+  const catalogue = buildSessionCatalogue(await discover())
   const entry: IntentSessionCatalogueCache = {
     schemaVersion: CACHE_SCHEMA_VERSION,
     workspaceRoot,
