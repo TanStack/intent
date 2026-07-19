@@ -166,6 +166,92 @@ function contextOutput(eventName, additionalContext) {
 `
 }
 
+export function buildCopilotProjectRunnerScript(
+  catalogCommand = formatIntentCommand(
+    detectPackageManager(),
+    'catalog --json',
+  ),
+): string {
+  return `#!/usr/bin/env node
+import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+
+const CATALOG_COMMAND = ${JSON.stringify(catalogCommand)}
+
+try {
+  await main()
+} catch (error) {
+  console.error(\`[intent catalog] hook failed open: \${error instanceof Error ? error.message : String(error)}\`)
+}
+
+process.exitCode = 0
+
+async function main() {
+  const event = readEventFromStdin()
+  const root = typeof event?.cwd === 'string' ? event.cwd : process.cwd()
+  const catalog = await loadLocalCatalog()
+
+  if (!catalog || typeof catalog.runSessionCatalogueHook !== 'function') {
+    runFallback(root)
+    return
+  }
+
+  await catalog.runSessionCatalogueHook({ agent: 'copilot', event })
+}
+
+function readEventFromStdin() {
+  try {
+    return JSON.parse(readFileSync(0, 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+async function loadLocalCatalog() {
+  if (typeof import.meta.resolve !== 'function') return undefined
+
+  let catalogUrl
+  try {
+    catalogUrl = import.meta.resolve('@tanstack/intent/catalog')
+  } catch {
+    return undefined
+  }
+
+  try {
+    return await import(catalogUrl)
+  } catch (error) {
+    if (error?.code === 'ERR_MODULE_NOT_FOUND' && error?.url === catalogUrl)
+      return undefined
+    throw error
+  }
+}
+
+function runFallback(root) {
+  const result = JSON.parse(
+    execFileSync(CATALOG_COMMAND, {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, INTENT_AUDIENCE: 'agent' },
+      maxBuffer: 1024 * 1024,
+      shell: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 9000,
+    }),
+  )
+  if (typeof result.context !== 'string' || result.context.length === 0) return
+
+  console.error(
+    \`[intent catalog] SessionStart \${result.cacheStatus ?? 'unknown'}; \${result.skillCount ?? 0} skills; \${result.sizeBytes ?? Buffer.byteLength(result.context)} bytes; \${formatDuration(result.durationMs)}; packageJsonReadCount=\${result.packageJsonReadCount ?? 0}; fallback=true\`,
+  )
+  process.stdout.write(JSON.stringify({ additionalContext: result.context }))
+}
+
+function formatDuration(value) {
+  return typeof value === 'number' ? \`\${value.toFixed(1)}ms\` : 'unknown'
+}
+`
+}
+
 export function formatHookInstallResult(result: HookInstallResult): string {
   if (result.status === 'skipped') {
     return `Skipped Intent hooks for ${result.agent}: ${result.reason}`
@@ -219,7 +305,9 @@ function installAgentHook({
   ).replace('@tanstack/intent@latest', `@tanstack/intent@${intentVersion()}`)
   const scriptStatus = writeIfChanged(
     scriptPath,
-    buildHookRunnerScript(agent, catalogCommand),
+    agent === 'copilot' && scope === 'project'
+      ? buildCopilotProjectRunnerScript(catalogCommand)
+      : buildHookRunnerScript(agent, catalogCommand),
   )
   const configStatus = updateJsonConfig(configPath, (config) =>
     upsertAdapterHooks({

@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,7 +12,11 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import { HOOK_AGENT_ADAPTERS } from '../src/hooks/adapters.js'
-import { buildHookRunnerScript, runInstallHooks } from '../src/hooks/install.js'
+import {
+  buildCopilotProjectRunnerScript,
+  buildHookRunnerScript,
+  runInstallHooks,
+} from '../src/hooks/install.js'
 
 const tempDirs: Array<string> = []
 
@@ -100,6 +105,162 @@ describe('hook installer', () => {
       'intent-copilot-catalog.mjs',
     )
     expect(result?.scriptPath).toContain(join(homeDir, '.tanstack'))
+  })
+
+  it('runs a compatible workspace catalogue API without invoking fallback', () => {
+    const root = tempRoot('intent-hooks-copilot-local-api-')
+    const localMarker = join(root, 'local-api.txt')
+    const fallbackMarker = join(root, 'fallback.txt')
+    const fallbackCommand = writeFallbackCatalogCommand(root, fallbackMarker)
+    writeCatalogApiPackage(
+      root,
+      `import { writeFileSync } from 'node:fs'
+export async function runSessionCatalogueHook({ agent }) {
+  writeFileSync(${JSON.stringify(localMarker)}, agent)
+  process.stdout.write(JSON.stringify({ additionalContext: 'local API context' }))
+}
+`,
+    )
+    const scriptPath = join(root, 'intent-copilot-catalog.mjs')
+    writeFileSync(scriptPath, buildCopilotProjectRunnerScript(fallbackCommand))
+
+    const result = runHookScript(scriptPath, sessionEvent('copilot', root))
+
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual({
+      additionalContext: 'local API context',
+    })
+    expect(readFileSync(localMarker, 'utf8')).toBe('copilot')
+    expect(existsSync(fallbackMarker)).toBe(false)
+  })
+
+  it('uses fallback when the workspace package lacks the catalogue export', () => {
+    const root = tempRoot('intent-hooks-copilot-old-package-')
+    const fallbackMarker = join(root, 'fallback.txt')
+    const fallbackCommand = writeFallbackCatalogCommand(root, fallbackMarker)
+    const packageDir = join(root, 'node_modules', '@tanstack', 'intent')
+    mkdirSync(packageDir, { recursive: true })
+    writeFileSync(
+      join(packageDir, 'package.json'),
+      JSON.stringify({ name: '@tanstack/intent', type: 'module' }),
+    )
+    const scriptPath = join(root, 'intent-copilot-catalog.mjs')
+    writeFileSync(scriptPath, buildCopilotProjectRunnerScript(fallbackCommand))
+
+    const result = runHookScript(scriptPath, sessionEvent('copilot', root))
+
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual({
+      additionalContext: expect.stringContaining('fallback skill'),
+    })
+    expect(readFileSync(fallbackMarker, 'utf8')).toBe(root)
+  })
+
+  it('uses fallback when the workspace catalogue export target is missing', () => {
+    const root = tempRoot('intent-hooks-copilot-missing-export-target-')
+    const fallbackMarker = join(root, 'fallback.txt')
+    const fallbackCommand = writeFallbackCatalogCommand(root, fallbackMarker)
+    const packageDir = join(root, 'node_modules', '@tanstack', 'intent')
+    mkdirSync(packageDir, { recursive: true })
+    writeFileSync(
+      join(packageDir, 'package.json'),
+      JSON.stringify({
+        name: '@tanstack/intent',
+        type: 'module',
+        exports: { './catalog': './missing-catalog.mjs' },
+      }),
+    )
+    const scriptPath = join(root, 'intent-copilot-catalog.mjs')
+    writeFileSync(scriptPath, buildCopilotProjectRunnerScript(fallbackCommand))
+
+    const result = runHookScript(scriptPath, sessionEvent('copilot', root))
+
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual({
+      additionalContext: expect.stringContaining('fallback skill'),
+    })
+    expect(readFileSync(fallbackMarker, 'utf8')).toBe(root)
+  })
+
+  it('fails open without fallback when the resolved catalogue API throws', () => {
+    const root = tempRoot('intent-hooks-copilot-runtime-failure-')
+    const fallbackMarker = join(root, 'fallback.txt')
+    const fallbackCommand = writeFallbackCatalogCommand(root, fallbackMarker)
+    writeCatalogApiPackage(
+      root,
+      `export async function runSessionCatalogueHook() {
+  throw new Error('runtime failure')
+}
+`,
+    )
+    const scriptPath = join(root, 'intent-copilot-catalog.mjs')
+    writeFileSync(scriptPath, buildCopilotProjectRunnerScript(fallbackCommand))
+
+    const result = runHookScript(scriptPath, sessionEvent('copilot', root))
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toContain('hook failed open: runtime failure')
+    expect(existsSync(fallbackMarker)).toBe(false)
+  })
+
+  it('fails open without fallback when the local catalogue has a missing dependency', () => {
+    const root = tempRoot('intent-hooks-copilot-missing-dependency-')
+    const fallbackMarker = join(root, 'fallback.txt')
+    const fallbackCommand = writeFallbackCatalogCommand(root, fallbackMarker)
+    writeCatalogApiPackage(
+      root,
+      `import 'missing-catalog-dependency'
+export async function runSessionCatalogueHook() {}
+`,
+    )
+    const scriptPath = join(root, 'intent-copilot-catalog.mjs')
+    writeFileSync(scriptPath, buildCopilotProjectRunnerScript(fallbackCommand))
+
+    const result = runHookScript(scriptPath, sessionEvent('copilot', root))
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toContain('hook failed open:')
+    expect(result.stderr).toContain('missing-catalog-dependency')
+    expect(existsSync(fallbackMarker)).toBe(false)
+  })
+
+  it('fails open without fallback when a catalogue dependency blocks a subpath', () => {
+    const root = tempRoot('intent-hooks-copilot-blocked-subpath-')
+    const fallbackMarker = join(root, 'fallback.txt')
+    const fallbackCommand = writeFallbackCatalogCommand(root, fallbackMarker)
+    writeCatalogApiPackage(
+      root,
+      `import 'blocked-catalog-dependency/private'
+export async function runSessionCatalogueHook() {}
+`,
+    )
+    const dependencyDir = join(
+      root,
+      'node_modules',
+      'blocked-catalog-dependency',
+    )
+    mkdirSync(dependencyDir, { recursive: true })
+    writeFileSync(
+      join(dependencyDir, 'package.json'),
+      JSON.stringify({
+        name: 'blocked-catalog-dependency',
+        type: 'module',
+        exports: { '.': './index.mjs' },
+      }),
+    )
+    writeFileSync(join(dependencyDir, 'index.mjs'), '')
+    const scriptPath = join(root, 'intent-copilot-catalog.mjs')
+    writeFileSync(scriptPath, buildCopilotProjectRunnerScript(fallbackCommand))
+
+    const result = runHookScript(scriptPath, sessionEvent('copilot', root))
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toContain('hook failed open:')
+    expect(result.stderr).toContain('blocked-catalog-dependency')
+    expect(existsSync(fallbackMarker)).toBe(false)
   })
 
   it('preserves unrelated hooks and replaces old Intent gate entries', () => {
@@ -329,6 +490,39 @@ function writeFakeCatalogCommand(root: string, markerPath?: string): string {
   sizeBytes: 180,
   skillCount: 1
 }))\n`,
+  )
+  return `${quoteCommandPath(process.execPath)} ${quoteCommandPath(scriptPath)}`
+}
+
+function writeCatalogApiPackage(root: string, source: string): void {
+  const packageDir = join(root, 'node_modules', '@tanstack', 'intent')
+  mkdirSync(packageDir, { recursive: true })
+  writeFileSync(
+    join(packageDir, 'package.json'),
+    JSON.stringify({
+      name: '@tanstack/intent',
+      type: 'module',
+      exports: { './catalog': './catalog.mjs' },
+    }),
+  )
+  writeFileSync(join(packageDir, 'catalog.mjs'), source)
+}
+
+function writeFallbackCatalogCommand(root: string, markerPath: string): string {
+  const scriptPath = join(root, 'fallback-catalog.mjs')
+  writeFileSync(
+    scriptPath,
+    `import { writeFileSync } from 'node:fs'
+writeFileSync(${JSON.stringify(markerPath)}, process.cwd())
+console.log(JSON.stringify({
+  cacheStatus: 'hit',
+  context: 'TanStack Intent: 1 available skill.\\n\\n- pkg#fallback: fallback skill',
+  durationMs: 1,
+  packageJsonReadCount: 0,
+  sizeBytes: 80,
+  skillCount: 1
+}))
+`,
   )
   return `${quoteCommandPath(process.execPath)} ${quoteCommandPath(scriptPath)}`
 }
