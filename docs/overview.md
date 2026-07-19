@@ -15,8 +15,8 @@ Intent provides tooling for two workflows:
 
 - Discover skills from your project and workspace dependencies
 - Control which packages' skills are surfaced with an allowlist
-- Add lightweight skill loading guidance to your agent config
-- Add hook enforcement for agents that support blocking lifecycle hooks
+- Add minimal fallback guidance for agents without lifecycle hooks
+- Inject cached skill catalogues through supported agent lifecycle hooks
 - Keep skills synchronized with library versions
 
 **For maintainers (library teams):**
@@ -48,16 +48,16 @@ Global package scanning is explicit; pass `--global` to include global packages 
 When both local and global packages are scanned, local packages take precedence.
 
 ```bash
-npx @tanstack/intent@latest install
+npx @tanstack/intent@latest install --mode fallback
 ```
 
-Creates or updates lightweight `intent-skills` guidance in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.). Existing guidance is updated in place; otherwise `AGENTS.md` is the default target. Pass `--map` to opt in to explicit task-to-skill mappings.
+Creates or updates lightweight fallback guidance in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.). Existing guidance is updated in place; otherwise `AGENTS.md` is the default target. Pass `--mode map` or the compatible `--map` alias to opt in to explicit task-to-skill mappings.
 
 ```bash
 npx @tanstack/intent@latest hooks install
 ```
 
-Installs hook enforcement for supported agents. Project-scoped hooks are available for Claude Code and Codex. GitHub Copilot CLI project guidance can live in `.github/copilot-instructions.md`, while blocking hooks are user-scoped. Cursor and generic `AGENTS.md` agents use guidance only.
+Installs project lifecycle hooks for Claude Code, Codex, and GitHub Copilot. Hooks inject a compact cached catalogue at session and subagent starts; they do not block edits. Cursor and generic `AGENTS.md` agents use fallback guidance or static mappings.
 
 ```bash
 npx @tanstack/intent@latest load @tanstack/query#fetching

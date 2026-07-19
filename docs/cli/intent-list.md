@@ -5,6 +5,8 @@ id: intent-list
 
 `intent list` discovers skill-enabled packages and prints available skills.
 
+Use it for manual inventory and diagnostics. Supported lifecycle hooks use the compact cached `intent catalog` path instead; agents should not run `intent list` for every user turn.
+
 ```bash
 npx @tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] [--show-hidden] [--no-notices]
 ```

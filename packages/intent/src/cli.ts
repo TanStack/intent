@@ -7,6 +7,7 @@ import { fail, isCliFailure } from './shared/cli-error.js'
 import type { CAC } from 'cac'
 import type { ExcludeCommandOptions } from './commands/exclude.js'
 import type { HooksInstallCommandOptions } from './commands/hooks/command.js'
+import type { CatalogCommandOptions } from './commands/catalog.js'
 import type { InstallCommandOptions } from './commands/install/command.js'
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
@@ -40,6 +41,22 @@ function createCli(): CAC {
     .action(async (options: ListCommandOptions) => {
       const { runListCommand } = await import('./commands/list.js')
       await runListCommand(options)
+    })
+
+  cli
+    .command(
+      'catalog',
+      'Build compact cached skill context for agent lifecycle hooks',
+    )
+    .usage('catalog [--json] [--refresh]')
+    .option('--json', 'Output JSON with context and cache metrics')
+    .option('--refresh', 'Ignore a valid cached catalogue')
+    .example('catalog')
+    .example('catalog --json')
+    .action((options: CatalogCommandOptions) => {
+      return import('./commands/catalog.js').then(({ runCatalogCommand }) =>
+        runCatalogCommand(options),
+      )
     })
 
   cli
@@ -123,9 +140,15 @@ function createCli(): CAC {
       'Create or update skill loading guidance in an agent config file',
     )
     .usage(
-      'install [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]',
+      'install [--mode hooks|fallback|map] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]',
     )
-    .option('--map', 'Write explicit skill-to-task mappings')
+    .option(
+      '--mode <mode>',
+      'Install hooks, fallback guidance, or static mappings',
+    )
+    .option('--map', 'Alias for --mode map')
+    .option('--scope <scope>', 'Hook scope for --mode hooks: project or user')
+    .option('--agents <agents>', 'Hook agents for --mode hooks')
     .option('--dry-run', 'Print the generated block without writing')
     .option(
       '--print-prompt',
@@ -135,6 +158,9 @@ function createCli(): CAC {
     .option('--global-only', 'Install mappings from global packages only')
     .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('install')
+    .example('install --mode hooks')
+    .example('install --mode fallback')
+    .example('install --mode map')
     .example('install --map')
     .example('install --dry-run')
     .example('install --print-prompt')

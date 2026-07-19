@@ -1,4 +1,9 @@
 import { relative } from 'node:path'
+import {
+  formatHookInstallResult,
+  runInstallHooks,
+  validateHookInstallOptions,
+} from '../../hooks/install.js'
 import { fail } from '../../shared/cli-error.js'
 import { detectIntentCommandPackageManager } from '../../shared/command-runner.js'
 import {
@@ -122,10 +127,15 @@ tanstackIntent:
    - The verification result`
 
 export interface InstallCommandOptions extends GlobalScanFlags {
+  agents?: string
   dryRun?: boolean
   map?: boolean
+  mode?: string
   printPrompt?: boolean
+  scope?: string
 }
+
+type InstallMode = 'fallback' | 'hooks' | 'map'
 
 function formatTargetPath(targetPath: string): string {
   return relative(process.cwd(), targetPath) || targetPath
@@ -203,10 +213,23 @@ export async function runInstallCommand(
     return
   }
 
+  const mode = resolveInstallMode(options)
+  if (mode === 'hooks') {
+    validateHookInstallOptions(options)
+    for (const result of runInstallHooks({
+      agents: options.agents,
+      root: process.cwd(),
+      scope: options.scope,
+    })) {
+      console.log(formatHookInstallResult(result))
+    }
+    return
+  }
+
   const coreOptions = coreOptionsFromGlobalFlags(options)
   const noticeOptions = noticeOptionsFromGlobalFlags(options)
 
-  if (!options.map) {
+  if (mode === 'fallback') {
     const generated = buildIntentSkillGuidanceBlock(
       detectIntentCommandPackageManager(),
     )
@@ -312,4 +335,15 @@ export async function runInstallCommand(
 
   printWarnings(scanResult.warnings)
   printNotices(scanResult.notices, noticeOptions)
+}
+
+function resolveInstallMode(options: InstallCommandOptions): InstallMode {
+  const mode = options.mode ?? (options.map ? 'map' : 'fallback')
+  if (mode !== 'fallback' && mode !== 'hooks' && mode !== 'map') {
+    fail(`Unknown install mode: ${mode}. Expected hooks, fallback, or map.`)
+  }
+  if (options.map && mode !== 'map') {
+    fail('Use either --map or --mode, not both.')
+  }
+  return mode
 }

@@ -36,13 +36,13 @@ export const HOOK_AGENT_ADAPTERS: Record<HookAgent, HookAgentAdapter> = {
           ? join(root, '.claude', 'settings.json')
           : join(homeDir, '.claude', 'settings.json'),
         scriptPath: project
-          ? join(root, HOOK_SCRIPT_DIR, 'intent-claude-gate.mjs')
+          ? join(root, HOOK_SCRIPT_DIR, 'intent-claude-catalog.mjs')
           : join(
               homeDir,
               '.tanstack',
               'intent',
               'hooks',
-              'intent-claude-gate.mjs',
+              'intent-claude-catalog.mjs',
             ),
       }
     },
@@ -58,13 +58,13 @@ export const HOOK_AGENT_ADAPTERS: Record<HookAgent, HookAgentAdapter> = {
           ? join(root, '.codex', 'hooks.json')
           : join(homeDir, '.codex', 'hooks.json'),
         scriptPath: project
-          ? join(root, HOOK_SCRIPT_DIR, 'intent-codex-gate.mjs')
+          ? join(root, HOOK_SCRIPT_DIR, 'intent-codex-catalog.mjs')
           : join(
               homeDir,
               '.tanstack',
               'intent',
               'hooks',
-              'intent-codex-gate.mjs',
+              'intent-codex-catalog.mjs',
             ),
       }
     },
@@ -72,21 +72,28 @@ export const HOOK_AGENT_ADAPTERS: Record<HookAgent, HookAgentAdapter> = {
   copilot: {
     agent: 'copilot',
     configKind: 'copilot-hooks',
-    supportedScopes: new Set(['user']),
-    paths: (_scope, { copilotHome, homeDir }) => ({
-      configPath: join(
-        copilotHome ?? join(homeDir, '.copilot'),
-        'hooks',
-        'hooks.json',
-      ),
-      scriptPath: join(
-        homeDir,
-        '.tanstack',
-        'intent',
-        'hooks',
-        'intent-copilot-gate.mjs',
-      ),
-    }),
+    supportedScopes: new Set(['project', 'user']),
+    paths: (scope, { copilotHome, homeDir, root }) => {
+      const project = scope === 'project'
+      return {
+        configPath: project
+          ? join(root, '.github', 'hooks', 'intent.json')
+          : join(
+              copilotHome ?? join(homeDir, '.copilot'),
+              'hooks',
+              'hooks.json',
+            ),
+        scriptPath: project
+          ? join(root, HOOK_SCRIPT_DIR, 'intent-copilot-catalog.mjs')
+          : join(
+              homeDir,
+              '.tanstack',
+              'intent',
+              'hooks',
+              'intent-copilot-catalog.mjs',
+            ),
+      }
+    },
   },
 }
 

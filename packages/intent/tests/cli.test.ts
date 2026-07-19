@@ -372,12 +372,12 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Created AGENTS.md with skill loading guidance.')
-    expect(content).toContain('## Skill Loading')
-    expect(content).toContain('npx @tanstack/intent@latest list')
-    expect(content).toContain('If a listed skill matches the task')
-    expect(content).toContain('before changing files')
-    expect(content).toContain('Monorepos:')
-    expect(content).toContain('Multiple matches:')
+    expect(content).toContain('## TanStack Intent skills')
+    expect(content).toContain('Do not run `intent list` for every task.')
+    expect(content).toContain('If no skill clearly matches, continue normally.')
+    expect(content).toContain('npx @tanstack/intent@latest list` once')
+    expect(content).toContain('<!-- intent-skills:start -->')
+    expect(content).toContain('<!-- intent-skills:end -->')
     expect(content).not.toContain('--global')
     expect(content).not.toContain('use: "@tanstack/query#fetching"')
     expect(content).not.toContain(root)
@@ -476,6 +476,62 @@ describe('cli commands', () => {
     expect(output).toContain('Installed Intent hooks for claude (project)')
     expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(true)
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('installs hooks with install --mode hooks without writing guidance', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-hooks-mode-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main([
+      'install',
+      '--mode',
+      'hooks',
+      '--agents',
+      'claude',
+    ])
+
+    expect(exitCode).toBe(0)
+    expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(true)
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('supports explicit fallback and map install modes', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-modes-'))
+    tempDirs.push(root)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    process.chdir(root)
+
+    expect(await main(['install', '--mode', 'fallback'])).toBe(0)
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+      'Do not run `intent list` for every task.',
+    )
+    expect(await main(['install', '--mode', 'map'])).toBe(0)
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+      'id: "@tanstack/query#fetching"',
+    )
+  })
+
+  it('rejects unknown and conflicting install modes', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-bad-mode-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    expect(await main(['install', '--mode', 'unknown'])).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Unknown install mode: unknown. Expected hooks, fallback, or map.',
+    )
+
+    errorSpy.mockClear()
+    expect(await main(['install', '--mode', 'hooks', '--map'])).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Use either --map or --mode, not both.',
+    )
   })
 
   it('fails cleanly for invalid hooks install options', async () => {

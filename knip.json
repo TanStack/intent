@@ -5,14 +5,10 @@
       "entry": [
         "scripts/*.ts",
         "evals/intent-discovery/**/*.ts",
-        "evals/intent-discovery/**/*.mjs",
-        "evals/intent-discovery/harness/intent-hooks/gate.mjs"
+        "evals/intent-discovery/**/*.mjs"
       ],
       "ignoreBinaries": ["copilot", "diff"],
-      "ignoreFiles": [
-        "evals/intent-discovery/fixtures/**/src/**/*",
-        "evals/intent-discovery/harness/intent-hooks/hook-core.d.mts"
-      ]
+      "ignoreFiles": ["evals/intent-discovery/fixtures/**/src/**/*"]
     },
     "packages/intent": {
       "entry": ["src/index.ts", "src/cli.ts", "src/core.ts", "src/setup.ts"],

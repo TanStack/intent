@@ -99,12 +99,25 @@ describe('install writer block builder', () => {
     const generated = buildIntentSkillGuidanceBlock()
 
     expect(generated.mappingCount).toBe(0)
-    expect(generated.block).toContain('## Skill Loading')
-    expect(generated.block).toContain('npx @tanstack/intent@latest list')
-    expect(generated.block).toContain('If a listed skill matches the task')
-    expect(generated.block).toContain('before changing files')
-    expect(generated.block).toContain('Monorepos:')
-    expect(generated.block).toContain('Multiple matches:')
+    expect(generated.block).toContain('## TanStack Intent skills')
+    expect(generated.block).toContain(
+      'Use the Intent skill catalogue already supplied to the current agent session.',
+    )
+    expect(generated.block).toContain(
+      'Do not run `intent list` for every task.',
+    )
+    expect(generated.block).toContain(
+      'If no skill clearly matches, continue normally.',
+    )
+    expect(generated.block).toContain(
+      'run `npx @tanstack/intent@latest list` once',
+    )
+    expect(generated.block).toContain(
+      'Re-run discovery only when dependencies or Intent configuration have changed',
+    )
+    expect(generated.block).not.toContain(
+      'Before editing files for a substantial task',
+    )
     expect(generated.block).not.toContain('install --map')
     expect(generated.block).not.toContain('--global')
   })

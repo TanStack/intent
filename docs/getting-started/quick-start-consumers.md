@@ -5,58 +5,49 @@ id: quick-start-consumers
 
 Get started using Intent to help your agent discover and load package skills.
 
-## 1. Run install
+## 1. Install lifecycle hooks
 
-The install command guides your agent through the setup process:
-
-```bash
-npx @tanstack/intent@latest install
-```
-
-Examples use `npx` for npm projects. In pnpm, Yarn, or Bun projects, use the matching runner: `pnpm dlx`, `yarn dlx`, or `bunx`.
-
-This creates or updates an `intent-skills` guidance block. It:
-
-1. Checks for existing `intent-skills` guidance in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.)
-2. Writes lightweight instructions for skill discovery and loading
-3. Preserves content outside the managed block
-4. Verifies the managed block before reporting success
-
-If an `intent-skills` block already exists, Intent updates that file in place.
-If no block exists, `AGENTS.md` is the default target.
-
-Intent creates guidance like:
-
-```markdown
-<!-- intent-skills:start -->
-## Skill Loading
-
-Before editing files for a substantial task:
-- Run `pnpm dlx @tanstack/intent@latest list` from the workspace root to see available local skills.
-- If a listed skill matches the task, run `pnpm dlx @tanstack/intent@latest load <package>#<skill>` before changing files.
-- Use the loaded `SKILL.md` guidance while making the change.
-- Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.
-- Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
-<!-- intent-skills:end -->
-```
-
-Intent detects the package manager when generating this block, so the runner may be `npx`, `pnpm dlx`, `yarn dlx`, or `bunx`.
-
-To enforce loading guidance before edits in supported agents, opt in to hooks:
+For Claude Code, Codex, and GitHub Copilot, install project lifecycle hooks:
 
 ```bash
 npx @tanstack/intent@latest hooks install
 ```
 
-Project-scoped hooks are installed for Claude Code and Codex. `intent install` can write project guidance to `.github/copilot-instructions.md`, but GitHub Copilot CLI hook enforcement is user-scoped, so configure it explicitly:
+Examples use `npx` for npm projects. In pnpm, Yarn, or Bun projects, use the matching runner: `pnpm dlx`, `yarn dlx`, or `bunx`.
+
+The hooks:
+
+1. Discover allowed workspace skills when an agent session starts.
+2. Inject a compact catalogue of skill IDs and descriptions into session context.
+3. Reuse a cached catalogue on resume, clear, compact, and subagent callbacks where supported.
+4. Tell the agent to load full guidance only when a skill clearly matches the task.
+
+Hooks are advisory. They do not block edits or claim to prove that a loaded skill semantically matches the current task. If no skill matches, the agent continues normally.
+
+For Cursor and generic `AGENTS.md` agents, install minimal fallback guidance instead:
 
 ```bash
-npx @tanstack/intent@latest hooks install --scope user --agents copilot
+npx @tanstack/intent@latest install --mode fallback
 ```
 
-Cursor and generic `AGENTS.md` agents use the guidance block only.
+This updates an existing managed block or creates `AGENTS.md` without embedding the discovered catalogue:
 
-Hooks add the available Intent skill catalog to supported agent sessions and keep the edit gate active until the agent loads matching full guidance. To tailor what appears in the session catalog, configure `intent.skills` and `intent.exclude` in `package.json`.
+```markdown
+<!-- intent-skills:start -->
+## TanStack Intent skills
+
+Use the Intent skill catalogue already supplied to the current agent session.
+
+- Do not run `intent list` for every task.
+- Before substantial work, check the current session catalogue for a clear task match.
+- If a skill clearly matches, run `pnpm dlx @tanstack/intent@latest load <package>#<skill>` before editing relevant files.
+- If no skill clearly matches, continue normally.
+- If no catalogue is available in the current session, run `pnpm dlx @tanstack/intent@latest list` once from the workspace root.
+- Re-run discovery only when dependencies or Intent configuration have changed, or when the existing catalogue is unavailable.
+<!-- intent-skills:end -->
+```
+
+`intent install --mode hooks` is equivalent to `intent hooks install`. Use `--scope user` for personal cross-project hooks. To tailor the catalogue, configure `intent.skills` and `intent.exclude` in `package.json`.
 
 ## 2. Choose which packages' skills to use
 
@@ -87,8 +78,10 @@ This prints the skill content for the installed package version.
 If you want explicit task-to-skill mappings in your agent config, opt in:
 
 ```bash
-npx @tanstack/intent@latest install --map
+npx @tanstack/intent@latest install --mode map
 ```
+
+`--map` remains an alias for compatibility. Static mappings become always-on context, so prefer lifecycle hooks when the agent supports them.
 
 ## 4. Keep skills up-to-date
 
