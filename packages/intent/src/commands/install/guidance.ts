@@ -2,14 +2,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { formatIntentCommand } from '../../shared/command-runner.js'
+import { containsLocalPath } from '../../shared/local-path.js'
 import { isGeneratedMappingSkill } from '../../skills/categories.js'
 import { formatSkillUse, parseSkillUse } from '../../skills/use.js'
 import type { ScanResult, SkillEntry } from '../../shared/types.js'
 
 const INTENT_SKILLS_START = '<!-- intent-skills:start -->'
 const INTENT_SKILLS_END = '<!-- intent-skills:end -->'
-const LOCAL_PATH_VALUE_PATTERN =
-  /(?:^|[\s"'])(?:\.{1,2}[\\/]|~[\\/]|[A-Za-z]:[\\/]|\/(?:Users|home|private|tmp|var\/folders)[\\/]|[^\s"']*(?:node_modules|\.pnpm|\.bun|\.yarn|\.intent)[\\/])/i
 
 const SUPPORTED_AGENT_CONFIG_FILES = [
   'AGENTS.md',
@@ -125,10 +124,6 @@ function parseSkillsList(block: string): {
   }
 }
 
-function containsLocalPathValue(value: string): boolean {
-  return LOCAL_PATH_VALUE_PATTERN.test(value)
-}
-
 function parseLoadedSkillUse(command: string): string | null {
   const match = command.match(
     /(?:^|&&|\|\||;|\|)\s*(?:bunx\s+@tanstack\/intent(?:@latest)?|pnpm\s+exec\s+intent|pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?|npx\s+@tanstack\/intent(?:@latest)?|yarn\s+dlx\s+@tanstack\/intent(?:@latest)?|intent)\s+load\s+([^\s|;&]+)/i,
@@ -168,7 +163,7 @@ export function verifyIntentSkillsBlockFile({
     errors.push('Managed block does not match generated mappings.')
   }
 
-  if (containsLocalPathValue(block)) {
+  if (containsLocalPath(block)) {
     errors.push('Managed block must not include local file paths.')
   }
 
@@ -220,7 +215,7 @@ export function verifyIntentSkillsBlockFile({
         errors.push(err instanceof Error ? err.message : String(err))
       }
 
-      if (containsLocalPathValue(mapping.id)) {
+      if (containsLocalPath(mapping.id)) {
         errors.push('Skill mapping `id` must not include local file paths.')
       }
     }
@@ -243,14 +238,14 @@ export function verifyIntentSkillsBlockFile({
         }
       }
 
-      if (containsLocalPathValue(mapping.run)) {
+      if (containsLocalPath(mapping.run)) {
         errors.push('Skill mapping `run` must not include local file paths.')
       }
     }
 
     if (typeof mapping.for !== 'string' || mapping.for.trim() === '') {
       errors.push('Each skill mapping must include a non-empty `for` field.')
-    } else if (containsLocalPathValue(mapping.for)) {
+    } else if (containsLocalPath(mapping.for)) {
       errors.push('Skill mapping `for` must not include local file paths.')
     }
   }

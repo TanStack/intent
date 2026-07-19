@@ -501,6 +501,64 @@ tanstackIntent:
     ).toEqual({ errors: [], ok: true })
   })
 
+  it.each([
+    String.raw`C:\Users\alice\project\README.md`,
+    '/etc/passwd',
+    '/projects/acme/README.md',
+    '[/opt/work/README.md]',
+    String.raw`\\server\share\README.md`,
+    '../private/README.md',
+    'file:///Users/alice/project/README.md',
+  ])('rejects local paths across supported path forms', (localPath) => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    const block = `<!-- intent-skills:start -->
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - id: "@tanstack/query#fetching"
+    run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
+    for: ${JSON.stringify(`Read ${localPath}`)}
+<!-- intent-skills:end -->
+`
+    writeFileSync(agentsPath, block)
+
+    const result = verifyIntentSkillsBlockFile({
+      expectedBlock: block,
+      expectedMappingCount: 1,
+      targetPath: agentsPath,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors).toContain(
+      'Skill mapping `for` must not include local file paths.',
+    )
+  })
+
+  it.each(['/users/:id', '/home/settings'])(
+    'allows the %s application route in mapping descriptions',
+    (route) => {
+      const root = tempRoot()
+      const agentsPath = join(root, 'AGENTS.md')
+      const block = `<!-- intent-skills:start -->
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - id: "@tanstack/router#routing"
+    run: "npx @tanstack/intent@latest load @tanstack/router#routing"
+    for: "Configure ${route} routes"
+<!-- intent-skills:end -->
+`
+      writeFileSync(agentsPath, block)
+
+      expect(
+        verifyIntentSkillsBlockFile({
+          expectedBlock: block,
+          expectedMappingCount: 1,
+          targetPath: agentsPath,
+        }),
+      ).toEqual({ errors: [], ok: true })
+    },
+  )
+
   it('rejects when target file does not exist', () => {
     const root = tempRoot()
     const missingPath = join(root, 'AGENTS.md')

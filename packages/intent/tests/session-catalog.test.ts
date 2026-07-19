@@ -66,6 +66,20 @@ function skill(
 }
 
 describe('session catalogue formatting', () => {
+  it('sorts skill ids using ordinal order', () => {
+    const catalogue = buildSessionCatalogue(
+      skillList([
+        skill('pkg#a-skill', 'Lowercase skill'),
+        skill('pkg#Z-skill', 'Uppercase skill'),
+      ]),
+    )
+
+    expect(catalogue.skills.map((entry) => entry.id)).toEqual([
+      'pkg#Z-skill',
+      'pkg#a-skill',
+    ])
+  })
+
   it('sorts actionable skills and normalizes descriptions without paths', () => {
     const catalogue = buildSessionCatalogue(
       skillList([
@@ -79,16 +93,44 @@ describe('session catalogue formatting', () => {
       {
         id: '@tanstack/query#queries',
         description: 'Use @tanstack/query#queries',
-        packageName: '@tanstack/query',
       },
       {
         id: '@tanstack/router#routing',
         description: 'Route navigation',
-        packageName: '@tanstack/router',
       },
     ])
     expect(catalogue.packageCount).toBe(0)
     expect(JSON.stringify(catalogue)).not.toContain('/private/workspace')
+  })
+
+  it.each([
+    ['Windows', String.raw`Read C:\Users\alice\project\README.md`],
+    ['POSIX', 'Read /opt/work/project/README.md'],
+    ['generic POSIX', 'Read /projects/acme/README.md'],
+    ['bracketed POSIX', 'Read [/opt/work/README.md]'],
+    ['UNC', String.raw`Read \\server\share\README.md`],
+    ['relative', 'Read ../private/README.md'],
+    ['file URL', 'Read file:///Users/alice/project/README.md'],
+  ])('replaces %s path-bearing descriptions', (_, description) => {
+    const [entry] = buildSessionCatalogue(
+      skillList([skill('pkg#core', description)]),
+    ).skills
+
+    expect(entry?.description).toBe('Use pkg#core')
+  })
+
+  it('preserves application route paths in descriptions', () => {
+    const entries = buildSessionCatalogue(
+      skillList([
+        skill('pkg#home', 'Configure /home/settings routes'),
+        skill('pkg#routing', 'Configure /users/:id routes and navigation'),
+      ]),
+    ).skills
+
+    expect(entries.map((entry) => entry.description)).toEqual([
+      'Configure /home/settings routes',
+      'Configure /users/:id routes and navigation',
+    ])
   })
 
   it('bounds large catalogues and marks truncation explicitly', () => {
@@ -153,6 +195,75 @@ describe('session catalogue formatting', () => {
     expect(context).toContain('If no skill clearly matches, continue normally.')
     expect(context.length).toBeLessThan(700)
   })
+
+  it('bounds the complete UTF-8 context and reports omitted skills', () => {
+    const catalogue = buildSessionCatalogue(
+      skillList(
+        Array.from({ length: 40 }, (_, index) =>
+          skill(
+            `pkg#skill-${String(index).padStart(2, '0')}`,
+            `Route guidance ${'🧭'.repeat(80)}`,
+          ),
+        ),
+        [`Warning ${'界'.repeat(500)}`],
+      ),
+      { maxSkills: 40 },
+    )
+
+    const context = formatSessionCatalogue(catalogue, { maxBytes: 1_200 })
+
+    expect(Buffer.byteLength(context)).toBeLessThanOrEqual(1_200)
+    expect(context).toMatch(/additional skills? omitted/)
+  })
+
+  it('truncates descriptions without splitting Unicode code points', () => {
+    const [entry] = buildSessionCatalogue(
+      skillList([skill('pkg#core', `Guidance ${'🧭'.repeat(200)}`)]),
+    ).skills
+
+    expect(entry?.description).not.toMatch(/[\uD800-\uDFFF]$/)
+    expect(
+      Buffer.from(entry?.description ?? '').toString('utf8'),
+    ).not.toContain('�')
+  })
+
+  it('rejects a context budget too small for complete guidance', () => {
+    const catalogue = buildSessionCatalogue(
+      skillList([skill('pkg#core', 'Core guidance')]),
+    )
+
+    expect(() => formatSessionCatalogue(catalogue, { maxBytes: 256 })).toThrow(
+      /at least/,
+    )
+  })
+
+  it('keeps long skill ids atomic when they do not fit', () => {
+    const longId = `pkg#${'skill-'.repeat(200)}`
+    const context = formatSessionCatalogue(
+      buildSessionCatalogue(skillList([skill(longId, 'Guidance')])),
+      { maxBytes: 1_000 },
+    )
+
+    expect(Buffer.byteLength(context)).toBeLessThanOrEqual(1_000)
+    expect(context).not.toContain(longId)
+    expect(context).toContain('1 additional skill omitted')
+  })
+
+  it('reports warnings omitted by count and byte limits', () => {
+    const result = skillList(
+      [skill('pkg#core', 'Core guidance')],
+      Array.from(
+        { length: 12 },
+        (_, index) => `Warning ${index}: ${'detail '.repeat(30)}`,
+      ),
+    )
+    const context = formatSessionCatalogue(buildSessionCatalogue(result), {
+      maxBytes: 1_100,
+    })
+
+    expect(Buffer.byteLength(context)).toBeLessThanOrEqual(1_100)
+    expect(context).toMatch(/additional warnings? omitted/)
+  })
 })
 
 describe('session catalogue cache', () => {
@@ -185,8 +296,10 @@ describe('session catalogue cache', () => {
 
     writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9\nchanged\n')
     const refreshed = getSessionCatalogue({ cacheDir, discover, root })
+    const hitAfterRefresh = getSessionCatalogue({ cacheDir, discover, root })
 
     expect(refreshed.cacheStatus).toBe('refresh')
+    expect(hitAfterRefresh.cacheStatus).toBe('hit')
     expect(discover).toHaveBeenCalledTimes(2)
   })
 
