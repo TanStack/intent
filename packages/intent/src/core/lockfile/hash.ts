@@ -151,9 +151,15 @@ export function computeSkillContentHash({
   if (!fs.lstatSync(realSkillDir).isDirectory()) {
     throw new Error('Skill directory is not a directory.')
   }
-  const entries: Array<HashEntry> = []
-  let entryCount = 0
-  let totalBytes = 0
+  const hashState: {
+    entries: Array<HashEntry>
+    entryCount: number
+    totalBytes: number
+  } = {
+    entries: [],
+    entryCount: 0,
+    totalBytes: 0,
+  }
 
   const readFile = (physicalPath: string, logicalPath: string): void => {
     const realPath = resolveInPackage(
@@ -166,12 +172,15 @@ export function computeSkillContentHash({
       throw new Error(`${logicalPath} is not a regular file.`)
     }
     const content = readBoundedFile(fs, realPath)
-    totalBytes += content.length
-    if (totalBytes > HASH_LIMITS.maxTotalBytes)
+    hashState.totalBytes += content.length
+    if (hashState.totalBytes > HASH_LIMITS.maxTotalBytes)
       throw new Error('Hash total size limit exceeded.')
-    if (entries.length + 1 > HASH_LIMITS.maxFileCount)
+    if (hashState.entries.length + 1 > HASH_LIMITS.maxFileCount)
       throw new Error('Hash file count limit exceeded.')
-    entries.push({ path: logicalPath, content: normalizeContent(content) })
+    hashState.entries.push({
+      path: logicalPath,
+      content: normalizeContent(content),
+    })
   }
 
   const collect = (
@@ -185,8 +194,8 @@ export function computeSkillContentHash({
     for (const entry of [...dirEntries].sort((a, b) =>
       compareStrings(a.name, b.name),
     )) {
-      entryCount += 1
-      if (entryCount > HASH_LIMITS.maxEntryCount)
+      hashState.entryCount += 1
+      if (hashState.entryCount > HASH_LIMITS.maxEntryCount)
         throw new Error('Hash entry count limit exceeded.')
       const logicalPath = `${logicalDir}/${entry.name}`
       const physicalPath = join(physicalDir, entry.name)
@@ -226,5 +235,5 @@ export function computeSkillContentHash({
       throw new Error(`${directory} is not a directory.`)
     collect(realDir, directory, 1)
   }
-  return hashEntries(entries)
+  return hashEntries(hashState.entries)
 }

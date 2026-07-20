@@ -1,5 +1,6 @@
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -12,6 +13,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { INSTALL_PROMPT } from '../src/commands/install/command.js'
+import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
+import { serializeIntentLockfile } from '../src/core/lockfile/lockfile.js'
+import { scanForIntents } from '../src/discovery/scanner.js'
 import { isMainModule, main } from '../src/cli.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
@@ -220,6 +224,128 @@ describe('cli commands', () => {
     expect(output).toContain('$ intent list [--json]')
     expect(output).toContain('--json')
     expect(output).toContain('--show-hidden')
+  })
+
+  it('tells consumers to install before syncing without configuration or a lockfile', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-sync-unconfigured-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), { name: 'app', private: true })
+    process.chdir(root)
+
+    const exitCode = await main(['sync'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Intent sync requires intent.install configuration and intent.lock. Run `intent install` first.',
+    )
+  })
+
+  it('syncs verified links and reports changed, pending, removed, and dry-run work', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-sync-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['verified'],
+        install: { method: 'symlink', targets: ['github', 'vscode'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    process.chdir(root)
+    const discovered = scanForIntents(root, { scope: 'local' }).packages
+    writeFileSync(
+      join(root, 'intent.lock'),
+      serializeIntentLockfile({
+        lockfileVersion: 1,
+        sources: buildCurrentLockfileSources(discovered),
+      }),
+    )
+
+    expect(await main(['sync'])).toBe(0)
+    const linkPath = join(root, '.github', 'skills', 'npm-verified-core')
+    expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
+    const state = readFileSync(
+      join(root, '.intent', 'install-state.json'),
+      'utf8',
+    )
+    const gitignore = readFileSync(join(root, '.gitignore'), 'utf8')
+    expect(gitignore).toContain('.github/skills/npm-verified-core')
+    expect(await main(['sync'])).toBe(0)
+    expect(
+      readFileSync(join(root, '.intent', 'install-state.json'), 'utf8'),
+    ).toBe(state)
+
+    writeFileSync(
+      join(root, 'node_modules', 'verified', 'skills', 'core', 'SKILL.md'),
+      '---\nname: core\ndescription: changed\n---\n',
+    )
+    expect(await main(['sync'])).toBe(0)
+    expect(existsSync(linkPath)).toBe(false)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'Changed: verified (1).',
+    )
+    expect(
+      JSON.parse(
+        readFileSync(join(root, '.intent', 'install-state.json'), 'utf8'),
+      ),
+    ).toEqual({ version: 1, entries: [] })
+
+    writeInstalledIntentPackage(root, {
+      name: 'pending',
+      version: '1.0.0',
+      skillName: 'new',
+      description: 'Pending skill',
+    })
+    expect(await main(['sync'])).toBe(0)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'Pending: pending (1).',
+    )
+
+    rmSync(join(root, 'node_modules', 'verified'), {
+      recursive: true,
+      force: true,
+    })
+    expect(await main(['sync'])).toBe(0)
+    expect(existsSync(linkPath)).toBe(false)
+
+    const dryRoot = mkdtempSync(join(realTmpdir, 'intent-cli-sync-dry-run-'))
+    tempDirs.push(dryRoot)
+    writeJson(join(dryRoot, 'package.json'), {
+      name: 'dry-app',
+      private: true,
+      intent: {
+        skills: ['dry-package'],
+        install: { method: 'symlink', targets: ['agents'] },
+      },
+    })
+    writeInstalledIntentPackage(dryRoot, {
+      name: 'dry-package',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Dry skill',
+    })
+    const dryDiscovered = scanForIntents(dryRoot, { scope: 'local' }).packages
+    writeFileSync(
+      join(dryRoot, 'intent.lock'),
+      serializeIntentLockfile({
+        lockfileVersion: 1,
+        sources: buildCurrentLockfileSources(dryDiscovered),
+      }),
+    )
+    process.chdir(dryRoot)
+    expect(await main(['sync', '--dry-run', '--json'])).toBe(0)
+    expect(
+      existsSync(join(dryRoot, '.agents', 'skills', 'npm-dry-package-core')),
+    ).toBe(false)
+    expect(existsSync(join(dryRoot, '.intent', 'install-state.json'))).toBe(
+      false,
+    )
   })
 
   it('prints the install prompt', async () => {

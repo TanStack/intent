@@ -184,6 +184,29 @@ export interface SourcePolicyResult {
   notices: Array<string>
 }
 
+export function scanForConfiguredIntents({
+  config,
+  exclude,
+  root,
+}: {
+  config: SkillSourcesConfig
+  exclude: Array<string>
+  root: string
+}): {
+  discovered: Array<IntentPackage>
+  policy: SourcePolicyResult
+} {
+  const scan = scanForIntents(root, { scope: 'local' })
+  const discovered = scan.packages.filter((pkg) => pkg.source === 'local')
+  return {
+    discovered,
+    policy: applySourcePolicy(
+      { packages: discovered },
+      { config, excludeMatchers: compileExcludePatterns(exclude) },
+    ),
+  }
+}
+
 export function applySourcePolicy(
   scanResult: { packages: Array<IntentPackage> },
   options: SourcePolicyOptions,

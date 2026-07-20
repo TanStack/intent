@@ -12,6 +12,7 @@ import type { InstallCommandOptions } from './commands/install/command.js'
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
 import type { StaleCommandOptions } from './commands/stale.js'
+import type { SyncCommandOptions } from './commands/sync/command.js'
 import type { ValidateCommandOptions } from './commands/validate.js'
 
 function createCli(): CAC {
@@ -161,6 +162,18 @@ function createCli(): CAC {
         import('./commands/install/command.js'),
       ])
       await runInstallCommand(options, scanIntentsOrFail)
+    })
+
+  cli
+    .command('sync', 'Synchronize verified skill links into configured targets')
+    .usage('sync [--dry-run] [--json]')
+    .option('--dry-run', 'Report changes without writing files')
+    .option('--json', 'Output JSON')
+    .example('sync')
+    .example('sync --dry-run')
+    .action(async (options: SyncCommandOptions) => {
+      const { runSyncCommand } = await import('./commands/sync/command.js')
+      runSyncCommand(options)
     })
 
   cli
