@@ -166,6 +166,10 @@ function loadPnpApi(root: string): LoadedPnp | null {
   }
 }
 
+export function getProjectReadFs(root: string): ReadFs {
+  return loadPnpApi(root)?.readFs ?? nodeReadFs
+}
+
 function getPnpLocatorKey(locator: PnpPackageLocator): string {
   return `${locator.name ?? '<top>'}@${locator.reference ?? '<top>'}`
 }

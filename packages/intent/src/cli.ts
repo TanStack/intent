@@ -7,6 +7,7 @@ import { fail, isCliFailure } from './shared/cli-error.js'
 import type { CAC } from 'cac'
 import type { ExcludeCommandOptions } from './commands/exclude.js'
 import type { HooksInstallCommandOptions } from './commands/hooks/command.js'
+import type { CatalogCommandOptions } from './commands/catalog.js'
 import type { InstallCommandOptions } from './commands/install/command.js'
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
@@ -40,6 +41,21 @@ function createCli(): CAC {
     .action(async (options: ListCommandOptions) => {
       const { runListCommand } = await import('./commands/list.js')
       await runListCommand(options)
+    })
+
+  cli
+    .command(
+      'catalog',
+      'Build compact cached skill context for agent lifecycle hooks',
+    )
+    .usage('catalog [--json] [--refresh]')
+    .option('--json', 'Output JSON with context and cache metrics')
+    .option('--refresh', 'Ignore a valid cached catalogue')
+    .example('catalog')
+    .example('catalog --json')
+    .action(async (options: CatalogCommandOptions) => {
+      const { runCatalogCommand } = await import('./commands/catalog.js')
+      await runCatalogCommand(options)
     })
 
   cli
