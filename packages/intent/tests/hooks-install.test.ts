@@ -45,7 +45,7 @@ describe('hook installer', () => {
     expect(HOOK_AGENT_ADAPTERS.copilot.supportedScopes.has('user')).toBe(true)
   })
 
-  it('installs project-scoped Claude and Codex hooks and skips Copilot', () => {
+  it('installs project-scoped Claude and Codex catalogues without edit gates', () => {
     const root = tempRoot('intent-hooks-project-')
 
     const results = runInstallHooks({ root, scope: 'project' })
@@ -75,37 +75,24 @@ describe('hook installer', () => {
     )
     expect(claudeConfig.hooks.SessionStart[0].hooks[0]).toMatchObject({
       command: 'node',
-      args: ['${CLAUDE_PROJECT_DIR}/.intent/hooks/intent-claude-gate.mjs'],
+      args: ['${CLAUDE_PROJECT_DIR}/.intent/hooks/intent-claude-catalog.mjs'],
       type: 'command',
     })
-    expect(claudeConfig.hooks.PreToolUse).toHaveLength(1)
-    expect(claudeConfig.hooks.PreToolUse[0].matcher).toBe(
-      'Bash|Write|Edit|MultiEdit|NotebookEdit',
-    )
-    expect(claudeConfig.hooks.PreToolUse[0].hooks[0]).toMatchObject({
-      command: 'node',
-      args: ['${CLAUDE_PROJECT_DIR}/.intent/hooks/intent-claude-gate.mjs'],
-      type: 'command',
-    })
+    expect(claudeConfig.hooks.PreToolUse).toEqual([])
 
     const codexConfig = readJson(join(root, '.codex', 'hooks.json'))
     expect(codexConfig.hooks.SessionStart[0].matcher).toBe(
       'startup|resume|clear|compact',
     )
     expect(codexConfig.hooks.SessionStart[0].hooks[0].command).toContain(
-      '.intent/hooks/intent-codex-gate.mjs',
+      '.intent/hooks/intent-codex-catalog.mjs',
     )
-    expect(codexConfig.hooks.PreToolUse[0].matcher).toBe(
-      'Bash|apply_patch|Edit|Write',
-    )
-    expect(codexConfig.hooks.PreToolUse[0].hooks[0].command).toContain(
-      '.intent/hooks/intent-codex-gate.mjs',
-    )
+    expect(codexConfig.hooks.PreToolUse).toEqual([])
     expect(
-      existsSync(join(root, '.intent', 'hooks', 'intent-claude-gate.mjs')),
+      existsSync(join(root, '.intent', 'hooks', 'intent-claude-catalog.mjs')),
     ).toBe(true)
     expect(
-      existsSync(join(root, '.intent', 'hooks', 'intent-codex-gate.mjs')),
+      existsSync(join(root, '.intent', 'hooks', 'intent-codex-catalog.mjs')),
     ).toBe(true)
   })
 
@@ -125,12 +112,10 @@ describe('hook installer', () => {
     expect(result).toMatchObject({ agent: 'copilot', status: 'created' })
     const config = readJson(join(copilotHome, 'hooks', 'hooks.json'))
     const sessionCommand = config.hooks.SessionStart[0].command as string
-    const command = config.hooks.PreToolUse[0].command as string
 
     expect(sessionCommand).toContain(join(homeDir, '.tanstack'))
-    expect(sessionCommand).toContain('intent-copilot-gate.mjs')
-    expect(command).toContain(join(homeDir, '.tanstack'))
-    expect(command).toContain('intent-copilot-gate.mjs')
+    expect(sessionCommand).toContain('intent-copilot-catalog.mjs')
+    expect(config.hooks.PreToolUse).toEqual([])
     expect(
       existsSync(
         join(
@@ -138,7 +123,7 @@ describe('hook installer', () => {
           '.tanstack',
           'intent',
           'hooks',
-          'intent-copilot-gate.mjs',
+          'intent-copilot-catalog.mjs',
         ),
       ),
     ).toBe(true)
@@ -147,7 +132,15 @@ describe('hook installer', () => {
   it('updates only the Intent hook group on repeated installs', () => {
     const root = tempRoot('intent-hooks-update-')
     const settingsPath = join(root, '.claude', 'settings.json')
+    const legacyScriptPath = join(
+      root,
+      '.intent',
+      'hooks',
+      'intent-claude-gate.mjs',
+    )
     mkdirSync(join(root, '.claude'), { recursive: true })
+    mkdirSync(join(root, '.intent', 'hooks'), { recursive: true })
+    writeFileSync(legacyScriptPath, 'legacy gate')
     writeFileSync(
       settingsPath,
       JSON.stringify(
@@ -180,8 +173,9 @@ describe('hook installer', () => {
 
     const config = readJson(settingsPath)
     expect(config.hooks.SessionStart).toHaveLength(1)
-    expect(config.hooks.PreToolUse).toHaveLength(2)
+    expect(config.hooks.PreToolUse).toHaveLength(1)
     expect(config.hooks.PreToolUse[0].hooks[0].command).toBe('echo keep')
+    expect(existsSync(legacyScriptPath)).toBe(false)
     expect(second[0]).toMatchObject({ status: 'unchanged' })
   })
 
@@ -217,13 +211,10 @@ describe('hook installer', () => {
 
     const config = readJson(settingsPath)
     expect(config.hooks.SessionStart).toHaveLength(1)
-    expect(config.hooks.PreToolUse).toHaveLength(2)
+    expect(config.hooks.PreToolUse).toHaveLength(1)
     expect(config.hooks.PreToolUse[0].hooks).toEqual([
       { type: 'command', command: 'echo keep' },
     ])
-    expect(config.hooks.PreToolUse[1].hooks[0].args[0]).toContain(
-      'intent-claude-gate.mjs',
-    )
   })
 
   it('replaces direct Copilot Intent hook entries on reinstall', () => {
@@ -258,11 +249,7 @@ describe('hook installer', () => {
 
     const config = readJson(hooksPath)
     expect(config.hooks.SessionStart).toHaveLength(1)
-    expect(config.hooks.PreToolUse).toHaveLength(2)
-    expect(config.hooks.PreToolUse[0]).toEqual({ command: 'echo keep' })
-    expect(config.hooks.PreToolUse[1].command).toContain(
-      'intent-copilot-gate.mjs',
-    )
+    expect(config.hooks.PreToolUse).toEqual([{ command: 'echo keep' }])
   })
 
   it('preserves hooks that only mention an Intent gate outside command fields', () => {
@@ -300,29 +287,27 @@ describe('hook installer', () => {
 
     const config = readJson(hooksPath)
     expect(config.hooks.SessionStart).toHaveLength(1)
-    expect(config.hooks.PreToolUse).toHaveLength(2)
-    expect(config.hooks.PreToolUse[0]).toMatchObject({
+    expect(config.hooks.PreToolUse).toHaveLength(1)
+    expect(config.hooks.PreToolUse[0]).toEqual({
       command: 'echo keep',
       note: 'mentions intent-copilot-gate.mjs in documentation',
     })
-    expect(config.hooks.PreToolUse[1].command).toContain(
-      'intent-copilot-gate.mjs',
-    )
   })
 
-  it('builds a runner script with command-free denial text', () => {
+  it('builds a catalogue-only runner script', () => {
     const script = buildHookRunnerScript('claude')
 
     expect(script).toContain('const AGENT = "claude"')
-    expect(script).toContain('permissionDecision')
-    expect(script).not.toMatch(/Blocked:.*intent\s+(list|load)/i)
+    expect(script).not.toContain('permissionDecision')
+    expect(script).not.toContain('PreToolUse')
+    expect(script).not.toContain('tanstack-intent-hooks')
     expect(script).not.toContain('@tanstack/intent/core')
     expect(script).not.toContain('createRequire')
   })
 
-  it('runs the generated gate script through the load then edit cycle', () => {
+  it('ignores edit events before and after a load command', () => {
     const root = tempRoot('intent-hooks-runner-')
-    const scriptPath = join(root, 'intent-claude-gate.mjs')
+    const scriptPath = join(root, 'intent-claude-catalog.mjs')
     writeFileSync(scriptPath, buildHookRunnerScript('claude'))
 
     const beforeLoad = runHookScript(scriptPath, {
@@ -348,9 +333,7 @@ describe('hook installer', () => {
     })
 
     expect(beforeLoad.status).toBe(0)
-    expect(JSON.parse(beforeLoad.stdout)).toMatchObject({
-      hookSpecificOutput: { permissionDecision: 'deny' },
-    })
+    expect(beforeLoad.stdout).toBe('')
     expect(load.status).toBe(0)
     expect(load.stdout).toBe('')
     expect(afterLoad.status).toBe(0)
@@ -366,7 +349,7 @@ describe('hook installer', () => {
         root,
         '.intent',
         'hooks',
-        `intent-${agent}-gate.mjs`,
+        `intent-${agent}-catalog.mjs`,
       )
       mkdirSync(join(root, '.intent', 'hooks'), { recursive: true })
       writeFileSync(scriptPath, buildHookRunnerScript(agent, catalogCommand))
@@ -396,10 +379,15 @@ describe('hook installer', () => {
     },
   )
 
-  it('does not unlock edits after session catalog context', () => {
+  it('does not emit an edit decision after session catalogue context', () => {
     const root = tempRoot('intent-hooks-session-catalog-gate-')
     const catalogCommand = writeFakeIntentListCommand(root)
-    const scriptPath = join(root, '.intent', 'hooks', 'intent-claude-gate.mjs')
+    const scriptPath = join(
+      root,
+      '.intent',
+      'hooks',
+      'intent-claude-catalog.mjs',
+    )
     mkdirSync(join(root, '.intent', 'hooks'), { recursive: true })
     writeFileSync(scriptPath, buildHookRunnerScript('claude', catalogCommand))
 
@@ -422,9 +410,7 @@ describe('hook installer', () => {
       hookSpecificOutput: { hookEventName: 'SessionStart' },
     })
     expect(edit.status).toBe(0)
-    expect(JSON.parse(edit.stdout)).toMatchObject({
-      hookSpecificOutput: { permissionDecision: 'deny' },
-    })
+    expect(edit.stdout).toBe('')
   })
 
   it('continues silently when session catalog loading fails', () => {
@@ -448,62 +434,6 @@ describe('hook installer', () => {
 
     expect(result.status).toBe(0)
     expect(result.stdout).toBe('')
-  })
-
-  it('does not unlock edits after non-executed load text', () => {
-    const root = tempRoot('intent-hooks-non-executed-load-')
-    const scriptPath = join(root, 'intent-claude-gate.mjs')
-    writeFileSync(scriptPath, buildHookRunnerScript('claude'))
-
-    const echoLoad = runHookScript(scriptPath, {
-      cwd: root,
-      hook_event_name: 'PreToolUse',
-      session_id: 'session-a',
-      tool_name: 'Bash',
-      tool_input: { command: 'echo intent load @tanstack/router#routing' },
-    })
-    const afterEcho = runHookScript(scriptPath, {
-      cwd: root,
-      hook_event_name: 'PreToolUse',
-      session_id: 'session-a',
-      tool_name: 'Edit',
-      tool_input: { file_path: join(root, 'src.ts') },
-    })
-
-    expect(echoLoad.status).toBe(0)
-    expect(echoLoad.stdout).toBe('')
-    expect(afterEcho.status).toBe(0)
-    expect(JSON.parse(afterEcho.stdout)).toMatchObject({
-      hookSpecificOutput: { permissionDecision: 'deny' },
-    })
-  })
-
-  it('unlocks edits after a load in an or-chain command', () => {
-    const root = tempRoot('intent-hooks-runner-or-chain-')
-    const scriptPath = join(root, 'intent-claude-gate.mjs')
-    writeFileSync(scriptPath, buildHookRunnerScript('claude'))
-
-    const load = runHookScript(scriptPath, {
-      cwd: root,
-      hook_event_name: 'PreToolUse',
-      session_id: 'session-a',
-      tool_name: 'Bash',
-      tool_input: {
-        command: 'npm test || intent load @tanstack/router#routing',
-      },
-    })
-    const afterLoad = runHookScript(scriptPath, {
-      cwd: root,
-      hook_event_name: 'PreToolUse',
-      session_id: 'session-a',
-      tool_name: 'Edit',
-      tool_input: { file_path: join(root, 'src.ts') },
-    })
-
-    expect(load.status).toBe(0)
-    expect(load.stdout).toBe('')
-    expect(afterLoad.status).toBe(0)
-    expect(afterLoad.stdout).toBe('')
   })
 
   it('formats skipped install results', () => {
@@ -555,5 +485,5 @@ console.log(JSON.stringify({
 }
 
 function quoteShell(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
+  return JSON.stringify(value)
 }

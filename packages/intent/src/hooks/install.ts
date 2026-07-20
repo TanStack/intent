@@ -1,11 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, relative } from 'node:path'
 import { detectPackageManager } from '../discovery/package-manager.js'
 import { fail } from '../shared/cli-error.js'
 import { formatIntentCommand } from '../shared/command-runner.js'
 import { ALL_HOOK_AGENTS, HOOK_AGENT_ADAPTERS } from './adapters.js'
-import { EDIT_TOOLS_BY_AGENT, GATE_DENY_REASON } from './policy.js'
 import type { HookAgent, HookInstallScope } from './types.js'
 
 type HookInstallStatus = 'created' | 'skipped' | 'unchanged' | 'updated'
@@ -27,7 +32,6 @@ export type InstallHooksOptions = {
   scope?: string
 }
 
-const GATE_STATUS_MESSAGE = 'Checking Intent guidance'
 const CATALOG_STATUS_MESSAGE = 'Loading Intent skill catalog'
 
 export function runInstallHooks({
@@ -66,21 +70,13 @@ export function buildHookRunnerScript(
     'list --json --no-notices',
   ),
 ): string {
-  const editTools = [...EDIT_TOOLS_BY_AGENT[agent]].sort()
-
   return `#!/usr/bin/env node
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { createHash } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 
 const AGENT = ${JSON.stringify(agent)}
 const CATALOG_COMMAND = ${JSON.stringify(catalogCommand)}
-const EDIT_TOOLS = new Set(${JSON.stringify(editTools)})
-const GATE_DENY_REASON = ${JSON.stringify(GATE_DENY_REASON)}
-const INTENT_COMMAND_PATTERN = /(?:^|&&|\\|\\||;|\\|)\\s*((?:bunx\\s+@tanstack\\/intent(?:@latest)?)|(?:pnpm\\s+exec\\s+intent)|(?:pnpm\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:npx\\s+@tanstack\\/intent(?:@latest)?)|(?:yarn\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:intent))\\s+(list|load)(?:\\s+([^\\s|;&]+))?/i
 
 try {
   await main()
@@ -92,24 +88,11 @@ process.exit(0)
 async function main() {
   const event = readEventFromStdin()
 
-  if (isSessionStartEvent(event)) {
-    const additionalContext = await createSessionCatalogContext(rootForEvent(event))
-    if (additionalContext) {
-      process.stdout.write(JSON.stringify(sessionStartOutput(additionalContext)))
-    }
-    return
-  }
+  if (!isSessionStartEvent(event)) return
 
-  const stateFile = stateFileForEvent(event)
-  const observation = observationFromEvent(event)
-
-  if (observation) {
-    appendObservation(stateFile, observation)
-  }
-
-  const toolName = event?.tool_name ?? event?.toolName
-  if (typeof toolName === 'string' && EDIT_TOOLS.has(toolName) && !hasLoad(stateFile)) {
-    process.stdout.write(JSON.stringify(denyOutput()))
+  const additionalContext = await createSessionCatalogContext(rootForEvent(event))
+  if (additionalContext) {
+    process.stdout.write(JSON.stringify(sessionStartOutput(additionalContext)))
   }
 }
 
@@ -216,87 +199,6 @@ function sessionStartOutput(additionalContext) {
   }
 }
 
-function stateFileForEvent(event) {
-  const sessionId = typeof event?.session_id === 'string' ? event.session_id : 'unknown'
-  const cwd = typeof event?.cwd === 'string' ? event.cwd : process.cwd()
-  const key = createHash('sha256').update(AGENT + '\\0' + cwd + '\\0' + sessionId).digest('hex')
-  return join(tmpdir(), 'tanstack-intent-hooks', key + '.jsonl')
-}
-
-function observationFromEvent(event) {
-  if (!event || typeof event !== 'object') return undefined
-  const toolName = event.tool_name ?? event.toolName
-  const toolInput = event.tool_input ?? event.toolArgs
-  if (toolName !== 'Bash') return undefined
-  const command = typeof toolInput === 'string' ? safeCommandFromString(toolInput) : commandFromObject(toolInput)
-  const parsed = parseIntentInvocation(command)
-  if (!parsed || typeof command !== 'string') return undefined
-  return { action: parsed.action, skillUse: parsed.skillUse, raw: command }
-}
-
-function parseIntentInvocation(command) {
-  if (typeof command !== 'string') return undefined
-  const match = command.match(INTENT_COMMAND_PATTERN)
-  if (!match?.[1] || !match[2]) return undefined
-  const action = match[2].toLowerCase()
-  if (action !== 'list' && action !== 'load') return undefined
-  const skillUse = action === 'load' ? match[3] : undefined
-  if (action === 'load' && !skillUse) return undefined
-  return action === 'load' ? { action, skillUse } : { action }
-}
-
-function commandFromObject(value) {
-  return value && typeof value === 'object' ? value.command : undefined
-}
-
-function safeCommandFromString(value) {
-  try {
-    const command = commandFromObject(JSON.parse(value))
-    return typeof command === 'string' ? command : value
-  } catch {
-    return value
-  }
-}
-
-function appendObservation(stateFile, observation) {
-  try {
-    mkdirSync(dirname(stateFile), { recursive: true })
-    appendFileSync(stateFile, JSON.stringify({ ts: new Date().toISOString(), ...observation }) + '\\n')
-  } catch {
-  }
-}
-
-function hasLoad(stateFile) {
-  if (!existsSync(stateFile)) return false
-  try {
-    return readFileSync(stateFile, 'utf8')
-      .split('\\n')
-      .filter(Boolean)
-      .some((line) => {
-        try {
-          return JSON.parse(line).action === 'load'
-        } catch {
-          return false
-        }
-      })
-  } catch {
-    return false
-  }
-}
-
-function denyOutput() {
-  if (AGENT === 'copilot') {
-    return { permissionDecision: 'deny', permissionDecisionReason: GATE_DENY_REASON }
-  }
-
-  return {
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      permissionDecision: 'deny',
-      permissionDecisionReason: GATE_DENY_REASON,
-    },
-  }
-}
 `
 }
 
@@ -357,6 +259,7 @@ function installAgentHook({
     scriptPath,
     buildHookRunnerScript(agent, catalogCommand),
   )
+  removeLegacyGateScript(scriptPath)
   const configStatus = updateJsonConfig(configPath, (config) =>
     upsertAdapterHooks({
       config,
@@ -440,7 +343,7 @@ function upsertClaudeHooks(
         command: 'node',
         args: [
           project
-            ? '${CLAUDE_PROJECT_DIR}/.intent/hooks/intent-claude-gate.mjs'
+            ? '${CLAUDE_PROJECT_DIR}/.intent/hooks/intent-claude-catalog.mjs'
             : scriptPath,
         ],
         timeout: 10,
@@ -448,22 +351,7 @@ function upsertClaudeHooks(
       },
     ],
   })
-  hooks.PreToolUse = upsertHookGroup(arrayValue(hooks.PreToolUse), {
-    matcher: 'Bash|Write|Edit|MultiEdit|NotebookEdit',
-    hooks: [
-      {
-        type: 'command',
-        command: 'node',
-        args: [
-          project
-            ? '${CLAUDE_PROJECT_DIR}/.intent/hooks/intent-claude-gate.mjs'
-            : scriptPath,
-        ],
-        timeout: 10,
-        statusMessage: GATE_STATUS_MESSAGE,
-      },
-    ],
-  })
+  hooks.PreToolUse = removeIntentHooks(arrayValue(hooks.PreToolUse))
   return { ...config, hooks }
 }
 
@@ -479,26 +367,14 @@ function upsertCodexHooks(
       {
         type: 'command',
         command: project
-          ? 'node "$(git rev-parse --show-toplevel)/.intent/hooks/intent-codex-gate.mjs"'
+          ? 'node "$(git rev-parse --show-toplevel)/.intent/hooks/intent-codex-catalog.mjs"'
           : `node ${quoteShell(scriptPath)}`,
         timeout: 10,
         statusMessage: CATALOG_STATUS_MESSAGE,
       },
     ],
   })
-  hooks.PreToolUse = upsertHookGroup(arrayValue(hooks.PreToolUse), {
-    matcher: 'Bash|apply_patch|Edit|Write',
-    hooks: [
-      {
-        type: 'command',
-        command: project
-          ? 'node "$(git rev-parse --show-toplevel)/.intent/hooks/intent-codex-gate.mjs"'
-          : `node ${quoteShell(scriptPath)}`,
-        timeout: 10,
-        statusMessage: GATE_STATUS_MESSAGE,
-      },
-    ],
-  })
+  hooks.PreToolUse = removeIntentHooks(arrayValue(hooks.PreToolUse))
   return { ...config, hooks }
 }
 
@@ -510,9 +386,7 @@ function upsertCopilotHooks(
   hooks.SessionStart = upsertHookGroup(arrayValue(hooks.SessionStart), {
     command: `node ${quoteShell(scriptPath)}`,
   })
-  hooks.PreToolUse = upsertHookGroup(arrayValue(hooks.PreToolUse), {
-    command: `node ${quoteShell(scriptPath)}`,
-  })
+  hooks.PreToolUse = removeIntentHooks(arrayValue(hooks.PreToolUse))
   return { ...config, hooks }
 }
 
@@ -520,7 +394,11 @@ function upsertHookGroup(
   groups: Array<unknown>,
   nextGroup: Record<string, unknown>,
 ): Array<unknown> {
-  return [...groups.flatMap(withoutIntentHooks), nextGroup]
+  return [...removeIntentHooks(groups), nextGroup]
+}
+
+function removeIntentHooks(groups: Array<unknown>): Array<unknown> {
+  return groups.flatMap(withoutIntentHooks)
 }
 
 function withoutIntentHooks(value: unknown): Array<unknown> {
@@ -548,9 +426,14 @@ function isIntentHook(value: unknown): boolean {
 }
 
 function isIntentGateScriptReference(value: string): boolean {
-  return /(?:^|[\s"'/])(?:old-)?intent-(claude|codex|copilot)-gate\.mjs(?:$|[?#\s"'])/i.test(
+  return /(?:^|[\s"'/])(?:old-)?intent-(claude|codex|copilot)-(?:gate|catalog)\.mjs(?:$|[?#\s"'])/i.test(
     value,
   )
+}
+
+function removeLegacyGateScript(scriptPath: string): void {
+  const legacyPath = scriptPath.replace(/-catalog\.mjs$/, '-gate.mjs')
+  if (legacyPath !== scriptPath) rmSync(legacyPath, { force: true })
 }
 
 function updateJsonConfig(

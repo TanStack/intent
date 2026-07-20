@@ -36,13 +36,13 @@ export const HOOK_AGENT_ADAPTERS: Record<HookAgent, HookAgentAdapter> = {
           ? join(root, '.claude', 'settings.json')
           : join(homeDir, '.claude', 'settings.json'),
         scriptPath: project
-          ? join(root, HOOK_SCRIPT_DIR, 'intent-claude-gate.mjs')
+          ? join(root, HOOK_SCRIPT_DIR, 'intent-claude-catalog.mjs')
           : join(
               homeDir,
               '.tanstack',
               'intent',
               'hooks',
-              'intent-claude-gate.mjs',
+              'intent-claude-catalog.mjs',
             ),
       }
     },
@@ -58,13 +58,13 @@ export const HOOK_AGENT_ADAPTERS: Record<HookAgent, HookAgentAdapter> = {
           ? join(root, '.codex', 'hooks.json')
           : join(homeDir, '.codex', 'hooks.json'),
         scriptPath: project
-          ? join(root, HOOK_SCRIPT_DIR, 'intent-codex-gate.mjs')
+          ? join(root, HOOK_SCRIPT_DIR, 'intent-codex-catalog.mjs')
           : join(
               homeDir,
               '.tanstack',
               'intent',
               'hooks',
-              'intent-codex-gate.mjs',
+              'intent-codex-catalog.mjs',
             ),
       }
     },
@@ -84,7 +84,7 @@ export const HOOK_AGENT_ADAPTERS: Record<HookAgent, HookAgentAdapter> = {
         '.tanstack',
         'intent',
         'hooks',
-        'intent-copilot-gate.mjs',
+        'intent-copilot-catalog.mjs',
       ),
     }),
   },
