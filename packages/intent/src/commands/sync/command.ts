@@ -34,8 +34,28 @@ interface SyncCommandResult {
   removed: Array<string>
   unchanged: Array<string>
   conflicts: Array<string>
-  pending: Array<SyncPackageSummary>
+  newDependencies: Array<SyncPackageSummary>
+  newSkills: Array<SyncPackageSummary>
   changed: Array<SyncPackageSummary>
+}
+
+function formatPackageSummaries(entries: Array<SyncPackageSummary>): string {
+  const width = Math.max(...entries.map((entry) => entry.name.length))
+  return entries
+    .map(
+      (entry) =>
+        `${entry.name.padEnd(width)}  ${entry.skillCount} ${entry.skillCount === 1 ? 'skill' : 'skills'}`,
+    )
+    .join('\n')
+}
+
+function printReminder(
+  title: string,
+  entries: Array<SyncPackageSummary>,
+  action: string,
+): void {
+  if (entries.length === 0) return
+  console.log(`${title}:\n\n${formatPackageSummaries(entries)}\n\n${action}`)
 }
 
 function writeGitignore(root: string, paths: Array<string>): boolean {
@@ -55,14 +75,21 @@ function output(result: SyncCommandResult, json: boolean): void {
   console.log(
     `Intent sync: ${result.created.length} created, ${result.repaired.length} repaired, ${result.removed.length} removed.`,
   )
-  if (result.pending.length > 0)
-    console.log(
-      `Pending: ${result.pending.map((entry) => `${entry.name} (${entry.skillCount})`).join(', ')}.`,
-    )
-  if (result.changed.length > 0)
-    console.log(
-      `Changed: ${result.changed.map((entry) => `${entry.name} (${entry.skillCount})`).join(', ')}.`,
-    )
+  printReminder(
+    'New dependencies with skills found',
+    result.newDependencies,
+    'Run `intent install` to review and install them, or add them to `intent.exclude`.',
+  )
+  printReminder(
+    'New skills found in enabled dependencies',
+    result.newSkills,
+    'Run `intent install` to review and install them.',
+  )
+  printReminder(
+    'Changed skill content',
+    result.changed,
+    'Run `intent install` to review and accept the new baseline.',
+  )
   if (result.conflicts.length > 0)
     console.log(`Conflicts: ${result.conflicts.join(', ')}.`)
 }
@@ -108,32 +135,38 @@ export function runSyncCommand(options: SyncCommandOptions): void {
     expected,
     stateResult: readInstallStateForLinks(root),
   })
-  const pending = inventory.packages
-    .map((pkg) => ({
-      name: pkg.name,
-      skillCount: pkg.skills.filter(
-        (skill) =>
-          skill.policy === 'pending' ||
-          (skill.policy === 'enabled' && skill.lock === 'new'),
-      ).length,
-    }))
-    .filter((entry) => entry.skillCount > 0)
-  const changed = inventory.packages
-    .map((pkg) => ({
-      name: pkg.name,
-      skillCount: pkg.skills.filter(
-        (skill) => skill.policy === 'enabled' && skill.lock === 'changed',
-      ).length,
-    }))
-    .filter((entry) => entry.skillCount > 0)
+  const summaries = {
+    newDependencies: inventory.packages
+      .map((pkg) => ({
+        name: pkg.kind === 'workspace' ? `workspace:${pkg.name}` : pkg.name,
+        skillCount: pkg.skills.filter((skill) => skill.policy === 'pending')
+          .length,
+      }))
+      .filter((entry) => entry.skillCount > 0),
+    newSkills: inventory.packages
+      .map((pkg) => ({
+        name: pkg.kind === 'workspace' ? `workspace:${pkg.name}` : pkg.name,
+        skillCount: pkg.skills.filter(
+          (skill) => skill.policy === 'enabled' && skill.lock === 'new',
+        ).length,
+      }))
+      .filter((entry) => entry.skillCount > 0),
+    changed: inventory.packages
+      .map((pkg) => ({
+        name: pkg.kind === 'workspace' ? `workspace:${pkg.name}` : pkg.name,
+        skillCount: pkg.skills.filter(
+          (skill) => skill.policy === 'enabled' && skill.lock === 'changed',
+        ).length,
+      }))
+      .filter((entry) => entry.skillCount > 0),
+  }
   const result = {
     created: links.created.map((path) => toProjectRelativePath(root, path)),
     repaired: links.repaired.map((path) => toProjectRelativePath(root, path)),
     removed: links.removed.map((path) => toProjectRelativePath(root, path)),
     unchanged: links.unchanged.map((path) => toProjectRelativePath(root, path)),
     conflicts: links.conflicts.map((path) => toProjectRelativePath(root, path)),
-    pending,
-    changed,
+    ...summaries,
   }
   if (!options.dryRun) {
     const stateEntries = links.entries.map((entry) => ({

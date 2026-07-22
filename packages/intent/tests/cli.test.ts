@@ -281,6 +281,24 @@ describe('cli commands', () => {
       readFileSync(join(root, '.intent', 'install-state.json'), 'utf8'),
     ).toBe(state)
 
+    writeSkillMd(
+      join(root, 'node_modules', 'verified', 'skills', 'additional'),
+      {
+        name: 'additional',
+        description: 'Additional skill',
+      },
+    )
+    expect(await main(['sync'])).toBe(0)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      [
+        'New skills found in enabled dependencies:',
+        '',
+        'verified  1 skill',
+        '',
+        'Run `intent install` to review and install them.',
+      ].join('\n'),
+    )
+
     writeFileSync(
       join(root, 'node_modules', 'verified', 'skills', 'core', 'SKILL.md'),
       '---\nname: core\ndescription: changed\n---\n',
@@ -288,7 +306,13 @@ describe('cli commands', () => {
     expect(await main(['sync'])).toBe(0)
     expect(existsSync(linkPath)).toBe(false)
     expect(logSpy.mock.calls.flat().join('\n')).toContain(
-      'Changed: verified (1).',
+      [
+        'Changed skill content:',
+        '',
+        'verified  1 skill',
+        '',
+        'Run `intent install` to review and accept the new baseline.',
+      ].join('\n'),
     )
     expect(
       JSON.parse(
@@ -304,7 +328,13 @@ describe('cli commands', () => {
     })
     expect(await main(['sync'])).toBe(0)
     expect(logSpy.mock.calls.flat().join('\n')).toContain(
-      'Pending: pending (1).',
+      [
+        'New dependencies with skills found:',
+        '',
+        'pending  1 skill',
+        '',
+        'Run `intent install` to review and install them, or add them to `intent.exclude`.',
+      ].join('\n'),
     )
 
     rmSync(join(root, 'node_modules', 'verified'), {
