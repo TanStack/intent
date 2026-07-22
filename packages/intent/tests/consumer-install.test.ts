@@ -57,8 +57,8 @@ function createPrompts(
 ): InstallerPrompter {
   return {
     complete: () => {},
-    selectTargets: () => Promise.resolve(['agents']),
     selectMethod: () => Promise.resolve('symlink'),
+    selectTargets: () => Promise.resolve(['agents']),
     confirmSymlink: () => Promise.resolve(true),
     selectSkills: () => Promise.resolve({ mode: 'all-found' }),
     confirmInstall: () => Promise.resolve('install'),
@@ -73,6 +73,29 @@ afterEach(() => {
 })
 
 describe('consumer install', () => {
+  it('selects the method before requesting applicable targets', async () => {
+    const root = createProject()
+    const calls: Array<string> = []
+    const prompts = createPrompts({
+      selectMethod: () => {
+        calls.push('method')
+        return Promise.resolve('symlink')
+      },
+      selectTargets: (method) => {
+        calls.push(`targets:${method}`)
+        return Promise.resolve(null)
+      },
+    })
+
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts,
+      root,
+    })
+
+    expect(calls).toEqual(['method', 'targets:symlink'])
+  })
+
   it('installs confirmed skills with policy, lock state, and managed links', async () => {
     const root = createProject()
     const prompts = createPrompts()

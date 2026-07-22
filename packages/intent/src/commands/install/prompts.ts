@@ -8,7 +8,7 @@ import {
   outro,
   select,
 } from '@clack/prompts'
-import { INSTALL_TARGETS } from './config.js'
+import { installTargetsForMethod } from './config.js'
 import { skillSelectionId } from './plan.js'
 import type { InstallConfirmation, InstallerPrompter } from './consumer.js'
 import type { InstallMethod, InstallTarget } from './config.js'
@@ -31,37 +31,41 @@ export function createClackInstallerPrompter(): InstallerPrompter {
     complete(message: string): void {
       outro(message)
     },
-    async selectTargets(): Promise<Array<InstallTarget> | null> {
+    async selectMethod(): Promise<InstallMethod | null> {
+      for (;;) {
+        const method = cancelled(
+          await select<InstallMethod>({
+            message: 'How do you want to install skills?',
+            options: [
+              { value: 'symlink', label: 'Symlink skill folders' },
+              { value: 'hooks', label: 'Install lifecycle hooks' },
+              {
+                value: 'map',
+                label: 'Add a compact skill map to agent instructions',
+              },
+            ],
+          }),
+        )
+        if (!method || method === 'symlink') return method
+        note(
+          'This delivery adapter is not available in the current installer slice.',
+          method === 'hooks'
+            ? 'Lifecycle hooks are coming next'
+            : 'Compact skill maps are coming next',
+        )
+      }
+    },
+    async selectTargets(
+      method: InstallMethod,
+    ): Promise<Array<InstallTarget> | null> {
       return cancelled(
         await multiselect<InstallTarget>({
           message: 'Where do you want to install skills?',
-          options: INSTALL_TARGETS.map((target) => ({
+          options: installTargetsForMethod(method).map((target) => ({
             value: target.id,
             label: target.label,
           })),
           required: true,
-        }),
-      )
-    },
-    async selectMethod(): Promise<InstallMethod | null> {
-      return cancelled(
-        await select<InstallMethod>({
-          message: 'How do you want to install skills?',
-          options: [
-            { value: 'symlink', label: 'Symlink skill folders' },
-            {
-              value: 'hooks',
-              label: 'Install lifecycle hooks',
-              hint: 'Target-aware hook installation is not available yet',
-              disabled: true,
-            },
-            {
-              value: 'map',
-              label: 'Add a compact skill map to agent instructions',
-              hint: 'Target-aware map installation is not available yet',
-              disabled: true,
-            },
-          ],
         }),
       )
     },
@@ -74,6 +78,7 @@ export function createClackInstallerPrompter(): InstallerPrompter {
         await confirm({
           message: 'Continue with symlinks?',
           initialValue: false,
+          vertical: true,
         }),
       )
     },

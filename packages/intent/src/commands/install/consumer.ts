@@ -34,8 +34,8 @@ export type InstallConfirmation = 'install' | 'back' | null
 
 export interface InstallerPrompter {
   complete: (message: string) => void
-  selectTargets: () => Promise<Array<InstallTarget> | null>
   selectMethod: () => Promise<InstallMethod | null>
+  selectTargets: (method: InstallMethod) => Promise<Array<InstallTarget> | null>
   confirmSymlink: () => Promise<boolean | null>
   selectSkills: (
     discovered: ReadonlyArray<IntentPackage>,
@@ -67,10 +67,10 @@ export async function runConsumerInstall({
     )
   }
   for (;;) {
-    const targets = await prompts.selectTargets()
-    if (!targets || targets.length === 0) return
     const method = await prompts.selectMethod()
     if (!method) return
+    const targets = await prompts.selectTargets(method)
+    if (!targets || targets.length === 0) return
     if (method !== 'symlink') {
       throw new Error(`Install method "${method}" is not implemented yet.`)
     }

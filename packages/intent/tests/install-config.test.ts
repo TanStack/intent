@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   INSTALL_TARGETS,
+  installTargetsForMethod,
   readIntentConsumerConfig,
   updateIntentConsumerConfigText,
 } from '../src/commands/install/config.js'
@@ -19,6 +20,23 @@ describe('installer configuration', () => {
       { id: 'cursor', label: 'Cursor' },
       { id: 'codex', label: 'Codex' },
       { id: 'claude', label: 'Claude Code' },
+    ])
+  })
+
+  it('filters targets by the selected delivery method', () => {
+    expect(
+      installTargetsForMethod('symlink').map((target) => target.id),
+    ).toEqual(['agents', 'github', 'vscode', 'cursor', 'codex', 'claude'])
+    expect(installTargetsForMethod('hooks').map((target) => target.id)).toEqual(
+      ['github', 'codex', 'claude'],
+    )
+    expect(installTargetsForMethod('map').map((target) => target.id)).toEqual([
+      'agents',
+      'github',
+      'vscode',
+      'cursor',
+      'codex',
+      'claude',
     ])
   })
 

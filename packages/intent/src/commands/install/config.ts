@@ -42,6 +42,14 @@ const INSTALL_METHODS: Readonly<
   map: new Set(INSTALL_TARGETS.map((target) => target.id)),
 }
 
+export function installTargetsForMethod(
+  method: InstallMethod,
+): typeof INSTALL_TARGETS {
+  return INSTALL_TARGETS.filter((target) =>
+    INSTALL_METHODS[method].has(target.id),
+  )
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
