@@ -8,6 +8,7 @@ import type {
 } from '../shared/types.js'
 
 export interface ResolveSkillResult {
+  kind: IntentPackage['kind']
   packageName: string
   skillName: string
   path: string
@@ -182,6 +183,7 @@ export function resolveSkillUse(
     ) ?? null
 
   return {
+    kind: pkg.kind,
     packageName,
     skillName: skill.name,
     path: skill.path,

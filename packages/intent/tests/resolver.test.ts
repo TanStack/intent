@@ -88,6 +88,7 @@ describe('resolveSkillUse', () => {
 
     expect(resolveSkillUse('@tanstack/query#core', scanResult([pkg]))).toEqual({
       conflict: null,
+      kind: 'npm',
       packageName: '@tanstack/query',
       packageRoot: 'node_modules/@tanstack/query',
       path: 'node_modules/@tanstack/query/skills/core/SKILL.md',

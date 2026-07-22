@@ -181,9 +181,7 @@ function getWorkspaceLoadFastPathCandidateDirs(
   return candidates
 }
 
-export interface FastPathResolveResult extends ResolveSkillResult {
-  kind: 'npm' | 'workspace'
-}
+export type FastPathResolveResult = ResolveSkillResult
 
 function resolveScannedPackageSkill(
   scanned: ReturnType<typeof scanIntentPackageAtRoot>,

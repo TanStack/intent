@@ -122,5 +122,7 @@ export type IntentCoreErrorCode =
   | 'package-not-listed'
   | 'skill-excluded'
   | 'skill-not-found'
+  | 'skill-not-accepted'
+  | 'skill-content-changed'
   | 'skill-path-outside-package'
   | 'skill-file-not-found'

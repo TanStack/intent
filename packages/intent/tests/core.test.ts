@@ -15,6 +15,8 @@ import {
   loadIntentSkill,
   resolveIntentSkill,
 } from '../src/core/index.js'
+import { computeSkillContentHash } from '../src/core/lockfile/hash.js'
+import { writeIntentLockfile } from '../src/core/lockfile/lockfile.js'
 
 const realTmpdir = realpathSync(tmpdir())
 
@@ -469,6 +471,105 @@ describe('loadIntentSkill', () => {
     })
   })
 
+  it('loads only exact skill content accepted by intent.lock', () => {
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    const packageRoot = join(root, 'node_modules', '@tanstack', 'query')
+    const skillDir = join(packageRoot, 'skills', 'fetching')
+    writeIntentLockfile(join(root, 'intent.lock'), {
+      lockfileVersion: 1,
+      sources: [
+        {
+          kind: 'npm',
+          id: '@tanstack/query',
+          skills: [
+            {
+              path: 'skills/fetching',
+              contentHash: computeSkillContentHash({ packageRoot, skillDir }),
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }).skillName,
+    ).toBe('fetching')
+
+    writeFileSync(join(skillDir, 'SKILL.md'), 'changed content', 'utf8')
+
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow(
+      'Cannot load skill use "@tanstack/query#fetching": installed content does not match intent.lock.',
+    )
+    expect(() =>
+      resolveIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow(
+      'Cannot load skill use "@tanstack/query#fetching": installed content does not match intent.lock.',
+    )
+  })
+
+  it('refuses a skill missing from an existing intent.lock', () => {
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeIntentLockfile(join(root, 'intent.lock'), {
+      lockfileVersion: 1,
+      sources: [],
+    })
+
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow(
+      'Cannot load skill use "@tanstack/query#fetching": skill is not accepted in intent.lock.',
+    )
+    expect(() =>
+      resolveIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow(
+      'Cannot load skill use "@tanstack/query#fetching": skill is not accepted in intent.lock.',
+    )
+  })
+
+  it('does not accept a lock entry for the wrong source kind', () => {
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    const packageRoot = join(root, 'node_modules', '@tanstack', 'query')
+    const skillDir = join(packageRoot, 'skills', 'fetching')
+    writeIntentLockfile(join(root, 'intent.lock'), {
+      lockfileVersion: 1,
+      sources: [
+        {
+          kind: 'workspace',
+          id: '@tanstack/query',
+          skills: [
+            {
+              path: 'skills/fetching',
+              contentHash: computeSkillContentHash({ packageRoot, skillDir }),
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow(
+      'Cannot load skill use "@tanstack/query#fetching": skill is not accepted in intent.lock.',
+    )
+  })
+
   it('does not change process cwd when loading from an explicit cwd', () => {
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',
@@ -608,6 +709,53 @@ describe('loadIntentSkill', () => {
     expect(result.path).toBe(
       join(routerDir, 'skills', 'router-core', 'auth-and-guards', 'SKILL.md'),
     )
+  })
+
+  it('loads an exact workspace skill accepted by intent.lock', () => {
+    const appDir = join(root, 'packages', 'app')
+    const routerDir = join(root, 'packages', 'router-core')
+    const skillDir = join(routerDir, 'skills', 'router-core', 'auth-and-guards')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-monorepo',
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(appDir, 'package.json'), { name: '@test/app' })
+    writeJson(join(routerDir, 'package.json'), {
+      name: '@tanstack/router-core',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'TanStack/router', docs: 'docs/' },
+    })
+    writeSkillMd({
+      dir: skillDir,
+      frontmatter: {
+        name: 'router-core/auth-and-guards',
+        description: 'Router auth and guards',
+      },
+    })
+    writeIntentLockfile(join(root, 'intent.lock'), {
+      lockfileVersion: 1,
+      sources: [
+        {
+          kind: 'workspace',
+          id: '@tanstack/router-core',
+          skills: [
+            {
+              path: 'skills/router-core/auth-and-guards',
+              contentHash: computeSkillContentHash({
+                packageRoot: routerDir,
+                skillDir,
+              }),
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(
+      loadIntentSkill('@tanstack/router-core#auth-and-guards', { cwd: appDir })
+        .skillName,
+    ).toBe('router-core/auth-and-guards')
   })
 
   it('loads a package-prefixed workspace skill by short name', () => {

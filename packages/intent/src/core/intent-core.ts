@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { ResolveSkillUseError, resolveSkillUse } from '../skills/resolver.js'
 import { formatSkillUse, parseSkillUse } from '../skills/use.js'
@@ -7,6 +7,8 @@ import {
   getEffectiveExcludePatterns,
 } from './excludes.js'
 import { rewriteLoadedSkillMarkdownDestinations } from './markdown.js'
+import { computeSkillContentHash } from './lockfile/hash.js'
+import { readIntentLockfile } from './lockfile/lockfile.js'
 import { resolveSkillUseFastPath } from './load-resolution.js'
 import { resolveProjectContext } from './project-context.js'
 import {
@@ -179,6 +181,8 @@ function toResolvedIntentSkill(
   use: string,
   resolved: ResolveSkillResult,
   readFs: ReadFs,
+  kind: 'npm' | 'workspace',
+  lockRoot: string,
   debug?: LoadedIntentSkillDebug,
 ): {
   realPackageRoot: string
@@ -206,6 +210,38 @@ function toResolvedIntentSkill(
       'skill-path-outside-package',
       `Resolved skill path for "${use}" is outside package root: ${resolved.path}`,
     )
+  }
+
+  const lock = readIntentLockfile(join(lockRoot, 'intent.lock'))
+  if (lock.status === 'found') {
+    const skillDirectory = dirname(realResolvedPath)
+    const relativeSkillDirectory = relative(realPackageRoot, skillDirectory)
+    const skillPath =
+      sep === '\\'
+        ? relativeSkillDirectory.split(sep).join('/')
+        : relativeSkillDirectory
+    const lockedSkill = lock.lockfile.sources
+      .find(
+        (source) => source.kind === kind && source.id === resolved.packageName,
+      )
+      ?.skills.find((skill) => skill.path === skillPath)
+    if (!lockedSkill) {
+      throw new IntentCoreError(
+        'skill-not-accepted',
+        `Cannot load skill use "${use}": skill is not accepted in intent.lock.`,
+      )
+    }
+    const contentHash = computeSkillContentHash({
+      packageRoot: realPackageRoot,
+      skillDir: skillDirectory,
+      fs: readFs,
+    })
+    if (contentHash !== lockedSkill.contentHash) {
+      throw new IntentCoreError(
+        'skill-content-changed',
+        `Cannot load skill use "${use}": installed content does not match intent.lock.`,
+      )
+    }
   }
 
   const result: ResolvedIntentSkill = {
@@ -283,6 +319,8 @@ function resolveIntentSkillInCwd(
 
   const fsCache = createIntentFsCache()
   const projectContext = resolveProjectContext({ cwd })
+  const lockRoot =
+    projectContext.workspaceRoot ?? projectContext.packageRoot ?? cwd
   const excludePatterns = getEffectiveExcludePatterns(options, projectContext)
   const excludeMatchers = compileExcludePatterns(excludePatterns)
   const config = readSkillSourcesConfig(cwd, projectContext)
@@ -313,6 +351,8 @@ function resolveIntentSkillInCwd(
       use,
       fastPathResolved,
       fsCache.getReadFs(),
+      fastPathResolved.kind,
+      lockRoot,
       options.debug
         ? createLoadedSkillDebug({
             cwd,
@@ -353,6 +393,8 @@ function resolveIntentSkillInCwd(
     use,
     resolved,
     fsCache.getReadFs(),
+    resolved.kind,
+    lockRoot,
     options.debug
       ? createLoadedSkillDebug({
           cwd,
