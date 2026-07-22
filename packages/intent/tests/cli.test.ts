@@ -475,120 +475,24 @@ describe('cli commands', () => {
     )
   })
 
-  it('writes skill loading guidance by default and is idempotent', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-'))
-    const isolatedGlobalRoot = mkdtempSync(
-      join(realTmpdir, 'intent-cli-install-empty-global-'),
-    )
-    tempDirs.push(root, isolatedGlobalRoot)
-    writeInstalledIntentPackage(root, {
-      name: '@tanstack/query',
-      version: '5.0.0',
-      skillName: 'fetching',
-      description: 'Query data fetching patterns',
-    })
+  it.each([{ flags: [] }, { flags: ['--dry-run'] }])(
+    'fails without writing when interactive install runs outside a TTY ($flags)',
+    async ({ flags }) => {
+      const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-nontty-'))
+      tempDirs.push(root)
+      writeJson(join(root, 'package.json'), { name: 'app', private: true })
+      process.chdir(root)
 
-    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
-    process.chdir(root)
+      const exitCode = await main(['install', ...flags])
 
-    const exitCode = await main(['install'])
-    const agentsPath = join(root, 'AGENTS.md')
-    const content = readFileSync(agentsPath, 'utf8')
-    const output = logSpy.mock.calls.flat().join('\n')
-
-    expect(exitCode).toBe(0)
-    expect(output).toContain('Created AGENTS.md with skill loading guidance.')
-    expect(content).toContain('## Skill Loading')
-    expect(content).toContain('npx @tanstack/intent@latest list')
-    expect(content).toContain('If a listed skill matches the task')
-    expect(content).toContain('before changing files')
-    expect(content).toContain('Monorepos:')
-    expect(content).toContain('Multiple matches:')
-    expect(content).not.toContain('--global')
-    expect(content).not.toContain('use: "@tanstack/query#fetching"')
-    expect(content).not.toContain(root)
-    expect(output).toContain(
-      'Tip: Keep the intent-skills block near the top of AGENTS.md',
-    )
-
-    logSpy.mockClear()
-
-    const secondExitCode = await main(['install'])
-    const secondOutput = logSpy.mock.calls.flat().join('\n')
-
-    expect(secondExitCode).toBe(0)
-    expect(secondOutput).toContain(
-      'No changes to AGENTS.md; skill loading guidance already current.',
-    )
-    expect(readFileSync(agentsPath, 'utf8')).toBe(content)
-  })
-
-  it('prints generated skill loading guidance without writing during dry run', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-dry-run-'))
-    const isolatedGlobalRoot = mkdtempSync(
-      join(realTmpdir, 'intent-cli-install-dry-run-empty-global-'),
-    )
-    tempDirs.push(root, isolatedGlobalRoot)
-    writeInstalledIntentPackage(root, {
-      name: '@tanstack/router',
-      version: '1.0.0',
-      skillName: 'routing',
-      description: 'Router patterns',
-    })
-
-    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
-    process.chdir(root)
-
-    const exitCode = await main(['install', '--dry-run'])
-    const output = logSpy.mock.calls.flat().join('\n')
-
-    expect(exitCode).toBe(0)
-    expect(output).toContain('Generated skill loading guidance for AGENTS.md.')
-    expect(output).toContain('npx @tanstack/intent@latest list')
-    expect(output).toContain(
-      'npx @tanstack/intent@latest load <package>#<skill>',
-    )
-    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
-  })
-
-  it('prints package-manager-specific install guidance', async () => {
-    const root = mkdtempSync(
-      join(realTmpdir, 'intent-cli-install-package-runner-'),
-    )
-    tempDirs.push(root)
-    writeFileSync(join(root, 'pnpm-lock.yaml'), '')
-
-    process.chdir(root)
-
-    const exitCode = await main(['install', '--dry-run'])
-    const output = logSpy.mock.calls.flat().join('\n')
-
-    expect(exitCode).toBe(0)
-    expect(output).toContain('pnpm dlx @tanstack/intent@latest list')
-    expect(output).toContain(
-      'pnpm dlx @tanstack/intent@latest load <package>#<skill>',
-    )
-  })
-
-  it('writes skill loading guidance even with no discovered skills', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-empty-'))
-    const isolatedGlobalRoot = mkdtempSync(
-      join(realTmpdir, 'intent-cli-install-empty-global-'),
-    )
-    tempDirs.push(root, isolatedGlobalRoot)
-
-    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
-    process.chdir(root)
-
-    const exitCode = await main(['install'])
-    const output = logSpy.mock.calls.flat().join('\n')
-
-    expect(exitCode).toBe(0)
-    expect(output).toContain('Created AGENTS.md with skill loading guidance.')
-    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
-      'npx @tanstack/intent@latest list',
-    )
-  })
+      expect(exitCode).toBe(1)
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Interactive installation requires a terminal. Run `intent install` in a TTY or use `intent install --map`.',
+      )
+      expect(existsSync(join(root, 'intent.lock'))).toBe(false)
+      expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+    },
+  )
 
   it('installs hooks with the hooks install command', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-hooks-install-'))

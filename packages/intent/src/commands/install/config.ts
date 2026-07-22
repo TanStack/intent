@@ -109,6 +109,14 @@ function parsePackageJson(text: string): Record<string, unknown> {
   return value
 }
 
+export function hasIntentDevDependency(text: string): boolean {
+  const devDependencies = parsePackageJson(text).devDependencies
+  return (
+    isRecord(devDependencies) &&
+    typeof devDependencies['@tanstack/intent'] === 'string'
+  )
+}
+
 export function readIntentConsumerConfig(text: string): IntentConsumerConfig {
   const packageJson = parsePackageJson(text)
   const intent = packageJson.intent

@@ -1,7 +1,4 @@
-import { detectPackageManager } from '../discovery/package-manager.js'
 import type { PackageManager } from './types.js'
-
-export { detectPackageManager as detectIntentCommandPackageManager }
 
 const runnerByPackageManager: Record<PackageManager, string> = {
   bun: 'bunx @tanstack/intent@latest',

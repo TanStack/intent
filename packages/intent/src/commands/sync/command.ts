@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { fail } from '../../shared/cli-error.js'
 import { buildCurrentLockfileSources } from '../../core/lockfile/lockfile-state.js'
 import { readIntentLockfile } from '../../core/lockfile/lockfile.js'
@@ -7,22 +7,18 @@ import { resolveProjectContext } from '../../core/project-context.js'
 import { scanForConfiguredIntents } from '../../core/source-policy.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
 import { readIntentConsumerConfig } from '../install/config.js'
-import { buildInstallDeltaInventory } from '../install/plan.js'
 import { updateIntentGitignore } from './gitignore.js'
 import { reconcileManagedLinks } from './links.js'
+import { buildSyncLinkPlan } from './plan.js'
 import {
   INSTALL_STATE_PATH,
-  readInstallState,
+  readInstallStateForLinks,
   writeInstallState,
 } from './state.js'
-import {
-  createSyncAliases,
-  resolveSyncTargetDirectories,
-  toProjectRelativePath,
-} from './targets.js'
-import type { IntentPackage } from '../../shared/types.js'
+import { toProjectRelativePath } from './targets.js'
 
 export interface SyncCommandOptions {
+  cwd?: string
   dryRun?: boolean
   json?: boolean
 }
@@ -40,10 +36,6 @@ interface SyncCommandResult {
   conflicts: Array<string>
   pending: Array<SyncPackageSummary>
   changed: Array<SyncPackageSummary>
-}
-
-function findSkill(pkg: IntentPackage, name: string) {
-  return pkg.skills.find((skill) => skill.name === name)
 }
 
 function writeGitignore(root: string, paths: Array<string>): boolean {
@@ -76,7 +68,7 @@ function output(result: SyncCommandResult, json: boolean): void {
 }
 
 export function runSyncCommand(options: SyncCommandOptions): void {
-  const context = resolveProjectContext({ cwd: process.cwd() })
+  const context = resolveProjectContext({ cwd: options.cwd ?? process.cwd() })
   const root = context.workspaceRoot ?? context.packageRoot ?? context.cwd
   const packageJsonPath = join(root, 'package.json')
   if (!existsSync(packageJsonPath)) {
@@ -103,78 +95,18 @@ export function runSyncCommand(options: SyncCommandOptions): void {
     exclude: config.exclude,
   })
   const current = buildCurrentLockfileSources(policy.packages)
-  const inventory = buildInstallDeltaInventory(
-    discovered,
-    current,
-    lock,
+  const { expected, inventory } = buildSyncLinkPlan({
     config,
-  )
-  const aliases = new Map(
-    createSyncAliases(
-      policy.packages.flatMap((pkg) =>
-        pkg.skills.map((skill) => ({
-          kind: pkg.kind,
-          id: pkg.name,
-          skill: skill.name,
-        })),
-      ),
-    ).map((entry) => [
-      `${entry.kind}\0${entry.id}\0${entry.skill}`,
-      entry.alias,
-    ]),
-  )
-  const sources = new Map(
-    discovered.map((pkg) => [`${pkg.kind}\0${pkg.name}`, pkg]),
-  )
-  const accepted = inventory.packages.flatMap((pkg) => {
-    const source = sources.get(`${pkg.kind}\0${pkg.name}`)
-    if (!source) return []
-    return pkg.skills.flatMap((skill) => {
-      if (skill.policy !== 'enabled' || skill.lock !== 'accepted') return []
-      const sourceSkill = findSkill(
-        source,
-        skill.id.slice(skill.id.indexOf('#') + 1),
-      )
-      return sourceSkill ? [{ pkg, skill: sourceSkill, source }] : []
-    })
-  })
-  const targetDirectories = resolveSyncTargetDirectories(
+    currentSources: current,
+    discovered,
+    lock,
+    packages: policy.packages,
     root,
-    config.install.targets,
-  )
-  const expected = accepted.flatMap(({ pkg, skill, source }) => {
-    const alias = aliases.get(`${pkg.kind}\0${pkg.name}\0${skill.name}`)!
-    return targetDirectories.map((target) => {
-      const path = join(target.path, alias)
-      return {
-        path,
-        targetDirectory: toProjectRelativePath(root, target.path),
-        alias,
-        source: { kind: pkg.kind, id: pkg.name },
-        skillPath: `skills/${skill.name}`,
-        sourceDirectory: dirname(skill.path),
-        packageRoot: source.packageRoot,
-      }
-    })
   })
-  const persistedState = readInstallState(root)
-  const stateForLinks =
-    persistedState.status === 'found'
-      ? {
-          status: 'found' as const,
-          state: {
-            version: 1 as const,
-            entries: persistedState.state.entries.map((entry) => ({
-              ...entry,
-              path: join(root, ...entry.path.split('/')),
-            })),
-          },
-        }
-      : persistedState
   const links = reconcileManagedLinks({
     dryRun: options.dryRun === true,
     expected,
-    stateResult: stateForLinks,
+    stateResult: readInstallStateForLinks(root),
   })
   const pending = inventory.packages
     .map((pkg) => ({

@@ -135,27 +135,24 @@ function createCli(): CAC {
     )
 
   cli
-    .command(
-      'install',
-      'Create or update skill loading guidance in an agent config file',
-    )
+    .command('install', 'Configure trusted skill sources and delivery targets')
     .usage(
       'install [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]',
     )
     .option('--map', 'Write explicit skill-to-task mappings')
-    .option('--dry-run', 'Print the generated block without writing')
+    .option('--dry-run', 'Preview installation without writing files')
     .option(
       '--print-prompt',
       'Print the legacy agent setup prompt instead of writing',
     )
-    .option('--global', 'Include global packages after project packages')
-    .option('--global-only', 'Install mappings from global packages only')
+    .option('--global', 'With --map, include global packages')
+    .option('--global-only', 'With --map, use only global packages')
     .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('install')
     .example('install --map')
     .example('install --dry-run')
     .example('install --print-prompt')
-    .example('install --global')
+    .example('install --map --global')
     .action(async (options: InstallCommandOptions) => {
       const [{ scanIntentsOrFail }, { runInstallCommand }] = await Promise.all([
         import('./commands/support.js'),

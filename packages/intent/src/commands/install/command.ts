@@ -1,6 +1,5 @@
 import { relative } from 'node:path'
 import { fail } from '../../shared/cli-error.js'
-import { detectIntentCommandPackageManager } from '../../shared/command-runner.js'
 import {
   coreOptionsFromGlobalFlags,
   noticeOptionsFromGlobalFlags,
@@ -8,13 +7,13 @@ import {
   printWarnings,
 } from '../support.js'
 import {
-  buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
   resolveIntentSkillsBlockTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from './guidance.js'
 import type { GlobalScanFlags } from '../support.js'
+import type { InstallerPrompter } from './consumer.js'
 import type { IntentCoreOptions } from '../../core/index.js'
 import type { ScanResult } from '../../shared/types.js'
 
@@ -127,6 +126,34 @@ export interface InstallCommandOptions extends GlobalScanFlags {
   printPrompt?: boolean
 }
 
+export async function runInteractiveInstall({
+  cwd,
+  dryRun,
+  prompts,
+}: {
+  cwd: string
+  dryRun?: boolean
+  prompts: InstallerPrompter
+}): Promise<void> {
+  const [
+    { runConsumerInstall },
+    { resolveProjectContext },
+    { scanForIntents },
+  ] = await Promise.all([
+    import('./consumer.js'),
+    import('../../core/project-context.js'),
+    import('../../discovery/scanner.js'),
+  ])
+  const context = resolveProjectContext({ cwd })
+  const root = context.workspaceRoot ?? context.packageRoot ?? context.cwd
+  await runConsumerInstall({
+    discovered: scanForIntents(root, { scope: 'local' }).packages,
+    dryRun,
+    prompts,
+    root,
+  })
+}
+
 function formatTargetPath(targetPath: string): string {
   return relative(process.cwd(), targetPath) || targetPath
 }
@@ -207,46 +234,17 @@ export async function runInstallCommand(
   const noticeOptions = noticeOptionsFromGlobalFlags(options)
 
   if (!options.map) {
-    const generated = buildIntentSkillGuidanceBlock(
-      detectIntentCommandPackageManager(),
-    )
-
-    if (options.dryRun) {
-      const targetPath = resolveIntentSkillsBlockTargetPath(process.cwd(), 1)
-      console.log(
-        `Generated skill loading guidance for ${formatTargetPath(targetPath!)}.`,
-      )
-      console.log(generated.block)
-      return
-    }
-
-    const result = writeIntentSkillsBlock({
-      ...generated,
-      root: process.cwd(),
-      skipWhenEmpty: false,
-    })
-
-    if (!result.targetPath) {
-      fail('Install guidance target was not created.')
-    }
-
-    const verification = verifyIntentSkillsBlockFile({
-      expectedBlock: generated.block,
-      targetPath: result.targetPath,
-    })
-
-    const target = formatTargetPath(result.targetPath)
-    if (!verification.ok) {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
       fail(
-        [
-          `Install verification failed for ${target}:`,
-          ...verification.errors.map((error) => `- ${error}`),
-        ].join('\n'),
+        'Interactive installation requires a terminal. Run `intent install` in a TTY or use `intent install --map`.',
       )
     }
-
-    printWriteResult(result)
-    printPlacementTip(result.targetPath)
+    const { createClackInstallerPrompter } = await import('./prompts.js')
+    await runInteractiveInstall({
+      cwd: process.cwd(),
+      dryRun: options.dryRun,
+      prompts: createClackInstallerPrompter(),
+    })
     return
   }
 

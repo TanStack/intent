@@ -1,12 +1,5 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { writeTextFileAtomic } from '../../shared/atomic-write.js'
 import { validateSkillPaths } from '../skill-path.js'
 
 export interface IntentLockfileSkill {
@@ -177,18 +170,5 @@ export function writeIntentLockfile(
   filePath: string,
   lockfile: IntentLockfile,
 ): void {
-  const directory = dirname(filePath)
-  mkdirSync(directory, { recursive: true })
-  const tempPath = join(
-    directory,
-    `.${basename(filePath)}.${process.pid}.${Math.random().toString(16).slice(2)}.tmp`,
-  )
-  try {
-    writeFileSync(tempPath, serializeIntentLockfile(lockfile), 'utf8')
-    renameSync(tempPath, filePath)
-  } finally {
-    try {
-      if (existsSync(tempPath)) unlinkSync(tempPath)
-    } catch {}
-  }
+  writeTextFileAtomic(filePath, serializeIntentLockfile(lockfile))
 }

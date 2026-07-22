@@ -55,7 +55,10 @@ function sourceEntry(pkg: IntentPackage): string {
   return pkg.kind === 'workspace' ? `workspace:${pkg.name}` : pkg.name
 }
 
-function skillId(pkg: IntentPackage, skill: SkillEntry): string {
+export function skillSelectionId(
+  pkg: IntentPackage,
+  skill: SkillEntry,
+): string {
   return `${sourceEntry(pkg)}#${skill.name}`
 }
 
@@ -89,7 +92,9 @@ function assertUniqueDiscovery(packages: ReadonlyArray<IntentPackage>): void {
     const skills = new Set<string>()
     for (const skill of pkg.skills) {
       if (skills.has(skill.name)) {
-        throw new Error(`Duplicate discovered skill "${skillId(pkg, skill)}".`)
+        throw new Error(
+          `Duplicate discovered skill "${skillSelectionId(pkg, skill)}".`,
+        )
       }
       skills.add(skill.name)
     }
@@ -125,7 +130,7 @@ export function buildSkillSelectionPlan(
     }
     const discoveredIds = new Set(
       packages.flatMap((pkg) =>
-        sortedSkills(pkg).map((skill) => skillId(pkg, skill)),
+        sortedSkills(pkg).map((skill) => skillSelectionId(pkg, skill)),
       ),
     )
     for (const id of selected) {
@@ -148,7 +153,9 @@ export function buildSkillSelectionPlan(
       selection.mode === 'all-found' ||
       packageMatchesScope ||
       (selection.mode === 'individual' &&
-        sortedSkills(pkg).some((skill) => selected.has(skillId(pkg, skill))))
+        sortedSkills(pkg).some((skill) =>
+          selected.has(skillSelectionId(pkg, skill)),
+        ))
     if (selection.mode === 'scope') {
       skills.add(selection.scope)
     } else if (packageEnabled) {
@@ -157,7 +164,7 @@ export function buildSkillSelectionPlan(
 
     const packageSkills = sortedSkills(pkg)
     const entries = packageSkills.map((skill) => {
-      const id = skillId(pkg, skill)
+      const id = skillSelectionId(pkg, skill)
       const enabled = selection.mode !== 'individual' || selected.has(id)
       return {
         id,
@@ -257,7 +264,7 @@ export function buildInstallDeltaInventory(
             ? 'enabled'
             : 'pending'
         if (policy !== 'enabled')
-          return { id: skillId(pkg, skill), policy, lock: null }
+          return { id: skillSelectionId(pkg, skill), policy, lock: null }
         const currentEntry = currentSkill(skill, current)
         const lockedEntry = currentEntry
           ? locked?.skills.find((entry) => entry.path === currentEntry.path)
@@ -269,7 +276,7 @@ export function buildInstallDeltaInventory(
               ? 'accepted'
               : 'changed'
         return {
-          id: skillId(pkg, skill),
+          id: skillSelectionId(pkg, skill),
           policy,
           lock,
         }

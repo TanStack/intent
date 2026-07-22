@@ -1,12 +1,6 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { writeTextFileAtomic } from '../../shared/atomic-write.js'
 
 export const INSTALL_STATE_PATH = '.intent/install-state.json'
 
@@ -100,18 +94,25 @@ export function readInstallState(root: string): ReadInstallStateResult {
   return state ? { status: 'found', state } : { status: 'malformed' }
 }
 
+export function readInstallStateForLinks(root: string): ReadInstallStateResult {
+  const result = readInstallState(root)
+  if (result.status !== 'found') return result
+  return {
+    status: 'found',
+    state: {
+      version: 1,
+      entries: result.state.entries.map((entry) => ({
+        ...entry,
+        path: join(root, ...entry.path.split('/')),
+      })),
+    },
+  }
+}
+
 export function writeInstallState(root: string, state: InstallState): boolean {
   const path = join(root, INSTALL_STATE_PATH)
   const content = serializeInstallState(state)
   if (existsSync(path) && readFileSync(path, 'utf8') === content) return false
-  const directory = dirname(path)
-  mkdirSync(directory, { recursive: true })
-  const temp = join(directory, `.${basename(path)}.${process.pid}.tmp`)
-  try {
-    writeFileSync(temp, content, 'utf8')
-    renameSync(temp, path)
-  } finally {
-    if (existsSync(temp)) unlinkSync(temp)
-  }
+  writeTextFileAtomic(path, content)
   return true
 }
