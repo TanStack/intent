@@ -170,7 +170,7 @@ function createCli(): CAC {
     .example('sync --dry-run')
     .action(async (options: SyncCommandOptions) => {
       const { runSyncCommand } = await import('./commands/sync/command.js')
-      runSyncCommand(options)
+      await runSyncCommand(options)
     })
 
   cli

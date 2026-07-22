@@ -9,6 +9,7 @@ import { writeTextFileAtomic } from '../../shared/atomic-write.js'
 import { runSyncCommand } from '../sync/command.js'
 import { reconcileManagedLinks } from '../sync/links.js'
 import { buildSyncLinkPlan } from '../sync/plan.js'
+import { wireIntentSyncPrepare } from '../sync/prepare.js'
 import { readInstallStateForLinks } from '../sync/state.js'
 import { toProjectRelativePath } from '../sync/targets.js'
 import {
@@ -100,9 +101,8 @@ export async function runConsumerInstall({
     if (confirmation === null) return
     if (confirmation === 'back') continue
 
-    const updatedPackageJson = updateIntentConsumerConfigText(
-      packageJson,
-      installation.config,
+    const updatedPackageJson = wireIntentSyncPrepare(
+      updateIntentConsumerConfigText(packageJson, installation.config),
     )
     const policy = applySourcePolicy(
       { packages: [...discovered] },
@@ -156,7 +156,7 @@ export async function runConsumerInstall({
 
     writeTextFileAtomic(packageJsonPath, updatedPackageJson)
     writeIntentLockfile(join(root, 'intent.lock'), lockfile)
-    runSyncCommand({ cwd: root })
+    await runSyncCommand({ cwd: root }, { interactive: false })
     prompts.complete(
       `Installed ${installation.skillCount} ${installation.skillCount === 1 ? 'skill' : 'skills'} using ${method}.`,
     )

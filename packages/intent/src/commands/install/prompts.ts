@@ -44,6 +44,41 @@ export function groupSkillOptions(
   )
 }
 
+export async function selectClackSkills(
+  discovered: ReadonlyArray<IntentPackage>,
+  includeModes = true,
+): Promise<SkillSelection | null> {
+  note(
+    `${discovered.reduce((count, pkg) => count + pkg.skills.length, 0)} skills from ${discovered.length} packages`,
+    'Skills found',
+  )
+  if (includeModes) {
+    const mode = cancelled(
+      await select<SkillSelection['mode']>({
+        message: 'Which skills do you want to enable?',
+        options: [
+          { value: 'all-found', label: 'Enable all skills found' },
+          { value: 'scope', label: 'Enable all @tanstack/* skills' },
+          { value: 'individual', label: 'Select skills' },
+        ],
+      }),
+    )
+    if (!mode) return null
+    if (mode === 'all-found') return { mode }
+    if (mode === 'scope') return { mode, scope: '@tanstack/*' }
+  }
+  const enabled = cancelled(
+    await groupMultiselect<string>({
+      message: 'Select skills to enable',
+      options: groupSkillOptions(discovered),
+      required: false,
+      selectableGroups: true,
+      groupSpacing: 1,
+    }),
+  )
+  return enabled ? { mode: 'individual', enabled } : null
+}
+
 export function createClackInstallerPrompter(): InstallerPrompter {
   intro('Configure TanStack Intent')
   return {
@@ -104,36 +139,7 @@ export function createClackInstallerPrompter(): InstallerPrompter {
     async selectSkills(
       discovered: ReadonlyArray<IntentPackage>,
     ): Promise<SkillSelection | null> {
-      note(
-        `${discovered.reduce((count, pkg) => count + pkg.skills.length, 0)} skills from ${discovered.length} packages`,
-        'Skills found',
-      )
-      const mode = cancelled(
-        await select<SkillSelection['mode']>({
-          message: 'Which skills do you want to enable?',
-          options: [
-            { value: 'all-found', label: 'Enable all skills found' },
-            {
-              value: 'scope',
-              label: 'Enable all @tanstack/* skills',
-            },
-            { value: 'individual', label: 'Select skills' },
-          ],
-        }),
-      )
-      if (!mode) return null
-      if (mode === 'all-found') return { mode }
-      if (mode === 'scope') return { mode, scope: '@tanstack/*' }
-      const enabled = cancelled(
-        await groupMultiselect<string>({
-          message: 'Select skills to enable',
-          options: groupSkillOptions(discovered),
-          required: false,
-          selectableGroups: true,
-          groupSpacing: 1,
-        }),
-      )
-      return enabled ? { mode, enabled } : null
+      return selectClackSkills(discovered)
     },
     async confirmInstall({ config, skillCount }): Promise<InstallConfirmation> {
       return cancelled(

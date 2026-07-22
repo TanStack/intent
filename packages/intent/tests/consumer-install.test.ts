@@ -15,6 +15,7 @@ import { runInteractiveInstall } from '../src/commands/install/command.js'
 import { runConsumerInstall } from '../src/commands/install/consumer.js'
 import { groupSkillOptions } from '../src/commands/install/prompts.js'
 import { readIntentConsumerConfig } from '../src/commands/install/config.js'
+import { runSyncCommand } from '../src/commands/sync/command.js'
 import { readInstallState } from '../src/commands/sync/state.js'
 import { readIntentLockfile } from '../src/core/lockfile/lockfile.js'
 import { scanForIntents } from '../src/discovery/scanner.js'
@@ -51,6 +52,28 @@ function createProject(): string {
     'utf8',
   )
   return root
+}
+
+function addSkillPackage(
+  root: string,
+  name: string,
+  skills: Array<string>,
+): void {
+  const packageRoot = join(root, 'node_modules', ...name.split('/'))
+  writeJson(join(packageRoot, 'package.json'), {
+    name,
+    version: '1.0.0',
+    intent: { version: 1, repo: `test/${name}`, docs: 'docs/' },
+  })
+  for (const skill of skills) {
+    const skillRoot = join(packageRoot, 'skills', skill)
+    mkdirSync(skillRoot, { recursive: true })
+    writeFileSync(
+      join(skillRoot, 'SKILL.md'),
+      `---\nname: ${skill}\ndescription: ${skill} guidance\n---\n`,
+      'utf8',
+    )
+  }
 }
 
 function createPrompts(
@@ -130,6 +153,9 @@ describe('consumer install', () => {
       exclude: [],
       install: { method: 'symlink', targets: ['agents'] },
     })
+    expect(
+      JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts,
+    ).toEqual({ prepare: 'intent sync' })
     expect(readIntentLockfile(join(root, 'intent.lock'))).toMatchObject({
       status: 'found',
       lockfile: {
@@ -349,5 +375,158 @@ describe('consumer install', () => {
       ),
     ).toBe(true)
     expect(existsSync(join(root, '.agents'))).toBe(false)
+  })
+
+  it('reviews and installs selected skills from new dependencies', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    addSkillPackage(root, '@tanstack/new-package', ['first', 'second'])
+
+    await runSyncCommand(
+      { cwd: root },
+      {
+        interactive: true,
+        prompts: {
+          complete: () => {},
+          reviewNewDependencies: () => Promise.resolve('review'),
+          selectSkills: () =>
+            Promise.resolve({
+              mode: 'individual',
+              enabled: ['@tanstack/new-package#first'],
+            }),
+        },
+      },
+    )
+
+    const config = readIntentConsumerConfig(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    )
+    expect(config.skills).toEqual(['@tanstack/new-package', '@tanstack/query'])
+    expect(config.exclude).toEqual(['@tanstack/new-package#second'])
+    expect(readIntentLockfile(join(root, 'intent.lock'))).toMatchObject({
+      status: 'found',
+      lockfile: {
+        sources: [
+          { id: '@tanstack/new-package', skills: [{ path: 'skills/first' }] },
+          { id: '@tanstack/query' },
+        ],
+      },
+    })
+    expect(
+      existsSync(
+        join(root, '.agents', 'skills', 'npm-tanstack-new-package-first'),
+      ),
+    ).toBe(true)
+    expect(
+      existsSync(
+        join(root, '.agents', 'skills', 'npm-tanstack-new-package-second'),
+      ),
+    ).toBe(false)
+  })
+
+  it('excludes new dependencies without changing the lock', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    addSkillPackage(root, 'declined-package', ['declined'])
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+
+    await runSyncCommand(
+      { cwd: root },
+      {
+        interactive: true,
+        prompts: {
+          complete: () => {},
+          reviewNewDependencies: () => Promise.resolve('exclude'),
+          selectSkills: () => Promise.resolve(null),
+        },
+      },
+    )
+
+    expect(
+      readIntentConsumerConfig(readFileSync(join(root, 'package.json'), 'utf8'))
+        .exclude,
+    ).toEqual(['declined-package'])
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
+  })
+
+  it('leaves new dependencies pending when review is deferred', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    addSkillPackage(root, 'later-package', ['later'])
+    const packageBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+
+    await runSyncCommand(
+      { cwd: root },
+      {
+        interactive: true,
+        prompts: {
+          complete: () => {},
+          reviewNewDependencies: () => Promise.resolve('later'),
+          selectSkills: () => Promise.resolve(null),
+        },
+      },
+    )
+
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(packageBefore)
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
+  })
+
+  it('keeps prepare sync prompt-free and reminder-only', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    addSkillPackage(root, 'prepare-package', ['prepare-skill'])
+    const packageBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+    const previousLifecycle = process.env.npm_lifecycle_event
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    let output = ''
+    process.env.npm_lifecycle_event = 'prepare'
+
+    try {
+      await runSyncCommand(
+        { cwd: root },
+        {
+          interactive: true,
+          prompts: {
+            complete: () => {},
+            reviewNewDependencies: () =>
+              Promise.reject(new Error('prepare must not prompt')),
+            selectSkills: () =>
+              Promise.reject(new Error('prepare must not select skills')),
+          },
+        },
+      )
+      output = log.mock.calls.flat().join('\n')
+    } finally {
+      log.mockRestore()
+      if (previousLifecycle === undefined) {
+        delete process.env.npm_lifecycle_event
+      } else {
+        process.env.npm_lifecycle_event = previousLifecycle
+      }
+    }
+
+    expect(output).toContain('New dependencies with skills found:')
+    expect(output).toContain('prepare-package  1 skill')
+    expect(output).toContain('Run `intent install` to review and install them')
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(packageBefore)
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
   })
 })
