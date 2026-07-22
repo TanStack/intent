@@ -1,6 +1,7 @@
 import {
   cancel,
   confirm,
+  groupMultiselect,
   intro,
   isCancel,
   multiselect,
@@ -23,6 +24,24 @@ function cancelled<T>(value: T | symbol): T | null {
 
 function sourceLabel(pkg: IntentPackage): string {
   return pkg.kind === 'workspace' ? `workspace:${pkg.name}` : pkg.name
+}
+
+export function groupSkillOptions(
+  discovered: ReadonlyArray<IntentPackage>,
+): Record<
+  string,
+  Array<{ value: string; label: string; hint: string | undefined }>
+> {
+  return Object.fromEntries(
+    discovered.map((pkg) => [
+      sourceLabel(pkg),
+      pkg.skills.map((skill) => ({
+        value: skillSelectionId(pkg, skill),
+        label: skill.name,
+        hint: skill.description || undefined,
+      })),
+    ]),
+  )
 }
 
 export function createClackInstallerPrompter(): InstallerPrompter {
@@ -85,14 +104,10 @@ export function createClackInstallerPrompter(): InstallerPrompter {
     async selectSkills(
       discovered: ReadonlyArray<IntentPackage>,
     ): Promise<SkillSelection | null> {
-      for (const pkg of discovered) {
-        note(
-          pkg.skills
-            .map((skill) => `${skill.name} -> ${skill.description}`)
-            .join('\n'),
-          sourceLabel(pkg),
-        )
-      }
+      note(
+        `${discovered.reduce((count, pkg) => count + pkg.skills.length, 0)} skills from ${discovered.length} packages`,
+        'Skills found',
+      )
       const mode = cancelled(
         await select<SkillSelection['mode']>({
           message: 'Which skills do you want to enable?',
@@ -110,16 +125,12 @@ export function createClackInstallerPrompter(): InstallerPrompter {
       if (mode === 'all-found') return { mode }
       if (mode === 'scope') return { mode, scope: '@tanstack/*' }
       const enabled = cancelled(
-        await multiselect<string>({
+        await groupMultiselect<string>({
           message: 'Select skills to enable',
-          options: discovered.flatMap((pkg) =>
-            pkg.skills.map((skill) => ({
-              value: skillSelectionId(pkg, skill),
-              label: `${sourceLabel(pkg)} / ${skill.name}`,
-              hint: skill.description,
-            })),
-          ),
+          options: groupSkillOptions(discovered),
           required: false,
+          selectableGroups: true,
+          groupSpacing: 1,
         }),
       )
       return enabled ? { mode, enabled } : null

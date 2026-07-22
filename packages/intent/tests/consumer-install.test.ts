@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runInteractiveInstall } from '../src/commands/install/command.js'
 import { runConsumerInstall } from '../src/commands/install/consumer.js'
+import { groupSkillOptions } from '../src/commands/install/prompts.js'
 import { readIntentConsumerConfig } from '../src/commands/install/config.js'
 import { readInstallState } from '../src/commands/sync/state.js'
 import { readIntentLockfile } from '../src/core/lockfile/lockfile.js'
@@ -73,6 +74,21 @@ afterEach(() => {
 })
 
 describe('consumer install', () => {
+  it('groups selectable skills by package', () => {
+    const root = createProject()
+    const discovered = scanForIntents(root, { scope: 'local' }).packages
+
+    expect(groupSkillOptions(discovered)).toEqual({
+      '@tanstack/query': [
+        {
+          value: '@tanstack/query#fetching',
+          label: 'fetching',
+          hint: 'Query fetching patterns',
+        },
+      ],
+    })
+  })
+
   it('selects the method before requesting applicable targets', async () => {
     const root = createProject()
     const calls: Array<string> = []
