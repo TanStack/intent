@@ -47,6 +47,7 @@
     "build": "tsdown src/index.ts src/cli.ts src/setup.ts src/core.ts src/catalog.ts --format esm --dts",
     "test:smoke": "pnpm run build && node dist/cli.mjs --help && node dist/cli.mjs load --help && node --input-type=module -e \"const api = await import('@tanstack/intent/catalog'); if (typeof api.getIntentCatalogContext !== 'function' || typeof api.runSessionCatalogueHook !== 'function') process.exit(1)\"",
     "test:lib": "vitest run --exclude 'tests/integration/**'",
+    "test:delivery": "vitest run tests/sync.test.ts",
     "test:integration": "vitest run tests/integration/",
     "test:types": "tsc --noEmit",
     "test:eslint": "eslint ."

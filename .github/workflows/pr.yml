@@ -36,6 +36,23 @@ jobs:
           main-branch-name: main
       - name: Run Checks
         run: pnpm run test:pr
+  delivery:
+    name: Delivery (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Setup Tools
+        uses: TanStack/config/.github/setup@b313637fa7d314532b98638f6b57b7b9c169d390 # main
+      - name: Run Managed Link Tests
+        run: pnpm --filter @tanstack/intent run test:delivery
   preview:
     name: Preview
     runs-on: ubuntu-latest
