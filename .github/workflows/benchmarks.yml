@@ -43,7 +43,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Tools
-        uses: TanStack/config/.github/setup@b313637fa7d314532b98638f6b57b7b9c169d390 # main
+        uses: TanStack/config/.github/setup@10ece5e28cfc5599fe7f4925275b895ed2e4cdf3 # main
 
       - name: Run intent CodSpeed benchmark
         continue-on-error: true
