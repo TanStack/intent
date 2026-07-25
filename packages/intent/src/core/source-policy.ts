@@ -1,7 +1,9 @@
 import { scanForIntents } from '../discovery/scanner.js'
 import { detectIntentAudience } from '../shared/environment.js'
+import { ALLOW_ALL_NOTICE } from '../shared/cli-output.js'
 import {
   compileExcludePatterns,
+  compileWildcardPattern,
   getConfigDirs,
   getEffectiveExcludePatterns,
   isPackageExcluded,
@@ -22,8 +24,7 @@ import type {
   IntentHiddenSourceSummary,
 } from './types.js'
 
-export const ALLOW_ALL_NOTICE =
-  'All skill sources allowed (intent.skills: ["*"]) — unvetted skills may be surfaced into agent guidance.'
+export { ALLOW_ALL_NOTICE }
 
 export const MIGRATION_NOTICE =
   'intent.skills is not set — all discovered skill sources are surfaced. A future version will require an explicit intent.skills allowlist; add one to opt in to specific sources.'
@@ -45,18 +46,77 @@ export interface LoadRefusal {
   message: string
 }
 
-function isSourcePermitted(
-  config: SkillSourcesConfig,
-  packageName: string,
-): boolean {
+type ExplicitSkillSource = Extract<
+  SkillSourcesConfig,
+  { mode: 'explicit' }
+>['sources'][number]
+
+interface SkillSourceMatcher {
+  source: ExplicitSkillSource
+  matchesPackage: (
+    packageName: string,
+    packageKind?: 'npm' | 'workspace',
+  ) => boolean
+}
+
+function compileSkillSourceMatcher(
+  source: ExplicitSkillSource,
+): SkillSourceMatcher {
+  if (source.kind === 'git') {
+    return { source, matchesPackage: () => false }
+  }
+
+  const matchesName =
+    'pattern' in source
+      ? compileWildcardPattern(source.pattern)
+      : (packageName: string) => source.id === packageName
+
+  return {
+    source,
+    matchesPackage: (packageName, packageKind) =>
+      (packageKind === undefined || source.kind === packageKind) &&
+      matchesName(packageName),
+  }
+}
+
+function compileSkillSourcePolicy(config: SkillSourcesConfig): {
+  matchers: Array<SkillSourceMatcher>
+  permits: (packageName: string, packageKind?: 'npm' | 'workspace') => boolean
+} {
   switch (config.mode) {
     case 'absent':
     case 'allow-all':
-      return true
+      return { matchers: [], permits: () => true }
     case 'empty':
-      return false
-    case 'explicit':
-      return config.sources.some((source) => source.id === packageName)
+      return { matchers: [], permits: () => false }
+    case 'explicit': {
+      const matchers = config.sources.map(compileSkillSourceMatcher)
+      return {
+        matchers,
+        permits: (packageName, packageKind) =>
+          matchers.some((matcher) =>
+            matcher.matchesPackage(packageName, packageKind),
+          ),
+      }
+    }
+  }
+}
+
+export function isSourcePermitted(
+  config: SkillSourcesConfig,
+  packageName: string,
+  packageKind?: 'npm' | 'workspace',
+): boolean {
+  return compileSkillSourcePolicy(config).permits(packageName, packageKind)
+}
+
+export function packageNotListedRefusal(
+  use: string,
+  packageName: string,
+): LoadRefusal {
+  return {
+    code: 'package-not-listed',
+    message: `Cannot load skill use "${use}": package "${packageName}" is not listed in intent.skills.`,
   }
 }
 
@@ -78,11 +138,11 @@ export function checkLoadAllowed(
     }
   }
 
+  // Name-only pre-check: kind isn't known yet at this point in the load path.
+  // A late, kind-aware isSourcePermitted call happens once resolution reveals
+  // the actual kind (see intent-core.ts).
   if (!isSourcePermitted(config, packageName)) {
-    return {
-      code: 'package-not-listed',
-      message: `Cannot load skill use "${use}": package "${packageName}" is not listed in intent.skills.`,
-    }
+    return packageNotListedRefusal(use, packageName)
   }
 
   if (isSkillExcluded(packageName, skillName, excludeMatchers)) {
@@ -128,6 +188,7 @@ export function applySourcePolicy(
 ): SourcePolicyResult {
   const { config, excludeMatchers } = options
   const audience = options.audience ?? 'human'
+  const sourcePolicy = compileSkillSourcePolicy(config)
   const seen = new Set<string>()
   const notices: Array<string> = []
 
@@ -143,7 +204,7 @@ export function applySourcePolicy(
   for (const pkg of scanResult.packages) {
     if (isPackageExcluded(pkg.name, excludeMatchers)) continue
 
-    if (!isSourcePermitted(config, pkg.name)) {
+    if (!sourcePolicy.permits(pkg.name, pkg.kind)) {
       if (config.mode === 'explicit') {
         hiddenSources.push({ name: pkg.name, skillCount: pkg.skills.length })
       }
@@ -163,11 +224,13 @@ export function applySourcePolicy(
   }
 
   if (config.mode === 'explicit') {
-    const discoveredNames = new Set(scanResult.packages.map((pkg) => pkg.name))
-    for (const source of config.sources) {
-      if (!discoveredNames.has(source.id)) {
+    for (const matcher of sourcePolicy.matchers) {
+      const notDiscovered = !scanResult.packages.some((pkg) =>
+        matcher.matchesPackage(pkg.name, pkg.kind),
+      )
+      if (notDiscovered) {
         emit(
-          `"${source.raw}" is declared in intent.skills but was not discovered.`,
+          `"${matcher.source.raw}" is declared in intent.skills but was not discovered.`,
         )
       }
     }
@@ -210,6 +273,7 @@ export interface PolicedScan {
   hiddenSources: Array<IntentHiddenSourceSummary>
   scan: ScanResult
   excludePatterns: Array<string>
+  droppedNames: Array<string>
 }
 
 export function scanForPolicedIntents(params: {
@@ -233,6 +297,8 @@ export function scanForPolicedIntents(params: {
     excludeMatchers,
   })
 
+  // Name-only Sets, correct because the scanner guarantees at most one
+  // package per name (createPackageRegistrar dedups before this runs).
   const survivingNames = new Set(policy.packages.map((pkg) => pkg.name))
   const droppedNames = scanResult.packages
     .map((pkg) => pkg.name)
@@ -254,5 +320,6 @@ export function scanForPolicedIntents(params: {
       ),
     },
     excludePatterns,
+    droppedNames,
   }
 }

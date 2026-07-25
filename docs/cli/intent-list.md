@@ -109,15 +109,16 @@ Each entry is one source:
 
 - `@scope/pkg` or `pkg`: an npm package reachable through the dependency tree.
 - `workspace:@scope/pkg`: a package in the current workspace.
+- `@scope/*` or `workspace:@scope/*`: every discovered package of that kind whose name matches the pattern.
 - `git:<host>/<repo>#<ref>`: reserved, and not yet supported.
 
 The list as a whole has three special forms:
 
 - **Absent** (no `intent.skills` key): every discovered package is surfaced, with a deprecation notice printed to stderr on each run until you set `intent.skills`. This is the upgrade path for existing projects. A future version will require an explicit allowlist.
 - **Empty** (`"skills": []`): no package is surfaced, with an info notice printed to stderr.
-- **Wildcard** (`"skills": ["*"]`): every discovered package is surfaced, with an acknowledged-risk notice printed to stderr.
+- **Wildcard** (`"skills": ["*"]`): every discovered package is surfaced, with an acknowledged-risk notice printed to stderr. This exact trust-all entry is distinct from a scoped package pattern such as `@tanstack/*`.
 
-A package that ships skills but is not listed is dropped. When packages are dropped this way, Intent prints one summary line naming them so you can opt in. In agent sessions, hidden sources are reported by count only; run `intent list --show-hidden` outside the agent session to review candidates. A listed package that was not discovered is reported as well. Matching is currently by package name. See [Configuration](../concepts/configuration) and [Trust model](../concepts/trust-model).
+A package that ships skills but is not listed or matched by a pattern is dropped. When packages are dropped this way, Intent prints one summary line naming them so you can opt in. In agent sessions, hidden sources are reported by count only; run `intent list --show-hidden` outside the agent session to review candidates. An exact entry or pattern that matches no discovered package is reported as well. Package patterns support `*` wildcards. Matching is currently by package name. See [Configuration](../concepts/configuration) and [Trust model](../concepts/trust-model).
 
 ## Excludes
 

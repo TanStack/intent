@@ -91,7 +91,9 @@ function globToRegExp(pattern: string): RegExp {
   return new RegExp(`^${source}$`)
 }
 
-function compileSegment(segment: string): (value: string) => boolean {
+export function compileWildcardPattern(
+  segment: string,
+): (value: string) => boolean {
   if (!segment.includes('*')) {
     return (value) => value === segment
   }
@@ -108,24 +110,28 @@ export function compileExcludePatterns(
 
     const hashIndex = pattern.indexOf('#')
     if (hashIndex === -1) {
-      return { pattern, matchesPackage: compileSegment(pattern) }
+      return { pattern, matchesPackage: compileWildcardPattern(pattern) }
     }
 
     const packageSegment = pattern.slice(0, hashIndex)
     const skillSegment = pattern.slice(hashIndex + 1)
 
     if (skillSegment.replace(/\*+/g, '*') === '*') {
-      return { pattern, matchesPackage: compileSegment(packageSegment) }
+      return {
+        pattern,
+        matchesPackage: compileWildcardPattern(packageSegment),
+      }
     }
 
     return {
       pattern,
-      matchesPackage: compileSegment(packageSegment),
-      matchesSkill: compileSegment(skillSegment),
+      matchesPackage: compileWildcardPattern(packageSegment),
+      matchesSkill: compileWildcardPattern(skillSegment),
     }
   })
 }
 
+// Deliberately kind-agnostic, unlike the allowlist/lockfile — not a gap to close later.
 export function isPackageExcluded(
   packageName: string,
   matchers: Array<ExcludeMatcher>,

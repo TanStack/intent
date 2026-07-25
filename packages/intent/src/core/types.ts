@@ -96,6 +96,24 @@ export interface LoadedIntentSkillDebug {
   scan: ScanStats
 }
 
+// `npm:foo` and `workspace:foo` are distinct sources; name-only comparison
+// would collapse them onto one lockfile entry/approval.
+export interface SourceIdentity {
+  kind: 'npm' | 'workspace'
+  id: string
+}
+
+export function sourceIdentityKey(s: SourceIdentity): string {
+  return `${s.kind}\u0000${s.id}`
+}
+
+export function sourceIdentityEquals(
+  a: SourceIdentity,
+  b: SourceIdentity,
+): boolean {
+  return a.kind === b.kind && a.id === b.id
+}
+
 export type IntentCoreErrorCode =
   | 'invalid-options'
   | 'invalid-skill-use'

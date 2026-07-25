@@ -26,26 +26,28 @@ describe('runStaleCommand', () => {
   })
 
   it('prints review signals in non-json output', async () => {
-    await runStaleCommand(undefined, {}, async () => ({
-      reports: [
-        {
-          library: '@tanstack/router',
-          currentVersion: '1.0.0',
-          skillVersion: '1.0.0',
-          versionDrift: null,
-          skills: [],
-          signals: [
-            {
-              type: 'missing-package-coverage',
-              library: '@tanstack/router',
-              packageName: '@tanstack/react-start-rsc',
-              reasons: ['package is not represented in skills or artifacts'],
-              needsReview: true,
-            },
-          ],
-        },
-      ],
-    }))
+    await runStaleCommand(undefined, {}, () =>
+      Promise.resolve({
+        reports: [
+          {
+            library: '@tanstack/router',
+            currentVersion: '1.0.0',
+            skillVersion: '1.0.0',
+            versionDrift: null,
+            skills: [],
+            signals: [
+              {
+                type: 'missing-package-coverage',
+                library: '@tanstack/router',
+                packageName: '@tanstack/react-start-rsc',
+                reasons: ['package is not represented in skills or artifacts'],
+                needsReview: true,
+              },
+            ],
+          },
+        ],
+      }),
+    )
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(output).toContain('@tanstack/router')
@@ -55,12 +57,14 @@ describe('runStaleCommand', () => {
   })
 
   it('prints workflow update advisories in non-json output', async () => {
-    await runStaleCommand(undefined, {}, async () => ({
-      reports: [],
-      workflowAdvisories: [
-        'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
-      ],
-    }))
+    await runStaleCommand(undefined, {}, () =>
+      Promise.resolve({
+        reports: [],
+        workflowAdvisories: [
+          'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
+        ],
+      }),
+    )
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(output).toContain('Intent workflow update available')
@@ -69,12 +73,14 @@ describe('runStaleCommand', () => {
   })
 
   it('does not print workflow update advisories in json output', async () => {
-    await runStaleCommand(undefined, { json: true }, async () => ({
-      reports: [],
-      workflowAdvisories: [
-        'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
-      ],
-    }))
+    await runStaleCommand(undefined, { json: true }, () =>
+      Promise.resolve({
+        reports: [],
+        workflowAdvisories: [
+          'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
+        ],
+      }),
+    )
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(output).toBe('[]')
@@ -94,29 +100,30 @@ describe('runStaleCommand', () => {
       await runStaleCommand(
         undefined,
         { githubReview: true, packageLabel: '@tanstack/router' },
-        async () => ({
-          reports: [
-            {
-              library: '@tanstack/router',
-              currentVersion: null,
-              skillVersion: null,
-              versionDrift: null,
-              skills: [],
-              signals: [
-                {
-                  type: 'missing-package-coverage',
-                  library: '@tanstack/react-start-rsc',
-                  packageName: '@tanstack/react-start-rsc',
-                  reasons: ['workspace package is not represented'],
-                  needsReview: true,
-                },
-              ],
-            },
-          ],
-          workflowAdvisories: [
-            'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
-          ],
-        }),
+        () =>
+          Promise.resolve({
+            reports: [
+              {
+                library: '@tanstack/router',
+                currentVersion: null,
+                skillVersion: null,
+                versionDrift: null,
+                skills: [],
+                signals: [
+                  {
+                    type: 'missing-package-coverage',
+                    library: '@tanstack/react-start-rsc',
+                    packageName: '@tanstack/react-start-rsc',
+                    reasons: ['workspace package is not represented'],
+                    needsReview: true,
+                  },
+                ],
+              },
+            ],
+            workflowAdvisories: [
+              'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
+            ],
+          }),
       )
     } finally {
       process.chdir(originalCwd)
@@ -163,9 +170,7 @@ describe('runStaleCommand', () => {
       await runStaleCommand(
         undefined,
         { githubReview: true, packageLabel: '@tanstack/router' },
-        async () => {
-          throw new Error('boom')
-        },
+        () => Promise.reject(new Error('boom')),
       )
     } finally {
       process.chdir(originalCwd)

@@ -379,7 +379,7 @@ describe('hook installer', () => {
       })
 
       expect(result.status).toBe(0)
-      const output = JSON.parse(result.stdout) as any
+      const output = JSON.parse(result.stdout)
       const context =
         agent === 'copilot'
           ? output.additionalContext

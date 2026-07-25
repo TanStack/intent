@@ -9,11 +9,11 @@ Intent surfaces skills from your dependencies into your coding agent's guidance.
 
 A package ships skills in a `skills/` directory. Discovery finds every installed package that has one, including transitive dependencies. Discovery does not grant trust.
 
-`package.json#intent.skills` is the gate. A discovered package contributes skills only when it appears in the allowlist. An unlisted package is dropped, and Intent reports it so you can opt in or ignore it.
+`package.json#intent.skills` is the gate. A discovered package contributes skills only when an exact entry or `*` pattern in the allowlist matches it. An unlisted package is dropped, and Intent reports it so you can opt in or ignore it.
 
 The gate is opt-in today. A project with no `intent.skills` key still surfaces every discovered package, and Intent prints a deprecation notice to stderr on each run until you set `intent.skills`. A future version will require an explicit allowlist. See the [special forms](./configuration#special-forms) in Configuration.
 
-Trust does not propagate. A listed package may depend on another package that ships skills, but that dependency stays unlisted until you add it to `intent.skills` yourself. You allow each source on its own.
+Trust does not propagate. A listed package may depend on another package that ships skills, but that dependency stays unlisted unless another entry matches it. Exact entries allow one source; patterns such as `@tanstack/*` explicitly allow every matching source.
 
 ## Static discovery
 
