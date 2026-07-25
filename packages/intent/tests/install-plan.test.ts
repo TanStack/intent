@@ -89,7 +89,7 @@ describe('installer selection planning', () => {
     ).toThrow('Duplicate')
   })
 
-  it('preserves workspace identity and rejects unrepresentable exclusions', () => {
+  it('rejects a selection whose exclusion would hide an enabled skill', () => {
     const sameName = [
       pkg('shared', ['npm-skill']),
       pkg('shared', ['workspace-skill'], 'workspace'),
@@ -102,7 +102,56 @@ describe('installer selection planning', () => {
         mode: 'individual',
         enabled: ['workspace:shared#workspace-skill'],
       }),
-    ).toThrow('intent.exclude matches npm and workspace sources')
+    ).toThrow('would also hide "workspace:shared#workspace-skill"')
+  })
+
+  it('reports the real collision when a skill alias conflicts within one package', () => {
+    expect(() =>
+      buildSkillSelectionPlan([pkg('ui', ['theme', 'ui/theme'])], {
+        mode: 'individual',
+        enabled: ['ui#theme'],
+      }),
+    ).toThrow(
+      'Cannot write intent.exclude "ui#ui/theme": it would also hide "ui#theme"',
+    )
+  })
+
+  it('rejects an exclusion that only collides once consumers trim it', () => {
+    expect(() =>
+      buildSkillSelectionPlan([pkg('ws', ['drop', 'drop '])], {
+        mode: 'individual',
+        enabled: ['ws#drop'],
+      }),
+    ).toThrow('would also hide "ws#drop"')
+  })
+
+  it('writes a shared skill exclusion when both kinds drop the same skill', () => {
+    const sameName = [
+      pkg('shared', ['keep', 'drop']),
+      pkg('shared', ['keep', 'drop'], 'workspace'),
+    ]
+    const plan = buildSkillSelectionPlan(sameName, {
+      mode: 'individual',
+      enabled: ['shared#keep', 'workspace:shared#keep'],
+    })
+
+    expect(plan.skills).toEqual(['shared', 'workspace:shared'])
+    expect(plan.exclude).toEqual(['shared#drop'])
+  })
+
+  it('writes a shared package exclusion when both kinds are fully disabled', () => {
+    const sameName = [
+      pkg('shared', ['one']),
+      pkg('shared', ['two'], 'workspace'),
+      pkg('other', ['keep']),
+    ]
+    const plan = buildSkillSelectionPlan(sameName, {
+      mode: 'individual',
+      enabled: ['other#keep'],
+    })
+
+    expect(plan.skills).toEqual(['other'])
+    expect(plan.exclude).toEqual(['shared'])
   })
 
   it('uses the existing bare package grammar for workspace skill exclusions', () => {

@@ -109,18 +109,44 @@ function validateScope(scope: string): void {
   }
 }
 
+function assertExclusionsRepresentable(
+  packages: ReadonlyArray<IntentPackage>,
+  grouped: ReadonlyArray<{
+    skills: ReadonlyArray<{ status: 'enabled' | 'excluded' }>
+  }>,
+  exclude: ReadonlySet<string>,
+): void {
+  if (exclude.size === 0) return
+  const patterns = [...exclude].map((pattern) => ({
+    pattern,
+    matchers: compileExcludePatterns([pattern.trim()]),
+  }))
+
+  for (const [index, pkg] of packages.entries()) {
+    const packageSkills = sortedSkills(pkg)
+    for (const [skillIndex, entry] of grouped[index]!.skills.entries()) {
+      if (entry.status !== 'enabled') continue
+      const skillName = packageSkills[skillIndex]!.name
+      const offending = patterns.find(
+        ({ matchers }) =>
+          isPackageExcluded(pkg.name, matchers) ||
+          isSkillExcluded(pkg.name, skillName, matchers),
+      )
+      if (offending) {
+        throw new Error(
+          `Cannot write intent.exclude "${offending.pattern}": it would also hide "${sourceEntry(pkg)}#${skillName}", which this selection enables.`,
+        )
+      }
+    }
+  }
+}
+
 export function buildSkillSelectionPlan(
   discovered: ReadonlyArray<IntentPackage>,
   selection: SkillSelection,
 ): SkillSelectionPlan {
   const packages = sortedPackages(discovered)
   assertUniqueDiscovery(packages)
-  const kindsByName = new Map<string, Set<IntentPackage['kind']>>()
-  for (const pkg of packages) {
-    const kinds = kindsByName.get(pkg.name) ?? new Set()
-    kinds.add(pkg.kind)
-    kindsByName.set(pkg.name, kinds)
-  }
   const selected = new Set<string>()
   if (selection.mode === 'scope') validateScope(selection.scope)
   if (selection.mode === 'individual') {
@@ -172,11 +198,6 @@ export function buildSkillSelectionPlan(
       }
     })
     if (selection.mode === 'scope' && !packageMatchesScope) {
-      if ((kindsByName.get(pkg.name)?.size ?? 0) > 1) {
-        throw new Error(
-          `Cannot exclude only ${sourceEntry(pkg)} because intent.exclude matches npm and workspace sources by package name.`,
-        )
-      }
       exclude.add(pkg.name)
       return {
         name: pkg.name,
@@ -188,26 +209,18 @@ export function buildSkillSelectionPlan(
       }
     }
     if (selection.mode === 'individual' && !packageEnabled) {
-      if ((kindsByName.get(pkg.name)?.size ?? 0) > 1) {
-        throw new Error(
-          `Cannot exclude only ${sourceEntry(pkg)} because intent.exclude matches npm and workspace sources by package name.`,
-        )
-      }
       exclude.add(pkg.name)
     } else if (selection.mode === 'individual') {
       for (const [index, entry] of entries.entries()) {
         if (entry.status === 'excluded') {
-          if ((kindsByName.get(pkg.name)?.size ?? 0) > 1) {
-            throw new Error(
-              `Cannot exclude a skill from only ${sourceEntry(pkg)} because intent.exclude matches npm and workspace sources by package name.`,
-            )
-          }
           exclude.add(skillExclude(pkg, packageSkills[index]!))
         }
       }
     }
     return { name: pkg.name, kind: pkg.kind, skills: entries }
   })
+
+  assertExclusionsRepresentable(packages, grouped, exclude)
 
   return {
     skills: [...skills].sort(compareStrings),
