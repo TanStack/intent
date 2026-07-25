@@ -204,7 +204,7 @@ describe('consumer install', () => {
     expect(existsSync(join(root, '.agents'))).toBe(false)
   })
 
-  it('locks and links selected skills while excluding unchecked siblings', async () => {
+  it('locks and links selected skills without excluding unchecked siblings', async () => {
     const root = createProject()
     const packageRoot = join(root, 'node_modules', '@tanstack', 'query')
     const sibling = join(packageRoot, 'skills', 'mutations')
@@ -231,7 +231,8 @@ describe('consumer install', () => {
     const config = readIntentConsumerConfig(
       readFileSync(join(root, 'package.json'), 'utf8'),
     )
-    expect(config.exclude).toEqual(['@tanstack/query#mutations'])
+    expect(config.skills).toEqual(['@tanstack/query#fetching'])
+    expect(config.exclude).toEqual([])
     const lock = readIntentLockfile(join(root, 'intent.lock'))
     expect(
       lock.status === 'found' ? lock.lockfile.sources[0]?.skills : [],
@@ -405,8 +406,11 @@ describe('consumer install', () => {
     const config = readIntentConsumerConfig(
       readFileSync(join(root, 'package.json'), 'utf8'),
     )
-    expect(config.skills).toEqual(['@tanstack/new-package', '@tanstack/query'])
-    expect(config.exclude).toEqual(['@tanstack/new-package#second'])
+    expect(config.skills).toEqual([
+      '@tanstack/new-package#first',
+      '@tanstack/query',
+    ])
+    expect(config.exclude).toEqual([])
     expect(readIntentLockfile(join(root, 'intent.lock'))).toMatchObject({
       status: 'found',
       lockfile: {
@@ -426,6 +430,128 @@ describe('consumer install', () => {
         join(root, '.agents', 'skills', 'npm-tanstack-new-package-second'),
       ),
     ).toBe(false)
+  })
+
+  it('adds accepted skills beside an existing skill-level entry', async () => {
+    const root = createProject()
+    addSkillPackage(root, 'demo-pkg', ['alpha'])
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    const packageJsonPath = join(root, 'package.json')
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+    packageJson.intent.skills = ['demo-pkg#alpha']
+    packageJson.intent.exclude = ['@tanstack/query']
+    writeJson(packageJsonPath, packageJson)
+    addSkillPackage(root, 'demo-pkg', ['alpha', 'beta'])
+
+    await runSyncCommand(
+      { cwd: root },
+      {
+        interactive: true,
+        prompts: {
+          complete: () => {},
+          reviewNewDependencies: () => Promise.resolve('review'),
+          selectSkills: () =>
+            Promise.resolve({
+              mode: 'individual',
+              enabled: ['demo-pkg#beta'],
+            }),
+        },
+      },
+    )
+
+    expect(
+      readIntentConsumerConfig(readFileSync(packageJsonPath, 'utf8')).skills,
+    ).toEqual(['demo-pkg#alpha', 'demo-pkg#beta'])
+    expect(
+      existsSync(join(root, '.agents', 'skills', 'npm-demo-pkg-alpha')),
+    ).toBe(true)
+    expect(
+      existsSync(join(root, '.agents', 'skills', 'npm-demo-pkg-beta')),
+    ).toBe(true)
+  })
+
+  it('keeps an existing package-level entry when accepting a new skill', async () => {
+    const root = createProject()
+    addSkillPackage(root, 'demo-pkg', ['alpha', 'beta'])
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    const packageJsonPath = join(root, 'package.json')
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+    packageJson.intent.skills = ['demo-pkg']
+    packageJson.intent.exclude = ['@tanstack/query']
+    writeJson(packageJsonPath, packageJson)
+
+    await runSyncCommand(
+      { cwd: root },
+      {
+        interactive: true,
+        prompts: {
+          complete: () => {},
+          reviewNewDependencies: () => Promise.resolve('review'),
+          selectSkills: () =>
+            Promise.resolve({
+              mode: 'individual',
+              enabled: ['demo-pkg#beta'],
+            }),
+        },
+      },
+    )
+
+    expect(
+      readIntentConsumerConfig(readFileSync(packageJsonPath, 'utf8')).skills,
+    ).toEqual(['demo-pkg'])
+    expect(
+      existsSync(join(root, '.agents', 'skills', 'npm-demo-pkg-alpha')),
+    ).toBe(true)
+    expect(
+      existsSync(join(root, '.agents', 'skills', 'npm-demo-pkg-beta')),
+    ).toBe(true)
+  })
+
+  it('writes a package-level entry when all skills in a new package are accepted', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    addSkillPackage(root, 'demo-pkg', ['alpha', 'beta'])
+
+    await runSyncCommand(
+      { cwd: root },
+      {
+        interactive: true,
+        prompts: {
+          complete: () => {},
+          reviewNewDependencies: () => Promise.resolve('review'),
+          selectSkills: () =>
+            Promise.resolve({
+              mode: 'individual',
+              enabled: ['demo-pkg#alpha', 'demo-pkg#beta'],
+            }),
+        },
+      },
+    )
+
+    const config = readIntentConsumerConfig(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    )
+    expect(config.skills).toContain('demo-pkg')
+    expect(config.skills).not.toContain('demo-pkg#alpha')
+    expect(config.skills).not.toContain('demo-pkg#beta')
+    expect(
+      existsSync(join(root, '.agents', 'skills', 'npm-demo-pkg-alpha')),
+    ).toBe(true)
+    expect(
+      existsSync(join(root, '.agents', 'skills', 'npm-demo-pkg-beta')),
+    ).toBe(true)
   })
 
   it('excludes new dependencies without changing the lock', async () => {

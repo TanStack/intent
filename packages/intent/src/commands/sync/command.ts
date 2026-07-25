@@ -227,9 +227,38 @@ async function reviewNewDependencies({
     return
   }
   const selectionPlan = buildSkillSelectionPlan(packages, selection)
+  const configuredSources = parseSkillSources(config.skills)
+  const configuredPolicy = compileSkillSourcePolicy(configuredSources)
+  const addedSkills = new Set(selectionPlan.skills)
+  for (const pkg of selectionPlan.packages) {
+    const packageCovered =
+      configuredSources.mode === 'absent' ||
+      configuredSources.mode === 'allow-all' ||
+      configuredPolicy.matchers.some(
+        (matcher) =>
+          matcher.matchesSkill === undefined &&
+          matcher.matchesPackage(pkg.name, pkg.kind),
+      )
+    if (packageCovered) {
+      addedSkills.delete(sourceName(pkg))
+      for (const skill of pkg.skills) addedSkills.delete(skill.id)
+      continue
+    }
+    const hasSkillEntries = configuredPolicy.matchers.some(
+      (matcher) =>
+        matcher.matchesSkill !== undefined &&
+        matcher.matchesPackage(pkg.name, pkg.kind),
+    )
+    if (hasSkillEntries) {
+      addedSkills.delete(sourceName(pkg))
+      for (const skill of pkg.skills) {
+        if (skill.status === 'enabled') addedSkills.add(skill.id)
+      }
+    }
+  }
   const updatedConfig = {
     ...config,
-    skills: [...new Set([...config.skills, ...selectionPlan.skills])].sort(
+    skills: [...new Set([...config.skills, ...addedSkills])].sort(
       compareStrings,
     ),
     exclude: [...new Set([...config.exclude, ...selectionPlan.exclude])].sort(

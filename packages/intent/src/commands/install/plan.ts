@@ -62,10 +62,6 @@ export function skillSelectionId(
   return `${sourceEntry(pkg)}#${skill.name}`
 }
 
-function skillExclude(pkg: IntentPackage, skill: SkillEntry): string {
-  return `${pkg.name}#${skill.name}`
-}
-
 function sortedPackages(
   packages: ReadonlyArray<IntentPackage>,
 ): Array<IntentPackage> {
@@ -169,6 +165,7 @@ export function buildSkillSelectionPlan(
   const skills = new Set<string>()
   const exclude = new Set<string>()
   const grouped = packages.map((pkg) => {
+    const packageSkills = sortedSkills(pkg)
     const packageMatchesScope =
       selection.mode === 'scope' &&
       pkg.kind === 'npm' &&
@@ -179,16 +176,15 @@ export function buildSkillSelectionPlan(
       selection.mode === 'all-found' ||
       packageMatchesScope ||
       (selection.mode === 'individual' &&
-        sortedSkills(pkg).some((skill) =>
+        packageSkills.some((skill) =>
           selected.has(skillSelectionId(pkg, skill)),
         ))
     if (selection.mode === 'scope') {
       skills.add(selection.scope)
-    } else if (packageEnabled) {
+    } else if (selection.mode === 'all-found') {
       skills.add(sourceEntry(pkg))
     }
 
-    const packageSkills = sortedSkills(pkg)
     const entries = packageSkills.map((skill) => {
       const id = skillSelectionId(pkg, skill)
       const enabled = selection.mode !== 'individual' || selected.has(id)
@@ -211,10 +207,13 @@ export function buildSkillSelectionPlan(
     if (selection.mode === 'individual' && !packageEnabled) {
       exclude.add(pkg.name)
     } else if (selection.mode === 'individual') {
-      for (const [index, entry] of entries.entries()) {
-        if (entry.status === 'excluded') {
-          exclude.add(skillExclude(pkg, packageSkills[index]!))
-        }
+      const enabledEntries = entries.filter(
+        (entry) => entry.status === 'enabled',
+      )
+      if (enabledEntries.length === entries.length) {
+        skills.add(sourceEntry(pkg))
+      } else {
+        for (const entry of enabledEntries) skills.add(entry.id)
       }
     }
     return { name: pkg.name, kind: pkg.kind, skills: entries }

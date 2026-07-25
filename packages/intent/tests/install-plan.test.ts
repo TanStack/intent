@@ -61,17 +61,23 @@ describe('installer selection planning', () => {
     ])
   })
 
-  it('excludes unchecked siblings and packages for individual selection', () => {
+  it('allows checked skills and excludes unchecked packages for individual selection', () => {
     const plan = buildSkillSelectionPlan(discovered, {
       mode: 'individual',
       enabled: ['@tanstack/query#alpha'],
     })
-    expect(plan.skills).toEqual(['@tanstack/query'])
-    expect(plan.exclude).toEqual([
-      '@other/core',
-      '@tanstack/query#zeta',
-      'workspace-query',
-    ])
+    expect(plan.skills).toEqual(['@tanstack/query#alpha'])
+    expect(plan.exclude).toEqual(['@other/core', 'workspace-query'])
+  })
+
+  it('writes a bare package exclusion when no skills are selected', () => {
+    const plan = buildSkillSelectionPlan([pkg('disabled', ['one', 'two'])], {
+      mode: 'individual',
+      enabled: [],
+    })
+
+    expect(plan.skills).toEqual([])
+    expect(plan.exclude).toEqual(['disabled'])
   })
 
   it('rejects malformed, duplicate, and unknown individual selections', () => {
@@ -105,27 +111,7 @@ describe('installer selection planning', () => {
     ).toThrow('would also hide "workspace:shared#workspace-skill"')
   })
 
-  it('reports the real collision when a skill alias conflicts within one package', () => {
-    expect(() =>
-      buildSkillSelectionPlan([pkg('ui', ['theme', 'ui/theme'])], {
-        mode: 'individual',
-        enabled: ['ui#theme'],
-      }),
-    ).toThrow(
-      'Cannot write intent.exclude "ui#ui/theme": it would also hide "ui#theme"',
-    )
-  })
-
-  it('rejects an exclusion that only collides once consumers trim it', () => {
-    expect(() =>
-      buildSkillSelectionPlan([pkg('ws', ['drop', 'drop '])], {
-        mode: 'individual',
-        enabled: ['ws#drop'],
-      }),
-    ).toThrow('would also hide "ws#drop"')
-  })
-
-  it('writes a shared skill exclusion when both kinds drop the same skill', () => {
+  it('writes kind-aware skill allows when both kinds select a subset', () => {
     const sameName = [
       pkg('shared', ['keep', 'drop']),
       pkg('shared', ['keep', 'drop'], 'workspace'),
@@ -135,8 +121,8 @@ describe('installer selection planning', () => {
       enabled: ['shared#keep', 'workspace:shared#keep'],
     })
 
-    expect(plan.skills).toEqual(['shared', 'workspace:shared'])
-    expect(plan.exclude).toEqual(['shared#drop'])
+    expect(plan.skills).toEqual(['shared#keep', 'workspace:shared#keep'])
+    expect(plan.exclude).toEqual([])
   })
 
   it('writes a shared package exclusion when both kinds are fully disabled', () => {
@@ -154,7 +140,7 @@ describe('installer selection planning', () => {
     expect(plan.exclude).toEqual(['shared'])
   })
 
-  it('uses the existing bare package grammar for workspace skill exclusions', () => {
+  it('uses kind-aware workspace grammar for partial skill allows', () => {
     const plan = buildSkillSelectionPlan(
       [pkg('workspace-only', ['enabled', 'excluded'], 'workspace')],
       {
@@ -163,8 +149,8 @@ describe('installer selection planning', () => {
       },
     )
 
-    expect(plan.skills).toEqual(['workspace:workspace-only'])
-    expect(plan.exclude).toEqual(['workspace-only#excluded'])
+    expect(plan.skills).toEqual(['workspace:workspace-only#enabled'])
+    expect(plan.exclude).toEqual([])
   })
 
   it('rejects duplicate discovered sources and skills', () => {
