@@ -104,6 +104,11 @@ export function parseIntentLockfile(content: string): IntentLockfile {
   }
   const root = assertRecord(parsed, 'root')
   assertFields(root, ['lockfileVersion', 'sources'], 'root')
+  if (typeof root.lockfileVersion === 'number' && root.lockfileVersion > 1) {
+    throw new Error(
+      `intent.lock declares lockfileVersion ${root.lockfileVersion}, which this @tanstack/intent cannot read. Upgrade @tanstack/intent.`,
+    )
+  }
   if (root.lockfileVersion !== 1 || !Array.isArray(root.sources)) {
     throw new Error('Invalid intent.lock root.')
   }
@@ -117,7 +122,7 @@ export function parseIntentLockfile(content: string): IntentLockfile {
       }
       if (source.kind !== 'npm' && source.kind !== 'workspace') {
         throw new Error(
-          `Invalid intent.lock source kind: ${String(source.kind)}.`,
+          `intent.lock contains a "${String(source.kind)}" source, which this @tanstack/intent cannot read. Upgrade @tanstack/intent if a newer version wrote this lockfile.`,
         )
       }
       return {

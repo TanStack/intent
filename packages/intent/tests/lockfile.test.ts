@@ -102,6 +102,17 @@ describe('intent lockfile', () => {
     ).toThrow()
   })
 
+  it('names an upgrade path for lockfiles a newer Intent wrote', () => {
+    expect(() =>
+      parseIntentLockfile('{"lockfileVersion":2,"sources":[]}'),
+    ).toThrow(/lockfileVersion 2.*Upgrade @tanstack\/intent/s)
+    expect(() =>
+      parseIntentLockfile(
+        '{"lockfileVersion":1,"sources":[{"kind":"git","id":"a","skills":[]}]}',
+      ),
+    ).toThrow(/contains a "git" source.*Upgrade @tanstack\/intent/s)
+  })
+
   it('reads missing locks and atomically writes canonical content', () => {
     const path = join(root(), 'nested', 'intent.lock')
     expect(readIntentLockfile(path)).toEqual({ status: 'missing' })
