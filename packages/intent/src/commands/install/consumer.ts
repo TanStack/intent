@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { compileExcludePatterns } from '../../core/excludes.js'
 import { buildCurrentLockfileSources } from '../../core/lockfile/lockfile-state.js'
-import { writeIntentLockfile } from '../../core/lockfile/lockfile.js'
+import {
+  readIntentLockfile,
+  writeIntentLockfile,
+} from '../../core/lockfile/lockfile.js'
 import { applySourcePolicy } from '../../core/source-policy.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
 import { runInstallHooks } from '../../hooks/install.js'
@@ -15,10 +18,16 @@ import { readInstallStateForLinks } from '../sync/state.js'
 import { toProjectRelativePath } from '../sync/targets.js'
 import {
   INSTALL_TARGETS,
+  detectInstallTargets,
   hasIntentDevDependency,
+  readIntentConsumerConfig,
   updateIntentConsumerConfigText,
 } from './config.js'
-import { buildSkillSelectionPlan } from './plan.js'
+import {
+  buildInstallDeltaInventory,
+  buildSkillSelectionPlan,
+  summarizeInstallDeltaInventory,
+} from './plan.js'
 import type {
   InstallMethod,
   InstallTarget,
@@ -38,7 +47,10 @@ export type InstallConfirmation = 'install' | 'back' | null
 export interface InstallerPrompter {
   complete: (message: string) => void
   selectMethod: () => Promise<InstallMethod | null>
-  selectTargets: (method: InstallMethod) => Promise<Array<InstallTarget> | null>
+  selectTargets: (
+    method: InstallMethod,
+    detected: ReadonlyArray<InstallTarget>,
+  ) => Promise<Array<InstallTarget> | null>
   confirmSymlink: () => Promise<boolean | null>
   confirmUserScopeHooks: () => Promise<boolean | null>
   selectSkills: (
@@ -71,6 +83,10 @@ function hookAgentForTarget(target: InstallTarget): HookAgent {
   }
 }
 
+function countSkills(entries: ReadonlyArray<{ skillCount: number }>): number {
+  return entries.reduce((count, entry) => count + entry.skillCount, 0)
+}
+
 export async function runConsumerInstall({
   discovered,
   dryRun = false,
@@ -84,12 +100,42 @@ export async function runConsumerInstall({
       '@tanstack/intent must be installed as a project devDependency before running `intent install`.',
     )
   }
+  const existingConfig = readIntentConsumerConfig(packageJson)
+  const configured = !dryRun && existingConfig.install !== undefined
+  if (configured) {
+    const inventory = buildInstallDeltaInventory(
+      discovered,
+      buildCurrentLockfileSources(discovered),
+      readIntentLockfile(join(root, 'intent.lock')),
+      existingConfig,
+    )
+    const summary = summarizeInstallDeltaInventory(inventory)
+    const newDependencies = countSkills(summary.newDependencies)
+    const newSkills = countSkills(summary.newSkills)
+    const changed = countSkills(summary.changed)
+    if (
+      newDependencies === 0 &&
+      newSkills === 0 &&
+      changed === 0 &&
+      summary.removed === 0
+    ) {
+      prompts.complete('Project is up to date.')
+      return
+    }
+    console.log(
+      `Install changes: ${newDependencies} new ${newDependencies === 1 ? 'dependency' : 'dependencies'}, ${newSkills} new ${newSkills === 1 ? 'skill' : 'skills'}, ${changed} changed, ${summary.removed} removed.`,
+    )
+  }
   for (;;) {
-    const method = await prompts.selectMethod()
+    const method = configured
+      ? existingConfig.install!.method
+      : await prompts.selectMethod()
     if (!method) return
-    const targets = await prompts.selectTargets(method)
+    const targets = configured
+      ? existingConfig.install!.targets
+      : await prompts.selectTargets(method, detectInstallTargets(root))
     if (!targets || targets.length === 0) return
-    if (method === 'symlink') {
+    if (!configured && method === 'symlink') {
       const symlinkAccepted = await prompts.confirmSymlink()
       if (!symlinkAccepted) return
     }

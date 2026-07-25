@@ -12,12 +12,15 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runInteractiveInstall } from '../src/commands/install/command.js'
+import {
+  detectInstallTargets,
+  readIntentConsumerConfig,
+} from '../src/commands/install/config.js'
 import { runConsumerInstall } from '../src/commands/install/consumer.js'
 import {
   createClackInstallerPrompter,
   groupSkillOptions,
 } from '../src/commands/install/prompts.js'
-import { readIntentConsumerConfig } from '../src/commands/install/config.js'
 import { runSyncCommand } from '../src/commands/sync/command.js'
 import { readInstallState } from '../src/commands/sync/state.js'
 import { readIntentLockfile } from '../src/core/lockfile/lockfile.js'
@@ -27,6 +30,7 @@ import type { InstallerPrompter } from '../src/commands/install/consumer.js'
 
 const clackPromptMocks = vi.hoisted(() => ({
   intro: vi.fn(),
+  multiselect: vi.fn<() => Promise<unknown>>(),
   select:
     vi.fn<
       (options: { options: Array<{ value: string }> }) => Promise<unknown>
@@ -38,6 +42,7 @@ vi.mock('@clack/prompts', async (importOriginal) => {
   return {
     ...actual,
     intro: clackPromptMocks.intro,
+    multiselect: clackPromptMocks.multiselect,
     select: clackPromptMocks.select,
   }
 })
@@ -119,6 +124,51 @@ afterEach(() => {
 })
 
 describe('consumer install', () => {
+  it('detects configured agent targets from project-owned signals', () => {
+    const root = createProject()
+    mkdirSync(join(root, '.claude'))
+    writeFileSync(join(root, '.cursorrules'), '', 'utf8')
+
+    expect(detectInstallTargets(root)).toEqual(['cursor', 'claude'])
+  })
+
+  it('detects no agent targets in a bare project', () => {
+    expect(detectInstallTargets(createProject())).toEqual([])
+  })
+
+  it('does not detect GitHub Copilot from the .github directory alone', () => {
+    const root = createProject()
+    mkdirSync(join(root, '.github'))
+
+    expect(detectInstallTargets(root)).toEqual([])
+  })
+
+  it('preselects detected targets while keeping every target toggleable', async () => {
+    const root = createProject()
+    mkdirSync(join(root, '.claude'))
+    writeFileSync(join(root, '.cursorrules'), '', 'utf8')
+    clackPromptMocks.multiselect.mockResolvedValueOnce([])
+
+    await createClackInstallerPrompter().selectTargets(
+      'symlink',
+      detectInstallTargets(root),
+    )
+
+    expect(clackPromptMocks.multiselect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialValues: ['cursor', 'claude'],
+        options: expect.arrayContaining([
+          expect.objectContaining({ value: 'agents' }),
+          expect.objectContaining({ value: 'github' }),
+          expect.objectContaining({ value: 'vscode' }),
+          expect.objectContaining({ value: 'cursor' }),
+          expect.objectContaining({ value: 'codex' }),
+          expect.objectContaining({ value: 'claude' }),
+        ]),
+      }),
+    )
+  })
+
   it('groups selectable skills by package', () => {
     const root = createProject()
     const discovered = scanForIntents(root, { scope: 'local' }).packages
@@ -165,6 +215,106 @@ describe('consumer install', () => {
     })
 
     expect(calls).toEqual(['method', 'targets:symlink'])
+  })
+
+  it('runs the full interview for an unconfigured project', async () => {
+    const root = createProject()
+    const selectMethod = vi.fn(() => Promise.resolve('symlink' as const))
+    const selectTargets = vi.fn(() =>
+      Promise.resolve<Array<'agents'>>(['agents']),
+    )
+    const selectSkills = vi.fn(() =>
+      Promise.resolve({ mode: 'all-found' as const }),
+    )
+
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts({ selectMethod, selectTargets, selectSkills }),
+      root,
+    })
+
+    expect(selectMethod).toHaveBeenCalledOnce()
+    expect(selectTargets).toHaveBeenCalledOnce()
+    expect(selectSkills).toHaveBeenCalledOnce()
+  })
+
+  it('reports an already-configured project as up to date without interviewing', async () => {
+    const root = createProject()
+    const discovered = scanForIntents(root, { scope: 'local' }).packages
+    await runConsumerInstall({ discovered, prompts: createPrompts(), root })
+    const complete = vi.fn()
+    const selectMethod = vi.fn(() =>
+      Promise.reject(new Error('method must not run')),
+    )
+    const selectTargets = vi.fn(() =>
+      Promise.reject(new Error('targets must not run')),
+    )
+    const selectSkills = vi.fn(() =>
+      Promise.reject(new Error('skills must not run')),
+    )
+    const prompts = createPrompts({
+      complete,
+      selectMethod,
+      selectTargets,
+      selectSkills,
+    })
+
+    await runConsumerInstall({ discovered, prompts, root })
+
+    expect(complete).toHaveBeenCalledWith('Project is up to date.')
+    expect(selectMethod).not.toHaveBeenCalled()
+    expect(selectTargets).not.toHaveBeenCalled()
+    expect(selectSkills).not.toHaveBeenCalled()
+  })
+
+  it('reports a new skill and enters review without re-interviewing delivery', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    const skillRoot = join(
+      root,
+      'node_modules',
+      '@tanstack',
+      'query',
+      'skills',
+      'mutations',
+    )
+    mkdirSync(skillRoot, { recursive: true })
+    writeFileSync(
+      join(skillRoot, 'SKILL.md'),
+      '---\nname: mutations\ndescription: Query mutation patterns\n---\n',
+      'utf8',
+    )
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const selectSkills = vi.fn(() =>
+      Promise.resolve({ mode: 'all-found' as const }),
+    )
+    const confirmInstall = vi.fn(() => Promise.resolve('install' as const))
+    const prompts = createPrompts({
+      selectMethod: () => Promise.reject(new Error('method must not run')),
+      selectTargets: () => Promise.reject(new Error('targets must not run')),
+      selectSkills,
+      confirmInstall,
+    })
+
+    try {
+      await runConsumerInstall({
+        discovered: scanForIntents(root, { scope: 'local' }).packages,
+        prompts,
+        root,
+      })
+
+      expect(log.mock.calls.flat().join('\n')).toContain(
+        'Install changes: 0 new dependencies, 1 new skill, 0 changed, 0 removed.',
+      )
+    } finally {
+      log.mockRestore()
+    }
+    expect(selectSkills).toHaveBeenCalledOnce()
+    expect(confirmInstall).toHaveBeenCalledOnce()
   })
 
   it('installs confirmed skills with policy, lock state, and managed links', async () => {

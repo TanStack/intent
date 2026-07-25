@@ -12,7 +12,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { INSTALL_PROMPT } from '../src/commands/install/command.js'
 import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
 import { serializeIntentLockfile } from '../src/core/lockfile/lockfile.js'
 import { scanForIntents } from '../src/discovery/scanner.js'
@@ -378,20 +377,49 @@ describe('cli commands', () => {
     )
   })
 
-  it('prints the install prompt', async () => {
+  it('rejects the removed install --print-prompt option', async () => {
     const exitCode = await main(['install', '--print-prompt'])
-    const output = String(logSpy.mock.calls[0]?.[0])
 
-    expect(exitCode).toBe(0)
-    expect(logSpy).toHaveBeenCalledWith(INSTALL_PROMPT)
-    expect(output).toContain('tanstackIntent:')
-    expect(output).toContain('  - id: "@scope/package#skill-name"')
-    expect(output).toContain(
-      '    run: "npx @tanstack/intent@latest load @scope/package#skill-name"',
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith('Unknown option `--printPrompt`')
+  })
+
+  it('runs install --no-input through sync without prompting', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-no-input-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['verified'],
+        install: { method: 'symlink', targets: ['github'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    const discovered = scanForIntents(root, { scope: 'local' }).packages
+    writeFileSync(
+      join(root, 'intent.lock'),
+      serializeIntentLockfile({
+        lockfileVersion: 1,
+        sources: buildCurrentLockfileSources(discovered),
+      }),
     )
-    expect(output).toContain('    for: "describe the task or code area here"')
-    expect(output).not.toContain('skills:\n  - when:')
-    expect(output).not.toContain('use: "@scope/package#skill-name"')
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--no-input'])
+
+    expect(errorSpy).not.toHaveBeenCalled()
+    expect(exitCode).toBe(0)
+    expect(
+      lstatSync(
+        join(root, '.github', 'skills', 'npm-verified-core'),
+      ).isSymbolicLink(),
+    ).toBe(true)
   })
 
   it('lists excludes when none are configured', async () => {
@@ -517,7 +545,7 @@ describe('cli commands', () => {
 
       expect(exitCode).toBe(1)
       expect(errorSpy).toHaveBeenCalledWith(
-        'Interactive installation requires a terminal. Run `intent install` in a TTY or use `intent install --map`.',
+        'Interactive installation requires a terminal. Run `intent install` in a TTY or use `intent install --map` or `intent install --no-input`.',
       )
       expect(existsSync(join(root, 'intent.lock'))).toBe(false)
       expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)

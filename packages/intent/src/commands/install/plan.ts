@@ -47,12 +47,50 @@ export interface InstallDeltaInventory {
   }>
 }
 
+export interface InstallDeltaSummary {
+  newDependencies: Array<{ name: string; skillCount: number }>
+  newSkills: Array<{ name: string; skillCount: number }>
+  changed: Array<{ name: string; skillCount: number }>
+  removed: number
+}
+
 function compareStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
-function sourceEntry(pkg: IntentPackage): string {
+function sourceEntry(pkg: Pick<IntentPackage, 'kind' | 'name'>): string {
   return pkg.kind === 'workspace' ? `workspace:${pkg.name}` : pkg.name
+}
+
+export function summarizeInstallDeltaInventory(
+  inventory: InstallDeltaInventory,
+): InstallDeltaSummary {
+  return {
+    newDependencies: inventory.packages
+      .map((pkg) => ({
+        name: sourceEntry(pkg),
+        skillCount: pkg.skills.filter((skill) => skill.policy === 'pending')
+          .length,
+      }))
+      .filter((entry) => entry.skillCount > 0),
+    newSkills: inventory.packages
+      .map((pkg) => ({
+        name: sourceEntry(pkg),
+        skillCount: pkg.skills.filter(
+          (skill) => skill.policy === 'enabled' && skill.lock === 'new',
+        ).length,
+      }))
+      .filter((entry) => entry.skillCount > 0),
+    changed: inventory.packages
+      .map((pkg) => ({
+        name: sourceEntry(pkg),
+        skillCount: pkg.skills.filter(
+          (skill) => skill.policy === 'enabled' && skill.lock === 'changed',
+        ).length,
+      }))
+      .filter((entry) => entry.skillCount > 0),
+    removed: inventory.removed.length,
+  }
 }
 
 export function skillSelectionId(

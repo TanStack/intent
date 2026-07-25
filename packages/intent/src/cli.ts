@@ -138,23 +138,25 @@ function createCli(): CAC {
   cli
     .command('install', 'Configure trusted skill sources and delivery targets')
     .usage(
-      'install [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]',
+      'install [--map] [--dry-run] [--no-input] [--global] [--global-only] [--no-notices]',
     )
     .option('--map', 'Write explicit skill-to-task mappings')
     .option('--dry-run', 'Preview installation without writing files')
-    .option(
-      '--print-prompt',
-      'Print the legacy agent setup prompt instead of writing',
-    )
+    .option('--no-input', 'Synchronize without interactive prompts')
     .option('--global', 'With --map, include global packages')
     .option('--global-only', 'With --map, use only global packages')
     .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('install')
     .example('install --map')
     .example('install --dry-run')
-    .example('install --print-prompt')
+    .example('install --no-input')
     .example('install --map --global')
     .action(async (options: InstallCommandOptions) => {
+      if (options.input === false) {
+        const { runSyncCommand } = await import('./commands/sync/command.js')
+        await runSyncCommand(options, { interactive: false })
+        return
+      }
       const [{ scanIntentsOrFail }, { runInstallCommand }] = await Promise.all([
         import('./commands/support.js'),
         import('./commands/install/command.js'),

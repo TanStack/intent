@@ -1,3 +1,5 @@
+import { existsSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { applyEdits, modify, parse } from 'jsonc-parser'
 import { compileExcludePatterns } from '../../core/excludes.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
@@ -47,6 +49,41 @@ export function installTargetsForMethod(
   return INSTALL_TARGETS.filter((target) =>
     INSTALL_METHODS[method].has(target.id),
   )
+}
+
+function isDirectory(root: string, path: string): boolean {
+  const target = join(root, path)
+  return existsSync(target) && statSync(target).isDirectory()
+}
+
+export function detectInstallTargets(root: string): Array<InstallTarget> {
+  return INSTALL_TARGETS.flatMap((target) => {
+    switch (target.id) {
+      case 'agents':
+        return isDirectory(root, '.agents') ||
+          existsSync(join(root, 'AGENTS.md'))
+          ? [target.id]
+          : []
+      case 'github':
+        return existsSync(join(root, '.github/copilot-instructions.md'))
+          ? [target.id]
+          : []
+      case 'vscode':
+        return isDirectory(root, '.vscode') ? [target.id] : []
+      case 'cursor':
+        return isDirectory(root, '.cursor') ||
+          existsSync(join(root, '.cursorrules'))
+          ? [target.id]
+          : []
+      case 'codex':
+        return isDirectory(root, '.codex') ? [target.id] : []
+      case 'claude':
+        return isDirectory(root, '.claude') ||
+          existsSync(join(root, 'CLAUDE.md'))
+          ? [target.id]
+          : []
+    }
+  })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

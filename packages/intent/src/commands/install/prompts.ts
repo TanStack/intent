@@ -98,14 +98,18 @@ export function createClackInstallerPrompter(): InstallerPrompter {
     },
     async selectTargets(
       method: InstallMethod,
+      detected: ReadonlyArray<InstallTarget>,
     ): Promise<Array<InstallTarget> | null> {
+      const targets = installTargetsForMethod(method)
+      const supported = new Set(targets.map((target) => target.id))
       return cancelled(
         await multiselect<InstallTarget>({
           message: 'Where do you want to install skills?',
-          options: installTargetsForMethod(method).map((target) => ({
+          options: targets.map((target) => ({
             value: target.id,
             label: target.label,
           })),
+          initialValues: detected.filter((target) => supported.has(target)),
           required: true,
         }),
       )

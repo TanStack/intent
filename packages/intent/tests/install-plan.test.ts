@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildInstallDeltaInventory,
   buildSkillSelectionPlan,
+  summarizeInstallDeltaInventory,
 } from '../src/commands/install/plan.js'
 import type {
   InventoryLockStatus,
@@ -171,6 +172,31 @@ describe('installer selection planning', () => {
 })
 
 describe('installer delta inventory', () => {
+  it('summarizes pending, new, changed, and removed entries', () => {
+    expect(
+      summarizeInstallDeltaInventory({
+        packages: [
+          {
+            name: 'pkg',
+            kind: 'npm',
+            skills: [
+              { id: 'pkg#pending', policy: 'pending', lock: null },
+              { id: 'pkg#new', policy: 'enabled', lock: 'new' },
+              { id: 'pkg#changed', policy: 'enabled', lock: 'changed' },
+              { id: 'pkg#accepted', policy: 'enabled', lock: 'accepted' },
+            ],
+          },
+        ],
+        removed: [{ kind: 'npm', id: 'gone', path: null }],
+      }),
+    ).toEqual({
+      newDependencies: [{ name: 'pkg', skillCount: 1 }],
+      newSkills: [{ name: 'pkg', skillCount: 1 }],
+      changed: [{ name: 'pkg', skillCount: 1 }],
+      removed: 1,
+    })
+  })
+
   it('classifies changed skills independently and reports removed lock entries', () => {
     const accepted: InventoryLockStatus = 'accepted'
     const enabled: InventoryPolicyStatus = 'enabled'
