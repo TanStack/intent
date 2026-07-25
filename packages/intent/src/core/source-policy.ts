@@ -390,13 +390,14 @@ export function scanForPolicedIntents(params: {
   scanOptions: ScanOptions
   coreOptions: IntentCoreOptions
   context?: ProjectContext
+  config?: SkillSourcesConfig
 }): PolicedScan {
   const { cwd, scanOptions, coreOptions } = params
   const context = params.context ?? resolveProjectContext({ cwd })
   const audience = detectIntentAudience(coreOptions.audience)
 
   const scanResult = scanForIntents(cwd, scanOptions)
-  const config = readSkillSourcesConfig(cwd, context)
+  const config = params.config ?? readSkillSourcesConfig(cwd, context)
   const excludePatterns = getEffectiveExcludePatterns(coreOptions, context)
   const excludeMatchers = compileExcludePatterns(excludePatterns)
 

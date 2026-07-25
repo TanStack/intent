@@ -388,6 +388,7 @@ function resolveIntentSkillInCwd(
     scanOptions: withFsCache(scanOptions, fsCache),
     coreOptions: options,
     context: projectContext,
+    config,
   })
   if (droppedNames.includes(parsedUse.packageName)) {
     const lateRefusal = packageNotListedRefusal(use, parsedUse.packageName)
