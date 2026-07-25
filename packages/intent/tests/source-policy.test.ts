@@ -7,8 +7,11 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { compileExcludePatterns } from '../src/core/excludes.js'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  compileExcludePatterns,
+  compileWildcardPattern,
+} from '../src/core/excludes.js'
 import {
   ALLOW_ALL_NOTICE,
   EMPTY_NOTE,
@@ -17,7 +20,16 @@ import {
   readSkillSourcesConfig,
 } from '../src/core/source-policy.js'
 import { parseSkillSources } from '../src/core/skill-sources.js'
+import type * as Excludes from '../src/core/excludes.js'
 import type { IntentPackage, SkillEntry } from '../src/shared/types.js'
+
+vi.mock('../src/core/excludes.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof Excludes>()
+  return {
+    ...actual,
+    compileWildcardPattern: vi.fn(actual.compileWildcardPattern),
+  }
+})
 
 const realTmpdir = realpathSync(tmpdir())
 
@@ -25,14 +37,18 @@ function skill(name: string): SkillEntry {
   return { name, path: `/pkg/skills/${name}/SKILL.md`, description: name }
 }
 
-function pkg(name: string, skillNames: Array<string>): IntentPackage {
+function pkg(
+  name: string,
+  skillNames: Array<string>,
+  kind: IntentPackage['kind'] = 'npm',
+): IntentPackage {
   return {
     name,
     version: '1.0.0',
     intent: { version: 1, repo: 'owner/repo', docs: '' },
     skills: skillNames.map(skill),
     packageRoot: `/root/node_modules/${name}`,
-    kind: 'npm',
+    kind,
     source: 'local',
   }
 }
@@ -53,6 +69,74 @@ describe('applySourcePolicy — allowlist matrix', () => {
     )
     expect(names(result.packages)).toEqual(['@scope/a'])
     expect(result.notices).toEqual([])
+  })
+
+  it('includes every package matched by an npm allowlist glob', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [
+          pkg('@tanstack/query', ['query']),
+          pkg('@tanstack/router', ['router']),
+          pkg('@other/package', ['other']),
+        ],
+      },
+      { config: config(['@tanstack/*']), excludeMatchers: [] },
+    )
+    expect(names(result.packages)).toEqual([
+      '@tanstack/query',
+      '@tanstack/router',
+    ])
+    expect(result.notices).toEqual([
+      '1 discovered package ships skills but is not listed in intent.skills: @other/package. Add to opt in.',
+    ])
+  })
+
+  it('keeps workspace allowlist globs kind-specific', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [
+          pkg('@scope/workspace', ['workspace'], 'workspace'),
+          pkg('@scope/npm', ['npm']),
+        ],
+      },
+      { config: config(['workspace:@scope/*']), excludeMatchers: [] },
+    )
+    expect(names(result.packages)).toEqual(['@scope/workspace'])
+    expect(result.notices).toEqual([
+      '1 discovered package ships skills but is not listed in intent.skills: @scope/npm. Add to opt in.',
+    ])
+  })
+
+  it('warns when an allowlist glob matches no discovered package', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@other/package', ['other'])] },
+      { config: config(['@tanstack/*']), excludeMatchers: [] },
+    )
+    expect(result.notices).toEqual([
+      '1 discovered package ships skills but is not listed in intent.skills: @other/package. Add to opt in.',
+      '"@tanstack/*" is declared in intent.skills but was not discovered.',
+    ])
+  })
+
+  it('compiles each allowlist glob once per policy application', () => {
+    const compile = vi.mocked(compileWildcardPattern)
+    compile.mockClear()
+
+    applySourcePolicy(
+      {
+        packages: [
+          pkg('@scope/one', ['one']),
+          pkg('@scope/two', ['two']),
+          pkg('@other/three', ['three']),
+        ],
+      },
+      {
+        config: config(['@scope/*', '@other/*']),
+        excludeMatchers: [],
+      },
+    )
+
+    expect(compile).toHaveBeenCalledTimes(2)
   })
 
   it('drops an unlisted discovered package and warns', () => {
@@ -93,9 +177,21 @@ describe('applySourcePolicy — allowlist matrix', () => {
     ])
   })
 
-  it('matches by name only, so workspace:foo authorizes an npm-discovered foo (M1 baseline)', () => {
+  it('does not authorize an npm-discovered foo via workspace:foo', () => {
     const result = applySourcePolicy(
       { packages: [pkg('foo', ['x'])] },
+      { config: config(['workspace:foo']), excludeMatchers: [] },
+    )
+    expect(names(result.packages)).toEqual([])
+    expect(result.notices).toEqual([
+      '1 discovered package ships skills but is not listed in intent.skills: foo. Add to opt in.',
+      '"workspace:foo" is declared in intent.skills but was not discovered.',
+    ])
+  })
+
+  it('authorizes a workspace-discovered foo via workspace:foo', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('foo', ['x'], 'workspace')] },
       { config: config(['workspace:foo']), excludeMatchers: [] },
     )
     expect(names(result.packages)).toEqual(['foo'])
@@ -141,6 +237,19 @@ describe('applySourcePolicy — allowlist matrix', () => {
 })
 
 describe('applySourcePolicy — permit-all and empty modes', () => {
+  it('unqualified exclude hides both an npm and a workspace package of the same name (kind-agnostic, deliberate)', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [pkg('foo', ['x'], 'npm'), pkg('foo', ['y'], 'workspace')],
+      },
+      {
+        config: config(['*']),
+        excludeMatchers: compileExcludePatterns(['foo']),
+      },
+    )
+    expect(names(result.packages)).toEqual([])
+  })
+
   it('permits every discovered source under allow-all with a loud notice', () => {
     const result = applySourcePolicy(
       { packages: [pkg('@scope/a', ['x']), pkg('@scope/b', ['y'])] },

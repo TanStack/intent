@@ -901,3 +901,110 @@ describe('loadIntentSkill', () => {
     expect(loaded.skillName).toBe('fetching')
   })
 })
+
+describe('loadIntentSkill — kind-mismatch late gate', () => {
+  it('refuses an npm-installed package listed only as workspace:<name>, via the fast path', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['workspace:@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    let thrown: unknown
+    try {
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root, debug: true })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('package-not-listed')
+    expect((thrown as Error).message).toBe(
+      'Cannot load skill use "@tanstack/query#fetching": package "@tanstack/query" is not listed in intent.skills.',
+    )
+  })
+
+  it('refuses an npm-installed package listed only as workspace:<name>, via the full-scan fallback', () => {
+    writeFileSync(join(root, '.pnp.cjs'), 'module.exports = {}\n')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['workspace:@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    let thrown: unknown
+    try {
+      const result = loadIntentSkill('@tanstack/query#fetching', {
+        cwd: root,
+        debug: true,
+      })
+      thrown = result
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('package-not-listed')
+    expect((thrown as Error).message).toBe(
+      'Cannot load skill use "@tanstack/query#fetching": package "@tanstack/query" is not listed in intent.skills.',
+    )
+  })
+
+  it('allows a workspace member listed as workspace:<name>', () => {
+    const appDir = join(root, 'packages', 'app')
+    const routerDir = join(root, 'packages', 'router-core')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-monorepo',
+      private: true,
+      workspaces: ['packages/*'],
+      intent: { skills: ['workspace:@tanstack/router-core'] },
+    })
+    writeJson(join(appDir, 'package.json'), {
+      name: '@test/app',
+    })
+    writeJson(join(routerDir, 'package.json'), {
+      name: '@tanstack/router-core',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'TanStack/router', docs: 'docs/' },
+    })
+    writeSkillMd({
+      dir: join(routerDir, 'skills', 'core'),
+      frontmatter: { name: 'core', description: 'Router core' },
+    })
+
+    const result = loadIntentSkill('@tanstack/router-core#core', {
+      cwd: appDir,
+    })
+
+    expect(result.packageName).toBe('@tanstack/router-core')
+  })
+
+  it('refuses an excluded, kind-mismatched package before any resolution attempt', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: {
+        skills: ['workspace:@tanstack/query'],
+        exclude: ['@tanstack/query'],
+      },
+    })
+
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow(
+      'Cannot load skill use "@tanstack/query#fetching": package "@tanstack/query" is excluded by Intent configuration.',
+    )
+  })
+})

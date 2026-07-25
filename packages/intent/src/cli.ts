@@ -94,15 +94,22 @@ function createCli(): CAC {
 
   cli
     .command('validate [dir]', 'Validate skill files')
-    .usage('validate [dir] [--github-summary] [--fix] [--check]')
+    .usage(
+      'validate [dir] [--github-summary] [--fix] [--check] [--set-version <version>]',
+    )
     .option('--github-summary', 'Write a GitHub Actions step summary')
     .option('--fix', 'Rewrite fixable SKILL.md frontmatter issues')
     .option(
       '--check',
       'Fail if fixable SKILL.md frontmatter issues would be rewritten',
     )
+    .option(
+      '--set-version <version>',
+      'Set metadata.library_version on matched skills, then validate',
+    )
     .example('validate')
     .example('validate packages/query/skills')
+    .example('validate packages/query/skills --set-version 5.62.0')
     .action(
       async (dir: string | undefined, options: ValidateCommandOptions) => {
         const { runValidateCommand } = await import('./commands/validate.js')

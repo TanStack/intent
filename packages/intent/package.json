@@ -1,6 +1,6 @@
 {
   "name": "@tanstack/intent",
-  "version": "0.3.2",
+  "version": "0.3.6",
   "description": "Ship compositional knowledge for AI coding agents alongside your npm packages",
   "license": "MIT",
   "type": "module",
@@ -43,6 +43,7 @@
     "test:smoke": "pnpm run build && node dist/cli.mjs --help > /dev/null && node dist/cli.mjs load --help > /dev/null",
     "test:lib": "vitest run --exclude 'tests/integration/**'",
     "test:integration": "vitest run tests/integration/",
-    "test:types": "tsc --noEmit"
+    "test:types": "tsc --noEmit",
+    "test:eslint": "eslint ."
   }
 }

@@ -229,9 +229,24 @@ describe('parseSkillSources — wildcard composition', () => {
     expect(error.issues[0]?.message).toContain('must be the exact entry "*"')
   })
 
-  it('rejects a glob in a package segment', () => {
-    const error = expectParseError(['@scope/*'])
-    expect(error.issues[0]?.message).toContain('globs are not supported')
+  it('parses a glob in an npm package name', () => {
+    expect(parseSkillSources(['@scope/*'])).toEqual({
+      mode: 'explicit',
+      sources: [{ raw: '@scope/*', pattern: '@scope/*', kind: 'npm' }],
+    })
+  })
+
+  it('parses a glob in a workspace package name', () => {
+    expect(parseSkillSources(['workspace:@scope/*'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        {
+          raw: 'workspace:@scope/*',
+          pattern: '@scope/*',
+          kind: 'workspace',
+        },
+      ],
+    })
   })
 
   it('still throws a duplicate error even when "*" subsumes the duplicated entry', () => {

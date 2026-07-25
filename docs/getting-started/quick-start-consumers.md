@@ -65,12 +65,12 @@ Hooks add the available Intent skill catalog to supported agent sessions and kee
 ```json
 {
   "intent": {
-    "skills": ["@tanstack/query", "@tanstack/router"]
+    "skills": ["@tanstack/*"]
   }
 }
 ```
 
-List the packages you trust. Intent then surfaces skills from those packages and leaves the rest out. See the [source entries](../concepts/configuration#source-entries) in Configuration for the forms an entry can take, and [Trust model](../concepts/trust-model) for why the allowlist exists.
+List the packages or `*` package patterns you trust. Intent then surfaces skills from matching packages and leaves the rest out. See the [source entries](../concepts/configuration#source-entries) in Configuration for the forms an entry can take, and [Trust model](../concepts/trust-model) for why the allowlist exists.
 
 ## 3. Use skills in your workflow
 

@@ -1,3 +1,6 @@
+import { detectIntentAudience } from '../shared/environment.js'
+import { formatIntentCommand } from '../shared/command-runner.js'
+import { listIntentSkills } from '../core/index.js'
 import {
   coreOptionsFromGlobalFlags,
   noticeOptionsFromGlobalFlags,
@@ -5,9 +8,6 @@ import {
   printNotices,
   printWarnings,
 } from './support.js'
-import { detectIntentAudience } from '../shared/environment.js'
-import { formatIntentCommand } from '../shared/command-runner.js'
-import { listIntentSkills } from '../core/index.js'
 import type { GlobalScanFlags } from './support.js'
 import type {
   IntentPackageSummary,
