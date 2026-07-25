@@ -260,4 +260,26 @@ describe('installer delta inventory', () => {
       { id: 'b#two', policy: 'pending', lock: null },
     ])
   })
+
+  it('records a declined package as excluded rather than pending', () => {
+    const discovered = [pkg('keep', ['one']), pkg('decline', ['two'])]
+    const plan = buildSkillSelectionPlan(discovered, {
+      mode: 'individual',
+      enabled: ['keep#one'],
+    })
+    const inventory = buildInstallDeltaInventory(
+      discovered,
+      [],
+      { status: 'missing' },
+      { skills: plan.skills, exclude: plan.exclude },
+    )
+    const policies = new Map(
+      inventory.packages.flatMap((entry) =>
+        entry.skills.map((skill) => [skill.id, skill.policy]),
+      ),
+    )
+
+    expect(policies.get('keep#one')).toBe('enabled')
+    expect(policies.get('decline#two')).toBe('excluded')
+  })
 })

@@ -70,10 +70,10 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     writeIntentPackage(root, EXCLUDED, 'core')
   }
 
-  it('list surfaces only the listed package', () => {
+  it('list names the unlisted package for a human audience', () => {
     writeStandaloneFixture()
 
-    const result = listIntentSkills({ cwd: root })
+    const result = listIntentSkills({ cwd: root, audience: 'human' })
 
     expect(result.packages.map((pkg) => pkg.name)).toEqual([LISTED])
     expect(result.notices.some((notice) => notice.includes(UNLISTED))).toBe(
@@ -85,6 +85,22 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     expect(result.warnings.some((warning) => warning.includes(UNLISTED))).toBe(
       false,
     )
+  })
+
+  it('list withholds the unlisted package name from an agent audience', () => {
+    writeStandaloneFixture()
+
+    const result = listIntentSkills({ cwd: root, audience: 'agent' })
+
+    expect(result.packages.map((pkg) => pkg.name)).toEqual([LISTED])
+    expect(result.notices.some((notice) => notice.includes(UNLISTED))).toBe(
+      false,
+    )
+    expect(
+      result.notices.some((notice) =>
+        notice.includes('not listed in intent.skills'),
+      ),
+    ).toBe(true)
   })
 
   it('list and load accept packages matched by an allowlist glob', () => {
