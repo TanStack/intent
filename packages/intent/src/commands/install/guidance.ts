@@ -131,7 +131,7 @@ function containsLocalPathValue(value: string): boolean {
 
 function parseLoadedSkillUse(command: string): string | null {
   const match = command.match(
-    /(?:^|&&|\|\||;|\|)\s*(?:bunx\s+@tanstack\/intent(?:@latest)?|pnpm\s+exec\s+intent|pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?|npx\s+@tanstack\/intent(?:@latest)?|yarn\s+dlx\s+@tanstack\/intent(?:@latest)?|intent)\s+load\s+([^\s|;&]+)/i,
+    /(?:^|&&|\|\||;|\|)\s*(?:bunx\s+@tanstack\/intent(?:@[^\s]+)?|pnpm\s+exec\s+intent|pnpm\s+dlx\s+@tanstack\/intent(?:@[^\s]+)?|npx\s+@tanstack\/intent(?:@[^\s]+)?|yarn\s+dlx\s+@tanstack\/intent(?:@[^\s]+)?|intent)\s+load\s+([^\s|;&]+)/i,
   )
   return match?.[1] ?? null
 }

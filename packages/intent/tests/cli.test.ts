@@ -15,11 +15,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
 import { serializeIntentLockfile } from '../src/core/lockfile/lockfile.js'
 import { scanForIntents } from '../src/discovery/scanner.js'
+import { packageVersionToPin } from '../src/shared/command-runner.js'
 import { isMainModule, main } from '../src/cli.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const metaDir = join(thisDir, '..', 'meta')
 const packageJsonPath = join(thisDir, '..', 'package.json')
+const intentPackagePin = packageVersionToPin(
+  (JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { version: string })
+    .version,
+)
 const realTmpdir = realpathSync(tmpdir())
 
 function writeJson(filePath: string, data: unknown): void {
@@ -634,7 +639,7 @@ describe('cli commands', () => {
     expect(content).toContain('for: "Query data fetching patterns"')
     expect(content).toContain('id: "@tanstack/query#fetching"')
     expect(content).toContain(
-      'run: "npx @tanstack/intent@latest load @tanstack/query#fetching"',
+      `run: "npx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching"`,
     )
     expect(content).not.toContain('load:')
     expect(content).not.toContain(root)
@@ -981,10 +986,10 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain(
-      'Load: npx @tanstack/intent@latest load @tanstack/query#fetching',
+      `Load: npx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching`,
     )
     expect(output).toContain(
-      'Load: npx @tanstack/intent@latest load @tanstack/query#query/cache',
+      `Load: npx @tanstack/intent@${intentPackagePin} load @tanstack/query#query/cache`,
     )
   })
 
@@ -1104,9 +1109,9 @@ describe('cli commands', () => {
   })
 
   it.each([
-    ['pnpm-lock.yaml', 'pnpm dlx @tanstack/intent@latest'],
-    ['yarn.lock', 'yarn dlx @tanstack/intent@latest'],
-    ['bun.lock', 'bunx @tanstack/intent@latest'],
+    ['pnpm-lock.yaml', `pnpm dlx @tanstack/intent@${intentPackagePin}`],
+    ['yarn.lock', `yarn dlx @tanstack/intent@${intentPackagePin}`],
+    ['bun.lock', `bunx @tanstack/intent@${intentPackagePin}`],
   ])(
     'prints %s load commands for human list output',
     async (lockfile, runner) => {
@@ -1430,7 +1435,7 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('Global fetching skill')
     expect(output).toContain(
-      'Load: npx @tanstack/intent@latest load @tanstack/query#fetching --global',
+      `Load: npx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching --global`,
     )
     expect(output).not.toContain(globalPkgDir)
   })

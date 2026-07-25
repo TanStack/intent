@@ -6,7 +6,8 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildIntentSkillGuidanceBlock,
@@ -15,6 +16,7 @@ import {
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from '../src/commands/install/guidance.js'
+import { packageVersionToPin } from '../src/shared/command-runner.js'
 import type {
   IntentPackage,
   ScanResult,
@@ -22,6 +24,13 @@ import type {
 } from '../src/shared/types.js'
 
 const tempDirs: Array<string> = []
+const packageJson = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'),
+    'utf8',
+  ),
+) as { version: string }
+const intentPackagePin = packageVersionToPin(packageJson.version)
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
@@ -89,7 +98,7 @@ const exampleBlock = `<!-- intent-skills:start -->
 # TanStack Intent - before editing files, run the matching guidance command.
 tanstackIntent:
   - id: "@tanstack/query#fetching"
-    run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#fetching"
+    run: "pnpm dlx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching"
     for: "Query data fetching"
 <!-- intent-skills:end -->
 `
@@ -100,7 +109,9 @@ describe('install writer block builder', () => {
 
     expect(generated.mappingCount).toBe(0)
     expect(generated.block).toContain('## Skill Loading')
-    expect(generated.block).toContain('npx @tanstack/intent@latest list')
+    expect(generated.block).toContain(
+      `npx @tanstack/intent@${intentPackagePin} list`,
+    )
     expect(generated.block).toContain('If a listed skill matches the task')
     expect(generated.block).toContain('before changing files')
     expect(generated.block).toContain('Monorepos:')
@@ -112,9 +123,11 @@ describe('install writer block builder', () => {
   it('builds package-manager-specific loading guidance', () => {
     const generated = buildIntentSkillGuidanceBlock('pnpm')
 
-    expect(generated.block).toContain('pnpm dlx @tanstack/intent@latest list')
     expect(generated.block).toContain(
-      'pnpm dlx @tanstack/intent@latest load <package>#<skill>',
+      `pnpm dlx @tanstack/intent@${intentPackagePin} list`,
+    )
+    expect(generated.block).toContain(
+      `pnpm dlx @tanstack/intent@${intentPackagePin} load <package>#<skill>`,
     )
   })
 
@@ -154,13 +167,13 @@ describe('install writer block builder', () => {
 # TanStack Intent - before editing files, run the matching guidance command.
 tanstackIntent:
   - id: "@tanstack/query#fetching"
-    run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#fetching"
+    run: "pnpm dlx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching"
     for: "Query data fetching patterns"
   - id: "@tanstack/query#mutations"
-    run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#mutations"
+    run: "pnpm dlx @tanstack/intent@${intentPackagePin} load @tanstack/query#mutations"
     for: "Mutation patterns"
   - id: "@tanstack/router#routing"
-    run: "pnpm dlx @tanstack/intent@latest load @tanstack/router#routing"
+    run: "pnpm dlx @tanstack/intent@${intentPackagePin} load @tanstack/router#routing"
     for: "Routing patterns"
 <!-- intent-skills:end -->
 `)
@@ -191,7 +204,7 @@ tanstackIntent:
     expect(generated.block).toContain('id: "@tanstack/query#global-fetching"')
     expect(generated.block).toContain('id: "@tanstack/query#pnpm-fetching"')
     expect(generated.block).toContain(
-      'run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#global-fetching"',
+      `run: "pnpm dlx @tanstack/intent@${intentPackagePin} load @tanstack/query#global-fetching"`,
     )
     expect(generated.block).not.toContain('/home/sarah')
     expect(generated.block).not.toContain('node_modules/.pnpm')
@@ -230,12 +243,12 @@ tanstackIntent:
     expect(generated.block).toContain('for: "Core skill"')
     expect(generated.block).toContain('id: "@tanstack/query#core"')
     expect(generated.block).toContain(
-      'run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#core"',
+      `run: "pnpm dlx @tanstack/intent@${intentPackagePin} load @tanstack/query#core"`,
     )
     expect(generated.block).toContain('for: "Sub-skill"')
     expect(generated.block).toContain('id: "@tanstack/query#core/fetching"')
     expect(generated.block).toContain(
-      'run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#core/fetching"',
+      `run: "pnpm dlx @tanstack/intent@${intentPackagePin} load @tanstack/query#core/fetching"`,
     )
     expect(generated.block).not.toContain('Reference material')
     expect(generated.block).not.toContain('Maintainer task')
@@ -466,6 +479,36 @@ describe('install writer verification', () => {
     ).toEqual({ errors: [], ok: true })
   })
 
+  it.each([
+    'intent load @tanstack/query#fetching',
+    'npx @tanstack/intent@latest load @tanstack/query#fetching',
+    'npx @tanstack/intent@0.4 load @tanstack/query#fetching',
+    'npx @tanstack/intent@0.4.0-next.1 load @tanstack/query#fetching',
+  ])(
+    'accepts a guidance command that extracts its skill use: %s',
+    (command) => {
+      const root = tempRoot()
+      const agentsPath = join(root, 'AGENTS.md')
+      const block = `<!-- intent-skills:start -->
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - id: "@tanstack/query#fetching"
+    run: "${command}"
+    for: "Query data fetching"
+<!-- intent-skills:end -->
+`
+      writeFileSync(agentsPath, block)
+
+      expect(
+        verifyIntentSkillsBlockFile({
+          expectedBlock: block,
+          expectedMappingCount: 1,
+          targetPath: agentsPath,
+        }),
+      ).toEqual({ errors: [], ok: true })
+    },
+  )
+
   it('accepts a written compact block', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
@@ -473,7 +516,7 @@ describe('install writer verification', () => {
 # TanStack Intent - before editing files, run the matching guidance command.
 tanstackIntent:
   - id: "@tanstack/query#fetching"
-    run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
+    run: "npx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching"
     for: "Query data fetching"
 <!-- intent-skills:end -->
 `
@@ -542,7 +585,7 @@ tanstackIntent:
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
     const block = `<!-- intent-skills:start -->
-# Skill mappings - load \`use\` with \`npx @tanstack/intent@latest load <use>\`.
+# Skill mappings - load \`use\` with \`npx @tanstack/intent@${intentPackagePin} load <use>\`.
 skills:
   - when: "Global query skill"
     load: "/home/sarah/.npm-global/lib/node_modules/@tanstack/query/skills/global/SKILL.md"
@@ -569,7 +612,7 @@ skills:
 # TanStack Intent - before editing files, run the matching guidance command.
 tanstackIntent:
   - id: "@tanstack/query#fetching"
-    run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
+    run: "npx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching"
 <!-- intent-skills:end -->
 `
     writeFileSync(agentsPath, block)
@@ -592,7 +635,7 @@ tanstackIntent:
     const block = `<!-- intent-skills:start -->
 # TanStack Intent - before editing files, run the matching guidance command.
 tanstackIntent:
-  - run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
+  - run: "npx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching"
     for: "Query data fetching"
 <!-- intent-skills:end -->
 `
@@ -617,7 +660,7 @@ tanstackIntent:
 # TanStack Intent - before editing files, run the matching guidance command.
 tanstackIntent:
   - id: "@tanstack/query"
-    run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
+    run: "npx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching"
     for: "Query data fetching"
 <!-- intent-skills:end -->
 `
@@ -642,7 +685,7 @@ tanstackIntent:
 # TanStack Intent - before editing files, run the matching guidance command.
 tanstackIntent:
   - id: "@tanstack/query#fetching"
-    run: "npx @tanstack/intent@latest load @tanstack/router#routing"
+    run: "npx @tanstack/intent@${intentPackagePin} load @tanstack/router#routing"
     for: "Query data fetching"
 <!-- intent-skills:end -->
 `
@@ -667,7 +710,7 @@ tanstackIntent:
 # TanStack Intent - before editing files, run the matching guidance command.
 tanstackIntent:
   - id: "@tanstack/query#fetching"
-    run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
+    run: "npx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching"
     for: "Edit /Users/sarah/project/src files"
 <!-- intent-skills:end -->
 `

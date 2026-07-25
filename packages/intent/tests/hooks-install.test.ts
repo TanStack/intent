@@ -7,15 +7,24 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { HOOK_AGENT_ADAPTERS } from '../src/hooks/adapters.js'
 import {
   formatHookInstallResult,
   runInstallHooks,
 } from '../src/hooks/install.js'
+import { packageVersionToPin } from '../src/shared/command-runner.js'
 
 const tempDirs: Array<string> = []
+const packageJson = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'),
+    'utf8',
+  ),
+) as { version: string }
+const intentPackagePin = packageVersionToPin(packageJson.version)
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
@@ -34,6 +43,14 @@ function readJson(filePath: string): Record<string, any> {
 }
 
 describe('hook installer', () => {
+  it('pins stable versions to major.minor', () => {
+    expect(packageVersionToPin('0.4.2')).toBe('0.4')
+  })
+
+  it('pins prerelease versions exactly', () => {
+    expect(packageVersionToPin('0.4.0-next.1')).toBe('0.4.0-next.1')
+  })
+
   it('declares supported scopes in the adapter registry', () => {
     expect(HOOK_AGENT_ADAPTERS.claude.supportedScopes.has('project')).toBe(true)
     expect(HOOK_AGENT_ADAPTERS.codex.supportedScopes.has('project')).toBe(true)
@@ -76,7 +93,7 @@ describe('hook installer', () => {
       'startup|resume|clear|compact',
     )
     expect(claudeConfig.hooks.SessionStart[0].hooks[0]).toMatchObject({
-      command: 'pnpm dlx @tanstack/intent@latest hooks run --agent claude',
+      command: `pnpm dlx @tanstack/intent@${intentPackagePin} hooks run --agent claude`,
       type: 'command',
     })
     expect(claudeConfig.hooks.PreToolUse).toEqual([])
@@ -86,7 +103,7 @@ describe('hook installer', () => {
       'startup|resume|clear|compact',
     )
     expect(codexConfig.hooks.SessionStart[0].hooks[0].command).toBe(
-      'pnpm dlx @tanstack/intent@latest hooks run --agent codex',
+      `pnpm dlx @tanstack/intent@${intentPackagePin} hooks run --agent codex`,
     )
     expect(codexConfig.hooks.PreToolUse).toEqual([])
     expect(
@@ -115,8 +132,9 @@ describe('hook installer', () => {
     const sessionCommand = config.hooks.SessionStart[0].command as string
 
     expect(sessionCommand).toBe(
-      'npx @tanstack/intent@latest hooks run --agent copilot',
+      `npx @tanstack/intent@${intentPackagePin} hooks run --agent copilot`,
     )
+    expect(sessionCommand).toContain('@tanstack/intent')
     expect(config.hooks.PreToolUse).toEqual([])
     expect(
       existsSync(
