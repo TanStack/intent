@@ -1999,3 +1999,77 @@ describe('package manager detection', () => {
     expect(() => scanForIntents(root)).toThrow('Deno without node_modules')
   })
 })
+
+describe('discovered sources (characterization)', () => {
+  function writeSkillPackage(dir: string, name: string, skill: string): void {
+    createDir(dir, 'skills', skill)
+    writeJson(join(dir, 'package.json'), {
+      name,
+      version: '1.0.0',
+      intent: { version: 1, repo: `example/${skill}`, docs: 'docs/' },
+    })
+    writeSkillMd(join(dir, 'skills', skill), {
+      name: skill,
+      description: `${skill} guidance`,
+    })
+  }
+
+  function discovered(): Array<string> {
+    return scanForIntents(root)
+      .packages.map((pkg) => `${pkg.kind}:${pkg.name}`)
+      .sort()
+  }
+
+  it('finds direct and transitive dependencies in a hoisted layout', () => {
+    writeFileSync(join(root, 'package-lock.json'), '{}')
+    writeJson(join(root, 'package.json'), {
+      name: 'consumer',
+      private: true,
+      dependencies: { '@scope/direct': '1.0.0' },
+    })
+
+    const direct = createDir(root, 'node_modules', '@scope', 'direct')
+    writeSkillPackage(direct, '@scope/direct', 'direct-skill')
+    writeJson(join(direct, 'package.json'), {
+      name: '@scope/direct',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'example/direct', docs: 'docs/' },
+      dependencies: { transitive: '1.0.0' },
+    })
+
+    writeSkillPackage(
+      createDir(root, 'node_modules', 'transitive'),
+      'transitive',
+      'transitive-skill',
+    )
+
+    expect(discovered()).toEqual(['npm:@scope/direct', 'npm:transitive'])
+  })
+
+  it('does not surface the workspace root as a skill source', () => {
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - packages/*\n',
+    )
+    writeSkillPackage(root, 'my-repo', 'root-skill')
+    createDir(root, 'node_modules')
+
+    expect(discovered()).toEqual([])
+  })
+
+  it('finds a workspace package reached through its node_modules link', () => {
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - packages/*\n',
+    )
+    writeJson(join(root, 'package.json'), { name: 'my-repo', private: true })
+
+    const ui = createDir(root, 'packages', 'ui')
+    writeSkillPackage(ui, '@my/ui', 'ui-skill')
+
+    createDir(root, 'node_modules', '@my')
+    symlinkSync(ui, join(root, 'node_modules', '@my', 'ui'), 'dir')
+
+    expect(discovered()).toEqual(['workspace:@my/ui'])
+  })
+})
