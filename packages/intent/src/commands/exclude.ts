@@ -1,7 +1,13 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fail } from '../shared/cli-error.js'
 import { compileExcludePatterns } from '../core/excludes.js'
+import { writeTextFileAtomic } from '../shared/atomic-write.js'
+import {
+  readIntentConsumerConfig,
+  updateIntentConsumerConfigText,
+} from './install/config.js'
+import type { IntentConsumerConfig } from './install/config.js'
 
 export interface ExcludeCommandOptions {
   json?: boolean
@@ -20,65 +26,34 @@ function getPackageJsonPath(cwd: string): string {
   return join(cwd, 'package.json')
 }
 
-function readPackageJson(cwd: string): Record<string, unknown> {
+function readPackageJsonText(cwd: string): string {
   const packageJsonPath = getPackageJsonPath(cwd)
   if (!existsSync(packageJsonPath)) {
     fail(`No package.json found in ${cwd}`)
   }
+  return readFileSync(packageJsonPath, 'utf8')
+}
 
+function readConfig(text: string): IntentConsumerConfig {
   try {
-    return JSON.parse(readFileSync(packageJsonPath, 'utf8')) as Record<
-      string,
-      unknown
-    >
+    return readIntentConsumerConfig(text)
   } catch (err) {
     fail(
-      `Failed to parse ${packageJsonPath}: ${err instanceof Error ? err.message : String(err)}`,
+      `Invalid package.json intent configuration: ${err instanceof Error ? err.message : String(err)}`,
     )
   }
 }
 
-function readConfiguredExcludes(pkg: Record<string, unknown>): Array<string> {
-  const intent = pkg.intent
-  if (intent === undefined) return []
-  if (!intent || typeof intent !== 'object') {
-    fail('Invalid package.json: intent must be an object when present.')
-  }
-
-  const raw = (intent as Record<string, unknown>).exclude
-  if (raw === undefined) return []
-  if (!Array.isArray(raw)) {
-    fail('Invalid package.json: intent.exclude must be an array of strings.')
-  }
-
-  const excludes: Array<string> = []
-  for (const entry of raw) {
-    if (typeof entry !== 'string') {
-      fail('Invalid package.json: intent.exclude must contain only strings.')
-    }
-    const trimmed = entry.trim()
-    if (trimmed.length === 0) continue
-    excludes.push(trimmed)
-  }
-  return excludes
-}
-
-function setConfiguredExcludes(
-  pkg: Record<string, unknown>,
+function writeExcludes(
+  cwd: string,
+  text: string,
+  config: IntentConsumerConfig,
   excludes: Array<string>,
 ): void {
-  const intent =
-    pkg.intent && typeof pkg.intent === 'object'
-      ? (pkg.intent as Record<string, unknown>)
-      : {}
-
-  intent.exclude = excludes
-  pkg.intent = intent
-}
-
-function writePackageJson(cwd: string, pkg: Record<string, unknown>): void {
-  const packageJsonPath = getPackageJsonPath(cwd)
-  writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8')
+  writeTextFileAtomic(
+    getPackageJsonPath(cwd),
+    updateIntentConsumerConfigText(text, { ...config, exclude: excludes }),
+  )
 }
 
 function normalizePattern(
@@ -133,8 +108,9 @@ export function runExcludeCommand(
 ): void {
   const action = normalizeAction(actionArg)
   const cwd = process.cwd()
-  const pkg = readPackageJson(cwd)
-  const currentExcludes = readConfiguredExcludes(pkg)
+  const text = readPackageJsonText(cwd)
+  const config = readConfig(text)
+  const currentExcludes = config.exclude
 
   if (action === 'list') {
     if (patternArg) {
@@ -158,8 +134,7 @@ export function runExcludeCommand(
     }
 
     const updated = [...currentExcludes, pattern]
-    setConfiguredExcludes(pkg, updated)
-    writePackageJson(cwd, pkg)
+    writeExcludes(cwd, text, config, updated)
     if (options.json) {
       printExcludes(updated, true)
       return
@@ -180,8 +155,7 @@ export function runExcludeCommand(
     return
   }
 
-  setConfiguredExcludes(pkg, updated)
-  writePackageJson(cwd, pkg)
+  writeExcludes(cwd, text, config, updated)
   if (options.json) {
     printExcludes(updated, true)
     return
