@@ -457,6 +457,45 @@ describe('consumer install', () => {
     expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
   })
 
+  it('excludes only new skills from a partially allowed package', async () => {
+    const root = createProject()
+    addSkillPackage(root, 'demo-pkg', ['alpha'])
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    const packageJsonPath = join(root, 'package.json')
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+    packageJson.intent.skills = ['@tanstack/query', 'demo-pkg#alpha']
+    writeJson(packageJsonPath, packageJson)
+    addSkillPackage(root, 'demo-pkg', ['alpha', 'beta'])
+
+    await runSyncCommand(
+      { cwd: root },
+      {
+        interactive: true,
+        prompts: {
+          complete: () => {},
+          reviewNewDependencies: () => Promise.resolve('exclude'),
+          selectSkills: () => Promise.resolve(null),
+        },
+      },
+    )
+
+    const config = readIntentConsumerConfig(
+      readFileSync(packageJsonPath, 'utf8'),
+    )
+    expect(config.exclude).toContain('demo-pkg#beta')
+    expect(config.exclude).not.toContain('demo-pkg')
+
+    await runSyncCommand({ cwd: root }, { interactive: false })
+
+    expect(
+      existsSync(join(root, '.agents', 'skills', 'npm-demo-pkg-alpha')),
+    ).toBe(true)
+  })
+
   it('leaves new dependencies pending when review is deferred', async () => {
     const root = createProject()
     await runConsumerInstall({

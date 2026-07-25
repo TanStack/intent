@@ -10,6 +10,7 @@ import {
 import { resolveProjectContext } from '../../core/project-context.js'
 import {
   applySourcePolicy,
+  compileSkillSourcePolicy,
   scanForConfiguredIntents,
 } from '../../core/source-policy.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
@@ -196,10 +197,20 @@ async function reviewNewDependencies({
   const packageJsonPath = join(root, 'package.json')
   const packageJson = readFileSync(packageJsonPath, 'utf8')
   if (decision === 'exclude') {
+    const sourcePolicy = compileSkillSourcePolicy(
+      parseSkillSources(config.skills),
+    )
     const updatedConfig = {
       ...config,
       exclude: [
-        ...new Set([...config.exclude, ...packages.map((pkg) => pkg.name)]),
+        ...new Set([
+          ...config.exclude,
+          ...packages.flatMap((pkg) =>
+            sourcePolicy.permits(pkg.name, pkg.kind)
+              ? pkg.skills.map((skill) => `${pkg.name}#${skill.name}`)
+              : [pkg.name],
+          ),
+        ]),
       ].sort(compareStrings),
     }
     writeTextFileAtomic(
