@@ -5,6 +5,7 @@ import { buildCurrentLockfileSources } from '../../core/lockfile/lockfile-state.
 import { writeIntentLockfile } from '../../core/lockfile/lockfile.js'
 import { applySourcePolicy } from '../../core/source-policy.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
+import { runInstallHooks } from '../../hooks/install.js'
 import { writeTextFileAtomic } from '../../shared/atomic-write.js'
 import { runSyncCommand } from '../sync/command.js'
 import { reconcileManagedLinks } from '../sync/links.js'
@@ -25,6 +26,7 @@ import type {
   IntentInstallPreferences,
 } from './config.js'
 import type { SkillSelection } from './plan.js'
+import type { HookAgent } from '../../hooks/types.js'
 import type { IntentPackage } from '../../shared/types.js'
 
 interface ConsumerInstallConfig extends IntentConsumerConfig {
@@ -38,6 +40,7 @@ export interface InstallerPrompter {
   selectMethod: () => Promise<InstallMethod | null>
   selectTargets: (method: InstallMethod) => Promise<Array<InstallTarget> | null>
   confirmSymlink: () => Promise<boolean | null>
+  confirmUserScopeHooks: () => Promise<boolean | null>
   selectSkills: (
     discovered: ReadonlyArray<IntentPackage>,
   ) => Promise<SkillSelection | null>
@@ -52,6 +55,20 @@ export interface RunConsumerInstallOptions {
   dryRun?: boolean
   prompts: InstallerPrompter
   root: string
+}
+
+function hookAgentForTarget(target: InstallTarget): HookAgent {
+  switch (target) {
+    case 'github':
+      return 'copilot'
+    case 'claude':
+    case 'codex':
+      return target
+    default:
+      throw new Error(
+        `Install method "hooks" is not supported for "${target}".`,
+      )
+  }
 }
 
 export async function runConsumerInstall({
@@ -72,11 +89,10 @@ export async function runConsumerInstall({
     if (!method) return
     const targets = await prompts.selectTargets(method)
     if (!targets || targets.length === 0) return
-    if (method !== 'symlink') {
-      throw new Error(`Install method "${method}" is not implemented yet.`)
+    if (method === 'symlink') {
+      const symlinkAccepted = await prompts.confirmSymlink()
+      if (!symlinkAccepted) return
     }
-    const symlinkAccepted = await prompts.confirmSymlink()
-    if (!symlinkAccepted) return
     if (discovered.every((pkg) => pkg.skills.length === 0)) {
       prompts.complete('No intent-enabled skills found.')
       return
@@ -101,9 +117,14 @@ export async function runConsumerInstall({
     if (confirmation === null) return
     if (confirmation === 'back') continue
 
-    const updatedPackageJson = wireIntentSyncPrepare(
-      updateIntentConsumerConfigText(packageJson, installation.config),
+    const updatedConsumerConfig = updateIntentConsumerConfigText(
+      packageJson,
+      installation.config,
     )
+    const updatedPackageJson =
+      method === 'symlink'
+        ? wireIntentSyncPrepare(updatedConsumerConfig)
+        : updatedConsumerConfig
     const policy = applySourcePolicy(
       { packages: [...discovered] },
       {
@@ -115,25 +136,27 @@ export async function runConsumerInstall({
       lockfileVersion: 1 as const,
       sources: buildCurrentLockfileSources(policy.packages),
     }
-    const linkPlan = buildSyncLinkPlan({
-      config: installation.config,
-      currentSources: lockfile.sources,
-      discovered,
-      lock: { status: 'found', lockfile },
-      packages: policy.packages,
-      root,
-    })
-    const preflight = reconcileManagedLinks({
-      dryRun: true,
-      expected: linkPlan.expected,
-      stateResult: readInstallStateForLinks(root),
-    })
-    if (preflight.conflicts.length > 0) {
-      throw new Error(
-        `Install target conflicts: ${preflight.conflicts
-          .map((path) => toProjectRelativePath(root, path))
-          .join(', ')}.`,
-      )
+    if (method === 'symlink') {
+      const linkPlan = buildSyncLinkPlan({
+        config: installation.config,
+        currentSources: lockfile.sources,
+        discovered,
+        lock: { status: 'found', lockfile },
+        packages: policy.packages,
+        root,
+      })
+      const preflight = reconcileManagedLinks({
+        dryRun: true,
+        expected: linkPlan.expected,
+        stateResult: readInstallStateForLinks(root),
+      })
+      if (preflight.conflicts.length > 0) {
+        throw new Error(
+          `Install target conflicts: ${preflight.conflicts
+            .map((path) => toProjectRelativePath(root, path))
+            .join(', ')}.`,
+        )
+      }
     }
 
     if (dryRun) {
@@ -154,11 +177,48 @@ export async function runConsumerInstall({
       return
     }
 
+    let userScopeHooksAccepted = false
+    if (method === 'hooks' && targets.includes('github')) {
+      const accepted = await prompts.confirmUserScopeHooks()
+      if (accepted === null) return
+      userScopeHooksAccepted = accepted
+    }
+
     writeTextFileAtomic(packageJsonPath, updatedPackageJson)
     writeIntentLockfile(join(root, 'intent.lock'), lockfile)
-    await runSyncCommand({ cwd: root }, { interactive: false })
+    if (method === 'symlink') {
+      await runSyncCommand({ cwd: root }, { interactive: false })
+      prompts.complete(
+        `Installed ${installation.skillCount} ${installation.skillCount === 1 ? 'skill' : 'skills'} using ${method}.`,
+      )
+      return
+    }
+
+    const hookAgents = targets.map(hookAgentForTarget)
+    const projectAgents = hookAgents.filter((agent) => agent !== 'copilot')
+    const installedAgents =
+      projectAgents.length > 0
+        ? runInstallHooks({
+            agents: projectAgents.join(','),
+            root,
+            scope: 'project',
+          })
+            .filter((result) => result.status !== 'skipped')
+            .map((result) => result.agent)
+        : []
+    if (userScopeHooksAccepted) {
+      installedAgents.push(
+        ...runInstallHooks({ agents: 'copilot', root, scope: 'user' })
+          .filter((result) => result.status !== 'skipped')
+          .map((result) => result.agent),
+      )
+    }
+    const skippedCopilot =
+      targets.includes('github') && !userScopeHooksAccepted
+        ? ' Copilot was skipped because home-directory access was declined.'
+        : ''
     prompts.complete(
-      `Installed ${installation.skillCount} ${installation.skillCount === 1 ? 'skill' : 'skills'} using ${method}.`,
+      `Installed ${installation.skillCount} ${installation.skillCount === 1 ? 'skill' : 'skills'} using hooks. Installed hook agents: ${installedAgents.length > 0 ? installedAgents.join(', ') : 'none'}.${skippedCopilot}`,
     )
     return
   }

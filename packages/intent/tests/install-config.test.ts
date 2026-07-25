@@ -30,23 +30,15 @@ describe('installer configuration', () => {
     expect(installTargetsForMethod('hooks').map((target) => target.id)).toEqual(
       ['github', 'codex', 'claude'],
     )
-    expect(installTargetsForMethod('map').map((target) => target.id)).toEqual([
-      'agents',
-      'github',
-      'vscode',
-      'cursor',
-      'codex',
-      'claude',
-    ])
   })
 
   it('rejects an install method unsupported by a selected target', () => {
     const preferences: IntentInstallPreferences = {
-      method: 'map',
+      method: 'hooks',
       targets: ['github'],
     }
     const method: InstallMethod = preferences.method
-    expect(method).toBe('map')
+    expect(method).toBe('hooks')
     expect(() =>
       readIntentConsumerConfig(
         '{ "intent": { "install": { "method": "hooks", "targets": ["vscode"] } } }',
@@ -57,7 +49,7 @@ describe('installer configuration', () => {
   it('rejects duplicate install targets', () => {
     expect(() =>
       readIntentConsumerConfig(
-        '{ "intent": { "install": { "method": "map", "targets": ["agents", "agents"] } } }',
+        '{ "intent": { "install": { "method": "symlink", "targets": ["agents", "agents"] } } }',
       ),
     ).toThrow('Duplicate')
   })
@@ -65,7 +57,7 @@ describe('installer configuration', () => {
   it('rejects unknown install fields', () => {
     expect(() =>
       readIntentConsumerConfig(
-        '{ "intent": { "install": { "method": "map", "targets": [], "extra": true } } }',
+        '{ "intent": { "install": { "method": "symlink", "targets": [], "extra": true } } }',
       ),
     ).toThrow('Unknown')
   })
@@ -73,7 +65,7 @@ describe('installer configuration', () => {
   it('rejects unknown targets, methods, and wrong target types', () => {
     expect(() =>
       readIntentConsumerConfig(
-        '{ "intent": { "install": { "method": "map", "targets": ["unknown"] } } }',
+        '{ "intent": { "install": { "method": "symlink", "targets": ["unknown"] } } }',
       ),
     ).toThrow('Unknown install target')
     expect(() =>
@@ -83,7 +75,7 @@ describe('installer configuration', () => {
     ).toThrow('Unknown install method')
     expect(() =>
       readIntentConsumerConfig(
-        '{ "intent": { "install": { "method": "map", "targets": "github" } } }',
+        '{ "intent": { "install": { "method": "symlink", "targets": "github" } } }',
       ),
     ).toThrow('array of strings')
   })
@@ -94,7 +86,7 @@ describe('installer configuration', () => {
     const updated = updateIntentConsumerConfigText(source, {
       skills: ['@tanstack/query'],
       exclude: ['@other/pkg'],
-      install: { method: 'map', targets: ['github'] },
+      install: { method: 'hooks', targets: ['github'] },
     })
 
     expect(updated.startsWith('\ufeff')).toBe(true)
@@ -105,7 +97,7 @@ describe('installer configuration', () => {
     expect(readIntentConsumerConfig(updated)).toEqual({
       skills: ['@tanstack/query'],
       exclude: ['@other/pkg'],
-      install: { method: 'map', targets: ['github'] },
+      install: { method: 'hooks', targets: ['github'] },
     })
   })
 

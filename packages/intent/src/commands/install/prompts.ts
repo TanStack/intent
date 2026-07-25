@@ -86,28 +86,15 @@ export function createClackInstallerPrompter(): InstallerPrompter {
       outro(message)
     },
     async selectMethod(): Promise<InstallMethod | null> {
-      for (;;) {
-        const method = cancelled(
-          await select<InstallMethod>({
-            message: 'How do you want to install skills?',
-            options: [
-              { value: 'symlink', label: 'Symlink skill folders' },
-              { value: 'hooks', label: 'Install lifecycle hooks' },
-              {
-                value: 'map',
-                label: 'Add a compact skill map to agent instructions',
-              },
-            ],
-          }),
-        )
-        if (!method || method === 'symlink') return method
-        note(
-          'This delivery adapter is not available in the current installer slice.',
-          method === 'hooks'
-            ? 'Lifecycle hooks are coming next'
-            : 'Compact skill maps are coming next',
-        )
-      }
+      return cancelled(
+        await select<InstallMethod>({
+          message: 'How do you want to install skills?',
+          options: [
+            { value: 'symlink', label: 'Symlink skill folders' },
+            { value: 'hooks', label: 'Install lifecycle hooks' },
+          ],
+        }),
+      )
     },
     async selectTargets(
       method: InstallMethod,
@@ -131,6 +118,20 @@ export function createClackInstallerPrompter(): InstallerPrompter {
       return cancelled(
         await confirm({
           message: 'Continue with symlinks?',
+          initialValue: false,
+          vertical: true,
+        }),
+      )
+    },
+    async confirmUserScopeHooks(): Promise<boolean | null> {
+      note(
+        'GitHub Copilot hooks are stored in your home directory and affect Copilot sessions in this and other repositories.',
+        'GitHub Copilot hooks apply across repositories',
+      )
+      return cancelled(
+        await confirm({
+          message:
+            'Allow Intent to write GitHub Copilot hooks in your home directory?',
           initialValue: false,
           vertical: true,
         }),

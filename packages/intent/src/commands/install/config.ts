@@ -2,7 +2,7 @@ import { applyEdits, modify, parse } from 'jsonc-parser'
 import { compileExcludePatterns } from '../../core/excludes.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
 
-export type InstallMethod = 'symlink' | 'hooks' | 'map'
+export type InstallMethod = 'symlink' | 'hooks'
 export type InstallTarget =
   | 'agents'
   | 'github'
@@ -39,7 +39,6 @@ const INSTALL_METHODS: Readonly<
 > = {
   symlink: new Set(INSTALL_TARGETS.map((target) => target.id)),
   hooks: new Set(['github', 'codex', 'claude']),
-  map: new Set(INSTALL_TARGETS.map((target) => target.id)),
 }
 
 export function installTargetsForMethod(

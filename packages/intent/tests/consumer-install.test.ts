@@ -13,13 +13,34 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runInteractiveInstall } from '../src/commands/install/command.js'
 import { runConsumerInstall } from '../src/commands/install/consumer.js'
-import { groupSkillOptions } from '../src/commands/install/prompts.js'
+import {
+  createClackInstallerPrompter,
+  groupSkillOptions,
+} from '../src/commands/install/prompts.js'
 import { readIntentConsumerConfig } from '../src/commands/install/config.js'
 import { runSyncCommand } from '../src/commands/sync/command.js'
 import { readInstallState } from '../src/commands/sync/state.js'
 import { readIntentLockfile } from '../src/core/lockfile/lockfile.js'
 import { scanForIntents } from '../src/discovery/scanner.js'
+import type * as ClackPrompts from '@clack/prompts'
 import type { InstallerPrompter } from '../src/commands/install/consumer.js'
+
+const clackPromptMocks = vi.hoisted(() => ({
+  intro: vi.fn(),
+  select:
+    vi.fn<
+      (options: { options: Array<{ value: string }> }) => Promise<unknown>
+    >(),
+}))
+
+vi.mock('@clack/prompts', async (importOriginal) => {
+  const actual = await importOriginal<typeof ClackPrompts>()
+  return {
+    ...actual,
+    intro: clackPromptMocks.intro,
+    select: clackPromptMocks.select,
+  }
+})
 
 const roots: Array<string> = []
 
@@ -84,6 +105,7 @@ function createPrompts(
     selectMethod: () => Promise.resolve('symlink'),
     selectTargets: () => Promise.resolve(['agents']),
     confirmSymlink: () => Promise.resolve(true),
+    confirmUserScopeHooks: () => Promise.resolve(true),
     selectSkills: () => Promise.resolve({ mode: 'all-found' }),
     confirmInstall: () => Promise.resolve('install'),
     ...overrides,
@@ -110,6 +132,16 @@ describe('consumer install', () => {
         },
       ],
     })
+  })
+
+  it('offers only implemented interactive install methods', async () => {
+    clackPromptMocks.select.mockResolvedValueOnce('symlink')
+
+    await createClackInstallerPrompter().selectMethod()
+
+    expect(clackPromptMocks.select).toHaveBeenCalledOnce()
+    const [{ options }] = clackPromptMocks.select.mock.calls[0]!
+    expect(options.map((option) => option.value)).toEqual(['symlink', 'hooks'])
   })
 
   it('selects the method before requesting applicable targets', async () => {
@@ -182,6 +214,123 @@ describe('consumer install', () => {
       },
     })
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('installs hooks with policy and lock state without links or prepare', async () => {
+    const root = createProject()
+    const prompts = createPrompts({
+      selectMethod: () => Promise.resolve('hooks'),
+      selectTargets: () => Promise.resolve(['claude', 'codex']),
+      confirmSymlink: () =>
+        Promise.reject(new Error('hooks must not request symlink consent')),
+    })
+
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts,
+      root,
+    })
+
+    expect(
+      readIntentConsumerConfig(
+        readFileSync(join(root, 'package.json'), 'utf8'),
+      ),
+    ).toEqual({
+      skills: ['@tanstack/query'],
+      exclude: [],
+      install: { method: 'hooks', targets: ['claude', 'codex'] },
+    })
+    expect(
+      JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts,
+    ).toBeUndefined()
+    expect(readIntentLockfile(join(root, 'intent.lock'))).toMatchObject({
+      status: 'found',
+      lockfile: {
+        sources: [
+          {
+            id: '@tanstack/query',
+            skills: [{ path: 'skills/fetching' }],
+          },
+        ],
+      },
+    })
+    expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(true)
+    expect(existsSync(join(root, '.codex', 'hooks.json'))).toBe(true)
+    expect(existsSync(join(root, '.agents'))).toBe(false)
+    expect(readInstallState(root)).toEqual({ status: 'missing' })
+  })
+
+  it('installs selected GitHub hooks at user scope after confirmation', async () => {
+    const root = createProject()
+    const copilotHome = join(root, 'copilot-home')
+    const previousCopilotHome = process.env.COPILOT_HOME
+    const confirmUserScopeHooks = vi.fn(() => Promise.resolve(true))
+    let output = ''
+    const prompts = createPrompts({
+      complete(message) {
+        output = message
+      },
+      selectMethod: () => Promise.resolve('hooks'),
+      selectTargets: () => Promise.resolve(['github']),
+      confirmUserScopeHooks,
+    })
+    process.env.COPILOT_HOME = copilotHome
+
+    try {
+      await runConsumerInstall({
+        discovered: scanForIntents(root, { scope: 'local' }).packages,
+        prompts,
+        root,
+      })
+    } finally {
+      if (previousCopilotHome === undefined) {
+        delete process.env.COPILOT_HOME
+      } else {
+        process.env.COPILOT_HOME = previousCopilotHome
+      }
+    }
+
+    expect(confirmUserScopeHooks).toHaveBeenCalledOnce()
+    expect(existsSync(join(copilotHome, 'hooks', 'hooks.json'))).toBe(true)
+    expect(output).toContain('Installed hook agents: copilot.')
+  })
+
+  it('skips declined Copilot hooks while installing project hooks', async () => {
+    const root = createProject()
+    const copilotHome = join(root, 'copilot-home')
+    const previousCopilotHome = process.env.COPILOT_HOME
+    let output = ''
+    const prompts = createPrompts({
+      complete(message) {
+        output = message
+      },
+      selectMethod: () => Promise.resolve('hooks'),
+      selectTargets: () => Promise.resolve(['github', 'claude', 'codex']),
+      confirmUserScopeHooks: () => Promise.resolve(false),
+    })
+    process.env.COPILOT_HOME = copilotHome
+
+    try {
+      await runConsumerInstall({
+        discovered: scanForIntents(root, { scope: 'local' }).packages,
+        prompts,
+        root,
+      })
+    } finally {
+      if (previousCopilotHome === undefined) {
+        delete process.env.COPILOT_HOME
+      } else {
+        process.env.COPILOT_HOME = previousCopilotHome
+      }
+    }
+
+    expect(existsSync(join(copilotHome, 'hooks', 'hooks.json'))).toBe(false)
+    expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(true)
+    expect(existsSync(join(root, '.codex', 'hooks.json'))).toBe(true)
+    expect(output).toContain('Installed hook agents: claude, codex.')
+    expect(output).toContain(
+      'Copilot was skipped because home-directory access was declined.',
+    )
   })
 
   it('writes nothing when installation is cancelled', async () => {
@@ -276,6 +425,40 @@ describe('consumer install', () => {
     )
     expect(existsSync(join(root, 'intent.lock'))).toBe(false)
     expect(existsSync(join(root, '.agents'))).toBe(false)
+  })
+
+  it('prints the hooks plan without writing or requesting home access', async () => {
+    const root = createProject()
+    const originalPackageJson = readFileSync(join(root, 'package.json'), 'utf8')
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    let output = ''
+    const prompts = createPrompts({
+      selectMethod: () => Promise.resolve('hooks'),
+      selectTargets: () => Promise.resolve(['github']),
+      confirmUserScopeHooks: () =>
+        Promise.reject(new Error('dry run must not request home access')),
+    })
+
+    try {
+      await runConsumerInstall({
+        discovered: scanForIntents(root, { scope: 'local' }).packages,
+        dryRun: true,
+        prompts,
+        root,
+      })
+      output = log.mock.calls.flat().join('\n')
+    } finally {
+      log.mockRestore()
+    }
+
+    expect(output).toContain(
+      'Would install 1 skill to GitHub Copilot using hooks.',
+    )
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      originalPackageJson,
+    )
+    expect(existsSync(join(root, 'intent.lock'))).toBe(false)
+    expect(existsSync(join(root, '.copilot'))).toBe(false)
   })
 
   it('requires Intent as a project development dependency', async () => {
