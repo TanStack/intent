@@ -66,6 +66,16 @@ interface SkillSourceMatcher {
     | undefined
 }
 
+export interface CompiledSkillSourcePolicy {
+  matchers: Array<SkillSourceMatcher>
+  permits: (packageName: string, packageKind?: 'npm' | 'workspace') => boolean
+  permitsSkill: (
+    packageName: string,
+    skillName: string,
+    packageKind?: 'npm' | 'workspace',
+  ) => boolean
+}
+
 function compileSkillSourceMatcher(
   source: ExplicitSkillSource,
 ): SkillSourceMatcher {
@@ -100,15 +110,9 @@ function compileSkillSourceMatcher(
   }
 }
 
-export function compileSkillSourcePolicy(config: SkillSourcesConfig): {
-  matchers: Array<SkillSourceMatcher>
-  permits: (packageName: string, packageKind?: 'npm' | 'workspace') => boolean
-  permitsSkill: (
-    packageName: string,
-    skillName: string,
-    packageKind?: 'npm' | 'workspace',
-  ) => boolean
-} {
+export function compileSkillSourcePolicy(
+  config: SkillSourcesConfig,
+): CompiledSkillSourcePolicy {
   switch (config.mode) {
     case 'absent':
     case 'allow-all':
@@ -133,27 +137,6 @@ export function compileSkillSourcePolicy(config: SkillSourcesConfig): {
       }
     }
   }
-}
-
-export function isSourcePermitted(
-  config: SkillSourcesConfig,
-  packageName: string,
-  packageKind?: 'npm' | 'workspace',
-): boolean {
-  return compileSkillSourcePolicy(config).permits(packageName, packageKind)
-}
-
-export function isSkillPermitted(
-  config: SkillSourcesConfig,
-  packageName: string,
-  skillName: string,
-  packageKind?: 'npm' | 'workspace',
-): boolean {
-  return compileSkillSourcePolicy(config).permitsSkill(
-    packageName,
-    skillName,
-    packageKind,
-  )
 }
 
 export function packageNotListedRefusal(
@@ -181,11 +164,11 @@ export function checkLoadAllowed(
   use: string,
   parsed: SkillUse,
   params: {
-    config: SkillSourcesConfig
+    sourcePolicy: CompiledSkillSourcePolicy
     excludeMatchers: Array<ExcludeMatcher>
   },
 ): LoadRefusal | null {
-  const { config, excludeMatchers } = params
+  const { sourcePolicy, excludeMatchers } = params
   const { packageName, skillName } = parsed
 
   if (isPackageExcluded(packageName, excludeMatchers)) {
@@ -195,15 +178,12 @@ export function checkLoadAllowed(
     }
   }
 
-  // Name-only pre-check: kind isn't known yet at this point in the load path.
-  // A late, kind-aware isSourcePermitted call happens once resolution reveals
-  // the actual kind (see intent-core.ts).
-  const policy = compileSkillSourcePolicy(config)
-  if (!policy.permits(packageName)) {
+  // Name-only pre-check: kind isn't known until resolution.
+  if (!sourcePolicy.permits(packageName)) {
     return packageNotListedRefusal(use, packageName)
   }
 
-  if (!policy.permitsSkill(packageName, skillName)) {
+  if (!sourcePolicy.permitsSkill(packageName, skillName)) {
     return skillNotListedRefusal(use, packageName, skillName)
   }
 

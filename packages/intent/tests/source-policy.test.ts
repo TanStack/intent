@@ -18,6 +18,7 @@ import {
   MIGRATION_NOTICE,
   applySourcePolicy,
   checkLoadAllowed,
+  compileSkillSourcePolicy,
   readSkillSourcesConfig,
 } from '../src/core/source-policy.js'
 import { parseSkillSources } from '../src/core/skill-sources.js'
@@ -341,7 +342,7 @@ describe('checkLoadAllowed — skill-level allowlist entries', () => {
         '@scope/a#x',
         { packageName: '@scope/a', skillName: 'x' },
         {
-          config: config(['@scope/a#x']),
+          sourcePolicy: compileSkillSourcePolicy(config(['@scope/a#x'])),
           excludeMatchers: [],
         },
       ),
@@ -350,7 +351,7 @@ describe('checkLoadAllowed — skill-level allowlist entries', () => {
 
   it('refuses a skill the entry does not name, without claiming the package is unlisted', () => {
     const refusal = checkLoadAllowed(use, parsed, {
-      config: config(['@scope/a#x']),
+      sourcePolicy: compileSkillSourcePolicy(config(['@scope/a#x'])),
       excludeMatchers: [],
     })
     expect(refusal?.code).toBe('skill-not-listed')
@@ -360,7 +361,7 @@ describe('checkLoadAllowed — skill-level allowlist entries', () => {
 
   it('still refuses a package that is not listed at all', () => {
     const refusal = checkLoadAllowed(use, parsed, {
-      config: config(['@other/b#x']),
+      sourcePolicy: compileSkillSourcePolicy(config(['@other/b#x'])),
       excludeMatchers: [],
     })
     expect(refusal?.code).toBe('package-not-listed')

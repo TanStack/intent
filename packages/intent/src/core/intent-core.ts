@@ -13,8 +13,7 @@ import { resolveSkillUseFastPath } from './load-resolution.js'
 import { resolveProjectContext } from './project-context.js'
 import {
   checkLoadAllowed,
-  isSkillPermitted,
-  isSourcePermitted,
+  compileSkillSourcePolicy,
   packageNotListedRefusal,
   readSkillSourcesConfig,
   scanForPolicedIntents,
@@ -326,8 +325,12 @@ function resolveIntentSkillInCwd(
   const excludePatterns = getEffectiveExcludePatterns(options, projectContext)
   const excludeMatchers = compileExcludePatterns(excludePatterns)
   const config = readSkillSourcesConfig(cwd, projectContext)
+  const sourcePolicy = compileSkillSourcePolicy(config)
 
-  const refusal = checkLoadAllowed(use, parsedUse, { config, excludeMatchers })
+  const refusal = checkLoadAllowed(use, parsedUse, {
+    sourcePolicy,
+    excludeMatchers,
+  })
   if (refusal) {
     throw new IntentCoreError(refusal.code, refusal.message)
   }
@@ -342,15 +345,12 @@ function resolveIntentSkillInCwd(
     fsCache,
   )
   if (fastPathResolved) {
-    if (
-      !isSourcePermitted(config, parsedUse.packageName, fastPathResolved.kind)
-    ) {
+    if (!sourcePolicy.permits(parsedUse.packageName, fastPathResolved.kind)) {
       const lateRefusal = packageNotListedRefusal(use, parsedUse.packageName)
       throw new IntentCoreError(lateRefusal.code, lateRefusal.message)
     }
     if (
-      !isSkillPermitted(
-        config,
+      !sourcePolicy.permitsSkill(
         parsedUse.packageName,
         parsedUse.skillName,
         fastPathResolved.kind,
@@ -398,8 +398,7 @@ function resolveIntentSkillInCwd(
   )
   if (
     survivingPackage &&
-    !isSkillPermitted(
-      config,
+    !sourcePolicy.permitsSkill(
       parsedUse.packageName,
       parsedUse.skillName,
       survivingPackage.kind,
