@@ -3,8 +3,9 @@ import {
   mkdirSync,
   readlinkSync,
   realpathSync,
-  rmSync,
+  rmdirSync,
   symlinkSync,
+  unlinkSync,
 } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import type { InstallStateEntry, ReadInstallStateResult } from './state.js'
@@ -92,6 +93,16 @@ function createLink(path: string, target: string): void {
   symlinkSync(relative(dirname(path), target), path, 'dir')
 }
 
+// `rmSync` with recursive+force silently leaves some directory symlinks in place.
+// On Windows a directory symlink or junction needs `rmdirSync`, not `unlinkSync`.
+function removeLink(path: string): void {
+  try {
+    unlinkSync(path)
+  } catch {
+    rmdirSync(path)
+  }
+}
+
 function compareStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
@@ -145,7 +156,7 @@ export function reconcileManagedLinks({
     }
     if (current === priorEntry.linkTarget) {
       if (!dryRun) {
-        rmSync(entry.path, { recursive: true, force: true })
+        removeLink(entry.path)
         createLink(entry.path, target)
       }
       result.repaired.push(entry.path)
@@ -167,7 +178,7 @@ export function reconcileManagedLinks({
         isLink(priorEntry.path) &&
         resolveLinkTarget(priorEntry.path) === priorEntry.linkTarget
       ) {
-        if (!dryRun) rmSync(priorEntry.path, { recursive: true, force: true })
+        if (!dryRun) removeLink(priorEntry.path)
         result.removed.push(priorEntry.path)
         continue
       }

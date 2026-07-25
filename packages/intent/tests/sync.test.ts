@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -144,7 +145,7 @@ describe('managed sync links', () => {
       },
     })
     expect(second.unchanged).toEqual([link.path])
-    rmSync(link.path, { recursive: true, force: true })
+    unlinkSync(link.path)
     const repaired = reconcileManagedLinks({
       dryRun: false,
       expected: [link],
