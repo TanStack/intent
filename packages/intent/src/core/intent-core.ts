@@ -13,10 +13,12 @@ import { resolveSkillUseFastPath } from './load-resolution.js'
 import { resolveProjectContext } from './project-context.js'
 import {
   checkLoadAllowed,
+  isSkillPermitted,
   isSourcePermitted,
   packageNotListedRefusal,
   readSkillSourcesConfig,
   scanForPolicedIntents,
+  skillNotListedRefusal,
 } from './source-policy.js'
 import type { ResolveSkillResult } from '../skills/resolver.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
@@ -346,6 +348,21 @@ function resolveIntentSkillInCwd(
       const lateRefusal = packageNotListedRefusal(use, parsedUse.packageName)
       throw new IntentCoreError(lateRefusal.code, lateRefusal.message)
     }
+    if (
+      !isSkillPermitted(
+        config,
+        parsedUse.packageName,
+        parsedUse.skillName,
+        fastPathResolved.kind,
+      )
+    ) {
+      const lateRefusal = skillNotListedRefusal(
+        use,
+        parsedUse.packageName,
+        parsedUse.skillName,
+      )
+      throw new IntentCoreError(lateRefusal.code, lateRefusal.message)
+    }
     return toResolvedIntentSkill(
       cwd,
       use,
@@ -374,6 +391,25 @@ function resolveIntentSkillInCwd(
   })
   if (droppedNames.includes(parsedUse.packageName)) {
     const lateRefusal = packageNotListedRefusal(use, parsedUse.packageName)
+    throw new IntentCoreError(lateRefusal.code, lateRefusal.message)
+  }
+  const survivingPackage = scanResult.packages.find(
+    (pkg) => pkg.name === parsedUse.packageName,
+  )
+  if (
+    survivingPackage &&
+    !isSkillPermitted(
+      config,
+      parsedUse.packageName,
+      parsedUse.skillName,
+      survivingPackage.kind,
+    )
+  ) {
+    const lateRefusal = skillNotListedRefusal(
+      use,
+      parsedUse.packageName,
+      parsedUse.skillName,
+    )
     throw new IntentCoreError(lateRefusal.code, lateRefusal.message)
   }
   let resolved: ReturnType<typeof resolveSkillUse>

@@ -4,7 +4,7 @@ import {
   isSkillExcluded,
 } from '../../core/excludes.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
-import { isSourcePermitted } from '../../core/source-policy.js'
+import { compileSkillSourcePolicy } from '../../core/source-policy.js'
 import type {
   IntentLockfileSource,
   ReadIntentLockfileResult,
@@ -248,6 +248,7 @@ export function buildInstallDeltaInventory(
 ): InstallDeltaInventory {
   assertUniqueDiscovery(discovered)
   const sources = parseSkillSources(config.skills)
+  const sourcePolicy = compileSkillSourcePolicy(sources)
   const excludes = compileExcludePatterns(config.exclude)
   const currentByKey = new Map(
     currentSources.map((source) => [sourceKey(source), source]),
@@ -263,7 +264,6 @@ export function buildInstallDeltaInventory(
     seen.add(key)
     const current = currentByKey.get(key)
     const locked = lockedByKey.get(key)
-    const sourcePermitted = isSourcePermitted(sources, pkg.name, pkg.kind)
     return {
       name: pkg.name,
       kind: pkg.kind,
@@ -273,7 +273,7 @@ export function buildInstallDeltaInventory(
           isSkillExcluded(pkg.name, skill.name, excludes)
         const policy: InventoryPolicyStatus = excluded
           ? 'excluded'
-          : sourcePermitted
+          : sourcePolicy.permitsSkill(pkg.name, skill.name, pkg.kind)
             ? 'enabled'
             : 'pending'
         if (policy !== 'enabled')

@@ -20,6 +20,7 @@ export type IntentAudience = 'agent' | 'human'
 export interface IntentHiddenSourceSummary {
   name: string
   skillCount: number
+  hiddenSkills?: Array<string>
 }
 
 export interface IntentSkillSummary {
@@ -121,6 +122,7 @@ export type IntentCoreErrorCode =
   | 'package-excluded'
   | 'package-not-listed'
   | 'skill-excluded'
+  | 'skill-not-listed'
   | 'skill-not-found'
   | 'skill-not-accepted'
   | 'skill-content-changed'

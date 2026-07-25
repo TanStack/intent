@@ -255,12 +255,133 @@ describe('parseSkillSources — wildcard composition', () => {
   })
 })
 
-describe('parseSkillSources — id validation', () => {
-  it('rejects skill-level granularity (#) in an npm entry', () => {
-    const error = expectParseError(['@scope/pkg#skill'])
-    expect(error.issues[0]?.message).toContain('skill-level granularity')
+describe('parseSkillSources — skill-level entries', () => {
+  it('parses a skill selector on an npm source', () => {
+    expect(parseSkillSources(['@scope/pkg#fetching'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        {
+          raw: '@scope/pkg#fetching',
+          id: '@scope/pkg',
+          kind: 'npm',
+          skill: 'fetching',
+        },
+      ],
+    })
   })
 
+  it('parses a skill selector on a workspace source', () => {
+    expect(parseSkillSources(['workspace:@scope/pkg#core'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        {
+          raw: 'workspace:@scope/pkg#core',
+          id: '@scope/pkg',
+          kind: 'workspace',
+          skill: 'core',
+        },
+      ],
+    })
+  })
+
+  it('parses a skill selector alongside a package glob', () => {
+    expect(parseSkillSources(['@scope/*#core'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        {
+          raw: '@scope/*#core',
+          pattern: '@scope/*',
+          kind: 'npm',
+          skill: 'core',
+        },
+      ],
+    })
+  })
+
+  it('parses a glob in a skill selector', () => {
+    expect(parseSkillSources(['@scope/pkg#fetch-*'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        {
+          raw: '@scope/pkg#fetch-*',
+          id: '@scope/pkg',
+          kind: 'npm',
+          skill: 'fetch-*',
+        },
+      ],
+    })
+  })
+
+  it('collapses an all-skills selector to a package-level entry', () => {
+    expect(parseSkillSources(['@scope/pkg#*', 'workspace:other#**'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        { raw: '@scope/pkg#*', id: '@scope/pkg', kind: 'npm' },
+        { raw: 'workspace:other#**', id: 'other', kind: 'workspace' },
+      ],
+    })
+  })
+
+  it('keeps two skill entries for the same package distinct', () => {
+    expect(parseSkillSources(['pkg#a', 'pkg#b'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        { raw: 'pkg#a', id: 'pkg', kind: 'npm', skill: 'a' },
+        { raw: 'pkg#b', id: 'pkg', kind: 'npm', skill: 'b' },
+      ],
+    })
+  })
+
+  it('dedups the same package and skill selector', () => {
+    expect(parseSkillSources(['pkg#a', '  pkg#a  '])).toEqual({
+      mode: 'explicit',
+      sources: [{ raw: 'pkg#a', id: 'pkg', kind: 'npm', skill: 'a' }],
+    })
+  })
+
+  it('rejects a skill entry whose package is already allowed in full', () => {
+    const error = expectParseError(['@scope/*', '@scope/a#x'])
+    expect(error.issues[0]?.raw).toBe('@scope/a#x')
+    expect(error.issues[0]?.message).toContain('already allows every skill')
+  })
+
+  it('rejects a skill entry beside an exact package entry', () => {
+    const error = expectParseError(['pkg', 'pkg#a'])
+    expect(error.issues[0]?.message).toContain('already allows every skill')
+  })
+
+  it('keeps a skill entry beside a package entry of a different kind', () => {
+    expect(parseSkillSources(['workspace:pkg', 'pkg#a'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        { raw: 'workspace:pkg', id: 'pkg', kind: 'workspace' },
+        { raw: 'pkg#a', id: 'pkg', kind: 'npm', skill: 'a' },
+      ],
+    })
+  })
+
+  it('rejects a missing skill name after "#"', () => {
+    const error = expectParseError(['@scope/pkg#'])
+    expect(error.issues[0]?.message).toContain('missing a skill name')
+  })
+
+  it('rejects a missing package name before "#"', () => {
+    const error = expectParseError(['#skill'])
+    expect(error.issues[0]?.message).toContain('missing a package name')
+  })
+
+  it('rejects more than one "#"', () => {
+    const error = expectParseError(['pkg#a#b'])
+    expect(error.issues[0]?.message).toContain('more than one "#"')
+  })
+
+  it('rejects whitespace inside a skill name', () => {
+    const error = expectParseError(['pkg#a b'])
+    expect(error.issues[0]?.message).toContain('cannot contain whitespace')
+  })
+})
+
+describe('parseSkillSources — id validation', () => {
   it('rejects internal whitespace in a package name', () => {
     const error = expectParseError(['a b'])
     expect(error.issues[0]?.message).toContain('cannot contain whitespace')

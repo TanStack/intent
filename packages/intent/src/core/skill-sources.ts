@@ -1,6 +1,8 @@
 // Static-discovery invariant: this module only inspects strings. It never
 // resolves, requires, or executes any discovered package.
 
+import { compileWildcardPattern } from './excludes.js'
+
 /**
  * Exact entries keep the `kind` + `id` identity M2's lockfile reuses. Patterns
  * select multiple discovered identities and remain distinct from exact entries.
@@ -8,7 +10,7 @@
  * parse time) but is defined here so M2 builds on this shape.
  */
 type SkillSource =
-  | ({ raw: string; kind: 'npm' | 'workspace' } & (
+  | ({ raw: string; kind: 'npm' | 'workspace'; skill?: string } & (
       | { id: string }
       | { pattern: string }
     ))
@@ -119,10 +121,23 @@ export function parseSkillSources(value: unknown): SkillSourcesConfig {
     }
 
     const selector = 'pattern' in parsed ? parsed.pattern : parsed.id
-    const identity = `${parsed.kind}\u0000${selector}`
+    const skill = 'skill' in parsed ? parsed.skill : undefined
+    const identity = `${parsed.kind}\u0000${selector}\u0000${skill ?? ''}`
     if (seenIdentity.has(identity)) continue
     seenIdentity.add(identity)
     sources.push(parsed)
+  }
+
+  if (!allowAll) {
+    for (const source of sources) {
+      const subsuming = findPackageLevelEntryCovering(source, sources)
+      if (subsuming) {
+        issues.push({
+          raw: source.raw,
+          message: `Entry "${source.raw.trim()}" is ambiguous: "${subsuming.raw.trim()}" already allows every skill in that package. Keep one.`,
+        })
+      }
+    }
   }
 
   if (issues.length > 0) {
@@ -136,6 +151,27 @@ export function parseSkillSources(value: unknown): SkillSourcesConfig {
   return { mode: 'explicit', sources }
 }
 
+function findPackageLevelEntryCovering(
+  source: SkillSource,
+  sources: Array<SkillSource>,
+): SkillSource | undefined {
+  if (
+    source.kind === 'git' ||
+    !('id' in source) ||
+    source.skill === undefined
+  ) {
+    return undefined
+  }
+  const { id, kind } = source
+  return sources.find((other) => {
+    if (other === source || other.kind === 'git') return false
+    if (other.kind !== kind || other.skill !== undefined) return false
+    return 'pattern' in other
+      ? compileWildcardPattern(other.pattern)(id)
+      : other.id === id
+  })
+}
+
 function parseEntry(
   raw: string,
   trimmed: string,
@@ -144,10 +180,12 @@ function parseEntry(
 
   // npm names cannot contain ':', so a colon-free entry is unambiguously npm.
   if (colon === -1) {
-    const invalid = validateId(trimmed)
+    const split = splitSkillSelector(raw, trimmed, trimmed)
+    if ('message' in split) return split
+    const invalid = validateId(split.packageSegment)
     if (invalid)
       return { raw, message: `Invalid npm source "${trimmed}": ${invalid}` }
-    return packageSource(raw, trimmed, 'npm')
+    return packageSource(raw, split.packageSegment, 'npm', split.skill)
   }
 
   const prefix = trimmed.slice(0, colon)
@@ -161,14 +199,16 @@ function parseEntry(
           message: `Workspace source "${trimmed}" is missing a package name.`,
         }
       }
-      const invalid = validateId(rest)
+      const split = splitSkillSelector(raw, trimmed, rest)
+      if ('message' in split) return split
+      const invalid = validateId(split.packageSegment)
       if (invalid) {
         return {
           raw,
           message: `Invalid workspace source "${trimmed}": ${invalid}`,
         }
       }
-      return packageSource(raw, rest, 'workspace')
+      return packageSource(raw, split.packageSegment, 'workspace', split.skill)
     }
     case 'git':
       return {
@@ -183,18 +223,58 @@ function parseEntry(
   }
 }
 
+function splitSkillSelector(
+  raw: string,
+  trimmed: string,
+  selector: string,
+): { packageSegment: string; skill: string | null } | SkillSourceIssue {
+  const hash = selector.indexOf('#')
+  if (hash === -1) return { packageSegment: selector, skill: null }
+
+  const packageSegment = selector.slice(0, hash)
+  const skillSegment = selector.slice(hash + 1)
+
+  if (skillSegment.includes('#')) {
+    return { raw, message: `Entry "${trimmed}" has more than one "#".` }
+  }
+  if (packageSegment === '') {
+    return {
+      raw,
+      message: `Entry "${trimmed}" is missing a package name before "#".`,
+    }
+  }
+  if (skillSegment === '') {
+    return {
+      raw,
+      message: `Entry "${trimmed}" is missing a skill name after "#".`,
+    }
+  }
+  if (/\s/.test(skillSegment)) {
+    return {
+      raw,
+      message: `Invalid skill selector in "${trimmed}": skill names cannot contain whitespace.`,
+    }
+  }
+
+  return {
+    packageSegment,
+    skill: skillSegment.replace(/\*+/g, '*') === '*' ? null : skillSegment,
+  }
+}
+
 function packageSource(
   raw: string,
   id: string,
   kind: 'npm' | 'workspace',
+  skill: string | null,
 ): SkillSource {
-  return id.includes('*') ? { raw, pattern: id, kind } : { raw, id, kind }
+  const source = id.includes('*')
+    ? { raw, pattern: id, kind }
+    : { raw, id, kind }
+  return skill === null ? source : { ...source, skill }
 }
 
 function validateId(id: string): string | null {
-  if (id.includes('#')) {
-    return 'skill-level granularity (#) is not supported in intent.skills (it is package-level); use intent.exclude for skill-level control.'
-  }
   if (/\s/.test(id)) {
     return 'package names cannot contain whitespace.'
   }

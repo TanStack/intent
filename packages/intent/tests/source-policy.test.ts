@@ -17,6 +17,7 @@ import {
   EMPTY_NOTE,
   MIGRATION_NOTICE,
   applySourcePolicy,
+  checkLoadAllowed,
   readSkillSourcesConfig,
 } from '../src/core/source-policy.js'
 import { parseSkillSources } from '../src/core/skill-sources.js'
@@ -233,6 +234,136 @@ describe('applySourcePolicy — allowlist matrix', () => {
       },
     )
     expect(input.skills.map((s) => s.name)).toEqual(['keep', 'drop'])
+  })
+})
+
+function skillNames(packages: Array<IntentPackage>): Array<Array<string>> {
+  return packages.map((p) => p.skills.map((s) => s.name))
+}
+
+describe('applySourcePolicy — skill-level allowlist entries', () => {
+  it('surfaces only the named skill from a listed package', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/a', ['x', 'y'])] },
+      { config: config(['@scope/a#x']), excludeMatchers: [] },
+    )
+    expect(names(result.packages)).toEqual(['@scope/a'])
+    expect(skillNames(result.packages)).toEqual([['x']])
+  })
+
+  it('reports skills a listed package ships that no entry allows', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/a', ['x', 'y', 'z'])] },
+      { config: config(['@scope/a#x']), excludeMatchers: [] },
+    )
+
+    expect(result.hiddenSources).toEqual([
+      { name: '@scope/a', skillCount: 2, hiddenSkills: ['y', 'z'] },
+    ])
+    expect(result.notices).toEqual([
+      '2 skills from listed packages are not listed in intent.skills: @scope/a#y, @scope/a#z. Add to opt in.',
+    ])
+  })
+
+  it('does not report excluded skills as hidden', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/a', ['x', 'y'])] },
+      {
+        config: config(['@scope/a']),
+        excludeMatchers: compileExcludePatterns(['@scope/a#y']),
+      },
+    )
+
+    expect(result.hiddenSources).toEqual([])
+    expect(result.notices).toEqual([])
+  })
+
+  it('matches a glob in the skill selector', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/a', ['fetch-one', 'fetch-two', 'other'])] },
+      { config: config(['@scope/a#fetch-*']), excludeMatchers: [] },
+    )
+    expect(skillNames(result.packages)).toEqual([['fetch-one', 'fetch-two']])
+  })
+
+  it('keeps a skill entry kind-specific', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [
+          pkg('@scope/a', ['x'], 'workspace'),
+          pkg('@scope/a', ['x'], 'npm'),
+        ],
+      },
+      { config: config(['workspace:@scope/a#x']), excludeMatchers: [] },
+    )
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]?.kind).toBe('workspace')
+  })
+
+  it('matches a prefixed skill by its short alias', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/ui', ['ui/theme', 'ui/layout'])] },
+      { config: config(['@scope/ui#theme']), excludeMatchers: [] },
+    )
+    expect(skillNames(result.packages)).toEqual([['ui/theme']])
+  })
+
+  it('reports a skill entry that matched no discovered skill', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/a', ['x'])] },
+      { config: config(['@scope/a#nope']), excludeMatchers: [] },
+    )
+    expect(result.notices).toEqual([
+      '1 skill from listed packages is not listed in intent.skills: @scope/a#x. Add to opt in.',
+      '"@scope/a#nope" is declared in intent.skills but was not discovered.',
+    ])
+  })
+
+  it('still lets an exclude hide a skill that a skill entry allows', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/a', ['x', 'y'])] },
+      {
+        config: config(['@scope/a#x']),
+        excludeMatchers: compileExcludePatterns(['@scope/a#x']),
+      },
+    )
+    expect(skillNames(result.packages)).toEqual([[]])
+  })
+})
+
+describe('checkLoadAllowed — skill-level allowlist entries', () => {
+  const use = '@scope/a#y'
+  const parsed = { packageName: '@scope/a', skillName: 'y' }
+
+  it('allows a skill named by a skill-level entry', () => {
+    expect(
+      checkLoadAllowed(
+        '@scope/a#x',
+        { packageName: '@scope/a', skillName: 'x' },
+        {
+          config: config(['@scope/a#x']),
+          excludeMatchers: [],
+        },
+      ),
+    ).toBeNull()
+  })
+
+  it('refuses a skill the entry does not name, without claiming the package is unlisted', () => {
+    const refusal = checkLoadAllowed(use, parsed, {
+      config: config(['@scope/a#x']),
+      excludeMatchers: [],
+    })
+    expect(refusal?.code).toBe('skill-not-listed')
+    expect(refusal?.message).toContain('"@scope/a#y"')
+    expect(refusal?.message).not.toContain('package "@scope/a" is not listed')
+  })
+
+  it('still refuses a package that is not listed at all', () => {
+    const refusal = checkLoadAllowed(use, parsed, {
+      config: config(['@other/b#x']),
+      excludeMatchers: [],
+    })
+    expect(refusal?.code).toBe('package-not-listed')
   })
 })
 

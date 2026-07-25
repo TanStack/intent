@@ -8,6 +8,7 @@ import {
   getEffectiveExcludePatterns,
   isPackageExcluded,
   isSkillExcluded,
+  skillNameVariants,
   warningMentionsPackage,
 } from './excludes.js'
 import { readPackageJson } from './package-json.js'
@@ -42,6 +43,7 @@ type LoadRefusalCode =
   | 'package-excluded'
   | 'package-not-listed'
   | 'skill-excluded'
+  | 'skill-not-listed'
 
 export interface LoadRefusal {
   code: LoadRefusalCode
@@ -59,13 +61,20 @@ interface SkillSourceMatcher {
     packageName: string,
     packageKind?: 'npm' | 'workspace',
   ) => boolean
+  matchesSkill:
+    | ((packageName: string, skillName: string) => boolean)
+    | undefined
 }
 
 function compileSkillSourceMatcher(
   source: ExplicitSkillSource,
 ): SkillSourceMatcher {
   if (source.kind === 'git') {
-    return { source, matchesPackage: () => false }
+    return {
+      source,
+      matchesPackage: () => false,
+      matchesSkill: undefined,
+    }
   }
 
   const matchesName =
@@ -73,24 +82,39 @@ function compileSkillSourceMatcher(
       ? compileWildcardPattern(source.pattern)
       : (packageName: string) => source.id === packageName
 
+  const matchesSkillName =
+    source.skill === undefined
+      ? undefined
+      : compileWildcardPattern(source.skill)
+
   return {
     source,
     matchesPackage: (packageName, packageKind) =>
       (packageKind === undefined || source.kind === packageKind) &&
       matchesName(packageName),
+    matchesSkill:
+      matchesSkillName === undefined
+        ? undefined
+        : (packageName, skillName) =>
+            skillNameVariants(packageName, skillName).some(matchesSkillName),
   }
 }
 
-function compileSkillSourcePolicy(config: SkillSourcesConfig): {
+export function compileSkillSourcePolicy(config: SkillSourcesConfig): {
   matchers: Array<SkillSourceMatcher>
   permits: (packageName: string, packageKind?: 'npm' | 'workspace') => boolean
+  permitsSkill: (
+    packageName: string,
+    skillName: string,
+    packageKind?: 'npm' | 'workspace',
+  ) => boolean
 } {
   switch (config.mode) {
     case 'absent':
     case 'allow-all':
-      return { matchers: [], permits: () => true }
+      return { matchers: [], permits: () => true, permitsSkill: () => true }
     case 'empty':
-      return { matchers: [], permits: () => false }
+      return { matchers: [], permits: () => false, permitsSkill: () => false }
     case 'explicit': {
       const matchers = config.sources.map(compileSkillSourceMatcher)
       return {
@@ -98,6 +122,13 @@ function compileSkillSourcePolicy(config: SkillSourcesConfig): {
         permits: (packageName, packageKind) =>
           matchers.some((matcher) =>
             matcher.matchesPackage(packageName, packageKind),
+          ),
+        permitsSkill: (packageName, skillName, packageKind) =>
+          matchers.some(
+            (matcher) =>
+              matcher.matchesPackage(packageName, packageKind) &&
+              (matcher.matchesSkill === undefined ||
+                matcher.matchesSkill(packageName, skillName)),
           ),
       }
     }
@@ -112,6 +143,19 @@ export function isSourcePermitted(
   return compileSkillSourcePolicy(config).permits(packageName, packageKind)
 }
 
+export function isSkillPermitted(
+  config: SkillSourcesConfig,
+  packageName: string,
+  skillName: string,
+  packageKind?: 'npm' | 'workspace',
+): boolean {
+  return compileSkillSourcePolicy(config).permitsSkill(
+    packageName,
+    skillName,
+    packageKind,
+  )
+}
+
 export function packageNotListedRefusal(
   use: string,
   packageName: string,
@@ -119,6 +163,17 @@ export function packageNotListedRefusal(
   return {
     code: 'package-not-listed',
     message: `Cannot load skill use "${use}": package "${packageName}" is not listed in intent.skills.`,
+  }
+}
+
+export function skillNotListedRefusal(
+  use: string,
+  packageName: string,
+  skillName: string,
+): LoadRefusal {
+  return {
+    code: 'skill-not-listed',
+    message: `Cannot load skill use "${use}": skill "${packageName}#${skillName}" is not listed in intent.skills.`,
   }
 }
 
@@ -143,8 +198,13 @@ export function checkLoadAllowed(
   // Name-only pre-check: kind isn't known yet at this point in the load path.
   // A late, kind-aware isSourcePermitted call happens once resolution reveals
   // the actual kind (see intent-core.ts).
-  if (!isSourcePermitted(config, packageName)) {
+  const policy = compileSkillSourcePolicy(config)
+  if (!policy.permits(packageName)) {
     return packageNotListedRefusal(use, packageName)
+  }
+
+  if (!policy.permitsSkill(packageName, skillName)) {
+    return skillNotListedRefusal(use, packageName, skillName)
   }
 
   if (isSkillExcluded(packageName, skillName, excludeMatchers)) {
@@ -175,6 +235,23 @@ function formatUnlistedNotice(
 
   const noun = sourceCount === 1 ? 'package ships' : 'packages ship'
   return `${sourceCount} discovered ${noun} skills but ${sourceCount === 1 ? 'is' : 'are'} not listed in intent.skills: ${sorted.map((source) => source.name).join(', ')}. Add to opt in.`
+}
+
+function formatUnlistedSkillNotice(
+  hiddenSources: Array<IntentHiddenSourceSummary>,
+  audience: IntentAudience,
+): string {
+  const uses = [...hiddenSources]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap((source) =>
+      (source.hiddenSkills ?? []).map((skill) => `${source.name}#${skill}`),
+    )
+
+  if (audience === 'agent') {
+    return `${uses.length} ${pluralize(uses.length, 'skill', 'skills')} from listed packages ${pluralize(uses.length, 'is', 'are')} hidden because ${pluralize(uses.length, 'it is', 'they are')} not listed in intent.skills. Ask the user to run \`intent list --show-hidden\` outside the agent session to review candidates.`
+  }
+
+  return `${uses.length} ${pluralize(uses.length, 'skill', 'skills')} from listed packages ${pluralize(uses.length, 'is', 'are')} not listed in intent.skills: ${uses.join(', ')}. Add to opt in.`
 }
 
 export interface SourcePolicyResult {
@@ -236,22 +313,49 @@ export function applySourcePolicy(
       continue
     }
 
-    const skills = pkg.skills.filter(
-      (skill) => !isSkillExcluded(pkg.name, skill.name, excludeMatchers),
-    )
+    const skills: Array<IntentPackage['skills'][number]> = []
+    const hiddenSkills: Array<string> = []
+    for (const skill of pkg.skills) {
+      if (isSkillExcluded(pkg.name, skill.name, excludeMatchers)) continue
+      if (!sourcePolicy.permitsSkill(pkg.name, skill.name, pkg.kind)) {
+        hiddenSkills.push(skill.name)
+        continue
+      }
+      skills.push(skill)
+    }
+    if (config.mode === 'explicit' && hiddenSkills.length > 0) {
+      hiddenSources.push({
+        name: pkg.name,
+        skillCount: hiddenSkills.length,
+        hiddenSkills,
+      })
+    }
     packages.push(
       skills.length === pkg.skills.length ? pkg : { ...pkg, skills },
     )
   }
 
-  if (hiddenSources.length > 0) {
-    emit(formatUnlistedNotice(hiddenSources, audience))
+  const unlistedSources = hiddenSources.filter(
+    (source) => source.hiddenSkills === undefined,
+  )
+  const partiallyHidden = hiddenSources.filter(
+    (source) => source.hiddenSkills !== undefined,
+  )
+  if (unlistedSources.length > 0) {
+    emit(formatUnlistedNotice(unlistedSources, audience))
+  }
+  if (partiallyHidden.length > 0) {
+    emit(formatUnlistedSkillNotice(partiallyHidden, audience))
   }
 
   if (config.mode === 'explicit') {
     for (const matcher of sourcePolicy.matchers) {
-      const notDiscovered = !scanResult.packages.some((pkg) =>
-        matcher.matchesPackage(pkg.name, pkg.kind),
+      const { matchesSkill } = matcher
+      const notDiscovered = !scanResult.packages.some(
+        (pkg) =>
+          matcher.matchesPackage(pkg.name, pkg.kind) &&
+          (matchesSkill === undefined ||
+            pkg.skills.some((skill) => matchesSkill(pkg.name, skill.name))),
       )
       if (notDiscovered) {
         emit(

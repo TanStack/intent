@@ -261,6 +261,20 @@ describe('installer delta inventory', () => {
     ])
   })
 
+  it('marks a skill outside a skill-level allow entry as pending', () => {
+    const inventory = buildInstallDeltaInventory(
+      [pkg('pkg', ['alpha', 'beta'])],
+      [],
+      { status: 'missing' },
+      { skills: ['pkg#alpha'], exclude: [] },
+    )
+
+    expect(inventory.packages[0]!.skills).toEqual([
+      { id: 'pkg#alpha', policy: 'enabled', lock: 'new' },
+      { id: 'pkg#beta', policy: 'pending', lock: null },
+    ])
+  })
+
   it('records a declined package as excluded rather than pending', () => {
     const discovered = [pkg('keep', ['one']), pkg('decline', ['two'])]
     const plan = buildSkillSelectionPlan(discovered, {

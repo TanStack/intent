@@ -1078,6 +1078,71 @@ describe('loadIntentSkill — kind-mismatch late gate', () => {
     )
   })
 
+  it('refuses a skill granted only to the workspace kind when the npm copy resolves', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: {
+        skills: ['@tanstack/query#alpha', 'workspace:@tanstack/query#fetching'],
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'alpha',
+      description: 'Alpha',
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    let thrown: unknown
+    try {
+      thrown = loadIntentSkill('@tanstack/query#fetching', { cwd: root })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('skill-not-listed')
+  })
+
+  it('refuses the same skill identically via the full-scan fallback', () => {
+    writeFileSync(join(root, '.pnp.cjs'), 'module.exports = {}\n')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: {
+        skills: ['@tanstack/query#alpha', 'workspace:@tanstack/query#fetching'],
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'alpha',
+      description: 'Alpha',
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    let thrown: unknown
+    try {
+      thrown = loadIntentSkill('@tanstack/query#fetching', { cwd: root })
+    } catch (err) {
+      thrown = err
+    }
+
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('skill-not-listed')
+  })
+
   it('refuses an npm-installed package listed only as workspace:<name>, via the full-scan fallback', () => {
     writeFileSync(join(root, '.pnp.cjs'), 'module.exports = {}\n')
     writeJson(join(root, 'package.json'), {
