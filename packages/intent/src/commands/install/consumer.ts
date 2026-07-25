@@ -45,6 +45,7 @@ interface ConsumerInstallConfig extends IntentConsumerConfig {
 export type InstallConfirmation = 'install' | 'back' | null
 
 export interface InstallerPrompter {
+  advisory: (message: string) => void
   complete: (message: string) => void
   selectMethod: () => Promise<InstallMethod | null>
   selectTargets: (
@@ -95,11 +96,7 @@ export async function runConsumerInstall({
 }: RunConsumerInstallOptions): Promise<void> {
   const packageJsonPath = join(root, 'package.json')
   const packageJson = readFileSync(packageJsonPath, 'utf8')
-  if (!hasIntentDevDependency(packageJson)) {
-    throw new Error(
-      '@tanstack/intent must be installed as a project devDependency before running `intent install`.',
-    )
-  }
+  const intentDevDependency = hasIntentDevDependency(packageJson)
   const existingConfig = readIntentConsumerConfig(packageJson)
   const configured = !dryRun && existingConfig.install !== undefined
   if (configured) {
@@ -168,7 +165,7 @@ export async function runConsumerInstall({
       installation.config,
     )
     const updatedPackageJson =
-      method === 'symlink'
+      method === 'symlink' && intentDevDependency
         ? wireIntentSyncPrepare(updatedConsumerConfig)
         : updatedConsumerConfig
     const policy = applySourcePolicy(
@@ -232,6 +229,11 @@ export async function runConsumerInstall({
 
     writeTextFileAtomic(packageJsonPath, updatedPackageJson)
     writeIntentLockfile(join(root, 'intent.lock'), lockfile)
+    if (!intentDevDependency) {
+      prompts.advisory(
+        'Skills will not re-sync automatically because the prepare script was not wired. intent.lock records the accepted skill baseline, but nothing will check it automatically. Add @tanstack/intent as a devDependency to enable both.',
+      )
+    }
     if (method === 'symlink') {
       await runSyncCommand({ cwd: root }, { interactive: false })
       prompts.complete(

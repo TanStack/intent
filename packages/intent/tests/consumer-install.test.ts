@@ -106,6 +106,7 @@ function createPrompts(
   overrides: Partial<InstallerPrompter> = {},
 ): InstallerPrompter {
   return {
+    advisory: () => {},
     complete: () => {},
     selectMethod: () => Promise.resolve('symlink'),
     selectTargets: () => Promise.resolve(['agents']),
@@ -319,7 +320,8 @@ describe('consumer install', () => {
 
   it('installs confirmed skills with policy, lock state, and managed links', async () => {
     const root = createProject()
-    const prompts = createPrompts()
+    const advisory = vi.fn()
+    const prompts = createPrompts({ advisory })
 
     await runInteractiveInstall({
       cwd: root,
@@ -364,6 +366,7 @@ describe('consumer install', () => {
       },
     })
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+    expect(advisory).not.toHaveBeenCalled()
   })
 
   it('installs hooks with policy and lock state without links or prepare', async () => {
@@ -611,21 +614,44 @@ describe('consumer install', () => {
     expect(existsSync(join(root, '.copilot'))).toBe(false)
   })
 
-  it('requires Intent as a project development dependency', async () => {
+  it('installs without Intent as a project development dependency', async () => {
     const root = createProject()
     writeJson(join(root, 'package.json'), { name: 'app', private: true })
-    const prompts = createPrompts()
+    const advisory = vi.fn()
+    const prompts = createPrompts({ advisory })
 
-    await expect(
-      runConsumerInstall({
-        discovered: scanForIntents(root, { scope: 'local' }).packages,
-        prompts,
-        root,
-      }),
-    ).rejects.toThrow(
-      '@tanstack/intent must be installed as a project devDependency before running `intent install`.',
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts,
+      root,
+    })
+
+    expect(
+      readIntentConsumerConfig(
+        readFileSync(join(root, 'package.json'), 'utf8'),
+      ),
+    ).toEqual({
+      skills: ['@tanstack/query'],
+      exclude: [],
+      install: { method: 'symlink', targets: ['agents'] },
+    })
+    expect(
+      JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts,
+    ).toBeUndefined()
+    expect(readIntentLockfile(join(root, 'intent.lock'))).toMatchObject({
+      status: 'found',
+      lockfile: {
+        sources: [
+          {
+            id: '@tanstack/query',
+            skills: [{ path: 'skills/fetching' }],
+          },
+        ],
+      },
+    })
+    expect(advisory).toHaveBeenCalledWith(
+      'Skills will not re-sync automatically because the prepare script was not wired. intent.lock records the accepted skill baseline, but nothing will check it automatically. Add @tanstack/intent as a devDependency to enable both.',
     )
-    expect(existsSync(join(root, 'intent.lock'))).toBe(false)
   })
 
   it('stops without skill selection when discovery is empty', async () => {

@@ -82,6 +82,9 @@ export async function selectClackSkills(
 export function createClackInstallerPrompter(): InstallerPrompter {
   intro('Configure TanStack Intent')
   return {
+    advisory(message: string): void {
+      note(message, 'Automatic re-sync is not enabled')
+    },
     complete(message: string): void {
       outro(message)
     },
