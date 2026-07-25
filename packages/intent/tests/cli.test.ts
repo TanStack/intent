@@ -552,6 +552,34 @@ describe('cli commands', () => {
     expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(false)
   })
 
+  it('runs the session catalogue hook for a valid agent', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-hooks-run-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main(['hooks', 'run', '--agent', 'claude'])
+
+    expect(exitCode).toBe(0)
+  })
+
+  it('requires an agent for hooks run', async () => {
+    const exitCode = await main(['hooks', 'run'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Missing hook agent. Expected copilot, claude, or codex.',
+    )
+  })
+
+  it('fails cleanly for an invalid hooks run agent', async () => {
+    const exitCode = await main(['hooks', 'run', '--agent', 'cursor'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Unknown hook agent: cursor. Expected copilot, claude, or codex.',
+    )
+  })
+
   it('writes install mappings with --map and is idempotent', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-map-'))
     const isolatedGlobalRoot = mkdtempSync(

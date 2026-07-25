@@ -133,6 +133,27 @@ describe('runSessionCatalogueHook', () => {
     expect(stderr).not.toHaveBeenCalled()
   })
 
+  it('writes the documented Codex output shape', async () => {
+    const { root } = fixture()
+    const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+    const stderr = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    await runSessionCatalogueHook({
+      agent: 'codex',
+      event: { cwd: root, hook_event_name: 'SessionStart' },
+    })
+
+    expect(JSON.parse(String(stdout.mock.calls[0]![0]))).toMatchObject({
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: expect.stringContaining('@fixture/package#core'),
+      },
+    })
+    expect(stderr).not.toHaveBeenCalled()
+  })
+
   it('ignores non-lifecycle events', async () => {
     const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
 

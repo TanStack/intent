@@ -1,10 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, relative } from 'node:path'
 import { detectPackageManager } from '../discovery/package-manager.js'
@@ -63,145 +57,6 @@ export function validateHookInstallOptions({
   parseAgents(agents)
 }
 
-export function buildHookRunnerScript(
-  agent: HookAgent,
-  catalogCommand = formatIntentCommand(
-    detectPackageManager(),
-    'list --json --no-notices',
-  ),
-): string {
-  return `#!/usr/bin/env node
-import { readFileSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
-import { performance } from 'node:perf_hooks'
-
-const AGENT = ${JSON.stringify(agent)}
-const CATALOG_COMMAND = ${JSON.stringify(catalogCommand)}
-
-try {
-  await main()
-} catch {
-}
-
-process.exit(0)
-
-async function main() {
-  const event = readEventFromStdin()
-
-  if (!isSessionStartEvent(event)) return
-
-  const additionalContext = await createSessionCatalogContext(rootForEvent(event))
-  if (additionalContext) {
-    process.stdout.write(JSON.stringify(sessionStartOutput(additionalContext)))
-  }
-}
-
-function readEventFromStdin() {
-  try {
-    return JSON.parse(readFileSync(0, 'utf8'))
-  } catch {
-    return {}
-  }
-}
-
-function isSessionStartEvent(event) {
-  return (event?.hook_event_name ?? event?.hookEventName) === 'SessionStart'
-}
-
-function rootForEvent(event) {
-  return typeof event?.cwd === 'string' ? event.cwd : process.cwd()
-}
-
-async function createSessionCatalogContext(root) {
-  try {
-    const start = performance.now()
-    const result = readIntentList(root)
-    const durationMs = performance.now() - start
-    console.error(
-      \`[intent-\${AGENT}-session-catalog] listIntentSkills found \${result.skills.length} skills from \${result.packages.length} packages in \${formatDuration(durationMs)} (packageJsonReadCount=\${result.debug?.scan.packageJsonReadCount ?? 'unknown'})\`,
-    )
-    return formatSessionCatalog(result)
-  } catch {
-    return ''
-  }
-}
-
-function readIntentList(root) {
-  const output = execFileSync(CATALOG_COMMAND, {
-    cwd: root,
-    encoding: 'utf8',
-    env: { ...process.env, INTENT_AUDIENCE: 'agent' },
-    maxBuffer: 1024 * 1024,
-    shell: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 9000,
-  })
-  return JSON.parse(output)
-}
-
-function formatDuration(durationMs) {
-  return \`\${durationMs.toFixed(1)}ms\`
-}
-
-function formatSessionCatalog(result) {
-  if (!Array.isArray(result.skills) || result.skills.length === 0) return ''
-
-  return [
-    'TanStack Intent skills are available in this repository.',
-    '',
-    'Before substantial work, check whether one listed skill clearly matches the user task. If one clearly matches, load that full skill guidance with the Intent CLI before proceeding.',
-    '',
-    'If no skill clearly matches, continue normally. Do not load a skill just to improve phrasing or gather nonessential context.',
-    '',
-    'Available local Intent skills:',
-    formatSkillCatalog(result.skills),
-    formatWarnings(result),
-  ]
-    .filter(Boolean)
-    .join('\\n')
-}
-
-function formatSkillCatalog(skills) {
-  return skills
-    .map((skill) => \`- \${skill.use}: \${normalizeDescription(skill.description)}\`)
-    .join('\\n')
-}
-
-function normalizeDescription(description) {
-  return typeof description === 'string' ? description.replace(/\\s+/g, ' ').trim() : ''
-}
-
-function formatWarnings(result) {
-  const warnings = [
-    ...(Array.isArray(result.warnings) ? result.warnings : []),
-    ...(Array.isArray(result.conflicts)
-      ? result.conflicts.map(
-          (conflict) =>
-            \`Version conflict for \${conflict.packageName}; using \${conflict.chosen.version}\`,
-        )
-      : []),
-  ]
-
-  if (warnings.length === 0) return ''
-  return \`\\nWarnings:\\n\${warnings.map((warning) => \`- \${warning}\`).join('\\n')}\`
-}
-
-function sessionStartOutput(additionalContext) {
-  if (AGENT === 'copilot') {
-    return { additionalContext }
-  }
-
-  return {
-    hookSpecificOutput: {
-      hookEventName: 'SessionStart',
-      additionalContext,
-    },
-  }
-}
-
-`
-}
-
 export function formatHookInstallResult(result: HookInstallResult): string {
   if (result.status === 'skipped') {
     return `Skipped Intent hooks for ${result.agent}: ${result.reason}`
@@ -246,93 +101,54 @@ function installAgentHook({
     }
   }
 
-  const { configPath, scriptPath } = adapter.paths(scope, {
+  const { configPath } = adapter.paths(scope, {
     copilotHome: copilotHome ?? process.env.COPILOT_HOME,
     homeDir,
     root,
   })
   const catalogCommand = formatIntentCommand(
     detectPackageManager(root),
-    'list --json --no-notices',
+    `hooks run --agent ${agent}`,
   )
-  const scriptStatus = writeIfChanged(
-    scriptPath,
-    buildHookRunnerScript(agent, catalogCommand),
-  )
-  removeLegacyGateScript(scriptPath)
   const configStatus = updateJsonConfig(configPath, (config) =>
     upsertAdapterHooks({
+      catalogCommand,
       config,
       configKind: adapter.configKind,
-      project: scope === 'project',
-      scriptPath,
     }),
   )
 
-  return hookInstallResult({
-    agent,
-    configPath,
-    scope,
-    scriptPath,
-    scriptStatus,
-    configStatus,
-  })
-}
-
-function hookInstallResult({
-  agent,
-  configPath,
-  configStatus,
-  scope,
-  scriptPath,
-  scriptStatus,
-}: {
-  agent: HookAgent
-  configPath: string
-  configStatus: HookInstallStatus
-  scope: HookInstallScope
-  scriptPath: string
-  scriptStatus: HookInstallStatus
-}): HookInstallResult {
   return {
     agent,
     configPath,
     scope,
-    scriptPath,
-    status:
-      scriptStatus === 'created' || configStatus === 'created'
-        ? 'created'
-        : scriptStatus === 'updated' || configStatus === 'updated'
-          ? 'updated'
-          : 'unchanged',
+    scriptPath: null,
+    status: configStatus,
   }
 }
 
 function upsertAdapterHooks({
+  catalogCommand,
   config,
   configKind,
-  project,
-  scriptPath,
 }: {
+  catalogCommand: string
   config: Record<string, unknown>
   configKind: (typeof HOOK_AGENT_ADAPTERS)[HookAgent]['configKind']
-  project: boolean
-  scriptPath: string
 }): Record<string, unknown> {
   switch (configKind) {
     case 'claude-settings':
-      return upsertClaudeHooks(config, project, scriptPath)
+      return upsertClaudeHooks(config, catalogCommand)
     case 'codex-hooks':
-      return upsertCodexHooks(config, project, scriptPath)
+      return upsertCodexHooks(config, catalogCommand)
     case 'copilot-hooks':
-      return upsertCopilotHooks(config, scriptPath)
+      return upsertCopilotHooks(config, catalogCommand)
   }
 }
 
 function upsertClaudeHooks(
   config: Record<string, unknown>,
-  project: boolean,
-  scriptPath: string,
+  catalogCommand: string,
 ): Record<string, unknown> {
   const hooks = objectValue(config.hooks)
   hooks.SessionStart = upsertHookGroup(arrayValue(hooks.SessionStart), {
@@ -340,12 +156,7 @@ function upsertClaudeHooks(
     hooks: [
       {
         type: 'command',
-        command: 'node',
-        args: [
-          project
-            ? '${CLAUDE_PROJECT_DIR}/.intent/hooks/intent-claude-catalog.mjs'
-            : scriptPath,
-        ],
+        command: catalogCommand,
         timeout: 10,
         statusMessage: CATALOG_STATUS_MESSAGE,
       },
@@ -357,8 +168,7 @@ function upsertClaudeHooks(
 
 function upsertCodexHooks(
   config: Record<string, unknown>,
-  project: boolean,
-  scriptPath: string,
+  catalogCommand: string,
 ): Record<string, unknown> {
   const hooks = objectValue(config.hooks)
   hooks.SessionStart = upsertHookGroup(arrayValue(hooks.SessionStart), {
@@ -366,9 +176,7 @@ function upsertCodexHooks(
     hooks: [
       {
         type: 'command',
-        command: project
-          ? 'node "$(git rev-parse --show-toplevel)/.intent/hooks/intent-codex-catalog.mjs"'
-          : `node ${quoteShell(scriptPath)}`,
+        command: catalogCommand,
         timeout: 10,
         statusMessage: CATALOG_STATUS_MESSAGE,
       },
@@ -380,11 +188,11 @@ function upsertCodexHooks(
 
 function upsertCopilotHooks(
   config: Record<string, unknown>,
-  scriptPath: string,
+  catalogCommand: string,
 ): Record<string, unknown> {
   const hooks = objectValue(config.hooks)
   hooks.SessionStart = upsertHookGroup(arrayValue(hooks.SessionStart), {
-    command: `node ${quoteShell(scriptPath)}`,
+    command: catalogCommand,
   })
   hooks.PreToolUse = removeIntentHooks(arrayValue(hooks.PreToolUse))
   return { ...config, hooks }
@@ -422,18 +230,18 @@ function isIntentHook(value: unknown): boolean {
     ? entry.args.filter((arg): arg is string => typeof arg === 'string')
     : []
 
-  return [command, ...args].some(isIntentGateScriptReference)
+  return [command, ...args].some(isIntentHookReference)
 }
 
-function isIntentGateScriptReference(value: string): boolean {
-  return /(?:^|[\s"'/])(?:old-)?intent-(claude|codex|copilot)-(?:gate|catalog)\.mjs(?:$|[?#\s"'])/i.test(
-    value,
+function isIntentHookReference(value: string): boolean {
+  return (
+    /(?:^|[\s"'/])(?:old-)?intent-(claude|codex|copilot)-(?:gate|catalog)\.mjs(?:$|[?#\s"'])/i.test(
+      value,
+    ) ||
+    /@tanstack\/intent(?:@[^\s]+)?\s+hooks\s+run\s+--agent\s+(?:copilot|claude|codex)(?:$|\s)/i.test(
+      value,
+    )
   )
-}
-
-function removeLegacyGateScript(scriptPath: string): void {
-  const legacyPath = scriptPath.replace(/-catalog\.mjs$/, '-gate.mjs')
-  if (legacyPath !== scriptPath) rmSync(legacyPath, { force: true })
 }
 
 function updateJsonConfig(
@@ -451,17 +259,6 @@ function updateJsonConfig(
 
   mkdirSync(dirname(filePath), { recursive: true })
   writeFileSync(filePath, next)
-  return existed ? 'updated' : 'created'
-}
-
-function writeIfChanged(filePath: string, content: string): HookInstallStatus {
-  const existed = existsSync(filePath)
-  if (existed && readFileSync(filePath, 'utf8') === content) {
-    return 'unchanged'
-  }
-
-  mkdirSync(dirname(filePath), { recursive: true })
-  writeFileSync(filePath, content)
   return existed ? 'updated' : 'created'
 }
 
@@ -519,10 +316,6 @@ function objectValue(value: unknown): Record<string, unknown> {
 
 function arrayValue(value: unknown): Array<unknown> {
   return Array.isArray(value) ? value : []
-}
-
-function quoteShell(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
 function formatPath(filePath: string): string {

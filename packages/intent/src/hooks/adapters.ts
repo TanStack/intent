@@ -3,7 +3,6 @@ import type { HookAgent, HookInstallScope } from './types.js'
 
 type HookAdapterPaths = {
   configPath: string
-  scriptPath: string
 }
 
 type HookAdapterContext = {
@@ -22,8 +21,6 @@ export type HookAgentAdapter = {
   ) => HookAdapterPaths
 }
 
-const HOOK_SCRIPT_DIR = '.intent/hooks'
-
 export const HOOK_AGENT_ADAPTERS: Record<HookAgent, HookAgentAdapter> = {
   claude: {
     agent: 'claude',
@@ -35,15 +32,6 @@ export const HOOK_AGENT_ADAPTERS: Record<HookAgent, HookAgentAdapter> = {
         configPath: project
           ? join(root, '.claude', 'settings.json')
           : join(homeDir, '.claude', 'settings.json'),
-        scriptPath: project
-          ? join(root, HOOK_SCRIPT_DIR, 'intent-claude-catalog.mjs')
-          : join(
-              homeDir,
-              '.tanstack',
-              'intent',
-              'hooks',
-              'intent-claude-catalog.mjs',
-            ),
       }
     },
   },
@@ -57,15 +45,6 @@ export const HOOK_AGENT_ADAPTERS: Record<HookAgent, HookAgentAdapter> = {
         configPath: project
           ? join(root, '.codex', 'hooks.json')
           : join(homeDir, '.codex', 'hooks.json'),
-        scriptPath: project
-          ? join(root, HOOK_SCRIPT_DIR, 'intent-codex-catalog.mjs')
-          : join(
-              homeDir,
-              '.tanstack',
-              'intent',
-              'hooks',
-              'intent-codex-catalog.mjs',
-            ),
       }
     },
   },
@@ -78,13 +57,6 @@ export const HOOK_AGENT_ADAPTERS: Record<HookAgent, HookAgentAdapter> = {
         copilotHome ?? join(homeDir, '.copilot'),
         'hooks',
         'hooks.json',
-      ),
-      scriptPath: join(
-        homeDir,
-        '.tanstack',
-        'intent',
-        'hooks',
-        'intent-copilot-catalog.mjs',
       ),
     }),
   },

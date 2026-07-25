@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { cac } from 'cac'
 import { fail, isCliFailure } from './shared/cli-error.js'
 import type { CAC } from 'cac'
+import type { HookAgent } from './catalog.js'
 import type { ExcludeCommandOptions } from './commands/exclude.js'
 import type { HooksInstallCommandOptions } from './commands/hooks/command.js'
 import type { CatalogCommandOptions } from './commands/catalog.js'
@@ -179,24 +180,41 @@ function createCli(): CAC {
       'Manage agent hooks that surface available skills',
     )
     .usage(
-      'hooks install [--scope project|user] [--agents copilot,claude,codex|all]',
+      'hooks <install|run> [--scope project|user] [--agents copilot,claude,codex|all] [--agent copilot|claude|codex]',
     )
     .option('--scope <scope>', 'Hook install scope: project or user')
     .option('--agents <agents>', 'Hook agents: copilot,claude,codex, or all')
+    .option('--agent <agent>', 'Hook agent: copilot, claude, or codex')
     .example('hooks install')
     .example('hooks install --scope user --agents copilot')
+    .example('hooks run --agent copilot')
     .action(
       async (
         action: string | undefined,
-        options: HooksInstallCommandOptions,
+        options: HooksInstallCommandOptions & { agent?: string },
       ) => {
-        if (action !== 'install') {
-          fail('Unknown hooks action: expected install.')
+        if (action === 'install') {
+          const { runHooksInstallCommand } =
+            await import('./commands/hooks/command.js')
+          runHooksInstallCommand(options)
+          return
         }
 
-        const { runHooksInstallCommand } =
-          await import('./commands/hooks/command.js')
-        runHooksInstallCommand(options)
+        if (action === 'run') {
+          if (!options.agent) {
+            fail('Missing hook agent. Expected copilot, claude, or codex.')
+          }
+          if (!['copilot', 'claude', 'codex'].includes(options.agent)) {
+            fail(
+              `Unknown hook agent: ${options.agent}. Expected copilot, claude, or codex.`,
+            )
+          }
+          const { runSessionCatalogueHook } = await import('./catalog.js')
+          await runSessionCatalogueHook({ agent: options.agent as HookAgent })
+          return
+        }
+
+        fail('Unknown hooks action: expected install or run.')
       },
     )
 
