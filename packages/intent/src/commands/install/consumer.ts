@@ -68,6 +68,7 @@ export interface RunConsumerInstallOptions {
   dryRun?: boolean
   prompts: InstallerPrompter
   root: string
+  selection?: SkillSelection
 }
 
 function hookAgentForTarget(target: InstallTarget): HookAgent {
@@ -93,17 +94,19 @@ export async function runConsumerInstall({
   dryRun = false,
   prompts,
   root,
+  selection: fixedSelection,
 }: RunConsumerInstallOptions): Promise<void> {
   const packageJsonPath = join(root, 'package.json')
   const packageJson = readFileSync(packageJsonPath, 'utf8')
   const intentDevDependency = hasIntentDevDependency(packageJson)
   const existingConfig = readIntentConsumerConfig(packageJson)
-  const configured = !dryRun && existingConfig.install !== undefined
-  if (configured) {
+  const install = dryRun ? undefined : existingConfig.install
+  if (install) {
+    const existingLock = readIntentLockfile(join(root, 'intent.lock'))
     const inventory = buildInstallDeltaInventory(
       discovered,
       buildCurrentLockfileSources(discovered),
-      readIntentLockfile(join(root, 'intent.lock')),
+      existingLock,
       existingConfig,
     )
     const summary = summarizeInstallDeltaInventory(inventory)
@@ -114,7 +117,8 @@ export async function runConsumerInstall({
       newDependencies === 0 &&
       newSkills === 0 &&
       changed === 0 &&
-      summary.removed === 0
+      summary.removed === 0 &&
+      existingLock.status === 'found'
     ) {
       prompts.complete('Project is up to date.')
       return
@@ -124,23 +128,24 @@ export async function runConsumerInstall({
     )
   }
   for (;;) {
-    const method = configured
-      ? existingConfig.install!.method
-      : await prompts.selectMethod()
+    const method = install ? install.method : await prompts.selectMethod()
     if (!method) return
-    const targets = configured
-      ? existingConfig.install!.targets
+    const targets = install
+      ? install.targets
       : await prompts.selectTargets(method, detectInstallTargets(root))
     if (!targets || targets.length === 0) return
-    if (!configured && method === 'symlink') {
+    if (!install && method === 'symlink') {
       const symlinkAccepted = await prompts.confirmSymlink()
       if (!symlinkAccepted) return
     }
-    if (discovered.every((pkg) => pkg.skills.length === 0)) {
+    if (
+      fixedSelection === undefined &&
+      discovered.every((pkg) => pkg.skills.length === 0)
+    ) {
       prompts.complete('No intent-enabled skills found.')
       return
     }
-    const selection = await prompts.selectSkills(discovered)
+    const selection = fixedSelection ?? (await prompts.selectSkills(discovered))
     if (!selection) return
     const plan = buildSkillSelectionPlan(discovered, selection)
     const installation = {
@@ -235,7 +240,7 @@ export async function runConsumerInstall({
       )
     }
     if (method === 'symlink') {
-      await runSyncCommand({ cwd: root }, { interactive: false })
+      await runSyncCommand({ cwd: root }, { review: 'reminder' })
       prompts.complete(
         `Installed ${installation.skillCount} ${installation.skillCount === 1 ? 'skill' : 'skills'} using ${method}.`,
       )

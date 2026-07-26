@@ -51,8 +51,10 @@ export interface SyncReviewPrompter {
   ) => Promise<SkillSelection | null>
 }
 
+export type SyncReviewMode = 'interactive' | 'reminder' | 'fail'
+
 export interface SyncCommandRuntime {
-  interactive?: boolean
+  review?: SyncReviewMode
   prompts?: SyncReviewPrompter
 }
 
@@ -165,7 +167,7 @@ function shouldReviewInteractively(
   ) {
     return false
   }
-  if (runtime.interactive !== undefined) return runtime.interactive
+  if (runtime.review !== undefined) return runtime.review === 'interactive'
   return process.stdin.isTTY === true && process.stdout.isTTY === true
 }
 
@@ -408,6 +410,14 @@ export async function runSyncCommand(
   output(result, options.json === true, interactiveReview)
   if (links.conflicts.length > 0)
     fail('Intent sync found managed link conflicts.')
+  if (
+    runtime.review === 'fail' &&
+    (summaries.newDependencies.length > 0 ||
+      summaries.newSkills.length > 0 ||
+      summaries.changed.length > 0)
+  ) {
+    fail('Intent sync requires review before automation can continue.')
+  }
   if (interactiveReview) {
     const pendingSkills = new Map(
       inventory.packages.map((pkg) => [

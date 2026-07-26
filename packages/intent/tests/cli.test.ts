@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -389,6 +390,577 @@ describe('cli commands', () => {
     expect(errorSpy).toHaveBeenCalledWith('Unknown option `--printPrompt`')
   })
 
+  it('rejects install --map --no-input before writing files', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-flags-'))
+    tempDirs.push(root)
+    const entriesBefore = readdirSync(root)
+    process.chdir(root)
+
+    expect(await main(['install', '--map', '--no-input'])).toBe(1)
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Cannot combine --map and --no-input.',
+    )
+    expect(readdirSync(root)).toEqual(entriesBefore)
+  })
+
+  it('names missing declarative config for install --no-input', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-no-config-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), { name: 'app', private: true })
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--no-input'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Non-interactive install requires an explicit package.json intent.skills array. Add intent.skills (use [] to deny all) before running `intent install --no-input`.',
+    )
+  })
+
+  it('requires first-bootstrap config in the workspace root manifest', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-leaf-bootstrap-'),
+    )
+    const leaf = join(root, 'packages', 'leaf')
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'workspace',
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(leaf, 'package.json'), {
+      name: 'leaf',
+      private: true,
+      intent: {
+        skills: ['verified'],
+        install: { method: 'symlink', targets: ['agents'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    process.chdir(leaf)
+
+    expect(await main(['install', '--no-input'])).toBe(1)
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Non-interactive install requires an explicit package.json intent.skills array. Add intent.skills (use [] to deny all) before running `intent install --no-input`.',
+    )
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    for (const path of [
+      'intent.lock',
+      '.gitignore',
+      '.intent',
+      '.agents',
+      '.github',
+      '.claude',
+      '.codex',
+    ]) {
+      expect(existsSync(join(root, path))).toBe(false)
+    }
+  })
+
+  it('names missing intent.install for install --no-input', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-no-method-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: [] },
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--no-input'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Non-interactive install requires an explicit valid package.json intent.install object. Configure intent.install.method and intent.install.targets before running `intent install --no-input`.',
+    )
+  })
+
+  it('fails cleanly when install --no-input has no package.json', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-no-package-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--no-input'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      `Non-interactive install requires package.json in ${root}.`,
+    )
+  })
+
+  it('bootstraps configured policy and symlink targets with install --no-input', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-bootstrap-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['verified#core'],
+        exclude: ['verified#draft'],
+        install: { method: 'symlink', targets: ['agents', 'github'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    writeSkillMd(join(root, 'node_modules', 'verified', 'skills', 'draft'), {
+      name: 'draft',
+      description: 'Draft skill',
+    })
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--no-input'])
+
+    expect(exitCode).toBe(0)
+    expect(errorSpy).not.toHaveBeenCalled()
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    expect(existsSync(join(root, 'intent.lock'))).toBe(true)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'Skills will not re-sync automatically because the prepare script was not wired.',
+    )
+    for (const target of ['.agents', '.github']) {
+      expect(
+        lstatSync(
+          join(root, target, 'skills', 'npm-verified-core'),
+        ).isSymbolicLink(),
+      ).toBe(true)
+      expect(
+        existsSync(join(root, target, 'skills', 'npm-verified-draft')),
+      ).toBe(false)
+    }
+  })
+
+  it('does not infer delivery targets for install --no-input', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-targets-'))
+    tempDirs.push(root)
+    mkdirSync(join(root, '.vscode'))
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['verified'],
+        install: { method: 'symlink', targets: ['agents'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    process.chdir(root)
+
+    expect(await main(['install', '--no-input'])).toBe(0)
+
+    expect(
+      lstatSync(
+        join(root, '.agents', 'skills', 'npm-verified-core'),
+      ).isSymbolicLink(),
+    ).toBe(true)
+    expect(existsSync(join(root, '.github'))).toBe(false)
+  })
+
+  it('accepts an explicit empty skill policy without synthesizing trust', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-empty-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: [],
+        install: { method: 'symlink', targets: ['agents'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'untrusted',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Untrusted skill',
+    })
+    process.chdir(root)
+
+    expect(await main(['install', '--no-input'])).toBe(0)
+    expect(await main(['install', '--no-input'])).toBe(0)
+
+    expect(JSON.parse(readFileSync(join(root, 'intent.lock'), 'utf8'))).toEqual(
+      { lockfileVersion: 1, sources: [] },
+    )
+    expect(
+      JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).intent
+        .skills,
+    ).toEqual([])
+    expect(existsSync(join(root, '.agents', 'skills'))).toBe(false)
+  })
+
+  it('rejects incomplete configured policy before bootstrap writes', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-incomplete-policy-'),
+    )
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['@acme/query#fetching'],
+        install: { method: 'symlink', targets: ['agents'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@acme/query',
+      version: '1.0.0',
+      skillName: 'fetching',
+      description: 'Query skill',
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@acme/router',
+      version: '1.0.0',
+      skillName: 'routing',
+      description: 'Router skill',
+    })
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    process.chdir(root)
+
+    expect(await main(['install', '--no-input'])).toBe(1)
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Configured policy leaves "@acme/router#routing" pending. Add it to intent.skills or intent.exclude before non-interactive install.',
+    )
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    for (const path of ['intent.lock', '.intent', '.agents']) {
+      expect(existsSync(join(root, path))).toBe(false)
+    }
+  })
+
+  it('keeps package and lock bytes unchanged for configured content drift', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-changed-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['verified'],
+        install: { method: 'symlink', targets: ['agents'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    const discovered = scanForIntents(root, { scope: 'local' }).packages
+    writeFileSync(
+      join(root, 'intent.lock'),
+      serializeIntentLockfile({
+        lockfileVersion: 1,
+        sources: buildCurrentLockfileSources(discovered),
+      }),
+    )
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+    writeFileSync(
+      join(root, 'node_modules', 'verified', 'skills', 'core', 'SKILL.md'),
+      '---\nname: core\ndescription: Changed skill\n---\n',
+    )
+    process.chdir(root)
+
+    expect(await main(['install', '--no-input'])).toBe(1)
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'Changed skill content:',
+    )
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Intent sync requires review before automation can continue.',
+    )
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
+  })
+
+  it('uses the workspace root config and lock for install --no-input from a leaf', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-leaf-sync-'))
+    const leaf = join(root, 'packages', 'leaf')
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'workspace',
+      private: true,
+      workspaces: ['packages/*'],
+      intent: {
+        skills: ['verified'],
+        install: { method: 'symlink', targets: ['agents'] },
+      },
+    })
+    writeJson(join(leaf, 'package.json'), {
+      name: 'leaf',
+      private: true,
+      intent: {
+        skills: [],
+        install: { method: 'symlink', targets: ['github'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    const discovered = scanForIntents(root, { scope: 'local' }).packages
+    writeFileSync(
+      join(root, 'intent.lock'),
+      serializeIntentLockfile({
+        lockfileVersion: 1,
+        sources: buildCurrentLockfileSources(discovered),
+      }),
+    )
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+    writeFileSync(
+      join(root, 'node_modules', 'verified', 'skills', 'core', 'SKILL.md'),
+      '---\nname: core\ndescription: Changed skill\n---\n',
+    )
+    process.chdir(leaf)
+
+    expect(await main(['install', '--no-input'])).toBe(1)
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'Changed skill content:',
+    )
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Intent sync requires review before automation can continue.',
+    )
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
+  })
+
+  it('leaves new dependencies pending for configured install --no-input', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-pending-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['verified'],
+        install: { method: 'symlink', targets: ['agents'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    const discovered = scanForIntents(root, { scope: 'local' }).packages
+    writeFileSync(
+      join(root, 'intent.lock'),
+      serializeIntentLockfile({
+        lockfileVersion: 1,
+        sources: buildCurrentLockfileSources(discovered),
+      }),
+    )
+    writeInstalledIntentPackage(root, {
+      name: 'pending',
+      version: '1.0.0',
+      skillName: 'new',
+      description: 'Pending skill',
+    })
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+    process.chdir(root)
+
+    expect(await main(['install', '--no-input'])).toBe(1)
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'New dependencies with skills found:',
+    )
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Intent sync requires review before automation can continue.',
+    )
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
+  })
+
+  it('performs no writes for first-time install --no-input --dry-run', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-dry-run-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['verified'],
+        install: { method: 'symlink', targets: ['agents'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    process.chdir(root)
+
+    expect(await main(['install', '--no-input', '--dry-run'])).toBe(0)
+
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    for (const path of [
+      'intent.lock',
+      '.gitignore',
+      '.intent',
+      '.agents',
+      '.github',
+      '.claude',
+      '.codex',
+    ]) {
+      expect(existsSync(join(root, path))).toBe(false)
+    }
+  })
+
+  it('bootstraps configured project-scope hooks without prompts', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-hooks-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['verified'],
+        install: { method: 'hooks', targets: ['claude', 'codex'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    process.chdir(root)
+
+    expect(await main(['install', '--no-input'])).toBe(0)
+
+    expect(existsSync(join(root, 'intent.lock'))).toBe(true)
+    expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(true)
+    expect(existsSync(join(root, '.codex', 'hooks.json'))).toBe(true)
+  })
+
+  it('rejects configured Copilot hook bootstrap before writes', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-copilot-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['verified'],
+        install: { method: 'hooks', targets: ['claude', 'github'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    process.chdir(root)
+
+    expect(await main(['install', '--no-input'])).toBe(1)
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Non-interactive install cannot bootstrap GitHub Copilot hooks because they require interactive approval for user-home access. Remove "github" from intent.install.targets or run `intent install` in a terminal.',
+    )
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    for (const path of ['intent.lock', '.intent', '.claude', '.codex']) {
+      expect(existsSync(join(root, path))).toBe(false)
+    }
+  })
+
+  it('uses the workspace root Copilot guard for install --no-input from a leaf', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-leaf-copilot-'),
+    )
+    const leaf = join(root, 'packages', 'leaf')
+    const copilotHome = join(root, 'copilot-home')
+    const previousCopilotHome = process.env.COPILOT_HOME
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'workspace',
+      private: true,
+      workspaces: ['packages/*'],
+      intent: {
+        skills: ['verified'],
+        install: { method: 'hooks', targets: ['claude', 'github'] },
+      },
+    })
+    writeJson(join(leaf, 'package.json'), {
+      name: 'leaf',
+      private: true,
+      intent: {
+        skills: ['verified'],
+        install: { method: 'hooks', targets: ['claude'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    process.env.COPILOT_HOME = copilotHome
+    process.chdir(leaf)
+
+    try {
+      expect(await main(['install', '--no-input'])).toBe(1)
+    } finally {
+      if (previousCopilotHome === undefined) {
+        delete process.env.COPILOT_HOME
+      } else {
+        process.env.COPILOT_HOME = previousCopilotHome
+      }
+    }
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Non-interactive install cannot bootstrap GitHub Copilot hooks because they require interactive approval for user-home access. Remove "github" from intent.install.targets or run `intent install` in a terminal.',
+    )
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    for (const path of [
+      'intent.lock',
+      '.intent',
+      '.claude',
+      '.codex',
+      join('copilot-home', 'hooks', 'hooks.json'),
+    ]) {
+      expect(existsSync(join(root, path))).toBe(false)
+    }
+  })
+
   it('runs install --no-input through sync without prompting', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-no-input-'))
     tempDirs.push(root)
@@ -425,6 +997,35 @@ describe('cli commands', () => {
         join(root, '.github', 'skills', 'npm-verified-core'),
       ).isSymbolicLink(),
     ).toBe(true)
+  })
+
+  it('syncs an existing lock before requiring bootstrap-only intent.skills', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-lock-no-skills-'),
+    )
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        install: { method: 'symlink', targets: ['agents'] },
+      },
+    })
+    writeFileSync(
+      join(root, 'intent.lock'),
+      serializeIntentLockfile({ lockfileVersion: 1, sources: [] }),
+    )
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+    process.chdir(root)
+
+    expect(await main(['install', '--no-input'])).toBe(0)
+
+    expect(errorSpy).not.toHaveBeenCalled()
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
   })
 
   it('lists excludes when none are configured', async () => {
@@ -550,7 +1151,7 @@ describe('cli commands', () => {
 
       expect(exitCode).toBe(1)
       expect(errorSpy).toHaveBeenCalledWith(
-        'Interactive installation requires a terminal. Run `intent install` in a TTY or use `intent install --map` or `intent install --no-input`.',
+        'Interactive installation requires a terminal. Run `intent install` in a TTY, use `intent install --map`, or configure explicit package.json intent.skills and intent.install values before using `intent install --no-input`.',
       )
       expect(existsSync(join(root, 'intent.lock'))).toBe(false)
       expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)

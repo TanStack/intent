@@ -9,6 +9,9 @@ import type {
   IntentLockfileSource,
   ReadIntentLockfileResult,
 } from '../../core/lockfile/lockfile.js'
+import type { ExcludeMatcher } from '../../core/excludes.js'
+import type { SkillSourcesConfig } from '../../core/skill-sources.js'
+import type { CompiledSkillSourcePolicy } from '../../core/source-policy.js'
 import type { IntentConsumerConfig } from './config.js'
 import type { IntentPackage, SkillEntry } from '../../shared/types.js'
 
@@ -16,6 +19,11 @@ export type SkillSelection =
   | { mode: 'all-found' }
   | { mode: 'scope'; scope: string }
   | { mode: 'individual'; enabled: Array<string> }
+  | {
+      mode: 'configured-policy'
+      skills: Array<string>
+      exclude: Array<string>
+    }
 
 export interface SkillSelectionPlan {
   skills: Array<string>
@@ -100,6 +108,25 @@ export function skillSelectionId(
   return `${sourceEntry(pkg)}#${skill.name}`
 }
 
+function classifySkillPolicy(
+  pkg: Pick<IntentPackage, 'kind' | 'name'>,
+  skillName: string,
+  sources: SkillSourcesConfig,
+  sourcePolicy: CompiledSkillSourcePolicy,
+  excludes: Array<ExcludeMatcher>,
+): InventoryPolicyStatus {
+  if (
+    isPackageExcluded(pkg.name, excludes) ||
+    isSkillExcluded(pkg.name, skillName, excludes) ||
+    sources.mode === 'empty'
+  ) {
+    return 'excluded'
+  }
+  return sourcePolicy.permitsSkill(pkg.name, skillName, pkg.kind)
+    ? 'enabled'
+    : 'pending'
+}
+
 function sortedPackages(
   packages: ReadonlyArray<IntentPackage>,
 ): Array<IntentPackage> {
@@ -181,6 +208,35 @@ export function buildSkillSelectionPlan(
 ): SkillSelectionPlan {
   const packages = sortedPackages(discovered)
   assertUniqueDiscovery(packages)
+  if (selection.mode === 'configured-policy') {
+    const sources = parseSkillSources(selection.skills)
+    const sourcePolicy = compileSkillSourcePolicy(sources)
+    const excludeMatchers = compileExcludePatterns(selection.exclude)
+    return {
+      skills: selection.skills,
+      exclude: selection.exclude,
+      packages: packages.map((pkg) => ({
+        name: pkg.name,
+        kind: pkg.kind,
+        skills: sortedSkills(pkg).map((skill) => {
+          const id = skillSelectionId(pkg, skill)
+          const status = classifySkillPolicy(
+            pkg,
+            skill.name,
+            sources,
+            sourcePolicy,
+            excludeMatchers,
+          )
+          if (status === 'pending') {
+            throw new Error(
+              `Configured policy leaves "${id}" pending. Add it to intent.skills or intent.exclude before non-interactive install.`,
+            )
+          }
+          return { id, status }
+        }),
+      })),
+    }
+  }
   const selected = new Set<string>()
   if (selection.mode === 'scope') validateScope(selection.scope)
   if (selection.mode === 'individual') {
@@ -305,14 +361,13 @@ export function buildInstallDeltaInventory(
       name: pkg.name,
       kind: pkg.kind,
       skills: sortedSkills(pkg).map((skill) => {
-        const excluded =
-          isPackageExcluded(pkg.name, excludes) ||
-          isSkillExcluded(pkg.name, skill.name, excludes)
-        const policy: InventoryPolicyStatus = excluded
-          ? 'excluded'
-          : sourcePolicy.permitsSkill(pkg.name, skill.name, pkg.kind)
-            ? 'enabled'
-            : 'pending'
+        const policy = classifySkillPolicy(
+          pkg,
+          skill.name,
+          sources,
+          sourcePolicy,
+          excludes,
+        )
         if (policy !== 'enabled')
           return { id: skillSelectionId(pkg, skill), policy, lock: null }
         const currentEntry = currentSkill(skill, current)

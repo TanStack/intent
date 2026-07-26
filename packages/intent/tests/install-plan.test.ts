@@ -38,6 +38,45 @@ const discovered = [
 ]
 
 describe('installer selection planning', () => {
+  it('classifies discovered skills from configured policy without rewriting it', () => {
+    const skills = ['workspace:workspace-query', '@tanstack/query#zeta']
+    const exclude = [
+      '@other/core',
+      '@tanstack/query#alpha',
+      'workspace-query#local',
+    ]
+
+    const plan = buildSkillSelectionPlan(discovered, {
+      mode: 'configured-policy',
+      skills,
+      exclude,
+    })
+
+    expect(plan.skills).toBe(skills)
+    expect(plan.exclude).toBe(exclude)
+    expect(plan.packages.flatMap((entry) => entry.skills)).toEqual([
+      { id: '@other/core#second', status: 'excluded' },
+      { id: '@tanstack/query#alpha', status: 'excluded' },
+      { id: '@tanstack/query#zeta', status: 'enabled' },
+      { id: 'workspace:workspace-query#local', status: 'excluded' },
+    ])
+  })
+
+  it('rejects a configured policy that leaves a discovered skill pending', () => {
+    expect(() =>
+      buildSkillSelectionPlan(
+        [pkg('@acme/query', ['fetching']), pkg('@acme/router', ['routing'])],
+        {
+          mode: 'configured-policy',
+          skills: ['@acme/query#fetching'],
+          exclude: [],
+        },
+      ),
+    ).toThrow(
+      'Configured policy leaves "@acme/router#routing" pending. Add it to intent.skills or intent.exclude before non-interactive install.',
+    )
+  })
+
   it('uses exact discovered source identities for all-found', () => {
     expect(
       buildSkillSelectionPlan(discovered, { mode: 'all-found' }),
@@ -284,6 +323,20 @@ describe('installer delta inventory', () => {
     expect(inventory.packages[0]!.skills).toEqual([
       { id: 'pkg#alpha', policy: 'enabled', lock: 'new' },
       { id: 'pkg#beta', policy: 'pending', lock: null },
+    ])
+  })
+
+  it('treats an explicit empty skill policy as deny-all', () => {
+    const inventory = buildInstallDeltaInventory(
+      [pkg('pkg', ['alpha', 'beta'])],
+      [],
+      { status: 'missing' },
+      { skills: [], exclude: [] },
+    )
+
+    expect(inventory.packages[0]!.skills).toEqual([
+      { id: 'pkg#alpha', policy: 'excluded', lock: null },
+      { id: 'pkg#beta', policy: 'excluded', lock: null },
     ])
   })
 

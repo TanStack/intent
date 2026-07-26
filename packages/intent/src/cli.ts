@@ -144,7 +144,10 @@ function createCli(): CAC {
     )
     .option('--map', 'Write explicit skill-to-task mappings')
     .option('--dry-run', 'Preview installation without writing files')
-    .option('--no-input', 'Synchronize without interactive prompts')
+    .option(
+      '--no-input',
+      'Install or synchronize from package.json without prompts',
+    )
     .option('--global', 'With --map, include global packages')
     .option('--global-only', 'With --map, use only global packages')
     .option('--no-notices', 'Suppress non-critical notices on stderr')
@@ -154,10 +157,8 @@ function createCli(): CAC {
     .example('install --no-input')
     .example('install --map --global')
     .action(async (options: InstallCommandOptions) => {
-      if (options.input === false) {
-        const { runSyncCommand } = await import('./commands/sync/command.js')
-        await runSyncCommand(options, { interactive: false })
-        return
+      if (options.map && options.input === false) {
+        fail('Cannot combine --map and --no-input.')
       }
       const [{ scanIntentsOrFail }, { runInstallCommand }] = await Promise.all([
         import('./commands/support.js'),

@@ -749,7 +749,7 @@ describe('consumer install', () => {
     await runSyncCommand(
       { cwd: root },
       {
-        interactive: true,
+        review: 'interactive',
         prompts: {
           complete: () => {},
           reviewNewDependencies: () => Promise.resolve('review'),
@@ -809,7 +809,7 @@ describe('consumer install', () => {
     await runSyncCommand(
       { cwd: root },
       {
-        interactive: true,
+        review: 'interactive',
         prompts: {
           complete: () => {},
           reviewNewDependencies: () => Promise.resolve('review'),
@@ -850,7 +850,7 @@ describe('consumer install', () => {
     await runSyncCommand(
       { cwd: root },
       {
-        interactive: true,
+        review: 'interactive',
         prompts: {
           complete: () => {},
           reviewNewDependencies: () => Promise.resolve('review'),
@@ -886,7 +886,7 @@ describe('consumer install', () => {
     await runSyncCommand(
       { cwd: root },
       {
-        interactive: true,
+        review: 'interactive',
         prompts: {
           complete: () => {},
           reviewNewDependencies: () => Promise.resolve('review'),
@@ -926,7 +926,7 @@ describe('consumer install', () => {
     await runSyncCommand(
       { cwd: root },
       {
-        interactive: true,
+        review: 'interactive',
         prompts: {
           complete: () => {},
           reviewNewDependencies: () => Promise.resolve('exclude'),
@@ -959,7 +959,7 @@ describe('consumer install', () => {
     await runSyncCommand(
       { cwd: root },
       {
-        interactive: true,
+        review: 'interactive',
         prompts: {
           complete: () => {},
           reviewNewDependencies: () => Promise.resolve('exclude'),
@@ -974,11 +974,99 @@ describe('consumer install', () => {
     expect(config.exclude).toContain('demo-pkg#beta')
     expect(config.exclude).not.toContain('demo-pkg')
 
-    await runSyncCommand({ cwd: root }, { interactive: false })
+    await runSyncCommand({ cwd: root }, { review: 'reminder' })
 
     expect(
       existsSync(join(root, '.agents', 'skills', 'npm-demo-pkg-alpha')),
     ).toBe(true)
+  })
+
+  it('fails non-interactive sync for a pending dependency without accepting it', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    addSkillPackage(root, 'pending-package', ['pending'])
+    const packageBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+
+    await expect(
+      runSyncCommand({ cwd: root }, { review: 'fail' }),
+    ).rejects.toThrow(
+      'Intent sync requires review before automation can continue.',
+    )
+
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(packageBefore)
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
+  })
+
+  it('fails non-interactive sync for a new skill in an enabled package without accepting it', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    const skillRoot = join(
+      root,
+      'node_modules',
+      '@tanstack',
+      'query',
+      'skills',
+      'mutation',
+    )
+    mkdirSync(skillRoot, { recursive: true })
+    writeFileSync(
+      join(skillRoot, 'SKILL.md'),
+      '---\nname: mutation\ndescription: Mutation guidance\n---\n',
+      'utf8',
+    )
+    const packageBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+
+    await expect(
+      runSyncCommand({ cwd: root }, { review: 'fail' }),
+    ).rejects.toThrow(
+      'Intent sync requires review before automation can continue.',
+    )
+
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(packageBefore)
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
+  })
+
+  it('fails non-interactive sync for changed content without accepting it', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    writeFileSync(
+      join(
+        root,
+        'node_modules',
+        '@tanstack',
+        'query',
+        'skills',
+        'fetching',
+        'SKILL.md',
+      ),
+      '---\nname: fetching\ndescription: Changed guidance\n---\n',
+      'utf8',
+    )
+    const packageBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+
+    await expect(
+      runSyncCommand({ cwd: root }, { review: 'fail' }),
+    ).rejects.toThrow(
+      'Intent sync requires review before automation can continue.',
+    )
+
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(packageBefore)
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
   })
 
   it('leaves new dependencies pending when review is deferred', async () => {
@@ -995,7 +1083,7 @@ describe('consumer install', () => {
     await runSyncCommand(
       { cwd: root },
       {
-        interactive: true,
+        review: 'interactive',
         prompts: {
           complete: () => {},
           reviewNewDependencies: () => Promise.resolve('later'),
@@ -1027,7 +1115,7 @@ describe('consumer install', () => {
       await runSyncCommand(
         { cwd: root },
         {
-          interactive: true,
+          review: 'interactive',
           prompts: {
             complete: () => {},
             reviewNewDependencies: () =>
