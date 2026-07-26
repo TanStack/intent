@@ -84,6 +84,7 @@ describe('session catalogue formatting', () => {
       '@fixture/package#z',
     ])
     expect(context).toContain('@fixture/package#a: Use @fixture/package#a')
+    expect(catalogue.skills[0]?.description).toBe('Use @fixture/package#a')
     expect(context).not.toContain('person')
     expect(Buffer.byteLength(context)).toBeLessThanOrEqual(8_000)
   })
@@ -99,6 +100,8 @@ describe('session catalogue formatting', () => {
     )
     const context = formatSessionCatalogue(catalogue, { maxBytes: 1_200 })
 
+    expect(catalogue.skills).toHaveLength(50)
+    expect(catalogue.totalSkillCount).toBe(60)
     expect(Buffer.byteLength(context)).toBeLessThanOrEqual(1_200)
     expect(context).toMatch(/additional skills omitted/)
   })
@@ -118,18 +121,18 @@ describe('session catalogue formatting', () => {
     )
   })
 
-  it('includes warnings and excludes human-facing notices', () => {
+  it('excludes warnings and human-facing notices', () => {
     const catalogue = buildSessionCatalogue(
       result([], ['Agent warning'], ['Maintainer notice']),
     )
     const context = formatSessionCatalogue(catalogue)
 
-    expect(catalogue.totalWarningCount).toBe(1)
-    expect(context).toContain('- Agent warning')
+    expect(catalogue).toEqual({ skills: [], totalSkillCount: 0 })
+    expect(context).not.toContain('Agent warning')
     expect(context).not.toContain('Maintainer notice')
   })
 
-  it('reports omitted warnings from the warning count only', () => {
+  it('excludes warnings regardless of warning count', () => {
     const catalogue = buildSessionCatalogue(
       result(
         [],
@@ -139,19 +142,19 @@ describe('session catalogue formatting', () => {
     )
     const context = formatSessionCatalogue(catalogue)
 
-    expect(catalogue.totalWarningCount).toBe(12)
-    expect(catalogue.warnings).toHaveLength(10)
-    expect(context).toContain('- 2 additional warnings omitted.')
+    expect(catalogue).toEqual({ skills: [], totalSkillCount: 0 })
+    expect(context).not.toContain('Warning 1')
+    expect(context).not.toContain('additional warnings omitted')
     expect(context).not.toContain('Maintainer notice')
   })
 
-  it('omits the warnings section when only notices are present', () => {
+  it('omits diagnostics when only notices are present', () => {
     const catalogue = buildSessionCatalogue(
       result([], [], ['Maintainer notice']),
     )
     const context = formatSessionCatalogue(catalogue)
 
-    expect(catalogue.totalWarningCount).toBe(0)
+    expect(catalogue).toEqual({ skills: [], totalSkillCount: 0 })
     expect(context).not.toContain('Warnings:')
     expect(context).not.toContain('Maintainer notice')
   })

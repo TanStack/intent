@@ -19,13 +19,11 @@ import { findWorkspacePackages } from './setup/workspace-patterns.js'
 import type { IntentSkillList } from './core/index.js'
 import type { ReadFs } from './shared/utils.js'
 
-const CACHE_SCHEMA_VERSION = 2
+const CACHE_SCHEMA_VERSION = 3
 const DEFAULT_MAX_CONTEXT_BYTES = 8_000
 const DEFAULT_MAX_SKILLS = 50
 const MIN_CONTEXT_BYTES = 512
 const MAX_DESCRIPTION_LENGTH = 180
-const MAX_WARNING_COUNT = 10
-const MAX_WARNING_LENGTH = 300
 const FINGERPRINT_FILES = [
   'package.json',
   'intent.lock',
@@ -55,8 +53,6 @@ export interface CatalogueVerificationEntry {
 export interface SessionCatalogue {
   skills: Array<SessionSkillSummary>
   totalSkillCount: number
-  totalWarningCount: number
-  warnings: Array<string>
 }
 
 export interface DiscoveredSessionCatalogue {
@@ -98,16 +94,9 @@ export function buildSessionCatalogue(
       }
     })
     .sort((left, right) => compareOrdinal(left.id, right.id))
-  const allWarnings = result.warnings
-    .map(normalizeWhitespace)
-    .filter((warning) => warning && !containsLocalPath(warning))
-    .map((warning) => truncateText(warning, MAX_WARNING_LENGTH))
-
   return {
     skills: allSkills.slice(0, maxSkills),
     totalSkillCount: allSkills.length,
-    totalWarningCount: allWarnings.length,
-    warnings: allWarnings.slice(0, MAX_WARNING_COUNT),
   }
 }
 
@@ -122,12 +111,7 @@ export function formatSessionCatalogue(
     )
   }
   if (catalogue.skills.length === 0) {
-    return fitWarnings(
-      ['No available Intent skills.'],
-      catalogue.warnings,
-      catalogue.totalWarningCount,
-      maxBytes,
-    )
+    return 'No available Intent skills.'
   }
 
   const baseLines = ['Available Intent skills:', '']
@@ -165,12 +149,7 @@ export function formatSessionCatalogue(
       'Session catalogue maxBytes must be large enough for complete guidance.',
     )
   }
-  return fitWarnings(
-    lines,
-    catalogue.warnings,
-    catalogue.totalWarningCount,
-    maxBytes,
-  )
+  return lines.join('\n')
 }
 
 export function resolveCatalogueWorkspaceRoot(cwd: string): string {
@@ -338,45 +317,6 @@ function formatOmittedSkills(count: number): string {
   return `- ${count} additional ${count === 1 ? 'skill' : 'skills'} omitted; narrow the catalogue with package.json intent.skills or intent.exclude.`
 }
 
-function fitWarnings(
-  lines: Array<string>,
-  warnings: Array<string>,
-  totalWarningCount: number,
-  maxBytes: number,
-): string {
-  const warningLines: Array<string> = []
-
-  for (const warning of warnings) {
-    const nextWarningLines = [...warningLines, `- ${warning}`]
-    const omitted = totalWarningCount - nextWarningLines.length
-    const candidateLines = [
-      ...lines,
-      '',
-      'Warnings:',
-      ...nextWarningLines,
-      ...(omitted > 0 ? [formatOmittedWarnings(omitted)] : []),
-    ]
-    if (!fits(candidateLines, maxBytes)) break
-    warningLines.push(nextWarningLines.at(-1)!)
-  }
-
-  const omitted = totalWarningCount - warningLines.length
-  if (warningLines.length === 0 && omitted === 0) return lines.join('\n')
-
-  const outputLines = [
-    ...lines,
-    '',
-    'Warnings:',
-    ...warningLines,
-    ...(omitted > 0 ? [formatOmittedWarnings(omitted)] : []),
-  ]
-  return fits(outputLines, maxBytes) ? outputLines.join('\n') : lines.join('\n')
-}
-
-function formatOmittedWarnings(count: number): string {
-  return `- ${count} additional ${count === 1 ? 'warning' : 'warnings'} omitted.`
-}
-
 function fits(lines: Array<string>, maxBytes: number): boolean {
   return Buffer.byteLength(lines.join('\n')) <= maxBytes
 }
@@ -410,10 +350,7 @@ function isCatalogue(value: unknown): value is SessionCatalogue {
   return (
     Array.isArray(catalogue.skills) &&
     catalogue.skills.every(isSkillSummary) &&
-    typeof catalogue.totalSkillCount === 'number' &&
-    typeof catalogue.totalWarningCount === 'number' &&
-    Array.isArray(catalogue.warnings) &&
-    catalogue.warnings.every((warning) => typeof warning === 'string')
+    typeof catalogue.totalSkillCount === 'number'
   )
 }
 

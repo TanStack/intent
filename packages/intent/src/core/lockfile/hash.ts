@@ -24,6 +24,7 @@ type HashEntry = { path: string; content: Buffer }
 type HashReadFs = ReadFs & { opendirSync?: typeof opendirSync }
 
 const nodeHashReadFs: HashReadFs = { ...nodeReadFs, opendirSync }
+const HASH_ENTRY_SEPARATOR = Buffer.from([0])
 
 function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
@@ -65,14 +66,14 @@ function hashEntries(entries: ReadonlyArray<HashEntry>): string {
     compareStrings(a.path, b.path),
   )) {
     const path = Buffer.from(entry.path, 'utf8')
-    hash.update(Buffer.from(String(path.length), 'ascii'))
-    hash.update(Buffer.from([0]))
+    hash.update(String(path.length), 'ascii')
+    hash.update(HASH_ENTRY_SEPARATOR)
     hash.update(path)
-    hash.update(Buffer.from([0]))
-    hash.update(Buffer.from(String(entry.content.length), 'ascii'))
-    hash.update(Buffer.from([0]))
+    hash.update(HASH_ENTRY_SEPARATOR)
+    hash.update(String(entry.content.length), 'ascii')
+    hash.update(HASH_ENTRY_SEPARATOR)
     hash.update(entry.content)
-    hash.update(Buffer.from([0]))
+    hash.update(HASH_ENTRY_SEPARATOR)
   }
   return `sha256-${hash.digest('hex')}`
 }
@@ -133,12 +134,7 @@ export function computeSkillContentHash({
   skillDir,
   fs = nodeHashReadFs,
 }: ComputeSkillContentHashOptions): string {
-  const realPackageRoot = resolveInPackage(
-    fs,
-    resolve(packageRoot),
-    fs.realpathSync(resolve(packageRoot)),
-    'package root',
-  )
+  const realPackageRoot = fs.realpathSync(resolve(packageRoot))
   const requestedSkillDir = isAbsolute(skillDir)
     ? resolve(skillDir)
     : resolve(packageRoot, skillDir)
