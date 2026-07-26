@@ -142,6 +142,16 @@ export function isPackageExcluded(
   )
 }
 
+export function findPackageExcludeMatch(
+  packageName: string,
+  matchers: Array<ExcludeMatcher>,
+): ExcludeMatcher | undefined {
+  return matchers.find(
+    (matcher) =>
+      matcher.matchesSkill === undefined && matcher.matchesPackage(packageName),
+  )
+}
+
 // A prefixed skill is loadable by its short alias too; an exclude must match either form.
 export function skillNameVariants(
   packageName: string,
@@ -162,6 +172,19 @@ export function isSkillExcluded(
 ): boolean {
   const variants = skillNameVariants(packageName, skillName)
   return matchers.some((matcher) => {
+    if (!matcher.matchesPackage(packageName)) return false
+    if (matcher.matchesSkill === undefined) return true
+    return variants.some((variant) => matcher.matchesSkill!(variant))
+  })
+}
+
+export function findSkillExcludeMatch(
+  packageName: string,
+  skillName: string,
+  matchers: Array<ExcludeMatcher>,
+): ExcludeMatcher | undefined {
+  const variants = skillNameVariants(packageName, skillName)
+  return matchers.find((matcher) => {
     if (!matcher.matchesPackage(packageName)) return false
     if (matcher.matchesSkill === undefined) return true
     return variants.some((variant) => matcher.matchesSkill!(variant))

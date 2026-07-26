@@ -11,6 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   compileExcludePatterns,
   compileWildcardPattern,
+  findPackageExcludeMatch,
+  findSkillExcludeMatch,
 } from '../src/core/excludes.js'
 import {
   ALLOW_ALL_NOTICE,
@@ -235,6 +237,91 @@ describe('applySourcePolicy — allowlist matrix', () => {
       },
     )
     expect(input.skills.map((s) => s.name)).toEqual(['keep', 'drop'])
+  })
+
+  it('records only exclusions permitted by intent.skills', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [
+          pkg('@scope/allowed', ['keep', 'drop']),
+          pkg('@scope/concealed', ['secret']),
+        ],
+      },
+      {
+        config: config(['@scope/allowed']),
+        excludeMatchers: compileExcludePatterns([
+          '@scope/allowed#drop',
+          '@scope/concealed#secret',
+        ]),
+      },
+    )
+
+    expect(
+      result.excludedSkills.map(
+        ({ package: package_, skill: entry, pattern }) =>
+          `${package_.name}#${entry.name}:${pattern}`,
+      ),
+    ).toEqual(['@scope/allowed#drop:@scope/allowed#drop'])
+  })
+})
+
+describe('compiled policy explanations', () => {
+  it('returns the package-level entry that permits a skill', () => {
+    const policy = compileSkillSourcePolicy(config(['@scope/a']))
+
+    expect(policy.explainPermits('@scope/a')).toMatchObject({
+      permitted: true,
+      source: { raw: '@scope/a' },
+    })
+    expect(policy.explainPermitsSkill('@scope/a', 'x')).toMatchObject({
+      permitted: true,
+      source: { raw: '@scope/a' },
+    })
+  })
+
+  it('returns the skill-level entry that permits a skill', () => {
+    const policy = compileSkillSourcePolicy(config(['@scope/a#x']))
+
+    expect(policy.explainPermitsSkill('@scope/a', 'x')).toMatchObject({
+      permitted: true,
+      source: { raw: '@scope/a#x', skill: 'x' },
+    })
+    expect(policy.explainPermitsSkill('@scope/a', 'y')).toEqual({
+      permitted: false,
+      source: null,
+    })
+  })
+
+  it.each([
+    [undefined, true],
+    [['*'], true],
+    [[], false],
+  ])(
+    'explains policy mode %# without inventing a responsible entry',
+    (value, permitted) => {
+      const policy = compileSkillSourcePolicy(config(value))
+
+      expect(policy.explainPermits('@scope/a')).toEqual({
+        permitted,
+        source: null,
+      })
+      expect(policy.explainPermitsSkill('@scope/a', 'x')).toEqual({
+        permitted,
+        source: null,
+      })
+    },
+  )
+
+  it('returns the exclusion pattern that matched', () => {
+    const matchers = compileExcludePatterns(['@scope/a', '@scope/b#fetch-*'])
+
+    expect(findPackageExcludeMatch('@scope/a', matchers)?.pattern).toBe(
+      '@scope/a',
+    )
+    expect(
+      findSkillExcludeMatch('@scope/b', 'fetch-one', matchers)?.pattern,
+    ).toBe('@scope/b#fetch-*')
+    expect(findSkillExcludeMatch('@scope/b', 'other', matchers)).toBeUndefined()
   })
 })
 

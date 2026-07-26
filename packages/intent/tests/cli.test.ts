@@ -1036,6 +1036,220 @@ describe('cli commands', () => {
     expect(output.match(/Load:/g)).toHaveLength(2)
   })
 
+  it('explains why human-listed skills are available', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-why-'))
+    tempDirs.push(root)
+    const pkgDir = join(root, 'node_modules', '@tanstack', 'query')
+
+    writeFileSync(join(root, 'pnpm-lock.yaml'), '')
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['@tanstack/query#fetching', '@tanstack/query#query/cache'],
+      },
+    })
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(join(pkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query fetching skill',
+    })
+    writeSkillMd(join(pkgDir, 'skills', 'query', 'cache'), {
+      name: 'query/cache',
+      description: 'Query cache skill',
+    })
+
+    process.env.INTENT_AUDIENCE = 'human'
+    process.chdir(root)
+
+    const exitCode = await main(['list', '--why'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain(
+      'Allowed by  intent.skills["@tanstack/query#fetching"]',
+    )
+    expect(output).toContain(
+      'Allowed by  intent.skills["@tanstack/query#query/cache"]',
+    )
+    expect(output.indexOf('Allowed by')).toBeLessThan(output.indexOf('Load:'))
+  })
+
+  it.each(['@tanstack/query#fetching', '@tanstack/query'])(
+    'explains skills excluded by %s only under --why',
+    async (pattern) => {
+      const root = mkdtempSync(
+        join(realTmpdir, 'intent-cli-list-why-excluded-'),
+      )
+      tempDirs.push(root)
+      writeJson(join(root, 'package.json'), {
+        name: 'app',
+        private: true,
+        intent: {
+          skills: ['@tanstack/query'],
+          exclude: [pattern],
+        },
+      })
+      writeInstalledIntentPackage(root, {
+        name: '@tanstack/query',
+        version: '5.0.0',
+        skillName: 'fetching',
+        description: 'Query data fetching patterns',
+      })
+      process.env.INTENT_AUDIENCE = 'human'
+      process.chdir(root)
+
+      expect(await main(['list'])).toBe(0)
+      const defaultOutput = logSpy.mock.calls.flat().join('\n')
+      expect(defaultOutput).not.toContain('@tanstack/query\n')
+      expect(defaultOutput).not.toContain('fetching')
+      logSpy.mockClear()
+
+      expect(await main(['list', '--why'])).toBe(0)
+      const whyOutput = logSpy.mock.calls.flat().join('\n')
+      expect(whyOutput).toContain('@tanstack/query\n')
+      expect(whyOutput).toContain('fetching  (excluded)')
+      expect(whyOutput).toContain(
+        `Excluded by  intent.exclude[${JSON.stringify(pattern)}]`,
+      )
+      expect(whyOutput).not.toContain('Load:')
+    },
+  )
+
+  it('names a package-level entry that allows a skill', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-why-package-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    process.env.INTENT_AUDIENCE = 'human'
+    process.chdir(root)
+
+    expect(await main(['list', '--why'])).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(output).toContain('Allowed by  intent.skills["@tanstack/query"]')
+  })
+
+  it.each([
+    [undefined, 'Available because intent.skills is not set'],
+    [['*'], 'Allowed because intent.skills allows all sources'],
+  ])('explains permit-all configuration %#', async (skills, explanation) => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-why-mode-'))
+    tempDirs.push(root)
+    if (skills) {
+      writeJson(join(root, 'package.json'), {
+        name: 'app',
+        private: true,
+        intent: { skills },
+      })
+    }
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    process.env.INTENT_AUDIENCE = 'human'
+    process.chdir(root)
+
+    expect(await main(['list', '--why'])).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(output).toContain(explanation)
+  })
+
+  it('adds no output for --why in agent sessions', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-why-agent-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['@tanstack/query'],
+        exclude: ['@tanstack/query#fetching'],
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    process.env.INTENT_AUDIENCE = 'agent'
+    process.chdir(root)
+
+    expect(await main(['list'])).toBe(0)
+    const defaultOutput = logSpy.mock.calls
+      .map((call: Array<unknown>) => call[0])
+      .join('\n')
+    logSpy.mockClear()
+
+    expect(await main(['list', '--why'])).toBe(0)
+    const whyOutput = logSpy.mock.calls
+      .map((call: Array<unknown>) => call[0])
+      .join('\n')
+
+    expect(whyOutput).toBe(defaultOutput)
+  })
+
+  it.each([false, true])(
+    'does not reveal policy-concealed skills under --why %#',
+    async (showHidden) => {
+      const root = mkdtempSync(
+        join(realTmpdir, 'intent-cli-list-why-concealed-'),
+      )
+      tempDirs.push(root)
+      writeJson(join(root, 'package.json'), {
+        name: 'app',
+        private: true,
+        intent: {
+          skills: ['@tanstack/query'],
+          exclude: ['@tanstack/router#routing'],
+        },
+      })
+      writeInstalledIntentPackage(root, {
+        name: '@tanstack/query',
+        version: '5.0.0',
+        skillName: 'fetching',
+        description: 'Query data fetching patterns',
+      })
+      writeInstalledIntentPackage(root, {
+        name: '@tanstack/router',
+        version: '1.0.0',
+        skillName: 'routing',
+        description: 'Router navigation patterns',
+      })
+      process.env.INTENT_AUDIENCE = 'human'
+      process.chdir(root)
+
+      expect(
+        await main(['list', '--why', ...(showHidden ? ['--show-hidden'] : [])]),
+      ).toBe(0)
+      const combinedOutput = [
+        ...logSpy.mock.calls.flat(),
+        ...errorSpy.mock.calls.flat(),
+      ].join('\n')
+
+      expect(combinedOutput).not.toContain('routing')
+      expect(combinedOutput).not.toContain(
+        'intent.exclude["@tanstack/router#routing"]',
+      )
+    },
+  )
+
   it('prints compact list guidance for agents', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-agent-'))
     tempDirs.push(root)
@@ -1118,6 +1332,37 @@ describe('cli commands', () => {
     expect(output).toContain('1 skill')
     expect(stderr).toContain('get-tsconfig')
     expect(stderr).toContain('Add to opt in')
+  })
+
+  it('explains already-visible hidden sources without revealing more', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-hidden-why-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'get-tsconfig',
+      version: '4.0.0',
+      skillName: 'config',
+      description: 'TypeScript config lookup',
+    })
+    process.env.INTENT_AUDIENCE = 'human'
+    process.chdir(root)
+
+    expect(await main(['list', '--show-hidden', '--why'])).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(output).toContain('  get-tsconfig (1 skill)')
+    expect(output).toContain('    Hidden because not listed in intent.skills')
+    expect(output.match(/get-tsconfig/g)).toHaveLength(1)
   })
 
   it('does not reveal hidden skill sources to agent list output', async () => {

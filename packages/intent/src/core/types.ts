@@ -13,6 +13,7 @@ export interface IntentCoreOptions {
   global?: boolean
   globalOnly?: boolean
   exclude?: Array<string>
+  why?: boolean
 }
 
 export type IntentAudience = 'agent' | 'human'
@@ -33,6 +34,11 @@ export interface IntentSkillSummary {
   description: string
   type?: string
   framework?: string
+  why?: string
+}
+
+export interface IntentExcludedSkillSummary extends IntentSkillSummary {
+  excluded: true
 }
 
 export interface IntentPackageSummary {
@@ -46,6 +52,7 @@ export interface IntentPackageSummary {
 export interface IntentSkillList {
   packageManager: PackageManager
   skills: Array<IntentSkillSummary>
+  excludedSkills?: Array<IntentExcludedSkillSummary>
   packages: Array<IntentPackageSummary>
   hiddenSourceCount: number
   hiddenSources: Array<IntentHiddenSourceSummary>

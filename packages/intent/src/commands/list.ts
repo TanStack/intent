@@ -10,6 +10,7 @@ import {
 } from './support.js'
 import type { GlobalScanFlags } from './support.js'
 import type {
+  IntentExcludedSkillSummary,
   IntentPackageSummary,
   IntentSkillList,
   IntentSkillSummary,
@@ -19,6 +20,7 @@ import type { ScanResult } from '../shared/types.js'
 export interface ListCommandOptions extends GlobalScanFlags {
   json?: boolean
   showHidden?: boolean
+  why?: boolean
 }
 
 function printListDebug(result: IntentSkillList): void {
@@ -81,6 +83,18 @@ function getPackageSkills(
   return skillsByPackageRoot.get(pkg.packageRoot) ?? []
 }
 
+function getExcludedPackageSummary(
+  skill: IntentExcludedSkillSummary,
+): IntentPackageSummary {
+  return {
+    name: skill.packageName,
+    version: skill.packageVersion,
+    source: skill.packageSource,
+    packageRoot: skill.packageRoot,
+    skillCount: 0,
+  }
+}
+
 function formatLoadCommand(
   skillUse: string,
   packageManager: ScanResult['packageManager'],
@@ -89,7 +103,11 @@ function formatLoadCommand(
   return formatIntentCommand(packageManager, `load ${skillUse}${scopeFlag}`)
 }
 
-function printHiddenSources(result: IntentSkillList, audience: string): void {
+function printHiddenSources(
+  result: IntentSkillList,
+  audience: string,
+  why: boolean,
+): void {
   if (audience === 'agent') {
     console.log(
       'Hidden skill sources are not revealed in agent sessions. Run this command outside the agent session to review candidates.',
@@ -107,6 +125,9 @@ function printHiddenSources(result: IntentSkillList, audience: string): void {
         ? `  ${source.name} (${count} not listed: ${source.hiddenSkills.join(', ')})`
         : `  ${source.name} (${count})`,
     )
+    if (why) {
+      console.log('    Hidden because not listed in intent.skills')
+    }
   }
 }
 
@@ -114,9 +135,11 @@ export async function runListCommand(
   options: ListCommandOptions,
 ): Promise<void> {
   const audience = detectIntentAudience()
+  const explain = audience === 'human' && options.why === true && !options.json
   const result = listIntentSkills({
     ...coreOptionsFromGlobalFlags(options),
     audience,
+    why: explain,
   })
   const noticeOptions = noticeOptionsFromGlobalFlags(options)
   printListDebug(result)
@@ -134,10 +157,10 @@ export async function runListCommand(
   const { computeSkillNameWidth, printSkillTree, printTable } =
     await import('../shared/display.js')
 
-  if (result.packages.length === 0) {
+  if (result.packages.length === 0 && result.excludedSkills?.length === 0) {
     console.log('No intent-enabled packages found.')
     if (options.showHidden && result.hiddenSourceCount > 0) {
-      printHiddenSources(result, audience)
+      printHiddenSources(result, audience, explain)
     }
     if (result.warnings.length > 0) {
       console.log()
@@ -166,14 +189,24 @@ export async function runListCommand(
   printVersionConflicts(result)
 
   if (options.showHidden) {
-    printHiddenSources(result, audience)
+    printHiddenSources(result, audience, explain)
   }
 
-  const skillsByPackageRoot = groupSkillsByPackageRoot(result.skills)
-  const allSkills = result.packages.map((pkg) =>
+  const displaySkills = [...result.skills, ...(result.excludedSkills ?? [])]
+  const skillsByPackageRoot = groupSkillsByPackageRoot(displaySkills)
+  const displayPackages = [...result.packages]
+  for (const skill of result.excludedSkills ?? []) {
+    if (!displayPackages.some((pkg) => pkg.packageRoot === skill.packageRoot)) {
+      displayPackages.push(getExcludedPackageSummary(skill))
+    }
+  }
+  const packagesWithSkills = displayPackages.filter(
+    (pkg) => getPackageSkills(pkg, skillsByPackageRoot).length > 0,
+  )
+  const allSkills = packagesWithSkills.map((pkg) =>
     getPackageSkills(pkg, skillsByPackageRoot).map((skill) => ({
       name: skill.skillName,
-      description: skill.description,
+      description: 'excluded' in skill ? '(excluded)' : skill.description,
       type: skill.type,
     })),
   )
@@ -192,17 +225,18 @@ export async function runListCommand(
   }
 
   console.log(`\nSkills:\n`)
-  for (const pkg of result.packages) {
+  for (const pkg of packagesWithSkills) {
     console.log(`  ${pkg.name}`)
     printSkillTree(
       getPackageSkills(pkg, skillsByPackageRoot).map((skill) => ({
         name: skill.skillName,
-        description: skill.description,
+        description: 'excluded' in skill ? '(excluded)' : skill.description,
         loadCommand:
-          audience === 'human'
+          audience === 'human' && !('excluded' in skill)
             ? formatLoadCommand(skill.use, result.packageManager, scopeFlag)
             : undefined,
         type: skill.type,
+        why: skill.why,
       })),
       { nameWidth, packageName: pkg.name, showTypes },
     )

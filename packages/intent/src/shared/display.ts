@@ -13,6 +13,7 @@ export interface SkillDisplay {
   loadCommand?: string
   type?: string
   path?: string
+  why?: string
 }
 
 function padColumn(text: string, width: number): string {
@@ -49,6 +50,9 @@ function printSkillLine(
     ? (skill.type ? `[${skill.type}]` : '').padEnd(14)
     : ''
   console.log(`${nameStr}${padding}${typeCol}${skill.description}`)
+  if (skill.why) {
+    console.log(`${' '.repeat(indent + 2)}${skill.why}`)
+  }
   if (skill.loadCommand) {
     console.log(`${' '.repeat(indent + 2)}Load: ${skill.loadCommand}`)
   }

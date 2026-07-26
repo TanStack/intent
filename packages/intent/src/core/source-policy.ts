@@ -4,6 +4,8 @@ import { ALLOW_ALL_NOTICE } from '../shared/cli-output.js'
 import {
   compileExcludePatterns,
   compileWildcardPattern,
+  findPackageExcludeMatch,
+  findSkillExcludeMatch,
   getConfigDirs,
   getEffectiveExcludePatterns,
   isPackageExcluded,
@@ -50,10 +52,15 @@ export interface LoadRefusal {
   message: string
 }
 
-type ExplicitSkillSource = Extract<
+export type ExplicitSkillSource = Extract<
   SkillSourcesConfig,
   { mode: 'explicit' }
 >['sources'][number]
+
+export interface SkillSourcePolicyDecision {
+  permitted: boolean
+  source: ExplicitSkillSource | null
+}
 
 interface SkillSourceMatcher {
   source: ExplicitSkillSource
@@ -74,6 +81,15 @@ export interface CompiledSkillSourcePolicy {
     skillName: string,
     packageKind?: 'npm' | 'workspace',
   ) => boolean
+  explainPermits: (
+    packageName: string,
+    packageKind?: 'npm' | 'workspace',
+  ) => SkillSourcePolicyDecision
+  explainPermitsSkill: (
+    packageName: string,
+    skillName: string,
+    packageKind?: 'npm' | 'workspace',
+  ) => SkillSourcePolicyDecision
 }
 
 function compileSkillSourceMatcher(
@@ -116,9 +132,21 @@ export function compileSkillSourcePolicy(
   switch (config.mode) {
     case 'absent':
     case 'allow-all':
-      return { matchers: [], permits: () => true, permitsSkill: () => true }
+      return {
+        matchers: [],
+        permits: () => true,
+        permitsSkill: () => true,
+        explainPermits: () => ({ permitted: true, source: null }),
+        explainPermitsSkill: () => ({ permitted: true, source: null }),
+      }
     case 'empty':
-      return { matchers: [], permits: () => false, permitsSkill: () => false }
+      return {
+        matchers: [],
+        permits: () => false,
+        permitsSkill: () => false,
+        explainPermits: () => ({ permitted: false, source: null }),
+        explainPermitsSkill: () => ({ permitted: false, source: null }),
+      }
     case 'explicit': {
       const matchers = config.sources.map(compileSkillSourceMatcher)
       return {
@@ -134,6 +162,27 @@ export function compileSkillSourcePolicy(
               (matcher.matchesSkill === undefined ||
                 matcher.matchesSkill(packageName, skillName)),
           ),
+        explainPermits: (packageName, packageKind) => {
+          const matcher = matchers.find((candidate) =>
+            candidate.matchesPackage(packageName, packageKind),
+          )
+          return {
+            permitted: matcher !== undefined,
+            source: matcher?.source ?? null,
+          }
+        },
+        explainPermitsSkill: (packageName, skillName, packageKind) => {
+          const matcher = matchers.find(
+            (candidate) =>
+              candidate.matchesPackage(packageName, packageKind) &&
+              (candidate.matchesSkill === undefined ||
+                candidate.matchesSkill(packageName, skillName)),
+          )
+          return {
+            permitted: matcher !== undefined,
+            source: matcher?.source ?? null,
+          }
+        },
       }
     }
   }
@@ -237,8 +286,16 @@ function formatUnlistedSkillNotice(
 export interface SourcePolicyResult {
   hiddenSourceCount: number
   hiddenSources: Array<IntentHiddenSourceSummary>
+  excludedSkills: Array<ExcludedSkill>
   packages: Array<IntentPackage>
   notices: Array<string>
+  sourcePolicy: CompiledSkillSourcePolicy
+}
+
+export interface ExcludedSkill {
+  package: IntentPackage
+  skill: IntentPackage['skills'][number]
+  pattern: string
 }
 
 export function scanForConfiguredIntents({
@@ -282,9 +339,24 @@ export function applySourcePolicy(
 
   const packages: Array<IntentPackage> = []
   const hiddenSources: Array<IntentHiddenSourceSummary> = []
+  const excludedSkills: Array<ExcludedSkill> = []
 
   for (const pkg of scanResult.packages) {
-    if (isPackageExcluded(pkg.name, excludeMatchers)) continue
+    const packageExclude = findPackageExcludeMatch(pkg.name, excludeMatchers)
+    if (packageExclude) {
+      if (sourcePolicy.permits(pkg.name, pkg.kind)) {
+        for (const skill of pkg.skills) {
+          if (sourcePolicy.permitsSkill(pkg.name, skill.name, pkg.kind)) {
+            excludedSkills.push({
+              package: pkg,
+              skill,
+              pattern: packageExclude.pattern,
+            })
+          }
+        }
+      }
+      continue
+    }
 
     if (!sourcePolicy.permits(pkg.name, pkg.kind)) {
       if (config.mode === 'explicit') {
@@ -296,9 +368,21 @@ export function applySourcePolicy(
     const skills: Array<IntentPackage['skills'][number]> = []
     const hiddenSkills: Array<string> = []
     for (const skill of pkg.skills) {
-      if (isSkillExcluded(pkg.name, skill.name, excludeMatchers)) continue
       if (!sourcePolicy.permitsSkill(pkg.name, skill.name, pkg.kind)) {
         hiddenSkills.push(skill.name)
+        continue
+      }
+      const skillExclude = findSkillExcludeMatch(
+        pkg.name,
+        skill.name,
+        excludeMatchers,
+      )
+      if (skillExclude) {
+        excludedSkills.push({
+          package: pkg,
+          skill,
+          pattern: skillExclude.pattern,
+        })
         continue
       }
       skills.push(skill)
@@ -352,8 +436,10 @@ export function applySourcePolicy(
   return {
     hiddenSourceCount: hiddenSources.length,
     hiddenSources,
+    excludedSkills,
     packages,
     notices,
+    sourcePolicy,
   }
 }
 
@@ -380,9 +466,12 @@ export function readSkillSourcesConfig(
 export interface PolicedScan {
   hiddenSourceCount: number
   hiddenSources: Array<IntentHiddenSourceSummary>
+  excludedSkills: Array<ExcludedSkill>
   scan: ScanResult
   excludePatterns: Array<string>
   droppedNames: Array<string>
+  config: SkillSourcesConfig
+  sourcePolicy: CompiledSkillSourcePolicy
 }
 
 export function scanForPolicedIntents(params: {
@@ -400,7 +489,6 @@ export function scanForPolicedIntents(params: {
   const config = params.config ?? readSkillSourcesConfig(cwd, context)
   const excludePatterns = getEffectiveExcludePatterns(coreOptions, context)
   const excludeMatchers = compileExcludePatterns(excludePatterns)
-
   const policy = applySourcePolicy(scanResult, {
     audience,
     config,
@@ -417,6 +505,7 @@ export function scanForPolicedIntents(params: {
   return {
     hiddenSourceCount: policy.hiddenSourceCount,
     hiddenSources: audience === 'agent' ? [] : policy.hiddenSources,
+    excludedSkills: audience === 'agent' ? [] : policy.excludedSkills,
     scan: {
       ...scanResult,
       packages: policy.packages,
@@ -431,5 +520,7 @@ export function scanForPolicedIntents(params: {
     },
     excludePatterns,
     droppedNames,
+    config,
+    sourcePolicy: policy.sourcePolicy,
   }
 }

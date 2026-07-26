@@ -26,7 +26,7 @@ function createCli(): CAC {
       'Discover intent-enabled packages from the project or workspace',
     )
     .usage(
-      'list [--json] [--debug] [--global] [--global-only] [--show-hidden] [--no-notices]',
+      'list [--json] [--debug] [--global] [--global-only] [--show-hidden] [--why] [--no-notices]',
     )
     .option('--json', 'Output JSON')
     .option('--debug', 'Print discovery debug details to stderr')
@@ -36,10 +36,12 @@ function createCli(): CAC {
       '--show-hidden',
       'Show hidden skill sources not listed in intent.skills',
     )
+    .option('--why', 'Explain why each shown skill is available or hidden')
     .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('list')
     .example('list --json')
     .example('list --global')
+    .example('list --why')
     .action(async (options: ListCommandOptions) => {
       const { runListCommand } = await import('./commands/list.js')
       await runListCommand(options)

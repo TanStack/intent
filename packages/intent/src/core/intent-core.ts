@@ -26,6 +26,7 @@ import type { ScanOptions, ScanScope } from '../shared/types.js'
 import type {
   IntentCoreErrorCode,
   IntentCoreOptions,
+  IntentExcludedSkillSummary,
   IntentSkillList,
   IntentSkillSummary,
   LoadedIntentSkill,
@@ -36,6 +37,7 @@ import type {
 export type {
   IntentCoreErrorCode,
   IntentCoreOptions,
+  IntentExcludedSkillSummary,
   IntentPackageSummary,
   IntentSkillListDebug,
   IntentSkillList,
@@ -104,13 +106,20 @@ export function listIntentSkills(
   const scanOptions = toScanOptions(options)
   const fsCache = createIntentFsCache()
   const projectContext = resolveProjectContext({ cwd })
-  const { hiddenSourceCount, hiddenSources, scan, excludePatterns } =
-    scanForPolicedIntents({
-      cwd,
-      scanOptions: withFsCache(scanOptions, fsCache),
-      coreOptions: options,
-      context: projectContext,
-    })
+  const {
+    hiddenSourceCount,
+    hiddenSources,
+    excludedSkills,
+    scan,
+    excludePatterns,
+    config,
+    sourcePolicy,
+  } = scanForPolicedIntents({
+    cwd,
+    scanOptions: withFsCache(scanOptions, fsCache),
+    coreOptions: options,
+    context: projectContext,
+  })
   const packages = scan.packages
   const skills = packages.flatMap((pkg) =>
     pkg.skills.map((skill): IntentSkillSummary => {
@@ -124,6 +133,22 @@ export function listIntentSkills(
         description: skill.description,
         type: skill.type,
         framework: skill.framework,
+        why: options.why
+          ? config.mode === 'absent'
+            ? 'Available because intent.skills is not set'
+            : config.mode === 'allow-all'
+              ? 'Allowed because intent.skills allows all sources'
+              : (() => {
+                  const decision = sourcePolicy.explainPermitsSkill(
+                    pkg.name,
+                    skill.name,
+                    pkg.kind,
+                  )
+                  return decision.source
+                    ? `Allowed by  intent.skills[${JSON.stringify(decision.source.raw)}]`
+                    : undefined
+                })()
+          : undefined,
       }
     }),
   )
@@ -143,6 +168,24 @@ export function listIntentSkills(
     warnings: scan.warnings,
     notices: scan.notices,
     conflicts: scan.conflicts,
+  }
+
+  if (options.why) {
+    result.excludedSkills = excludedSkills.map(
+      ({ package: pkg, skill, pattern }): IntentExcludedSkillSummary => ({
+        use: formatSkillUse(pkg.name, skill.name),
+        packageName: pkg.name,
+        packageRoot: pkg.packageRoot,
+        packageVersion: pkg.version,
+        packageSource: pkg.source,
+        skillName: skill.name,
+        description: skill.description,
+        type: skill.type,
+        framework: skill.framework,
+        why: `Excluded by  intent.exclude[${JSON.stringify(pattern)}]`,
+        excluded: true,
+      }),
+    )
   }
 
   if (options.debug) {
