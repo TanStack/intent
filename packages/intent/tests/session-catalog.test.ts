@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -22,6 +28,7 @@ function tempRoot(name: string): string {
 function result(
   skills: Array<{ use: string; description: string }>,
   warnings: Array<string> = [],
+  notices: Array<string> = [],
 ): IntentSkillList {
   return {
     packageManager: 'pnpm',
@@ -45,7 +52,7 @@ function result(
     hiddenSourceCount: 0,
     hiddenSources: [],
     warnings,
-    notices: [],
+    notices,
     conflicts: [],
   }
 }
@@ -110,9 +117,93 @@ describe('session catalogue formatting', () => {
       'Use /users/:id and /posts/:slug routes',
     )
   })
+
+  it('includes warnings and excludes human-facing notices', () => {
+    const catalogue = buildSessionCatalogue(
+      result([], ['Agent warning'], ['Maintainer notice']),
+    )
+    const context = formatSessionCatalogue(catalogue)
+
+    expect(catalogue.totalWarningCount).toBe(1)
+    expect(context).toContain('- Agent warning')
+    expect(context).not.toContain('Maintainer notice')
+  })
+
+  it('reports omitted warnings from the warning count only', () => {
+    const catalogue = buildSessionCatalogue(
+      result(
+        [],
+        Array.from({ length: 12 }, (_, index) => `Warning ${index + 1}`),
+        ['Maintainer notice'],
+      ),
+    )
+    const context = formatSessionCatalogue(catalogue)
+
+    expect(catalogue.totalWarningCount).toBe(12)
+    expect(catalogue.warnings).toHaveLength(10)
+    expect(context).toContain('- 2 additional warnings omitted.')
+    expect(context).not.toContain('Maintainer notice')
+  })
+
+  it('omits the warnings section when only notices are present', () => {
+    const catalogue = buildSessionCatalogue(
+      result([], [], ['Maintainer notice']),
+    )
+    const context = formatSessionCatalogue(catalogue)
+
+    expect(catalogue.totalWarningCount).toBe(0)
+    expect(context).not.toContain('Warnings:')
+    expect(context).not.toContain('Maintainer notice')
+  })
 })
 
 describe('session catalogue cache', () => {
+  it('recomputes a persisted catalogue from an older schema version', async () => {
+    const root = tempRoot('intent-catalog-stale-schema-')
+    const cacheDir = join(root, 'cache')
+    writeFileSync(join(root, 'package.json'), '{}')
+    let discoveries = 0
+    const options = {
+      cacheDir,
+      root,
+      discover: () => {
+        discoveries += 1
+        return {
+          result: result([
+            {
+              use: '@fixture/package#core',
+              description:
+                discoveries === 1 ? 'Cached guidance' : 'Recomputed guidance',
+            },
+          ]),
+          verification: [],
+        }
+      },
+    }
+    const first = await getSessionCatalogue(options)
+    const persisted = JSON.parse(readFileSync(first.cachePath, 'utf8')) as {
+      schemaVersion: number
+    }
+    writeFileSync(
+      first.cachePath,
+      JSON.stringify({
+        ...persisted,
+        schemaVersion: persisted.schemaVersion - 1,
+      }),
+    )
+
+    const recomputed = await getSessionCatalogue(options)
+
+    expect(recomputed.cacheStatus).toBe('miss')
+    expect(recomputed.catalogue.skills).toEqual([
+      {
+        id: '@fixture/package#core',
+        description: 'Recomputed guidance',
+      },
+    ])
+    expect(discoveries).toBe(2)
+  })
+
   it('reuses valid content and refreshes after accepted skill drift', async () => {
     const root = tempRoot('intent-catalog-cache-')
     const cacheDir = join(root, 'cache')

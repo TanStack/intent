@@ -19,7 +19,7 @@ import { findWorkspacePackages } from './setup/workspace-patterns.js'
 import type { IntentSkillList } from './core/index.js'
 import type { ReadFs } from './shared/utils.js'
 
-const CACHE_SCHEMA_VERSION = 1
+const CACHE_SCHEMA_VERSION = 2
 const DEFAULT_MAX_CONTEXT_BYTES = 8_000
 const DEFAULT_MAX_SKILLS = 50
 const MIN_CONTEXT_BYTES = 512
@@ -98,7 +98,7 @@ export function buildSessionCatalogue(
       }
     })
     .sort((left, right) => compareOrdinal(left.id, right.id))
-  const allWarnings = [...result.warnings, ...result.notices]
+  const allWarnings = result.warnings
     .map(normalizeWhitespace)
     .filter((warning) => warning && !containsLocalPath(warning))
     .map((warning) => truncateText(warning, MAX_WARNING_LENGTH))
