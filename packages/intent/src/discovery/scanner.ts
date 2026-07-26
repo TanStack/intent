@@ -1,11 +1,10 @@
 // Static-discovery invariant: discovery reads package data as files and never
-// executes discovered package code. The only sanctioned dynamic load is Yarn's
-// PnP runtime (.pnp.cjs / pnpapi), used solely to map identities to readable
-// roots. Enforced by the `intent/static-discovery` ESLint rule.
+// executes discovered package code. The only sanctioned project-code dynamic
+// load is Yarn's PnP runtime (.pnp.cjs / pnpapi), used solely to map identities
+// to readable roots. Enforced by the `intent/static-discovery` ESLint rule.
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import semver from 'semver'
 import {
   detectGlobalNodeModules,
   nodeReadFs,
@@ -22,6 +21,7 @@ import { detectPackageManager } from './package-manager.js'
 import { createDependencyWalker, createPackageRegistrar } from './index.js'
 import type { IntentFsCache } from './fs-cache.js'
 import type { ReadFs } from '../shared/utils.js'
+import type Semver from 'semver'
 import type {
   InstalledVariant,
   IntentConfig,
@@ -73,6 +73,13 @@ interface NodeModuleInternals {
 }
 
 const requireFromHere = createRequire(import.meta.url)
+let semver: typeof Semver | undefined
+
+function getSemver(): typeof Semver {
+  // Static yaml/semver imports add ~20ms of hook startup, and tsdown inlines dynamic imports, so createRequire preserves the lazy boundary.
+  semver ??= requireFromHere('semver') as typeof Semver
+  return semver
+}
 
 function findPnpFile(start: string): string | null {
   let dir = resolve(start)
@@ -126,6 +133,9 @@ function loadPnpApi(root: string): LoadedPnp | null {
   const readFs = requireFromHere('node:fs') as unknown as ReadFs
 
   try {
+    // Yarn PnP patches CommonJS resolution during setup, so cache yaml before
+    // loading the runtime; later createRequire calls otherwise fail.
+    void requireFromHere('yaml')
     // eslint-disable-next-line no-restricted-syntax -- sanctioned PnP runtime load
     const pnpModule = requireFromHere(pnpPath) as PnpApi
     if (typeof pnpModule.setup === 'function') {
@@ -405,10 +415,10 @@ function getPackageDepth(packageRoot: string, projectRoot: string): number {
 }
 
 function normalizeVersion(version: string): string | null {
-  const validVersion = semver.valid(version)
+  const validVersion = getSemver().valid(version)
   if (validVersion) return validVersion
 
-  return semver.coerce(version)?.version ?? null
+  return getSemver().coerce(version)?.version ?? null
 }
 
 function comparePackageVersions(a: string, b: string): number {
@@ -421,7 +431,7 @@ function comparePackageVersions(a: string, b: string): number {
     return 0
   }
 
-  return semver.compare(versionA, versionB)
+  return getSemver().compare(versionA, versionB)
 }
 
 function formatVariantWarning(

@@ -11,8 +11,16 @@ import {
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve, sep } from 'node:path'
-import { parse as parseYaml } from 'yaml'
 import type { Dirent } from 'node:fs'
+import type { parse as ParseYaml } from 'yaml'
+
+const requireFromHere = createRequire(import.meta.url)
+let parseYaml: typeof ParseYaml | undefined
+
+function getParseYaml(): typeof ParseYaml {
+  parseYaml ??= (requireFromHere('yaml') as { parse: typeof ParseYaml }).parse
+  return parseYaml
+}
 
 /**
  * The subset of `node:fs` the scanner reads through. Under Yarn PnP this is
@@ -402,7 +410,7 @@ export function parseFrontmatter(
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
   if (!match?.[1]) return null
   try {
-    return parseYaml(match[1]) as Record<string, unknown>
+    return getParseYaml()(match[1]) as Record<string, unknown>
   } catch {
     return null
   }

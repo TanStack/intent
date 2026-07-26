@@ -1,9 +1,18 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { parse as parseJsonc } from 'jsonc-parser'
-import { parse as parseYaml } from 'yaml'
 import { hasAnySkillFile } from '../shared/utils.js'
 import type { ParseError } from 'jsonc-parser'
+import type { parse as ParseYaml } from 'yaml'
+
+const requireFromHere = createRequire(import.meta.url)
+let parseYaml: typeof ParseYaml | undefined
+
+function getParseYaml(): typeof ParseYaml {
+  parseYaml ??= (requireFromHere('yaml') as { parse: typeof ParseYaml }).parse
+  return parseYaml
+}
 
 function normalizeWorkspacePattern(pattern: string): string {
   return pattern.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
@@ -72,7 +81,7 @@ function hasWorkspaceManifest(dir: string): boolean {
 }
 
 function readYamlFile(path: string): unknown {
-  return parseYaml(readFileSync(path, 'utf8'))
+  return getParseYaml()(readFileSync(path, 'utf8'))
 }
 
 function readJsonFile(path: string): unknown {
