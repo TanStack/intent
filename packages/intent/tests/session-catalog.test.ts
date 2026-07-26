@@ -1,13 +1,20 @@
 import {
+  chmodSync,
+  existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { basename, dirname, join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildSessionCatalogue,
   formatSessionCatalogue,
@@ -161,6 +168,318 @@ describe('session catalogue formatting', () => {
 })
 
 describe('session catalogue cache', () => {
+  it('fails open when the default temporary directory cannot be resolved', async () => {
+    const root = tempRoot('intent-catalog-missing-temp-')
+    const missingTempRoot = join(root, 'missing')
+    writeFileSync(join(root, 'package.json'), '{}')
+    const originalTmpdir = process.env.TMPDIR
+    const stderr = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true)
+
+    try {
+      process.env.TMPDIR = missingTempRoot
+      vi.resetModules()
+      const catalog = await import('../src/session-catalog.js')
+      const discovered = await catalog.getSessionCatalogue({
+        root,
+        discover: () => ({
+          result: result([
+            {
+              use: '@fixture/package#core',
+              description: 'Safe guidance',
+            },
+          ]),
+          verification: [],
+        }),
+      })
+
+      expect(discovered.cacheStatus).toBe('miss')
+      expect(catalog.formatSessionCatalogue(discovered.catalogue)).toContain(
+        'Safe guidance',
+      )
+      expect(existsSync(discovered.cachePath)).toBe(false)
+      expect(
+        stderr.mock.calls.filter(([chunk]) =>
+          String(chunk).includes('caching is disabled'),
+        ),
+      ).toHaveLength(1)
+    } finally {
+      if (originalTmpdir === undefined) delete process.env.TMPDIR
+      else process.env.TMPDIR = originalTmpdir
+      vi.resetModules()
+      stderr.mockRestore()
+    }
+  })
+
+  it('uses a private immediate child of the current temporary directory by default', async ({
+    skip,
+  }) => {
+    if (typeof process.getuid !== 'function') {
+      skip()
+      return
+    }
+
+    const root = tempRoot('intent-catalog-default-root-')
+    const importTempRoot = tempRoot('intent-catalog-import-temp-')
+    const defaultTempRoot = tempRoot('intent-catalog-default-temp-')
+    const realDefaultTempRoot = realpathSync.native(defaultTempRoot)
+    writeFileSync(join(root, 'package.json'), '{}')
+    const originalTmpdir = process.env.TMPDIR
+    let discoveries = 0
+
+    try {
+      process.env.TMPDIR = importTempRoot
+      vi.resetModules()
+      const { getSessionCatalogue: getFreshSessionCatalogue } =
+        await import('../src/session-catalog.js')
+      process.env.TMPDIR = defaultTempRoot
+      const options = {
+        root,
+        discover: () => {
+          discoveries += 1
+          return { result: result([]), verification: [] }
+        },
+      }
+
+      const first = await getFreshSessionCatalogue(options)
+      const cacheDir = dirname(first.cachePath)
+
+      expect(dirname(cacheDir)).toBe(realDefaultTempRoot)
+      expect(basename(cacheDir)).toMatch(/^tanstack-intent-.*-catalogues$/)
+      expect(statSync(cacheDir).mode & 0o777).toBe(0o700)
+      expect(statSync(first.cachePath).mode & 0o777).toBe(0o600)
+
+      chmodSync(cacheDir, 0o755)
+      const second = await getFreshSessionCatalogue(options)
+
+      expect(second.cacheStatus).toBe('hit')
+      expect(second.cachePath).toBe(first.cachePath)
+      expect(statSync(cacheDir).mode & 0o777).toBe(0o700)
+      expect(discoveries).toBe(1)
+    } finally {
+      if (originalTmpdir === undefined) delete process.env.TMPDIR
+      else process.env.TMPDIR = originalTmpdir
+      vi.resetModules()
+    }
+  })
+
+  it('bypasses a supplied cache directory symlink', async ({ skip }) => {
+    const root = tempRoot('intent-catalog-directory-symlink-')
+    const targetDir = join(root, 'target')
+    const cacheDir = join(root, 'cache')
+    mkdirSync(targetDir)
+    writeFileSync(join(root, 'package.json'), '{}')
+    try {
+      symlinkSync(targetDir, cacheDir, 'dir')
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        ['EACCES', 'ENOTSUP', 'EPERM'].includes(String(error.code))
+      ) {
+        skip()
+        return
+      }
+      throw error
+    }
+
+    let discoveries = 0
+    const options = {
+      cacheDir,
+      root,
+      discover: () => {
+        discoveries += 1
+        return { result: result([]), verification: [] }
+      },
+    }
+    const stderr = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true)
+
+    try {
+      const first = await getSessionCatalogue(options)
+      const second = await getSessionCatalogue(options)
+      const cacheWarnings = stderr.mock.calls.filter(([chunk]) =>
+        String(chunk).includes('caching is disabled'),
+      )
+
+      expect(first.cacheStatus).toBe('miss')
+      expect(second.cacheStatus).toBe('miss')
+      expect(discoveries).toBe(2)
+      expect(existsSync(first.cachePath)).toBe(false)
+      expect(cacheWarnings).toHaveLength(1)
+      expect(String(cacheWarnings[0]?.[0])).toContain(cacheDir)
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
+  it('does not serve a cache file symlink', async ({ skip }) => {
+    if (typeof process.getuid !== 'function') {
+      skip()
+      return
+    }
+
+    const root = tempRoot('intent-catalog-file-symlink-')
+    const cacheDir = join(root, 'cache')
+    const externalCachePath = join(root, 'external-cache.json')
+    writeFileSync(join(root, 'package.json'), '{}')
+    let discoveries = 0
+    const options = {
+      cacheDir,
+      root,
+      discover: () => {
+        discoveries += 1
+        return {
+          result: result([
+            {
+              use: '@fixture/package#core',
+              description: 'Safe guidance',
+            },
+          ]),
+          verification: [],
+        }
+      },
+    }
+    const first = await getSessionCatalogue(options)
+    const persisted = JSON.parse(readFileSync(first.cachePath, 'utf8')) as {
+      catalogue: { skills: Array<{ description: string }> }
+    }
+    persisted.catalogue.skills[0]!.description = 'Modified guidance'
+    writeFileSync(externalCachePath, JSON.stringify(persisted))
+    unlinkSync(first.cachePath)
+    try {
+      symlinkSync(externalCachePath, first.cachePath)
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        ['EACCES', 'ENOTSUP', 'EPERM'].includes(String(error.code))
+      ) {
+        skip()
+        return
+      }
+      throw error
+    }
+
+    const second = await getSessionCatalogue(options)
+
+    expect(second.cacheStatus).toBe('miss')
+    expect(second.catalogue.skills[0]?.description).toBe('Safe guidance')
+    expect(discoveries).toBe(2)
+    expect(lstatSync(first.cachePath).isSymbolicLink()).toBe(false)
+    expect(lstatSync(first.cachePath).isFile()).toBe(true)
+  })
+
+  it('replaces a writable cache file instead of serving it', async ({
+    skip,
+  }) => {
+    if (typeof process.getuid !== 'function') {
+      skip()
+      return
+    }
+
+    const root = tempRoot('intent-catalog-writable-file-')
+    const cacheDir = join(root, 'cache')
+    writeFileSync(join(root, 'package.json'), '{}')
+    let discoveries = 0
+    const options = {
+      cacheDir,
+      root,
+      discover: () => {
+        discoveries += 1
+        return {
+          result: result([
+            {
+              use: '@fixture/package#core',
+              description: 'Safe guidance',
+            },
+          ]),
+          verification: [],
+        }
+      },
+    }
+    const first = await getSessionCatalogue(options)
+    const persisted = JSON.parse(readFileSync(first.cachePath, 'utf8')) as {
+      catalogue: { skills: Array<{ description: string }> }
+    }
+    persisted.catalogue.skills[0]!.description = 'Modified guidance'
+    writeFileSync(first.cachePath, JSON.stringify(persisted))
+    chmodSync(first.cachePath, 0o666)
+
+    const second = await getSessionCatalogue(options)
+
+    expect(second.cacheStatus).toBe('miss')
+    expect(second.catalogue.skills[0]?.description).toBe('Safe guidance')
+    expect(second.cachePath).toBe(first.cachePath)
+    expect(discoveries).toBe(2)
+    expect(lstatSync(second.cachePath).isFile()).toBe(true)
+    expect(statSync(second.cachePath).mode & 0o777).toBe(0o600)
+  })
+
+  it('creates custom cache directories and files with private modes', async ({
+    skip,
+  }) => {
+    if (typeof process.getuid !== 'function') {
+      skip()
+      return
+    }
+
+    const root = tempRoot('intent-catalog-private-modes-')
+    const cacheDir = join(root, 'cache')
+    writeFileSync(join(root, 'package.json'), '{}')
+
+    const catalogue = await getSessionCatalogue({
+      cacheDir,
+      root,
+      discover: () => ({ result: result([]), verification: [] }),
+    })
+
+    expect(statSync(cacheDir).mode & 0o777).toBe(0o700)
+    expect(statSync(catalogue.cachePath).mode & 0o777).toBe(0o600)
+  })
+
+  it('bypasses an existing writable custom cache directory without changing its mode', async ({
+    skip,
+  }) => {
+    if (typeof process.getuid !== 'function') {
+      skip()
+      return
+    }
+
+    const root = tempRoot('intent-catalog-permissive-directory-')
+    const cacheDir = join(root, 'cache')
+    mkdirSync(cacheDir)
+    chmodSync(cacheDir, 0o777)
+    writeFileSync(join(root, 'package.json'), '{}')
+    let discoveries = 0
+    const stderr = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true)
+    const options = {
+      cacheDir,
+      root,
+      discover: () => {
+        discoveries += 1
+        return { result: result([]), verification: [] }
+      },
+    }
+
+    try {
+      const first = await getSessionCatalogue(options)
+      const second = await getSessionCatalogue(options)
+
+      expect(first.cacheStatus).toBe('miss')
+      expect(second.cacheStatus).toBe('miss')
+      expect(discoveries).toBe(2)
+      expect(existsSync(first.cachePath)).toBe(false)
+      expect(statSync(cacheDir).mode & 0o777).toBe(0o777)
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
   it('recomputes a persisted catalogue from an older schema version', async () => {
     const root = tempRoot('intent-catalog-stale-schema-')
     const cacheDir = join(root, 'cache')

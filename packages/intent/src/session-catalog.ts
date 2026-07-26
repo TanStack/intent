@@ -1,6 +1,12 @@
 import {
+  chmodSync,
+  closeSync,
+  constants,
   existsSync,
+  fstatSync,
+  lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   realpathSync,
   renameSync,
@@ -8,7 +14,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir, userInfo } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { resolveProjectContext } from './core/project-context.js'
 import { computeSkillContentHash } from './core/lockfile/hash.js'
@@ -24,6 +30,7 @@ const DEFAULT_MAX_CONTEXT_BYTES = 8_000
 const DEFAULT_MAX_SKILLS = 50
 const MIN_CONTEXT_BYTES = 512
 const MAX_DESCRIPTION_LENGTH = 180
+const warnedCacheDirectories = new Set<string>()
 const FINGERPRINT_FILES = [
   'package.json',
   'intent.lock',
@@ -157,14 +164,7 @@ export function resolveCatalogueWorkspaceRoot(cwd: string): string {
   return normalizeRoot(context.workspaceRoot ?? context.packageRoot ?? cwd)
 }
 
-export async function getSessionCatalogue({
-  cacheDir = join(tmpdir(), 'tanstack-intent', 'catalogues'),
-  discover,
-  refresh = false,
-  root,
-  policyRoot = root,
-  readFs,
-}: {
+export async function getSessionCatalogue(options: {
   cacheDir?: string
   discover: () =>
     | DiscoveredSessionCatalogue
@@ -174,6 +174,15 @@ export async function getSessionCatalogue({
   policyRoot?: string
   readFs?: ReadFs
 }): Promise<SessionCatalogueResult> {
+  const {
+    cacheDir: suppliedCacheDir,
+    discover,
+    refresh = false,
+    root,
+    policyRoot = root,
+    readFs,
+  } = options
+  const cache = prepareCacheDirectory(suppliedCacheDir)
   const workspaceRoot = normalizeRoot(root)
   const normalizedPolicyRoot = normalizeRoot(policyRoot)
   const dependencyFingerprint = computeCatalogueFingerprint(
@@ -181,10 +190,10 @@ export async function getSessionCatalogue({
     normalizedPolicyRoot,
   )
   const cachePath = join(
-    cacheDir,
+    cache.path,
     `${createHash('sha256').update(workspaceRoot).update('\0').update(normalizedPolicyRoot).digest('hex')}.json`,
   )
-  const cached = readCache(cachePath)
+  const cached = cache.enabled ? readCache(cachePath) : null
 
   if (
     !refresh &&
@@ -210,7 +219,7 @@ export async function getSessionCatalogue({
     catalogue,
     verification: refreshed.verification,
   }
-  writeCache(cachePath, entry)
+  if (cache.enabled) writeCache(cachePath, entry)
 
   return {
     cachePath,
@@ -321,12 +330,108 @@ function fits(lines: Array<string>, maxBytes: number): boolean {
   return Buffer.byteLength(lines.join('\n')) <= maxBytes
 }
 
-function readCache(path: string): IntentSessionCatalogueCache | null {
+function defaultCacheDirectory(): string {
+  const tempRoot = realpathSync.native(tmpdir())
+  const userKey =
+    typeof process.getuid === 'function'
+      ? String(process.getuid())
+      : createHash('sha256')
+          .update(userInfo().username)
+          .update('\0')
+          .update(homedir())
+          .digest('hex')
+          .slice(0, 12)
+  return join(tempRoot, `tanstack-intent-${userKey}-catalogues`)
+}
+
+function prepareCacheDirectory(suppliedPath?: string): {
+  path: string
+  enabled: boolean
+} {
+  let path = suppliedPath
   try {
-    const value = JSON.parse(readFileSync(path, 'utf8')) as unknown
+    const isDefault = path === undefined
+    path = suppliedPath ?? defaultCacheDirectory()
+    if (typeof process.getuid === 'function' && isDefault) {
+      const tempRoot = lstatSync(dirname(path))
+      const isPrivateOwnerDirectory =
+        tempRoot.uid === process.getuid() && (tempRoot.mode & 0o022) === 0
+      if (
+        tempRoot.isSymbolicLink() ||
+        !tempRoot.isDirectory() ||
+        (!isPrivateOwnerDirectory && (tempRoot.mode & 0o1000) === 0)
+      ) {
+        throw new Error('Unsafe temporary directory')
+      }
+    }
+
+    mkdirSync(path, { recursive: true, mode: 0o700 })
+    const initial = lstatSync(path)
+    if (initial.isSymbolicLink() || !initial.isDirectory()) {
+      throw new Error('Unsafe cache directory')
+    }
+
+    if (typeof process.getuid === 'function') {
+      if (initial.uid !== process.getuid()) {
+        throw new Error('Unsafe cache directory owner')
+      }
+      if (isDefault && (initial.mode & 0o077) !== 0) {
+        chmodSync(path, 0o700)
+        const tightened = lstatSync(path)
+        if (
+          tightened.dev !== initial.dev ||
+          tightened.ino !== initial.ino ||
+          tightened.isSymbolicLink() ||
+          !tightened.isDirectory() ||
+          tightened.uid !== process.getuid() ||
+          (tightened.mode & 0o077) !== 0
+        ) {
+          throw new Error('Cache directory changed while securing it')
+        }
+      } else if (!isDefault && (initial.mode & 0o022) !== 0) {
+        throw new Error('Writable cache directory')
+      }
+    }
+
+    return { path, enabled: true }
+  } catch {
+    path ??= join(tmpdir(), 'tanstack-intent-catalogues-disabled')
+    if (!warnedCacheDirectories.has(path)) {
+      warnedCacheDirectories.add(path)
+      process.stderr.write(
+        `[intent catalog] rejected cache directory ${path}; caching is disabled.\n`,
+      )
+    }
+    return { path, enabled: false }
+  }
+}
+
+function readCache(path: string): IntentSessionCatalogueCache | null {
+  let descriptor: number | undefined
+  try {
+    const flags =
+      typeof process.getuid === 'function'
+        ? constants.O_RDONLY | constants.O_NOFOLLOW
+        : constants.O_RDONLY
+    descriptor = openSync(path, flags)
+    const file = fstatSync(descriptor)
+    if (
+      !file.isFile() ||
+      (typeof process.getuid === 'function' &&
+        (file.uid !== process.getuid() || (file.mode & 0o022) !== 0))
+    ) {
+      return null
+    }
+    const value = JSON.parse(readFileSync(descriptor, 'utf8')) as unknown
     return isCacheEntry(value) ? value : null
   } catch {
     return null
+  } finally {
+    if (descriptor !== undefined) {
+      try {
+        closeSync(descriptor)
+      } catch {}
+    }
   }
 }
 
@@ -375,8 +480,10 @@ function isVerificationEntry(
 function writeCache(path: string, entry: IntentSessionCatalogueCache): void {
   const temporaryPath = `${path}.${process.pid}.${Date.now()}.tmp`
   try {
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(temporaryPath, `${JSON.stringify(entry)}\n`, { flag: 'wx' })
+    writeFileSync(temporaryPath, `${JSON.stringify(entry)}\n`, {
+      flag: 'wx',
+      mode: 0o600,
+    })
     renameSync(temporaryPath, path)
   } catch {
     try {
