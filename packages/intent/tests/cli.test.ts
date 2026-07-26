@@ -627,21 +627,28 @@ describe('cli commands', () => {
     })
 
     process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.env.INTENT_AUDIENCE = 'human'
     process.chdir(root)
 
     const exitCode = await main(['install', '--map'])
     const agentsPath = join(root, 'AGENTS.md')
     const content = readFileSync(agentsPath, 'utf8')
-    const output = logSpy.mock.calls.flat().join('\n')
+    const output = [...logSpy.mock.calls, ...errorSpy.mock.calls]
+      .flat()
+      .join('\n')
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Created AGENTS.md with 1 mapping.')
+    expect(output).toContain(
+      'The intent-skills block is a snapshot and does not update when dependencies change. Re-run `intent install --map` to regenerate it.',
+    )
     expect(content).toContain('for: "Query data fetching patterns"')
     expect(content).toContain('id: "@tanstack/query#fetching"')
     expect(content).toContain(
       `run: "npx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching"`,
     )
     expect(content).not.toContain('load:')
+    expect(content).not.toContain('snapshot')
     expect(content).not.toContain(root)
 
     logSpy.mockClear()
@@ -654,6 +661,32 @@ describe('cli commands', () => {
       'No changes to AGENTS.md; 1 mapping already current.',
     )
     expect(readFileSync(agentsPath, 'utf8')).toBe(content)
+  })
+
+  it('does not print the install mapping snapshot advisory to agents', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-map-agent-'))
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-map-agent-empty-global-'),
+    )
+    tempDirs.push(root, isolatedGlobalRoot)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.env.INTENT_AUDIENCE = 'agent'
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--map'])
+    const output = [...logSpy.mock.calls, ...errorSpy.mock.calls]
+      .flat()
+      .join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).not.toContain('snapshot')
   })
 
   it('omits unlisted packages from the install --map block', async () => {
@@ -965,6 +998,8 @@ describe('cli commands', () => {
     tempDirs.push(root)
     const pkgDir = join(root, 'node_modules', '@tanstack', 'query')
 
+    writeFileSync(join(root, 'pnpm-lock.yaml'), '')
+
     writeJson(join(pkgDir, 'package.json'), {
       name: '@tanstack/query',
       version: '5.0.0',
@@ -979,18 +1014,75 @@ describe('cli commands', () => {
       description: 'Query cache skill',
     })
 
+    process.env.INTENT_AUDIENCE = 'human'
     process.chdir(root)
 
     const exitCode = await main(['list'])
     const output = logSpy.mock.calls.flat().join('\n')
+    const stderr = errorSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
+    expect(output).toContain('PACKAGE')
+    expect(output).toContain('SOURCE')
+    expect(output).toContain('VERSION')
+    expect(output).toContain('SKILLS')
+    expect(stderr).toContain('Notices:')
     expect(output).toContain(
-      `Load: npx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching`,
+      `Load: pnpm dlx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching`,
     )
     expect(output).toContain(
-      `Load: npx @tanstack/intent@${intentPackagePin} load @tanstack/query#query/cache`,
+      `Load: pnpm dlx @tanstack/intent@${intentPackagePin} load @tanstack/query#query/cache`,
     )
+    expect(output.match(/Load:/g)).toHaveLength(2)
+  })
+
+  it('prints compact list guidance for agents', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-agent-'))
+    tempDirs.push(root)
+    const pkgDir = join(root, 'node_modules', '@tanstack', 'query')
+
+    writeFileSync(join(root, 'pnpm-lock.yaml'), '')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+    })
+    writeSkillMd(join(pkgDir, 'skills', 'fetching'), {
+      name: 'fetching',
+      description: 'Query fetching skill',
+    })
+    writeSkillMd(join(pkgDir, 'skills', 'query', 'cache'), {
+      name: 'query/cache',
+      description: 'Query cache skill',
+    })
+
+    process.env.INTENT_AUDIENCE = 'agent'
+    process.chdir(root)
+
+    const exitCode = await main(['list'])
+    const output = logSpy.mock.calls
+      .map((call: Array<unknown>) => `${String(call[0] ?? '')}\n`)
+      .join('')
+    const stderr = errorSpy.mock.calls.flat().join('\n')
+    const loadHeader = `Load a skill with \`pnpm dlx @tanstack/intent@${intentPackagePin} load <id>\`.`
+
+    expect(exitCode).toBe(0)
+    expect(output).not.toContain('PACKAGE')
+    expect(output).not.toContain('SOURCE')
+    expect(output).not.toContain('VERSION')
+    expect(output).not.toContain('SKILLS')
+    expect(stderr).not.toContain('Notices:')
+    expect(stderr).not.toContain('intent.skills is not set')
+    expect(output.split(loadHeader)).toHaveLength(2)
+    expect(output).toContain(
+      `1 intent-enabled packages, 2 skills\n\n${loadHeader}`,
+    )
+    expect(output).not.toContain(
+      `1 intent-enabled packages, 2 skills\n\n\n${loadHeader}`,
+    )
+    expect(output).not.toContain('Load:')
+    expect(output).toContain('fetching')
+    expect(output).toContain('query/cache')
   })
 
   it('reveals hidden skill sources for human list output when requested', async () => {
@@ -1060,7 +1152,7 @@ describe('cli commands', () => {
     expect(combined).toContain(
       'Hidden skill sources are not revealed in agent sessions. Run this command outside the agent session to review candidates.',
     )
-    expect(combined).toContain(
+    expect(combined).not.toContain(
       '1 discovered skill source with 1 skill is hidden',
     )
     expect(combined).not.toContain('get-tsconfig')
@@ -1127,6 +1219,7 @@ describe('cli commands', () => {
         description: 'Query fetching skill',
       })
 
+      process.env.INTENT_AUDIENCE = 'human'
       process.chdir(root)
 
       const exitCode = await main(['list'])
@@ -1190,6 +1283,7 @@ describe('cli commands', () => {
     })
 
     process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.env.INTENT_AUDIENCE = 'human'
     process.chdir(root)
 
     const exitCode = await main(['list'])
@@ -1249,6 +1343,7 @@ describe('cli commands', () => {
     })
 
     process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.env.INTENT_AUDIENCE = 'human'
     process.chdir(root)
 
     const exitCode = await main(['list', '--no-notices'])
@@ -1427,6 +1522,7 @@ describe('cli commands', () => {
     })
 
     process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+    process.env.INTENT_AUDIENCE = 'human'
     process.chdir(root)
 
     const exitCode = await main(['list', '--global'])
@@ -2051,16 +2147,23 @@ describe('cli commands', () => {
       description: 'Query v5 skill',
     })
 
+    process.env.INTENT_AUDIENCE = 'agent'
     process.chdir(root)
 
     const exitCode = await main(['list'])
-    const output = logSpy.mock.calls.flat().join('\n')
+    const output = logSpy.mock.calls
+      .map((call: Array<unknown>) => `${String(call[0] ?? '')}\n`)
+      .join('')
+    const loadHeader = `Load a skill with \`npx @tanstack/intent@${intentPackagePin} load <id>\`.`
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Version conflicts:')
     expect(output).toContain('@tanstack/query -> using 5.0.0')
     expect(output).toContain(`chosen: ${queryV5Dir}`)
     expect(output).toContain(`also found: 4.0.0 at ${queryV4Dir}`)
+    expect(output).toContain(
+      `also found: 4.0.0 at ${queryV4Dir}\n\n${loadHeader}`,
+    )
   })
 
   it('validates a well-formed skills directory', async () => {

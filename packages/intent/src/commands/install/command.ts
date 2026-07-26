@@ -1,5 +1,6 @@
 import { relative } from 'node:path'
 import { fail } from '../../shared/cli-error.js'
+import { detectIntentAudience } from '../../shared/environment.js'
 import {
   coreOptionsFromGlobalFlags,
   noticeOptionsFromGlobalFlags,
@@ -201,5 +202,13 @@ export async function runInstallCommand(
   printPlacementTip(result.targetPath)
 
   printWarnings(scanResult.warnings)
-  printNotices(scanResult.notices, noticeOptions)
+  const snapshotNotices =
+    result.status !== 'unchanged' &&
+    generated.mappingCount > 0 &&
+    detectIntentAudience() === 'human'
+      ? [
+          'The intent-skills block is a snapshot and does not update when dependencies change. Re-run `intent install --map` to regenerate it.',
+        ]
+      : []
+  printNotices([...snapshotNotices, ...scanResult.notices], noticeOptions)
 }

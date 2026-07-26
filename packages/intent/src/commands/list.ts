@@ -82,11 +82,11 @@ function getPackageSkills(
 }
 
 function formatLoadCommand(
-  skill: IntentSkillSummary,
+  skillUse: string,
   packageManager: ScanResult['packageManager'],
   scopeFlag: string,
 ): string {
-  return formatIntentCommand(packageManager, `load ${skill.use}${scopeFlag}`)
+  return formatIntentCommand(packageManager, `load ${skillUse}${scopeFlag}`)
 }
 
 function printHiddenSources(result: IntentSkillList, audience: string): void {
@@ -143,7 +143,9 @@ export async function runListCommand(
       console.log()
       printWarnings(result.warnings)
     }
-    printNotices(result.notices, noticeOptions)
+    if (audience === 'human') {
+      printNotices(result.notices, noticeOptions)
+    }
     return
   }
 
@@ -151,13 +153,15 @@ export async function runListCommand(
     `\n${result.packages.length} intent-enabled packages, ${result.skills.length} skills\n`,
   )
 
-  const rows = result.packages.map((pkg) => [
-    pkg.name,
-    pkg.source,
-    pkg.version,
-    String(pkg.skillCount),
-  ])
-  printTable(['PACKAGE', 'SOURCE', 'VERSION', 'SKILLS'], rows)
+  if (audience === 'human') {
+    const rows = result.packages.map((pkg) => [
+      pkg.name,
+      pkg.source,
+      pkg.version,
+      String(pkg.skillCount),
+    ])
+    printTable(['PACKAGE', 'SOURCE', 'VERSION', 'SKILLS'], rows)
+  }
 
   printVersionConflicts(result)
 
@@ -181,6 +185,12 @@ export async function runListCommand(
       ? ' --global'
       : ''
 
+  if (audience === 'agent') {
+    console.log(
+      `Load a skill with \`${formatLoadCommand('<id>', result.packageManager, scopeFlag)}\`.`,
+    )
+  }
+
   console.log(`\nSkills:\n`)
   for (const pkg of result.packages) {
     console.log(`  ${pkg.name}`)
@@ -188,7 +198,10 @@ export async function runListCommand(
       getPackageSkills(pkg, skillsByPackageRoot).map((skill) => ({
         name: skill.skillName,
         description: skill.description,
-        loadCommand: formatLoadCommand(skill, result.packageManager, scopeFlag),
+        loadCommand:
+          audience === 'human'
+            ? formatLoadCommand(skill.use, result.packageManager, scopeFlag)
+            : undefined,
         type: skill.type,
       })),
       { nameWidth, packageName: pkg.name, showTypes },
@@ -197,5 +210,7 @@ export async function runListCommand(
   }
 
   printWarnings(result.warnings)
-  printNotices(result.notices, noticeOptions)
+  if (audience === 'human') {
+    printNotices(result.notices, noticeOptions)
+  }
 }
