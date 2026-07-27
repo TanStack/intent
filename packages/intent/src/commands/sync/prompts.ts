@@ -9,19 +9,20 @@ export function createClackSyncReviewPrompter(): SyncReviewPrompter {
     },
     async reviewNewDependencies(): Promise<NewDependencyDecision | null> {
       const decision = await select<NewDependencyDecision>({
-        message: 'How do you want to handle these dependencies?',
+        message: 'How do you want to handle these pending skills?',
         options: [
           { value: 'review', label: 'Review and install' },
-          { value: 'exclude', label: 'Exclude these packages' },
+          { value: 'exclude', label: 'Exclude pending skills' },
           { value: 'later', label: 'Remind me later' },
         ],
       })
       if (!isCancel(decision)) return decision
-      cancel('Sync review cancelled. New dependencies remain pending.')
+      cancel('Sync review cancelled. Pending skills remain pending review.')
       return null
     },
-    selectSkills(packages) {
-      return selectClackSkills(packages, false)
+    async selectSkills(packages) {
+      const selection = await selectClackSkills(packages, false)
+      return selection?.mode === 'individual' ? selection : null
     },
   }
 }

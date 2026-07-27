@@ -833,9 +833,13 @@ describe('consumer install', () => {
     ).toBe(true)
   })
 
-  it('keeps an existing package-level entry when accepting a new skill', async () => {
+  it('accepts a pending skill without rebaselining a changed sibling', async () => {
     const root = createProject()
-    addSkillPackage(root, 'demo-pkg', ['alpha', 'beta'])
+    rmSync(join(root, 'node_modules', '@tanstack', 'query'), {
+      recursive: true,
+      force: true,
+    })
+    addSkillPackage(root, 'demo-pkg', ['alpha'])
     await runConsumerInstall({
       discovered: scanForIntents(root, { scope: 'local' }).packages,
       prompts: createPrompts(),
@@ -843,9 +847,18 @@ describe('consumer install', () => {
     })
     const packageJsonPath = join(root, 'package.json')
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
-    packageJson.intent.skills = ['demo-pkg']
-    packageJson.intent.exclude = ['@tanstack/query']
+    packageJson.intent.skills = ['demo-pkg#alpha']
     writeJson(packageJsonPath, packageJson)
+    const lockBefore = readIntentLockfile(join(root, 'intent.lock'))
+    expect(lockBefore.status).toBe('found')
+    if (lockBefore.status !== 'found') return
+    const alphaHash = lockBefore.lockfile.sources[0]!.skills[0]!.contentHash
+    writeFileSync(
+      join(root, 'node_modules', 'demo-pkg', 'skills', 'alpha', 'SKILL.md'),
+      '---\nname: alpha\ndescription: changed alpha guidance\n---\n',
+      'utf8',
+    )
+    addSkillPackage(root, 'demo-pkg', ['beta'])
 
     await runSyncCommand(
       { cwd: root },
@@ -863,15 +876,123 @@ describe('consumer install', () => {
       },
     )
 
-    expect(
-      readIntentConsumerConfig(readFileSync(packageJsonPath, 'utf8')).skills,
-    ).toEqual(['demo-pkg'])
+    const lockAfter = readIntentLockfile(join(root, 'intent.lock'))
+    expect(lockAfter.status).toBe('found')
+    if (lockAfter.status !== 'found') return
+    const demoSource = lockAfter.lockfile.sources.find(
+      (source) => source.id === 'demo-pkg',
+    )
+    expect({
+      alphaHash: demoSource?.skills.find(
+        (skill) => skill.path === 'skills/alpha',
+      )?.contentHash,
+      alphaLinked: existsSync(
+        join(root, '.agents', 'skills', 'npm-demo-pkg-alpha'),
+      ),
+      betaLocked: demoSource?.skills.some(
+        (skill) => skill.path === 'skills/beta',
+      ),
+      betaLinked: existsSync(
+        join(root, '.agents', 'skills', 'npm-demo-pkg-beta'),
+      ),
+    }).toEqual({
+      alphaHash,
+      alphaLinked: false,
+      betaLocked: true,
+      betaLinked: true,
+    })
+  })
+
+  it('preserves enabled siblings when no pending skills are selected', async () => {
+    const root = createProject()
+    rmSync(join(root, 'node_modules', '@tanstack', 'query'), {
+      recursive: true,
+      force: true,
+    })
+    addSkillPackage(root, 'demo-pkg', ['alpha'])
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    const packageJsonPath = join(root, 'package.json')
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+    packageJson.intent.skills = ['demo-pkg#alpha']
+    writeJson(packageJsonPath, packageJson)
+    addSkillPackage(root, 'demo-pkg', ['alpha', 'beta'])
+
+    await runSyncCommand(
+      { cwd: root },
+      {
+        review: 'interactive',
+        prompts: {
+          complete: () => {},
+          reviewNewDependencies: () => Promise.resolve('review'),
+          selectSkills: () =>
+            Promise.resolve({ mode: 'individual', enabled: [] }),
+        },
+      },
+    )
+
+    const config = readIntentConsumerConfig(
+      readFileSync(packageJsonPath, 'utf8'),
+    )
+    expect(config.skills).toEqual(['demo-pkg#alpha'])
+    expect(config.exclude).toEqual(['demo-pkg#beta'])
     expect(
       existsSync(join(root, '.agents', 'skills', 'npm-demo-pkg-alpha')),
     ).toBe(true)
     expect(
       existsSync(join(root, '.agents', 'skills', 'npm-demo-pkg-beta')),
+    ).toBe(false)
+  })
+
+  it('leaves a new skill under package-level trust pending baseline review', async () => {
+    const root = createProject()
+    addSkillPackage(root, 'demo-pkg', ['alpha'])
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    const packageJsonPath = join(root, 'package.json')
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+    packageJson.intent.skills = ['demo-pkg']
+    packageJson.intent.exclude = ['@tanstack/query']
+    writeJson(packageJsonPath, packageJson)
+    addSkillPackage(root, 'demo-pkg', ['beta'])
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    let output = ''
+
+    try {
+      await runSyncCommand(
+        { cwd: root },
+        {
+          review: 'interactive',
+          prompts: {
+            complete: () => {},
+            reviewNewDependencies: () =>
+              Promise.reject(new Error('package-level trust must not prompt')),
+            selectSkills: () =>
+              Promise.reject(new Error('package-level trust must not select')),
+          },
+        },
+      )
+      output = log.mock.calls.flat().join('\n')
+    } finally {
+      log.mockRestore()
+    }
+
+    expect(output).toContain('New skills found in enabled dependencies:')
+    expect(output).toContain('demo-pkg  1 skill')
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
+    expect(
+      existsSync(join(root, '.agents', 'skills', 'npm-demo-pkg-alpha')),
     ).toBe(true)
+    expect(
+      existsSync(join(root, '.agents', 'skills', 'npm-demo-pkg-beta')),
+    ).toBe(false)
   })
 
   it('writes a package-level entry when all skills in a new package are accepted', async () => {
@@ -1135,7 +1256,7 @@ describe('consumer install', () => {
       }
     }
 
-    expect(output).toContain('New dependencies with skills found:')
+    expect(output).toContain('Pending skills by source:')
     expect(output).toContain('prepare-package  1 skill')
     expect(output).toContain('Run `intent install` to review and install them')
     expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(packageBefore)

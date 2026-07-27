@@ -33,6 +33,8 @@ import type { SkillSelection } from '../install/plan.js'
 import type { LinkReconciliation } from './links.js'
 import type { IntentPackage } from '../../shared/types.js'
 
+type SyncSkillSelection = Extract<SkillSelection, { mode: 'individual' }>
+
 export interface SyncCommandOptions {
   cwd?: string
   dryRun?: boolean
@@ -48,10 +50,10 @@ export interface SyncReviewPrompter {
   ) => Promise<NewDependencyDecision | null>
   selectSkills: (
     packages: ReadonlyArray<IntentPackage>,
-  ) => Promise<SkillSelection | null>
+  ) => Promise<SyncSkillSelection | null>
 }
 
-export type SyncReviewMode = 'interactive' | 'reminder' | 'fail'
+type SyncReviewMode = 'interactive' | 'reminder' | 'fail'
 
 export interface SyncCommandRuntime {
   review?: SyncReviewMode
@@ -124,7 +126,7 @@ function output(
     `Intent sync: ${result.created.length} created, ${result.repaired.length} repaired, ${result.removed.length} removed.`,
   )
   printReminder(
-    'New dependencies with skills found',
+    'Pending skills by source',
     result.newDependencies,
     interactiveReview
       ? 'Choose how to handle them below.'
@@ -176,6 +178,7 @@ async function reviewNewDependencies({
   discovered,
   lock,
   packages,
+  reviewedPackages,
   prompts,
   root,
 }: {
@@ -183,6 +186,7 @@ async function reviewNewDependencies({
   discovered: Array<IntentPackage>
   lock: Extract<ReturnType<typeof readIntentLockfile>, { status: 'found' }>
   packages: Array<IntentPackage>
+  reviewedPackages: Array<IntentPackage>
   prompts: SyncReviewPrompter
   root: string
 }): Promise<void> {
@@ -193,7 +197,7 @@ async function reviewNewDependencies({
     })),
   )
   if (!decision || decision === 'later') {
-    prompts.complete('New dependencies remain pending.')
+    prompts.complete('Pending skills remain pending review.')
     return
   }
   const packageJsonPath = join(root, 'package.json')
@@ -219,33 +223,45 @@ async function reviewNewDependencies({
       packageJsonPath,
       updateIntentConsumerConfigText(packageJson, updatedConfig),
     )
-    prompts.complete('Excluded new skill dependencies.')
+    prompts.complete('Excluded pending skills.')
     return
   }
 
   const selection = await prompts.selectSkills(packages)
   if (!selection) {
-    prompts.complete('New dependencies remain pending.')
+    prompts.complete('Pending skills remain pending review.')
     return
   }
-  const selectionPlan = buildSkillSelectionPlan(packages, selection)
+  const pendingSelectionPlan = buildSkillSelectionPlan(packages, selection)
+  const pendingSkillIds = new Set(
+    packages.flatMap((pkg) =>
+      pkg.skills.map((skill) => `${sourceName(pkg)}#${skill.name}`),
+    ),
+  )
+  const selectionPlan = buildSkillSelectionPlan(reviewedPackages, {
+    ...selection,
+    enabled: [
+      ...new Set([
+        ...selection.enabled,
+        ...reviewedPackages.flatMap((pkg) =>
+          pkg.skills
+            .map((skill) => `${sourceName(pkg)}#${skill.name}`)
+            .filter((id) => !pendingSkillIds.has(id)),
+        ),
+      ]),
+    ],
+  })
+  const packageExcludes = new Set(selectionPlan.exclude)
+  const narrowedExcludes = packages.flatMap((pkg) =>
+    pendingSelectionPlan.exclude.includes(pkg.name) &&
+    !packageExcludes.has(pkg.name)
+      ? pkg.skills.map((skill) => `${pkg.name}#${skill.name}`)
+      : [],
+  )
   const configuredSources = parseSkillSources(config.skills)
   const configuredPolicy = compileSkillSourcePolicy(configuredSources)
   const addedSkills = new Set(selectionPlan.skills)
   for (const pkg of selectionPlan.packages) {
-    const packageCovered =
-      configuredSources.mode === 'absent' ||
-      configuredSources.mode === 'allow-all' ||
-      configuredPolicy.matchers.some(
-        (matcher) =>
-          matcher.matchesSkill === undefined &&
-          matcher.matchesPackage(pkg.name, pkg.kind),
-      )
-    if (packageCovered) {
-      addedSkills.delete(sourceName(pkg))
-      for (const skill of pkg.skills) addedSkills.delete(skill.id)
-      continue
-    }
     const hasSkillEntries = configuredPolicy.matchers.some(
       (matcher) =>
         matcher.matchesSkill !== undefined &&
@@ -263,9 +279,13 @@ async function reviewNewDependencies({
     skills: [...new Set([...config.skills, ...addedSkills])].sort(
       compareStrings,
     ),
-    exclude: [...new Set([...config.exclude, ...selectionPlan.exclude])].sort(
-      compareStrings,
-    ),
+    exclude: [
+      ...new Set([
+        ...config.exclude,
+        ...selectionPlan.exclude,
+        ...narrowedExcludes,
+      ]),
+    ].sort(compareStrings),
   }
   const policy = applySourcePolicy(
     { packages: discovered },
@@ -274,17 +294,61 @@ async function reviewNewDependencies({
       excludeMatchers: compileExcludePatterns(updatedConfig.exclude),
     },
   )
-  const reviewedKeys = new Set(packages.map(sourceKey))
   const currentSources = buildCurrentLockfileSources(policy.packages)
+  const selectedPendingIds = new Set(selection.enabled)
+  const selectedPathsBySource = new Map(
+    packages.flatMap((pkg) => {
+      const paths = pkg.skills
+        .filter((skill) =>
+          selectedPendingIds.has(`${sourceName(pkg)}#${skill.name}`),
+        )
+        .map((skill) => `skills/${skill.name}`)
+      return paths.length > 0 ? [[sourceKey(pkg), new Set(paths)] as const] : []
+    }),
+  )
+  const selectedCurrentSources = new Map(
+    currentSources.flatMap((source) => {
+      const key = `${source.kind}\0${source.id}`
+      const selectedPaths = selectedPathsBySource.get(key)
+      if (!selectedPaths) return []
+      return [
+        [
+          key,
+          {
+            ...source,
+            skills: source.skills.filter((skill) =>
+              selectedPaths.has(skill.path),
+            ),
+          },
+        ] as const,
+      ]
+    }),
+  )
+  const lockedKeys = new Set(
+    lock.lockfile.sources.map((source) => `${source.kind}\0${source.id}`),
+  )
   const prospectiveLock = {
     lockfileVersion: 1 as const,
     sources: [
-      ...lock.lockfile.sources.filter(
-        (source) => !reviewedKeys.has(`${source.kind}\0${source.id}`),
-      ),
-      ...currentSources.filter((source) =>
-        reviewedKeys.has(`${source.kind}\0${source.id}`),
-      ),
+      ...lock.lockfile.sources.map((source) => {
+        const selectedSource = selectedCurrentSources.get(
+          `${source.kind}\0${source.id}`,
+        )
+        if (!selectedSource) return source
+        const selectedPaths = new Set(
+          selectedSource.skills.map((skill) => skill.path),
+        )
+        return {
+          ...source,
+          skills: [
+            ...source.skills.filter((skill) => !selectedPaths.has(skill.path)),
+            ...selectedSource.skills,
+          ],
+        }
+      }),
+      ...[...selectedCurrentSources.entries()]
+        .filter(([key]) => !lockedKeys.has(key))
+        .map(([, source]) => source),
     ],
   }
   const expected = buildSyncLinkPlan({
@@ -439,6 +503,29 @@ export async function runSyncCommand(
         },
       ]
     })
+    const reviewedKeys = new Set(packages.map(sourceKey))
+    const enabledSkills = new Map(
+      policy.packages.map((pkg) => [
+        sourceKey(pkg),
+        new Set(pkg.skills.map((skill) => skill.name)),
+      ]),
+    )
+    const reviewedPackages = discovered.flatMap((pkg) => {
+      const key = sourceKey(pkg)
+      if (!reviewedKeys.has(key)) return []
+      const pending = pendingSkills.get(key)
+      const enabled = enabledSkills.get(key)
+      return [
+        {
+          ...pkg,
+          skills: pkg.skills.filter(
+            (skill) =>
+              pending?.has(skill.name) === true ||
+              enabled?.has(skill.name) === true,
+          ),
+        },
+      ]
+    })
     const prompts =
       runtime.prompts ??
       (await import('./prompts.js')).createClackSyncReviewPrompter()
@@ -447,6 +534,7 @@ export async function runSyncCommand(
       discovered,
       lock,
       packages,
+      reviewedPackages,
       prompts,
       root,
     })

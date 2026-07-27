@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { isAbsolute, join, posix, relative, resolve, sep } from 'node:path'
 import { writeTextFileAtomic } from '../../shared/atomic-write.js'
 
 export const INSTALL_STATE_PATH = '.intent/install-state.json'
@@ -43,6 +43,19 @@ function parseEntry(value: unknown): InstallStateEntry | null {
   if (
     typeof value.targetDirectory !== 'string' ||
     typeof value.path !== 'string' ||
+    value.path.length === 0 ||
+    posix.isAbsolute(value.path) ||
+    value.path.includes('\\') ||
+    /^[A-Za-z]:/.test(value.path) ||
+    value.path
+      .split('/')
+      .some(
+        (segment) =>
+          segment === '' ||
+          segment === '.' ||
+          segment === '..' ||
+          /[. ]$/.test(segment),
+      ) ||
     typeof value.alias !== 'string' ||
     typeof value.skillPath !== 'string' ||
     typeof value.linkTarget !== 'string' ||
@@ -97,15 +110,26 @@ export function readInstallState(root: string): ReadInstallStateResult {
 export function readInstallStateForLinks(root: string): ReadInstallStateResult {
   const result = readInstallState(root)
   if (result.status !== 'found') return result
+  const projectRoot = resolve(root)
+  const entries = result.state.entries.map((entry) => ({
+    ...entry,
+    path: resolve(projectRoot, ...entry.path.split('/')),
+  }))
+  if (
+    entries.some((entry) => {
+      const projectRelativePath = relative(projectRoot, entry.path)
+      return (
+        projectRelativePath === '..' ||
+        projectRelativePath.startsWith(`..${sep}`) ||
+        isAbsolute(projectRelativePath)
+      )
+    })
+  ) {
+    return { status: 'malformed' }
+  }
   return {
     status: 'found',
-    state: {
-      version: 1,
-      entries: result.state.entries.map((entry) => ({
-        ...entry,
-        path: join(root, ...entry.path.split('/')),
-      })),
-    },
+    state: { version: 1, entries },
   }
 }
 

@@ -334,7 +334,7 @@ describe('cli commands', () => {
     expect(await main(['sync'])).toBe(0)
     expect(logSpy.mock.calls.flat().join('\n')).toContain(
       [
-        'New dependencies with skills found:',
+        'Pending skills by source:',
         '',
         'pending  1 skill',
         '',
@@ -791,7 +791,7 @@ describe('cli commands', () => {
     expect(await main(['install', '--no-input'])).toBe(1)
 
     expect(logSpy.mock.calls.flat().join('\n')).toContain(
-      'New dependencies with skills found:',
+      'Pending skills by source:',
     )
     expect(errorSpy).toHaveBeenCalledWith(
       'Intent sync requires review before automation can continue.',

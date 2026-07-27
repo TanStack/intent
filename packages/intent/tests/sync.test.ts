@@ -17,6 +17,7 @@ import { wireIntentSyncPrepare } from '../src/commands/sync/prepare.js'
 import {
   parseInstallState,
   readInstallState,
+  readInstallStateForLinks,
   serializeInstallState,
   writeInstallState,
 } from '../src/commands/sync/state.js'
@@ -99,6 +100,32 @@ describe('sync state', () => {
     ).toBeNull()
   })
 
+  it.each([
+    '',
+    '/absolute/link',
+    'outside\\link',
+    'C:/link',
+    'C:link',
+    './link',
+    'links/./link',
+    'links//link',
+    '../outside/link',
+    'links/../outside',
+    '.. /link',
+    'links/.. /outside',
+    'links/link.',
+    'links/link ',
+  ])('rejects invalid persisted path %j', (path) => {
+    expect(
+      parseInstallState(
+        JSON.stringify({
+          ...state,
+          entries: [{ ...state.entries[0], path }],
+        }),
+      ),
+    ).toBeNull()
+  })
+
   it('writes atomically only when state changes and reports malformed state', () => {
     const root = tempRoot('intent-sync-state-')
     expect(writeInstallState(root, state)).toBe(true)
@@ -125,6 +152,52 @@ describe('managed sync links', () => {
       packageRoot,
     }
   }
+
+  it('rejects persisted link paths that traverse outside the project', () => {
+    const parent = tempRoot('intent-sync-state-path-')
+    const root = join(parent, 'project')
+    const outsideDirectory = join(parent, 'outside')
+    const source = join(parent, 'source')
+    const outsideLink = join(outsideDirectory, 'link')
+    mkdirSync(join(root, '.intent'), { recursive: true })
+    mkdirSync(outsideDirectory, { recursive: true })
+    mkdirSync(source, { recursive: true })
+    symlinkSync(source, outsideLink, 'dir')
+    writeFileSync(
+      join(root, '.intent', 'install-state.json'),
+      JSON.stringify({
+        version: 1,
+        entries: [
+          {
+            targetDirectory: '../outside',
+            path: '../outside/link',
+            alias: 'link',
+            source: { kind: 'npm', id: 'pkg' },
+            skillPath: 'skills/core',
+            linkTarget: source,
+          },
+        ],
+      }),
+      'utf8',
+    )
+
+    const stateResult = readInstallStateForLinks(root)
+    const result = reconcileManagedLinks({
+      dryRun: false,
+      expected: [],
+      stateResult,
+    })
+
+    expect({
+      stateStatus: stateResult.status,
+      removed: result.removed,
+      outsideLinkExists: existsSync(outsideLink),
+    }).toEqual({
+      stateStatus: 'malformed',
+      removed: [],
+      outsideLinkExists: true,
+    })
+  })
 
   it('creates, leaves unchanged, repairs owned links, and cleans owned stale links', () => {
     const root = tempRoot('intent-sync-links-')
