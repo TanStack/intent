@@ -145,7 +145,7 @@ export function listIntentSkills(
                     pkg.kind,
                   )
                   return decision.source
-                    ? `Allowed by  intent.skills[${JSON.stringify(decision.source.raw)}]`
+                    ? `Allowed by intent.skills[${JSON.stringify(decision.source.raw)}]`
                     : undefined
                 })()
           : undefined,
@@ -182,7 +182,7 @@ export function listIntentSkills(
         description: skill.description,
         type: skill.type,
         framework: skill.framework,
-        why: `Excluded by  intent.exclude[${JSON.stringify(pattern)}]`,
+        why: `Excluded by intent.exclude[${JSON.stringify(pattern)}]`,
         excluded: true,
       }),
     )

@@ -1,5 +1,6 @@
 import { detectIntentAudience } from '../shared/environment.js'
 import { formatIntentCommand } from '../shared/command-runner.js'
+import { containsLocalPath } from '../shared/local-path.js'
 import { listIntentSkills } from '../core/index.js'
 import {
   coreOptionsFromGlobalFlags,
@@ -57,6 +58,18 @@ function printVersionConflicts(result: IntentSkillList): void {
 
     console.log()
   }
+}
+
+function visibleWarnings(
+  result: IntentSkillList,
+  audience: string,
+): Array<string> {
+  if (audience !== 'agent') return result.warnings
+  return result.warnings.filter((warning) => !containsLocalPath(warning))
+}
+
+function redactPackageRoot<T extends { packageRoot: string }>(entry: T): T {
+  return { ...entry, packageRoot: '' }
 }
 
 function groupSkillsByPackageRoot(
@@ -142,6 +155,7 @@ export async function runListCommand(
     why: explain,
   })
   const noticeOptions = noticeOptionsFromGlobalFlags(options)
+  const warnings = visibleWarnings(result, audience)
   printListDebug(result)
 
   if (options.json) {
@@ -150,21 +164,35 @@ export async function runListCommand(
       packageManager: _packageManager,
       ...jsonResult
     } = result
-    console.log(JSON.stringify(jsonResult, null, 2))
+    const outputResult =
+      audience === 'agent'
+        ? {
+            ...jsonResult,
+            skills: jsonResult.skills.map(redactPackageRoot),
+            excludedSkills: jsonResult.excludedSkills?.map(redactPackageRoot),
+            packages: jsonResult.packages.map(redactPackageRoot),
+            warnings,
+            conflicts: [],
+          }
+        : jsonResult
+    console.log(JSON.stringify(outputResult, null, 2))
     return
   }
 
   const { computeSkillNameWidth, printSkillTree, printTable } =
     await import('../shared/display.js')
 
-  if (result.packages.length === 0 && result.excludedSkills?.length === 0) {
+  if (
+    result.packages.length === 0 &&
+    (result.excludedSkills?.length ?? 0) === 0
+  ) {
     console.log('No intent-enabled packages found.')
     if (options.showHidden && result.hiddenSourceCount > 0) {
       printHiddenSources(result, audience, explain)
     }
-    if (result.warnings.length > 0) {
+    if (warnings.length > 0) {
       console.log()
-      printWarnings(result.warnings)
+      printWarnings(warnings)
     }
     if (audience === 'human') {
       printNotices(result.notices, noticeOptions)
@@ -186,7 +214,9 @@ export async function runListCommand(
     printTable(['PACKAGE', 'SOURCE', 'VERSION', 'SKILLS'], rows)
   }
 
-  printVersionConflicts(result)
+  if (audience === 'human') {
+    printVersionConflicts(result)
+  }
 
   if (options.showHidden) {
     printHiddenSources(result, audience, explain)
@@ -243,7 +273,7 @@ export async function runListCommand(
     console.log()
   }
 
-  printWarnings(result.warnings)
+  printWarnings(warnings)
   if (audience === 'human') {
     printNotices(result.notices, noticeOptions)
   }

@@ -66,6 +66,7 @@ export interface InstallerPrompter {
 export interface RunConsumerInstallOptions {
   discovered: ReadonlyArray<IntentPackage>
   dryRun?: boolean
+  existingLockReview?: 'fail'
   prompts: InstallerPrompter
   root: string
   selection?: SkillSelection
@@ -92,6 +93,7 @@ function countSkills(entries: ReadonlyArray<{ skillCount: number }>): number {
 export async function runConsumerInstall({
   discovered,
   dryRun = false,
+  existingLockReview,
   prompts,
   root,
   selection: fixedSelection,
@@ -113,15 +115,24 @@ export async function runConsumerInstall({
     const newDependencies = countSkills(summary.newDependencies)
     const newSkills = countSkills(summary.newSkills)
     const changed = countSkills(summary.changed)
+    const hasChanges =
+      newDependencies > 0 || newSkills > 0 || changed > 0 || summary.removed > 0
     if (
-      newDependencies === 0 &&
-      newSkills === 0 &&
-      changed === 0 &&
-      summary.removed === 0 &&
-      existingLock.status === 'found'
+      !hasChanges &&
+      existingLock.status === 'found' &&
+      existingLockReview !== 'fail'
     ) {
       prompts.complete('Project is up to date.')
       return
+    }
+    if (
+      hasChanges &&
+      existingLock.status === 'found' &&
+      existingLockReview === 'fail'
+    ) {
+      throw new Error(
+        'Intent install requires review before automation can continue.',
+      )
     }
     console.log(
       `Install changes: ${newDependencies} new ${newDependencies === 1 ? 'dependency' : 'dependencies'}, ${newSkills} new ${newSkills === 1 ? 'skill' : 'skills'}, ${changed} changed, ${summary.removed} removed.`,

@@ -190,31 +190,24 @@ export function readIntentConsumerConfig(text: string): IntentConsumerConfig {
   }
 }
 
+export function readIntentExcludeList(text: string): Array<string> {
+  const intent = parsePackageJson(text).intent
+  if (!isRecord(intent) || !Array.isArray(intent.exclude)) return []
+  return intent.exclude.flatMap((entry) => {
+    if (typeof entry !== 'string') return []
+    const trimmed = entry.trim()
+    return trimmed === '' ? [] : [trimmed]
+  })
+}
+
 function equalsConfig(
   left: IntentConsumerConfig,
   right: IntentConsumerConfig,
 ): boolean {
-  if (
-    left.skills.length !== right.skills.length ||
-    left.exclude.length !== right.exclude.length
-  ) {
-    return false
-  }
-  if (
-    left.skills.some((entry, index) => entry !== right.skills[index]) ||
-    left.exclude.some((entry, index) => entry !== right.exclude[index])
-  ) {
-    return false
-  }
-  if (left.install === undefined || right.install === undefined) {
-    return left.install === right.install
-  }
   return (
-    left.install.method === right.install.method &&
-    left.install.targets.length === right.install.targets.length &&
-    left.install.targets.every(
-      (target, index) => target === right.install!.targets[index],
-    )
+    equalsArray(left.skills, right.skills) &&
+    equalsArray(left.exclude, right.exclude) &&
+    equalsInstall(left.install, right.install)
   )
 }
 

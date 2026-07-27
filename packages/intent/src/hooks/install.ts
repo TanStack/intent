@@ -9,11 +9,10 @@ import type { HookAgent, HookInstallScope } from './types.js'
 
 type HookInstallStatus = 'created' | 'skipped' | 'unchanged' | 'updated'
 
-export type HookInstallResult = {
+type HookInstallResult = {
   agent: HookAgent
   configPath: string | null
   scope: HookInstallScope
-  scriptPath: string | null
   status: HookInstallStatus
   reason?: string
 }
@@ -96,7 +95,6 @@ function installAgentHook({
       configPath: null,
       reason: 'project scope is not supported; use --scope user',
       scope,
-      scriptPath: null,
       status: 'skipped',
     }
   }
@@ -122,7 +120,6 @@ function installAgentHook({
     agent,
     configPath,
     scope,
-    scriptPath: null,
     status: configStatus,
   }
 }

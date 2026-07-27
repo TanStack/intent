@@ -3,6 +3,7 @@ import {
   INSTALL_TARGETS,
   installTargetsForMethod,
   readIntentConsumerConfig,
+  readIntentExcludeList,
   updateIntentConsumerConfigText,
 } from '../src/commands/install/config.js'
 import type {
@@ -134,5 +135,19 @@ describe('installer configuration', () => {
     expect(() =>
       readIntentConsumerConfig('{"intent":{"exclude":["  "]}}'),
     ).toThrow('must not contain blank entries')
+  })
+
+  it('reads only normalized string excludes from released JSONC config', () => {
+    expect(
+      readIntentExcludeList(`{
+        // released config shapes remain readable
+        "intent": {
+          "skills": null,
+          "exclude": ["", "  legacy-pkg  ", null, 42],
+        },
+      }`),
+    ).toEqual(['legacy-pkg'])
+    expect(readIntentExcludeList('{"intent":{"exclude":null}}')).toEqual([])
+    expect(readIntentExcludeList('{"intent":{"exclude":"pkg"}}')).toEqual([])
   })
 })

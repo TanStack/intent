@@ -74,6 +74,56 @@ function writeInstalledIntentPackage(
   })
 }
 
+function writeConflictingQueryPackages(root: string): {
+  queryV4Dir: string
+  queryV5Dir: string
+} {
+  writeJson(join(root, 'package.json'), {
+    name: 'app',
+    private: true,
+    dependencies: {
+      'consumer-a': '1.0.0',
+      'consumer-b': '1.0.0',
+    },
+  })
+
+  const consumerADir = join(root, 'node_modules', 'consumer-a')
+  const consumerBDir = join(root, 'node_modules', 'consumer-b')
+  const queryV4Dir = join(consumerADir, 'node_modules', '@tanstack', 'query')
+  const queryV5Dir = join(consumerBDir, 'node_modules', '@tanstack', 'query')
+
+  writeJson(join(consumerADir, 'package.json'), {
+    name: 'consumer-a',
+    version: '1.0.0',
+    dependencies: { '@tanstack/query': '4.0.0' },
+  })
+  writeJson(join(consumerBDir, 'package.json'), {
+    name: 'consumer-b',
+    version: '1.0.0',
+    dependencies: { '@tanstack/query': '5.0.0' },
+  })
+  writeJson(join(queryV4Dir, 'package.json'), {
+    name: '@tanstack/query',
+    version: '4.0.0',
+    intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+  })
+  writeJson(join(queryV5Dir, 'package.json'), {
+    name: '@tanstack/query',
+    version: '5.0.0',
+    intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+  })
+  writeSkillMd(join(queryV4Dir, 'skills', 'fetching'), {
+    name: 'fetching',
+    description: 'Query v4 skill',
+  })
+  writeSkillMd(join(queryV5Dir, 'skills', 'fetching'), {
+    name: 'fetching',
+    description: 'Query v5 skill',
+  })
+
+  return { queryV4Dir, queryV5Dir }
+}
+
 let originalCwd: string
 let logSpy: ReturnType<typeof vi.spyOn>
 let infoSpy: ReturnType<typeof vi.spyOn>
@@ -860,10 +910,60 @@ describe('cli commands', () => {
     process.chdir(root)
 
     expect(await main(['install', '--no-input'])).toBe(0)
-
+    const claudeHooks = join(root, '.claude', 'settings.json')
+    const codexHooks = join(root, '.codex', 'hooks.json')
     expect(existsSync(join(root, 'intent.lock'))).toBe(true)
-    expect(existsSync(join(root, '.claude', 'settings.json'))).toBe(true)
-    expect(existsSync(join(root, '.codex', 'hooks.json'))).toBe(true)
+    expect(existsSync(claudeHooks)).toBe(true)
+    expect(existsSync(codexHooks)).toBe(true)
+
+    rmSync(claudeHooks)
+    expect(await main(['install', '--no-input'])).toBe(0)
+    expect(existsSync(claudeHooks)).toBe(true)
+    expect(existsSync(codexHooks)).toBe(true)
+  })
+
+  it('rejects configured hook content drift before writing package, lock, or hooks', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-hooks-drift-'),
+    )
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['verified'],
+        install: { method: 'hooks', targets: ['claude', 'codex'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    process.chdir(root)
+
+    expect(await main(['install', '--no-input'])).toBe(0)
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+    const claudeHooks = join(root, '.claude', 'settings.json')
+    writeFileSync(
+      join(root, 'node_modules', 'verified', 'skills', 'core', 'SKILL.md'),
+      '---\nname: core\ndescription: Changed skill\n---\n',
+    )
+    rmSync(claudeHooks)
+    errorSpy.mockClear()
+
+    expect(await main(['install', '--no-input'])).toBe(1)
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Intent install requires review before automation can continue.',
+    )
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
+    expect(existsSync(claudeHooks)).toBe(false)
   })
 
   it('rejects configured Copilot hook bootstrap before writes', async () => {
@@ -895,6 +995,51 @@ describe('cli commands', () => {
       packageJsonBefore,
     )
     for (const path of ['intent.lock', '.intent', '.claude', '.codex']) {
+      expect(existsSync(join(root, path))).toBe(false)
+    }
+  })
+
+  it('rejects configured Copilot hooks before writes when a lock exists', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-copilot-locked-'),
+    )
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['verified'],
+        install: { method: 'hooks', targets: ['claude', 'github'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    const discovered = scanForIntents(root, { scope: 'local' }).packages
+    writeFileSync(
+      join(root, 'intent.lock'),
+      serializeIntentLockfile({
+        lockfileVersion: 1,
+        sources: buildCurrentLockfileSources(discovered),
+      }),
+    )
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+    process.chdir(root)
+
+    expect(await main(['install', '--no-input'])).toBe(1)
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Non-interactive install cannot bootstrap GitHub Copilot hooks because they require interactive approval for user-home access. Remove "github" from intent.install.targets or run `intent install` in a terminal.',
+    )
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
+    for (const path of ['.intent', '.claude', '.codex']) {
       expect(existsSync(join(root, path))).toBe(false)
     }
   })
@@ -1041,6 +1186,69 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(logSpy).toHaveBeenCalledWith('No excludes configured.')
+  })
+
+  it('lists excludes when released config has null skills', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-exclude-list-null-skills-'),
+    )
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: null },
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['exclude', 'list'])
+
+    expect(exitCode).toBe(0)
+    expect(logSpy).toHaveBeenCalledWith('No excludes configured.')
+  })
+
+  it('lists only nonblank string excludes from released config', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-exclude-list-legacy-'),
+    )
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: [],
+        exclude: ['', '  legacy-pkg  ', null, 42],
+      },
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['exclude', 'list', '--json'])
+    const output = String(logSpy.mock.calls.at(-1)?.[0] ?? '')
+
+    expect(exitCode).toBe(0)
+    expect(JSON.parse(output)).toEqual(['legacy-pkg'])
+  })
+
+  it('keeps exclude mutations strict for released config', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-exclude-write-legacy-'),
+    )
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: null, exclude: ['legacy-pkg'] },
+    })
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    process.chdir(root)
+
+    expect(await main(['exclude', 'add', 'new-pkg'])).toBe(1)
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Invalid package.json intent configuration: intent.skills must be an array of strings.',
+    )
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
   })
 
   it('adds and lists an exclude pattern', async () => {
@@ -1594,6 +1802,23 @@ describe('cli commands', () => {
     expect(parsed.warnings).toEqual([])
   })
 
+  it('prints the empty default list message', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-empty-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: [] },
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['list'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('No intent-enabled packages found.')
+  })
+
   it('prints full load commands for every skill in human list output', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-load-commands-'))
     tempDirs.push(root)
@@ -1672,10 +1897,10 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain(
-      'Allowed by  intent.skills["@tanstack/query#fetching"]',
+      'Allowed by intent.skills["@tanstack/query#fetching"]',
     )
     expect(output).toContain(
-      'Allowed by  intent.skills["@tanstack/query#query/cache"]',
+      'Allowed by intent.skills["@tanstack/query#query/cache"]',
     )
     expect(output.indexOf('Allowed by')).toBeLessThan(output.indexOf('Load:'))
   })
@@ -1715,7 +1940,7 @@ describe('cli commands', () => {
       expect(whyOutput).toContain('@tanstack/query\n')
       expect(whyOutput).toContain('fetching  (excluded)')
       expect(whyOutput).toContain(
-        `Excluded by  intent.exclude[${JSON.stringify(pattern)}]`,
+        `Excluded by intent.exclude[${JSON.stringify(pattern)}]`,
       )
       expect(whyOutput).not.toContain('Load:')
     },
@@ -1741,7 +1966,7 @@ describe('cli commands', () => {
     expect(await main(['list', '--why'])).toBe(0)
     const output = logSpy.mock.calls.flat().join('\n')
 
-    expect(output).toContain('Allowed by  intent.skills["@tanstack/query"]')
+    expect(output).toContain('Allowed by intent.skills["@tanstack/query"]')
   })
 
   it.each([
@@ -2946,70 +3171,68 @@ describe('cli commands', () => {
     )
   })
 
-  it('explains which package version was chosen when conflicts exist', async () => {
+  it('keeps full version conflict paths in human list output', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-conflicts-'))
     tempDirs.push(root)
+    const { queryV4Dir, queryV5Dir } = writeConflictingQueryPackages(root)
 
-    writeJson(join(root, 'package.json'), {
-      name: 'app',
-      private: true,
-      dependencies: {
-        'consumer-a': '1.0.0',
-        'consumer-b': '1.0.0',
-      },
-    })
-
-    const consumerADir = join(root, 'node_modules', 'consumer-a')
-    const consumerBDir = join(root, 'node_modules', 'consumer-b')
-    const queryV4Dir = join(consumerADir, 'node_modules', '@tanstack', 'query')
-    const queryV5Dir = join(consumerBDir, 'node_modules', '@tanstack', 'query')
-
-    writeJson(join(consumerADir, 'package.json'), {
-      name: 'consumer-a',
-      version: '1.0.0',
-      dependencies: { '@tanstack/query': '4.0.0' },
-    })
-    writeJson(join(consumerBDir, 'package.json'), {
-      name: 'consumer-b',
-      version: '1.0.0',
-      dependencies: { '@tanstack/query': '5.0.0' },
-    })
-    writeJson(join(queryV4Dir, 'package.json'), {
-      name: '@tanstack/query',
-      version: '4.0.0',
-      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
-    })
-    writeJson(join(queryV5Dir, 'package.json'), {
-      name: '@tanstack/query',
-      version: '5.0.0',
-      intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
-    })
-    writeSkillMd(join(queryV4Dir, 'skills', 'fetching'), {
-      name: 'fetching',
-      description: 'Query v4 skill',
-    })
-    writeSkillMd(join(queryV5Dir, 'skills', 'fetching'), {
-      name: 'fetching',
-      description: 'Query v5 skill',
-    })
-
-    process.env.INTENT_AUDIENCE = 'agent'
+    process.env.INTENT_AUDIENCE = 'human'
     process.chdir(root)
 
     const exitCode = await main(['list'])
     const output = logSpy.mock.calls
       .map((call: Array<unknown>) => `${String(call[0] ?? '')}\n`)
       .join('')
-    const loadHeader = `Load a skill with \`npx @tanstack/intent@${intentPackagePin} load <id>\`.`
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Version conflicts:')
     expect(output).toContain('@tanstack/query -> using 5.0.0')
     expect(output).toContain(`chosen: ${queryV5Dir}`)
     expect(output).toContain(`also found: 4.0.0 at ${queryV4Dir}`)
-    expect(output).toContain(
-      `also found: 4.0.0 at ${queryV4Dir}\n\n${loadHeader}`,
-    )
+
+    logSpy.mockClear()
+    expect(await main(['list', '--json'])).toBe(0)
+    const jsonOutput = String(logSpy.mock.calls.at(-1)?.[0] ?? '')
+    expect(jsonOutput).toContain(queryV4Dir)
+    expect(jsonOutput).toContain(queryV5Dir)
+  })
+
+  it('redacts version conflict paths from agent list output', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-conflicts-agent-'))
+    tempDirs.push(root)
+    const { queryV4Dir, queryV5Dir } = writeConflictingQueryPackages(root)
+
+    process.env.INTENT_AUDIENCE = 'agent'
+    process.chdir(root)
+
+    expect(await main(['list'])).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).not.toContain('Version conflicts:')
+    expect(output).not.toContain(queryV4Dir)
+    expect(output).not.toContain(queryV5Dir)
+
+    logSpy.mockClear()
+    expect(await main(['list', '--json'])).toBe(0)
+    const jsonOutput = String(logSpy.mock.calls.at(-1)?.[0] ?? '')
+    const parsed = JSON.parse(jsonOutput) as { conflicts: Array<unknown> }
+    expect(parsed.conflicts).toEqual([])
+    expect(jsonOutput).not.toContain(queryV4Dir)
+    expect(jsonOutput).not.toContain(queryV5Dir)
+  })
+
+  it('redacts scanner warning paths from agent list output', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-warnings-agent-'))
+    tempDirs.push(root)
+    const malformedPackageDir = join(root, 'node_modules', 'malformed')
+    mkdirSync(join(malformedPackageDir, 'skills'), { recursive: true })
+    writeFileSync(join(malformedPackageDir, 'package.json'), '{')
+
+    process.env.INTENT_AUDIENCE = 'agent'
+    process.chdir(root)
+
+    expect(await main(['list', '--json'])).toBe(0)
+    const jsonOutput = String(logSpy.mock.calls.at(-1)?.[0] ?? '')
+    expect(jsonOutput).not.toContain(root)
   })
 
   it('validates a well-formed skills directory', async () => {

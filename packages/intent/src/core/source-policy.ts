@@ -52,12 +52,12 @@ export interface LoadRefusal {
   message: string
 }
 
-export type ExplicitSkillSource = Extract<
+type ExplicitSkillSource = Extract<
   SkillSourcesConfig,
   { mode: 'explicit' }
 >['sources'][number]
 
-export interface SkillSourcePolicyDecision {
+interface SkillSourcePolicyDecision {
   permitted: boolean
   source: ExplicitSkillSource | null
 }
@@ -292,7 +292,7 @@ export interface SourcePolicyResult {
   sourcePolicy: CompiledSkillSourcePolicy
 }
 
-export interface ExcludedSkill {
+interface ExcludedSkill {
   package: IntentPackage
   skill: IntentPackage['skills'][number]
   pattern: string

@@ -321,7 +321,6 @@ describe('hook installer', () => {
         configPath: null,
         reason: 'project scope is not supported; use --scope user',
         scope: 'project',
-        scriptPath: null,
         status: 'skipped',
       }),
     ).toBe(

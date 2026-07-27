@@ -22,11 +22,13 @@ import type { ScanResult } from '../../shared/types.js'
 
 async function runInstallWithPrompts({
   dryRun,
+  existingLockReview,
   prompts,
   root,
   selection,
 }: {
   dryRun?: boolean
+  existingLockReview?: 'fail'
   prompts: InstallerPrompter
   root: string
   selection?: SkillSelection
@@ -38,6 +40,7 @@ async function runInstallWithPrompts({
   await runConsumerInstall({
     discovered: scanForIntents(root, { scope: 'local' }).packages,
     dryRun,
+    existingLockReview,
     prompts,
     root,
     selection,
@@ -60,29 +63,31 @@ async function runDeclarativeInstall(
     }
     throw error
   }
+  const { hasExplicitIntentSkills, readIntentConsumerConfig } =
+    await import('./config.js')
+  const config = readIntentConsumerConfig(packageJson)
+  const install = config.install
+  if (install?.method === 'hooks' && install.targets.includes('github')) {
+    fail(
+      'Non-interactive install cannot bootstrap GitHub Copilot hooks because they require interactive approval for user-home access. Remove "github" from intent.install.targets or run `intent install` in a terminal.',
+    )
+  }
   const { readIntentLockfile } = await import('../../core/lockfile/lockfile.js')
-  if (readIntentLockfile(join(root, 'intent.lock')).status === 'found') {
+  const hasExistingLock =
+    readIntentLockfile(join(root, 'intent.lock')).status === 'found'
+  if (hasExistingLock && install?.method !== 'hooks') {
     const { runSyncCommand } = await import('../sync/command.js')
     await runSyncCommand({ ...options, cwd: root }, { review: 'fail' })
     return
   }
-  const { hasExplicitIntentSkills, readIntentConsumerConfig } =
-    await import('./config.js')
-  const config = readIntentConsumerConfig(packageJson)
   if (!hasExplicitIntentSkills(packageJson)) {
     fail(
       'Non-interactive install requires an explicit package.json intent.skills array. Add intent.skills (use [] to deny all) before running `intent install --no-input`.',
     )
   }
-  if (!config.install) {
+  if (!install) {
     fail(
       'Non-interactive install requires an explicit valid package.json intent.install object. Configure intent.install.method and intent.install.targets before running `intent install --no-input`.',
-    )
-  }
-  const install = config.install
-  if (install.method === 'hooks' && install.targets.includes('github')) {
-    fail(
-      'Non-interactive install cannot bootstrap GitHub Copilot hooks because they require interactive approval for user-home access. Remove "github" from intent.install.targets or run `intent install` in a terminal.',
     )
   }
   const selection: SkillSelection = {
@@ -102,6 +107,7 @@ async function runDeclarativeInstall(
   }
   await runInstallWithPrompts({
     dryRun: options.dryRun,
+    existingLockReview: hasExistingLock ? 'fail' : undefined,
     prompts,
     root,
     selection,
