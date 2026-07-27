@@ -13,12 +13,13 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, win32 } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildSessionCatalogue,
   formatSessionCatalogue,
   getSessionCatalogue,
+  policyManifestPaths,
 } from '../src/session-catalog.js'
 import { computeSkillContentHash } from '../src/core/lockfile/hash.js'
 import { nodeReadFs } from '../src/shared/utils.js'
@@ -168,6 +169,29 @@ describe('session catalogue formatting', () => {
 })
 
 describe('session catalogue cache', () => {
+  it('does not persist a discovery without lock verification', async () => {
+    const root = tempRoot('intent-catalog-no-lock-')
+    const cacheDir = join(root, 'cache')
+    writeFileSync(join(root, 'package.json'), '{}')
+    let discoveries = 0
+    const options = {
+      cacheDir,
+      root,
+      discover: () => {
+        discoveries += 1
+        return { result: result([]), verification: null }
+      },
+    }
+
+    const first = await getSessionCatalogue(options)
+    const second = await getSessionCatalogue(options)
+
+    expect(first.cacheStatus).toBe('miss')
+    expect(second.cacheStatus).toBe('miss')
+    expect(discoveries).toBe(2)
+    expect(existsSync(first.cachePath)).toBe(false)
+  })
+
   it('fails open when the default temporary directory cannot be resolved', async () => {
     const root = tempRoot('intent-catalog-missing-temp-')
     const missingTempRoot = join(root, 'missing')
@@ -597,5 +621,50 @@ describe('session catalogue cache', () => {
 
     expect((await getSessionCatalogue(options)).cacheStatus).toBe('miss')
     expect(discoveries).toBe(2)
+  })
+})
+
+describe('session catalogue policy manifests', () => {
+  it('uses only the policy manifest when Windows roots are on different drives', () => {
+    expect(policyManifestPaths('C:\\workspace', 'D:\\policy', win32)).toEqual([
+      'D:\\policy\\package.json',
+    ])
+  })
+
+  it('includes nested policy ancestors on the same Windows drive', () => {
+    expect(
+      policyManifestPaths(
+        'C:\\workspace',
+        'C:\\workspace\\packages\\app',
+        win32,
+      ),
+    ).toEqual([
+      'C:\\workspace\\packages\\app\\package.json',
+      'C:\\workspace\\packages\\package.json',
+      'C:\\workspace\\package.json',
+    ])
+  })
+
+  it('recognizes equivalent Windows roots with different casing and trailing separators', () => {
+    expect(
+      policyManifestPaths(
+        'C:\\WORKSPACE\\',
+        'c:\\workspace\\packages\\app\\',
+        win32,
+      ),
+    ).toEqual([
+      'c:\\workspace\\packages\\app\\package.json',
+      'c:\\workspace\\packages\\package.json',
+      'C:\\WORKSPACE\\package.json',
+    ])
+  })
+
+  it('includes an in-workspace child whose name starts with two dots', () => {
+    expect(
+      policyManifestPaths('C:\\workspace', 'C:\\workspace\\..cfg', win32),
+    ).toEqual([
+      'C:\\workspace\\..cfg\\package.json',
+      'C:\\workspace\\package.json',
+    ])
   })
 })

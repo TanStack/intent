@@ -53,19 +53,32 @@ export async function runSessionCatalogueHook({
   agent: HookAgent
   event?: Record<string, unknown>
 }): Promise<void> {
-  try {
-    const eventName = getLifecycleEventName(agent, event)
-    if (!eventName) return
+  const eventName = getLifecycleEventName(agent, event)
+  if (!eventName) return
 
+  let context: string
+  try {
     const result = await getIntentCatalogContext({ cwd: getEventCwd(event) })
+    context = result.context
+  } catch (error) {
+    logHookFailure(error)
+    context =
+      'Intent skills are unavailable because the catalogue could not be built. Run `intent catalog` outside the agent session for details.'
+  }
+
+  try {
     process.stdout.write(
-      JSON.stringify(formatHookOutput(agent, eventName, result.context)),
+      JSON.stringify(formatHookOutput(agent, eventName, context)),
     )
   } catch (error) {
-    console.error(
-      `[intent catalog] hook failed open: ${error instanceof Error ? error.message : String(error)}`,
-    )
+    logHookFailure(error)
   }
+}
+
+function logHookFailure(error: unknown): void {
+  console.error(
+    `[intent catalog] hook failed open: ${error instanceof Error ? error.message : String(error)}`,
+  )
 }
 
 function readEventFromStdin(): Record<string, unknown> {

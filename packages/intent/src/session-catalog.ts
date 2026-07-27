@@ -15,17 +15,18 @@ import {
 } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { homedir, tmpdir, userInfo } from 'node:os'
-import { dirname, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { resolveProjectContext } from './core/project-context.js'
 import { computeSkillContentHash } from './core/lockfile/hash.js'
 import { containsLocalPath } from './shared/local-path.js'
 import { isGeneratedMappingSkill } from './skills/categories.js'
 import { parseSkillUse } from './skills/use.js'
 import { findWorkspacePackages } from './setup/workspace-patterns.js'
+import type * as NodePath from 'node:path'
 import type { IntentSkillList } from './core/index.js'
 import type { ReadFs } from './shared/utils.js'
 
-const CACHE_SCHEMA_VERSION = 3
+const CACHE_SCHEMA_VERSION = 4
 const DEFAULT_MAX_CONTEXT_BYTES = 8_000
 const DEFAULT_MAX_SKILLS = 50
 const MIN_CONTEXT_BYTES = 512
@@ -64,7 +65,7 @@ export interface SessionCatalogue {
 
 export interface DiscoveredSessionCatalogue {
   result: IntentSkillList
-  verification: Array<CatalogueVerificationEntry>
+  verification: Array<CatalogueVerificationEntry> | null
 }
 
 interface IntentSessionCatalogueCache {
@@ -211,15 +212,17 @@ export async function getSessionCatalogue(options: {
 
   const refreshed = await discover()
   const catalogue = buildSessionCatalogue(refreshed.result)
-  const entry: IntentSessionCatalogueCache = {
-    schemaVersion: CACHE_SCHEMA_VERSION,
-    workspaceRoot,
-    policyRoot: normalizedPolicyRoot,
-    dependencyFingerprint,
-    catalogue,
-    verification: refreshed.verification,
+  if (cache.enabled && refreshed.verification !== null) {
+    const entry: IntentSessionCatalogueCache = {
+      schemaVersion: CACHE_SCHEMA_VERSION,
+      workspaceRoot,
+      policyRoot: normalizedPolicyRoot,
+      dependencyFingerprint,
+      catalogue,
+      verification: refreshed.verification,
+    }
+    writeCache(cachePath, entry)
   }
-  if (cache.enabled) writeCache(cachePath, entry)
 
   return {
     cachePath,
@@ -283,25 +286,33 @@ function normalizeRoot(root: string): string {
     : normalized
 }
 
-function policyManifestPaths(
+export function policyManifestPaths(
   workspaceRoot: string,
   policyRoot: string,
+  pathApi: Pick<
+    typeof NodePath,
+    'dirname' | 'isAbsolute' | 'join' | 'relative'
+  > = { dirname, isAbsolute, join, relative },
 ): Array<string> {
-  const relativePolicyRoot = relative(workspaceRoot, policyRoot)
+  const relativePolicyRoot = pathApi.relative(workspaceRoot, policyRoot)
   if (
-    relativePolicyRoot.startsWith('..') ||
-    relativePolicyRoot.startsWith('/')
+    relativePolicyRoot.split(/[\\/]/, 1)[0] === '..' ||
+    pathApi.isAbsolute(relativePolicyRoot)
   ) {
-    return [join(policyRoot, 'package.json')]
+    return [pathApi.join(policyRoot, 'package.json')]
   }
 
   const manifests: Array<string> = []
   let directory = policyRoot
-  while (directory !== workspaceRoot) {
-    manifests.push(join(directory, 'package.json'))
-    directory = dirname(directory)
+  while (pathApi.relative(workspaceRoot, directory) !== '') {
+    manifests.push(pathApi.join(directory, 'package.json'))
+    const parent = pathApi.dirname(directory)
+    if (parent === directory) {
+      return [pathApi.join(policyRoot, 'package.json')]
+    }
+    directory = parent
   }
-  manifests.push(join(workspaceRoot, 'package.json'))
+  manifests.push(pathApi.join(workspaceRoot, 'package.json'))
   return manifests
 }
 

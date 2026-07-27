@@ -1,13 +1,26 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { applyCatalogueLock } from '../src/catalog-lock.js'
 import {
   getIntentCatalogContext,
   runSessionCatalogueHook,
 } from '../src/catalog.js'
+import { listIntentSkills } from '../src/core/index.js'
 import { computeSkillContentHash } from '../src/core/lockfile/hash.js'
 import { writeIntentLockfile } from '../src/core/lockfile/lockfile.js'
+import { getProjectReadFs } from '../src/discovery/scanner.js'
+import {
+  formatSessionCatalogue,
+  getSessionCatalogue,
+} from '../src/session-catalog.js'
 
 const roots: Array<string> = []
 
@@ -69,6 +82,22 @@ function fixture(): { root: string; packageRoot: string; skillDir: string } {
   return { root, packageRoot, skillDir }
 }
 
+async function getFixtureCatalogContext(root: string, cacheDir: string) {
+  const readFs = getProjectReadFs(root)
+  const result = await getSessionCatalogue({
+    cacheDir,
+    root,
+    readFs,
+    discover: () =>
+      applyCatalogueLock(
+        listIntentSkills({ audience: 'agent', cwd: root }),
+        root,
+        readFs,
+      ),
+  })
+  return { ...result, context: formatSessionCatalogue(result.catalogue) }
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   for (const root of roots.splice(0)) {
@@ -77,6 +106,44 @@ afterEach(() => {
 })
 
 describe('getIntentCatalogContext', () => {
+  it('refreshes without replacing an existing cache after intent.lock is removed', async () => {
+    const { root, skillDir } = fixture()
+    const cacheDir = join(root, 'cache')
+    const first = await getFixtureCatalogContext(root, cacheDir)
+    const cachedBytes = readFileSync(first.cachePath)
+    rmSync(join(root, 'intent.lock'))
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      '---\nname: core\ndescription: Changed unverified guidance\n---\n',
+    )
+
+    const changed = await getFixtureCatalogContext(root, cacheDir)
+
+    expect(first.cacheStatus).toBe('miss')
+    expect(changed.cacheStatus).toBe('refresh')
+    expect(changed.context).toContain('Changed unverified guidance')
+    expect(changed.context).not.toContain('Core package guidance')
+    expect(readFileSync(first.cachePath)).toEqual(cachedBytes)
+  })
+
+  it('rediscovers changed context when intent.lock is missing', async () => {
+    const { root, skillDir } = fixture()
+    rmSync(join(root, 'intent.lock'))
+
+    const first = await getIntentCatalogContext({ cwd: root })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      '---\nname: core\ndescription: Changed guidance\n---\n',
+    )
+    const changed = await getIntentCatalogContext({ cwd: root })
+
+    expect(first.cacheStatus).toBe('miss')
+    expect(first.context).toContain('Core package guidance')
+    expect(changed.cacheStatus).toBe('miss')
+    expect(changed.context).toContain('Changed guidance')
+    expect(changed.context).not.toContain('Core package guidance')
+  })
+
   it('reuses accepted context and withholds drifted skill content', async () => {
     const { root, skillDir } = fixture()
 
@@ -97,6 +164,37 @@ describe('getIntentCatalogContext', () => {
     expect(changed.context).toContain('@fixture/package#sibling')
   })
 
+  it('restores an accepted skill after its exact locked content returns', async () => {
+    const { root, skillDir } = fixture()
+    const cacheDir = join(root, 'cache')
+    const originalSkill = readFileSync(join(skillDir, 'SKILL.md'))
+    const first = await getFixtureCatalogContext(root, cacheDir)
+    const cachedBytes = readFileSync(first.cachePath)
+
+    expect(first.cacheStatus).toBe('miss')
+    expect(first.context).toContain('@fixture/package#core')
+    expect(first.context).toContain('@fixture/package#sibling')
+
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      '---\nname: core\ndescription: Drifted guidance\n---\n',
+    )
+
+    const drifted = await getFixtureCatalogContext(root, cacheDir)
+
+    expect(drifted.cacheStatus).toBe('refresh')
+    expect(drifted.context).not.toContain('@fixture/package#core')
+    expect(drifted.context).toContain('@fixture/package#sibling')
+    expect(readFileSync(first.cachePath)).toEqual(cachedBytes)
+
+    writeFileSync(join(skillDir, 'SKILL.md'), originalSkill)
+    const restored = await getFixtureCatalogContext(root, cacheDir)
+
+    expect(restored.cacheStatus).toBe('hit')
+    expect(restored.context).toContain('@fixture/package#core')
+    expect(restored.context).toContain('@fixture/package#sibling')
+  })
+
   it('withholds a newly discovered skill without changing accepted siblings', async () => {
     const { root, packageRoot } = fixture()
     const newSkillDir = join(packageRoot, 'skills', 'new-skill')
@@ -115,6 +213,33 @@ describe('getIntentCatalogContext', () => {
 })
 
 describe('runSessionCatalogueHook', () => {
+  it('writes generic Copilot context when the catalogue cannot be built', async () => {
+    const { root } = fixture()
+    writeFileSync(join(root, 'intent.lock'), '{broken')
+    const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+    const stderr = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    await runSessionCatalogueHook({
+      agent: 'copilot',
+      event: { cwd: root, source: 'startup' },
+    })
+
+    expect(stdout).toHaveBeenCalledTimes(1)
+    const output = String(stdout.mock.calls[0]![0])
+    expect(JSON.parse(output)).toEqual({
+      additionalContext:
+        'Intent skills are unavailable because the catalogue could not be built. Run `intent catalog` outside the agent session for details.',
+    })
+    expect(stderr).toHaveBeenCalledTimes(1)
+    expect(String(stderr.mock.calls[0]![0])).toContain(
+      '[intent catalog] hook failed open:',
+    )
+    expect(output).not.toContain('Invalid intent.lock JSON')
+    expect(output).not.toContain(root)
+  })
+
   it('writes the documented Copilot output shape', async () => {
     const { root } = fixture()
     const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)

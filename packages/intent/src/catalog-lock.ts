@@ -13,7 +13,7 @@ import type { ReadFs } from './shared/utils.js'
 
 export interface LockCheckedCatalogueDiscovery {
   result: IntentSkillList
-  verification: Array<CatalogueVerificationEntry>
+  verification: Array<CatalogueVerificationEntry> | null
 }
 
 export function applyCatalogueLock(
@@ -22,7 +22,7 @@ export function applyCatalogueLock(
   readFs: ReadFs = getProjectReadFs(workspaceRoot),
 ): LockCheckedCatalogueDiscovery {
   const locked = readIntentLockfile(join(workspaceRoot, 'intent.lock'))
-  if (locked.status === 'missing') return { result, verification: [] }
+  if (locked.status === 'missing') return { result, verification: null }
 
   const fsCache = createIntentFsCache()
   fsCache.useFs(readFs)
@@ -102,6 +102,6 @@ export function applyCatalogueLock(
           }
         : {}),
     },
-    verification,
+    verification: withheldCount > 0 ? null : verification,
   }
 }
