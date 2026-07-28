@@ -433,6 +433,55 @@ describe('cli commands', () => {
     )
   })
 
+  it('reports sync preflight conflicts before failing without writing', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-sync-conflict-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: ['verified#core'],
+        install: { method: 'symlink', targets: ['agents'] },
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'verified',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Verified skill',
+    })
+    process.chdir(root)
+
+    expect(await main(['install', '--no-input'])).toBe(0)
+    const statePath = join(root, '.intent', 'install-state.json')
+    const conflictPath = '.agents/skills/npm-verified-core'
+    const linkPath = join(root, conflictPath)
+    rmSync(statePath)
+    logSpy.mockClear()
+
+    expect(await main(['sync', '--json'])).toBe(1)
+
+    expect(logSpy).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      created: [],
+      repaired: [],
+      removed: [],
+      conflicts: [conflictPath],
+    })
+    expect(existsSync(statePath)).toBe(false)
+    expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
+
+    logSpy.mockClear()
+
+    expect(await main(['sync'])).toBe(1)
+
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('Intent sync: 0 created, 0 repaired, 0 removed.')
+    expect(output).toContain(`Conflicts: ${conflictPath}.`)
+    expect(existsSync(statePath)).toBe(false)
+    expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
+  })
+
   it('rejects the removed install --print-prompt option', async () => {
     const exitCode = await main(['install', '--print-prompt'])
 

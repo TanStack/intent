@@ -115,6 +115,24 @@ function writeManagedLinkState(root: string, links: LinkReconciliation): void {
   ])
 }
 
+function buildSyncCommandResult(
+  root: string,
+  links: LinkReconciliation,
+  summaries: Pick<
+    SyncCommandResult,
+    'newDependencies' | 'newSkills' | 'changed'
+  >,
+): SyncCommandResult {
+  return {
+    created: links.created.map((path) => toProjectRelativePath(root, path)),
+    repaired: links.repaired.map((path) => toProjectRelativePath(root, path)),
+    removed: links.removed.map((path) => toProjectRelativePath(root, path)),
+    unchanged: links.unchanged.map((path) => toProjectRelativePath(root, path)),
+    conflicts: links.conflicts.map((path) => toProjectRelativePath(root, path)),
+    ...summaries,
+  }
+}
+
 function output(
   result: SyncCommandResult,
   json: boolean,
@@ -484,35 +502,6 @@ export async function runSyncCommand(
       'Archive-backed/PnP sources cannot use symlink delivery; use hooks instead by setting intent.install.method to "hooks".',
     )
   }
-  const preflight = reconcileManagedLinks({
-    dryRun: true,
-    expected,
-    stateResult,
-  })
-  if (preflight.conflicts.length > 0) {
-    fail(
-      `Intent sync found managed link conflicts: ${preflight.conflicts
-        .map((path) => toProjectRelativePath(root, path))
-        .join(', ')}.`,
-    )
-  }
-  const links = options.dryRun
-    ? preflight
-    : reconcileManagedLinks({
-        dryRun: false,
-        expected,
-        stateResult,
-      })
-  if (!options.dryRun) {
-    writeManagedLinkState(root, links)
-  }
-  if (links.conflicts.length > 0) {
-    fail(
-      `Intent sync found managed link conflicts: ${links.conflicts
-        .map((path) => toProjectRelativePath(root, path))
-        .join(', ')}.`,
-    )
-  }
   const summaries = {
     newDependencies: inventory.packages
       .map((pkg) => ({
@@ -538,17 +527,48 @@ export async function runSyncCommand(
       }))
       .filter((entry) => entry.skillCount > 0),
   }
-  const result = {
-    created: links.created.map((path) => toProjectRelativePath(root, path)),
-    repaired: links.repaired.map((path) => toProjectRelativePath(root, path)),
-    removed: links.removed.map((path) => toProjectRelativePath(root, path)),
-    unchanged: links.unchanged.map((path) => toProjectRelativePath(root, path)),
-    conflicts: links.conflicts.map((path) => toProjectRelativePath(root, path)),
-    ...summaries,
-  }
   const interactiveReview =
     summaries.newDependencies.length > 0 &&
     shouldReviewInteractively(options, runtime)
+  const preflight = reconcileManagedLinks({
+    dryRun: true,
+    expected,
+    stateResult,
+  })
+  if (preflight.conflicts.length > 0) {
+    const reportedLinks = options.dryRun
+      ? preflight
+      : { ...preflight, created: [], repaired: [], removed: [] }
+    output(
+      buildSyncCommandResult(root, reportedLinks, summaries),
+      options.json === true,
+      false,
+    )
+    fail(
+      `Intent sync found managed link conflicts: ${preflight.conflicts
+        .map((path) => toProjectRelativePath(root, path))
+        .join(', ')}.`,
+    )
+  }
+  const links = options.dryRun
+    ? preflight
+    : reconcileManagedLinks({
+        dryRun: false,
+        expected,
+        stateResult,
+      })
+  if (!options.dryRun) {
+    writeManagedLinkState(root, links)
+  }
+  const result = buildSyncCommandResult(root, links, summaries)
+  if (links.conflicts.length > 0) {
+    output(result, options.json === true, false)
+    fail(
+      `Intent sync found managed link conflicts: ${links.conflicts
+        .map((path) => toProjectRelativePath(root, path))
+        .join(', ')}.`,
+    )
+  }
   output(result, options.json === true, interactiveReview)
   if (
     runtime.review === 'fail' &&
