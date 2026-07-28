@@ -414,19 +414,43 @@ export async function runSyncCommand(
     )
   }
 
-  const { discovered, policy } = scanForConfiguredIntents({
-    root,
-    config: parseSkillSources(config.skills),
-    exclude: config.exclude,
-  })
-  const { expected, inventory } = buildSyncLinkPlan({
-    config,
-    currentSources: buildCurrentLockfileSources(policy.packages),
-    discovered,
-    lock,
-    packages: policy.packages,
-    root,
-  })
+  let discovery: ReturnType<typeof scanForConfiguredIntents>
+  let plan: ReturnType<typeof buildSyncLinkPlan>
+  try {
+    discovery = scanForConfiguredIntents({
+      root,
+      config: parseSkillSources(config.skills),
+      exclude: config.exclude,
+    })
+    plan = buildSyncLinkPlan({
+      config,
+      currentSources: buildCurrentLockfileSources(discovery.policy.packages),
+      discovered: discovery.discovered,
+      lock,
+      packages: discovery.policy.packages,
+      root,
+    })
+  } catch (error) {
+    const links = reconcileManagedLinks({
+      dryRun: options.dryRun === true,
+      expected: [],
+      stateResult: readInstallStateForLinks(root),
+    })
+    if (!options.dryRun) {
+      writeManagedLinkState(root, links)
+    }
+    if (links.conflicts.length > 0) {
+      throw new Error(
+        `Intent sync could not revoke managed links after verification failed: ${links.conflicts
+          .map((path) => toProjectRelativePath(root, path))
+          .join(', ')}.`,
+        { cause: error },
+      )
+    }
+    throw error
+  }
+  const { discovered, policy } = discovery
+  const { expected, inventory } = plan
   const links = reconcileManagedLinks({
     dryRun: options.dryRun === true,
     expected,

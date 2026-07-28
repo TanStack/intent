@@ -1,6 +1,5 @@
 import { isUtf8 } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { opendirSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { nodeReadFs } from '../../shared/utils.js'
 import type { Dirent } from 'node:fs'
@@ -21,9 +20,9 @@ export interface ComputeSkillContentHashOptions {
 }
 
 type HashEntry = { path: string; content: Buffer }
-type HashReadFs = ReadFs & { opendirSync?: typeof opendirSync }
+type HashReadFs = ReadFs
 
-const nodeHashReadFs: HashReadFs = { ...nodeReadFs, opendirSync }
+const nodeHashReadFs: HashReadFs = nodeReadFs
 const HASH_ENTRY_SEPARATOR = Buffer.from([0])
 
 function compareStrings(a: string, b: string): number {
@@ -108,11 +107,11 @@ function readDirectoryEntries(
   fs: HashReadFs,
   path: string,
 ): Array<Dirent<string>> {
-  if (!('opendirSync' in fs)) {
+  if (!fs.opendirSync) {
     return fs.readdirSync(path, { encoding: 'utf8', withFileTypes: true })
   }
 
-  const directory = fs.opendirSync!(path, { encoding: 'utf8' })
+  const directory = fs.opendirSync(path, { encoding: 'utf8' })
   const entries: Array<Dirent<string>> = []
   try {
     for (;;) {
@@ -193,7 +192,9 @@ export function computeSkillContentHash({
       hashState.entryCount += 1
       if (hashState.entryCount > HASH_LIMITS.maxEntryCount)
         throw new Error('Hash entry count limit exceeded.')
-      const logicalPath = `${logicalDir}/${entry.name}`
+      const logicalPath = logicalDir
+        ? `${logicalDir}/${entry.name}`
+        : entry.name
       const physicalPath = join(physicalDir, entry.name)
       const realPath = resolveInPackage(
         fs,
@@ -212,24 +213,14 @@ export function computeSkillContentHash({
     }
   }
 
-  readFile(join(realSkillDir, 'SKILL.md'), 'SKILL.md')
-  for (const directory of ['references', 'assets', 'scripts']) {
-    const physicalDir = join(realSkillDir, directory)
-    try {
-      fs.lstatSync(physicalDir)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
-      throw error
-    }
-    const realDir = resolveInPackage(
-      fs,
-      physicalDir,
-      realPackageRoot,
-      directory,
-    )
-    if (!fs.lstatSync(realDir).isDirectory())
-      throw new Error(`${directory} is not a directory.`)
-    collect(realDir, directory, 1)
-  }
+  const skillFile = resolveInPackage(
+    fs,
+    join(realSkillDir, 'SKILL.md'),
+    realPackageRoot,
+    'SKILL.md',
+  )
+  if (!fs.lstatSync(skillFile).isFile())
+    throw new Error('SKILL.md is not a regular file.')
+  collect(realSkillDir, '', 0)
   return hashEntries(hashState.entries)
 }

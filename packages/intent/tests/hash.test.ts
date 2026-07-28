@@ -84,17 +84,34 @@ describe('computeSkillContentHash', () => {
     },
   )
 
-  it('ignores unrelated sibling files', () => {
+  it('includes arbitrary top-level files', () => {
     const { root, skill } = skillRoot()
+    writeFileSync(join(skill, 'EXTRA.md'), 'One')
     const baseline = computeSkillContentHash({
       packageRoot: root,
       skillDir: skill,
     })
-    writeFileSync(join(skill, 'notes.md'), 'Not a supported resource')
+    writeFileSync(join(skill, 'EXTRA.md'), 'Two')
 
     expect(
       computeSkillContentHash({ packageRoot: root, skillDir: skill }),
-    ).toBe(baseline)
+    ).not.toBe(baseline)
+  })
+
+  it('includes files under arbitrary top-level directories', () => {
+    const { root, skill } = skillRoot()
+    mkdirSync(join(skill, 'examples'))
+    writeFileSync(join(skill, 'examples', 'usage.md'), 'One')
+    const baseline = computeSkillContentHash({
+      packageRoot: root,
+      skillDir: skill,
+    })
+
+    writeFileSync(join(skill, 'examples', 'usage.md'), 'Two')
+
+    expect(
+      computeSkillContentHash({ packageRoot: root, skillDir: skill }),
+    ).not.toBe(baseline)
   })
 
   it('preserves binary bytes', () => {
@@ -150,5 +167,25 @@ describe('computeSkillContentHash', () => {
     expect(() =>
       computeSkillContentHash({ packageRoot: root, skillDir: skill }),
     ).toThrow()
+  })
+
+  it.each([
+    ['the skill root', ['outside.md']],
+    ['an arbitrary nested directory', ['examples', 'nested', 'outside.md']],
+  ])('rejects an escaping symlink under %s', (_location, linkParts) => {
+    const { root, skill } = skillRoot()
+    const outside = mkdtempSync(join(tmpdir(), 'intent-hash-outside-'))
+    roots.push(outside)
+    writeFileSync(join(outside, 'outside.md'), 'Outside')
+    mkdirSync(join(skill, ...linkParts.slice(0, -1)), { recursive: true })
+    try {
+      symlinkSync(join(outside, 'outside.md'), join(skill, ...linkParts))
+    } catch {
+      return
+    }
+
+    expect(() =>
+      computeSkillContentHash({ packageRoot: root, skillDir: skill }),
+    ).toThrow('escapes package root through a symlink')
   })
 })

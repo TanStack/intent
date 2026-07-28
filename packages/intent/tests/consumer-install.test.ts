@@ -6,6 +6,8 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -46,6 +48,10 @@ vi.mock('@clack/prompts', async (importOriginal) => {
     select: clackPromptMocks.select,
   }
 })
+
+function createDirectoryLink(target: string, path: string): void {
+  symlinkSync(target, path, process.platform === 'win32' ? 'junction' : 'dir')
+}
 
 const roots: Array<string> = []
 
@@ -367,6 +373,104 @@ describe('consumer install', () => {
     })
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
     expect(advisory).not.toHaveBeenCalled()
+  })
+
+  it('revokes only exact owned links when sync rejects escaped skill content', async () => {
+    const root = createProject()
+    const packageRoot = join(root, 'node_modules', '@tanstack', 'query')
+    const mutationRoot = join(packageRoot, 'skills', 'mutation')
+    mkdirSync(mutationRoot, { recursive: true })
+    writeFileSync(
+      join(mutationRoot, 'SKILL.md'),
+      '---\nname: mutation\ndescription: Mutation guidance\n---\n',
+      'utf8',
+    )
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    const packageBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+    const fetchingLink = join(
+      root,
+      '.agents',
+      'skills',
+      'npm-tanstack-query-fetching',
+    )
+    const mutationLink = join(
+      root,
+      '.agents',
+      'skills',
+      'npm-tanstack-query-mutation',
+    )
+    const retargeted = join(root, 'retargeted-skill')
+    mkdirSync(retargeted)
+    unlinkSync(mutationLink)
+    createDirectoryLink(retargeted, mutationLink)
+    const outside = join(root, 'outside-content')
+    mkdirSync(outside)
+    writeFileSync(join(outside, 'unsafe.md'), 'unsafe', 'utf8')
+    createDirectoryLink(
+      outside,
+      join(packageRoot, 'skills', 'fetching', 'references'),
+    )
+
+    await expect(
+      runSyncCommand({ cwd: root }, { review: 'reminder' }),
+    ).rejects.toThrow(
+      'Intent sync could not revoke managed links after verification failed: .agents/skills/npm-tanstack-query-mutation.',
+    )
+
+    expect(existsSync(fetchingLink)).toBe(false)
+    expect(existsSync(join(fetchingLink, 'references', 'unsafe.md'))).toBe(
+      false,
+    )
+    expect(realpathSync(mutationLink)).toBe(realpathSync(retargeted))
+    expect(readInstallState(root)).toMatchObject({
+      status: 'found',
+      state: {
+        entries: [{ path: '.agents/skills/npm-tanstack-query-mutation' }],
+      },
+    })
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(packageBefore)
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
+  })
+
+  it('reports managed links that cannot be revoked after verification fails', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    const link = join(root, '.agents', 'skills', 'npm-tanstack-query-fetching')
+    const state = readInstallState(root)
+    expect(state.status).toBe('found')
+    if (state.status !== 'found') throw new Error('Expected install state.')
+    unlinkSync(link)
+    createDirectoryLink(join(root, 'retargeted-skill'), link)
+    const outside = join(root, 'outside-content')
+    mkdirSync(outside)
+    createDirectoryLink(
+      outside,
+      join(
+        root,
+        'node_modules',
+        '@tanstack',
+        'query',
+        'skills',
+        'fetching',
+        'references',
+      ),
+    )
+
+    await expect(
+      runSyncCommand({ cwd: root }, { review: 'reminder' }),
+    ).rejects.toThrow(
+      'Intent sync could not revoke managed links after verification failed: .agents/skills/npm-tanstack-query-fetching.',
+    )
+    expect(readInstallState(root)).toEqual(state)
   })
 
   it('installs hooks with policy and lock state without links or prepare', async () => {

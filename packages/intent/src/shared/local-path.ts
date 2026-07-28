@@ -33,6 +33,7 @@ const USER_DATA_POSIX_ROOTS = new Set([
   'srv',
   'workspace',
 ])
+const HOME_POSIX_ROOTS = new Set(['Users', 'home'])
 
 export function containsLocalPath(value: string): boolean {
   if (
@@ -60,7 +61,8 @@ function isLikelyLocalPosixPath(candidate: string): boolean {
     (root !== undefined && SYSTEM_POSIX_ROOTS.has(root)) ||
     (root !== undefined &&
       USER_DATA_POSIX_ROOTS.has(root) &&
-      segments.length >= 3)
+      (segments.length >= 3 ||
+        (HOME_POSIX_ROOTS.has(root) && segments.length >= 2)))
   )
 }
 

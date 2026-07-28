@@ -95,12 +95,28 @@ function createLink(path: string, target: string): void {
 
 // `rmSync` with recursive+force silently leaves some directory symlinks in place.
 // On Windows a directory symlink or junction needs `rmdirSync`, not `unlinkSync`.
-function removeLink(path: string): void {
+function removeLink(path: string): boolean {
   try {
     unlinkSync(path)
-  } catch {
-    rmdirSync(path)
+    return true
+  } catch (unlinkError) {
+    if (process.platform !== 'win32') {
+      if (isRemovalConflict(unlinkError)) return false
+      throw unlinkError
+    }
+    try {
+      rmdirSync(path)
+      return true
+    } catch (rmdirError) {
+      if (isRemovalConflict(rmdirError)) return false
+      throw rmdirError
+    }
   }
+}
+
+function isRemovalConflict(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code
+  return code === 'EACCES' || code === 'EBUSY' || code === 'EPERM'
 }
 
 function compareStrings(left: string, right: string): number {
@@ -111,10 +127,12 @@ export function reconcileManagedLinks({
   dryRun,
   expected,
   stateResult,
+  removeLink: removeManagedLink = removeLink,
 }: {
   dryRun: boolean
   expected: ReadonlyArray<ExpectedLink>
   stateResult: ReadInstallStateResult
+  removeLink?: (path: string) => boolean
 }): LinkReconciliation {
   const result: LinkReconciliation = {
     created: [],
@@ -134,6 +152,8 @@ export function reconcileManagedLinks({
     const target = sourceTarget(entry)
     if (!target) {
       result.conflicts.push(entry.path)
+      const priorEntry = priorByPath.get(entry.path)
+      if (priorEntry) result.entries.push(priorEntry)
       continue
     }
     const priorEntry = priorByPath.get(entry.path)
@@ -156,7 +176,11 @@ export function reconcileManagedLinks({
     }
     if (current === priorEntry.linkTarget) {
       if (!dryRun) {
-        removeLink(entry.path)
+        if (!removeManagedLink(entry.path)) {
+          result.conflicts.push(entry.path)
+          result.entries.push(priorEntry)
+          continue
+        }
         createLink(entry.path, target)
       }
       result.repaired.push(entry.path)
@@ -178,7 +202,11 @@ export function reconcileManagedLinks({
         isLink(priorEntry.path) &&
         resolveLinkTarget(priorEntry.path) === priorEntry.linkTarget
       ) {
-        if (!dryRun) removeLink(priorEntry.path)
+        if (!dryRun && !removeManagedLink(priorEntry.path)) {
+          result.conflicts.push(priorEntry.path)
+          result.entries.push(priorEntry)
+          continue
+        }
         result.removed.push(priorEntry.path)
         continue
       }

@@ -4,6 +4,7 @@ import {
   existsSync,
   lstatSync,
   openSync,
+  opendirSync,
   readFileSync,
   readSync,
   readdirSync,
@@ -43,6 +44,7 @@ export interface ReadFs {
   openSync?: typeof openSync
   readSync?: typeof readSync
   closeSync?: typeof closeSync
+  opendirSync?: typeof opendirSync
 }
 
 export const nodeReadFs: ReadFs = {
@@ -54,6 +56,7 @@ export const nodeReadFs: ReadFs = {
   openSync,
   readSync,
   closeSync,
+  opendirSync,
 }
 
 /**
