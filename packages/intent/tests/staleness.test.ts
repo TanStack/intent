@@ -73,11 +73,11 @@ function mockFetchVersion(version: string): void {
   globalThis.fetch = vi.fn().mockResolvedValue({
     ok: true,
     json: () => Promise.resolve({ version }),
-  } as Response)
+  })
 }
 
 function mockFetchNotOk(): void {
-  globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response)
+  globalThis.fetch = vi.fn().mockResolvedValue({ ok: false })
 }
 
 beforeEach(() => {

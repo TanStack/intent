@@ -164,7 +164,7 @@ export function getDeps(
   for (const field of fields) {
     const d = pkgJson[field]
     if (d && typeof d === 'object') {
-      for (const name of Object.keys(d as Record<string, string>)) {
+      for (const name of Object.keys(d)) {
         deps.add(name)
       }
     }

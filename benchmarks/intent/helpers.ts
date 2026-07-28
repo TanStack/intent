@@ -142,7 +142,7 @@ async function loadBuiltCliMain(): Promise<
         )
       }
 
-      return module.main as (argv?: Array<string>) => Promise<number>
+      return module.main
     },
   )
 
