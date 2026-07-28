@@ -375,7 +375,66 @@ describe('consumer install', () => {
     expect(advisory).not.toHaveBeenCalled()
   })
 
-  it('revokes only exact owned links when sync rejects escaped skill content', async () => {
+  it('preserves malformed install state and managed links when sync fails', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    const statePath = join(root, '.intent', 'install-state.json')
+    const gitignorePath = join(root, '.gitignore')
+    const linkPath = join(
+      root,
+      '.agents',
+      'skills',
+      'npm-tanstack-query-fetching',
+    )
+    writeFileSync(statePath, '{malformed ownership state\n', 'utf8')
+    const stateBefore = readFileSync(statePath)
+    const gitignoreBefore = readFileSync(gitignorePath)
+
+    await expect(
+      runSyncCommand({ cwd: root }, { review: 'reminder' }),
+    ).rejects.toThrow(
+      /install state is malformed.*remove.*install-state\.json/i,
+    )
+
+    expect(readFileSync(statePath)).toEqual(stateBefore)
+    expect(readFileSync(gitignorePath)).toEqual(gitignoreBefore)
+    expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
+  })
+
+  it('preserves missing install state and existing links when sync conflicts', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    const statePath = join(root, '.intent', 'install-state.json')
+    const gitignorePath = join(root, '.gitignore')
+    const linkPath = join(
+      root,
+      '.agents',
+      'skills',
+      'npm-tanstack-query-fetching',
+    )
+    unlinkSync(statePath)
+    const gitignoreBefore = readFileSync(gitignorePath)
+
+    await expect(
+      runSyncCommand({ cwd: root }, { review: 'reminder' }),
+    ).rejects.toThrow(
+      'Intent sync found managed link conflicts: .agents/skills/npm-tanstack-query-fetching.',
+    )
+
+    expect(existsSync(statePath)).toBe(false)
+    expect(readFileSync(gitignorePath)).toEqual(gitignoreBefore)
+    expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
+  })
+
+  it('revokes exact-owned links while preserving conflicting links after verification fails', async () => {
     const root = createProject()
     const packageRoot = join(root, 'node_modules', '@tanstack', 'query')
     const mutationRoot = join(packageRoot, 'skills', 'mutation')
@@ -427,12 +486,12 @@ describe('consumer install', () => {
       false,
     )
     expect(realpathSync(mutationLink)).toBe(realpathSync(retargeted))
-    expect(readInstallState(root)).toMatchObject({
-      status: 'found',
-      state: {
-        entries: [{ path: '.agents/skills/npm-tanstack-query-mutation' }],
-      },
-    })
+    const state = readInstallState(root)
+    expect(state.status).toBe('found')
+    if (state.status !== 'found') throw new Error('Expected install state.')
+    expect(state.state.entries.map((entry) => entry.path)).toEqual([
+      '.agents/skills/npm-tanstack-query-mutation',
+    ])
     expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(packageBefore)
     expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
   })
@@ -471,6 +530,47 @@ describe('consumer install', () => {
       'Intent sync could not revoke managed links after verification failed: .agents/skills/npm-tanstack-query-fetching.',
     )
     expect(readInstallState(root)).toEqual(state)
+  })
+
+  it('preserves missing ownership state after verification fails', async () => {
+    const root = createProject()
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts(),
+      root,
+    })
+    const statePath = join(root, '.intent', 'install-state.json')
+    const gitignorePath = join(root, '.gitignore')
+    const linkPath = join(
+      root,
+      '.agents',
+      'skills',
+      'npm-tanstack-query-fetching',
+    )
+    unlinkSync(statePath)
+    const gitignoreBefore = readFileSync(gitignorePath)
+    const outside = join(root, 'outside-content')
+    mkdirSync(outside)
+    createDirectoryLink(
+      outside,
+      join(
+        root,
+        'node_modules',
+        '@tanstack',
+        'query',
+        'skills',
+        'fetching',
+        'references',
+      ),
+    )
+
+    await expect(
+      runSyncCommand({ cwd: root }, { review: 'reminder' }),
+    ).rejects.toThrow(/escapes package root/i)
+
+    expect(existsSync(statePath)).toBe(false)
+    expect(readFileSync(gitignorePath)).toEqual(gitignoreBefore)
+    expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
   })
 
   it('installs hooks with policy and lock state without links or prepare', async () => {

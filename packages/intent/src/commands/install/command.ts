@@ -33,15 +33,21 @@ async function runInstallWithPrompts({
   root: string
   selection?: SkillSelection
 }): Promise<void> {
-  const [{ runConsumerInstall }, { scanForIntents }] = await Promise.all([
-    import('./consumer.js'),
-    import('../../discovery/scanner.js'),
-  ])
+  const [{ runConsumerInstall }, { createIntentFsCache }, { scanForIntents }] =
+    await Promise.all([
+      import('./consumer.js'),
+      import('../../discovery/fs-cache.js'),
+      import('../../discovery/scanner.js'),
+    ])
+  const fsCache = createIntentFsCache()
+  const scanOptions = { scope: 'local' as const, fsCache }
+  const scan = scanForIntents(root, scanOptions)
   await runConsumerInstall({
-    discovered: scanForIntents(root, { scope: 'local' }).packages,
+    discovered: scan.packages,
     dryRun,
     existingLockReview,
     prompts,
+    readFs: fsCache.getReadFs(),
     root,
     selection,
   })

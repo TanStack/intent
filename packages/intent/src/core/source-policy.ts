@@ -17,6 +17,7 @@ import { readPackageJson } from './package-json.js'
 import { parseSkillSources } from './skill-sources.js'
 import { resolveProjectContext } from './project-context.js'
 import type { SkillUse } from '../skills/use.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { IntentPackage, ScanOptions, ScanResult } from '../shared/types.js'
 import type { ExcludeMatcher } from './excludes.js'
 import type { ProjectContext } from './project-context.js'
@@ -301,16 +302,19 @@ interface ExcludedSkill {
 export function scanForConfiguredIntents({
   config,
   exclude,
+  fsCache,
   root,
 }: {
   config: SkillSourcesConfig
   exclude: Array<string>
+  fsCache?: IntentFsCache
   root: string
 }): {
   discovered: Array<IntentPackage>
   policy: SourcePolicyResult
 } {
-  const scan = scanForIntents(root, { scope: 'local' })
+  const scanOptions = { scope: 'local' as const, fsCache }
+  const scan = scanForIntents(root, scanOptions)
   const discovered = scan.packages.filter((pkg) => pkg.source === 'local')
   return {
     discovered,

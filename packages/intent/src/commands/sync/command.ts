@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fail } from '../../shared/cli-error.js'
 import { compileExcludePatterns } from '../../core/excludes.js'
+import { createIntentFsCache } from '../../discovery/fs-cache.js'
 import { buildCurrentLockfileSources } from '../../core/lockfile/lockfile-state.js'
 import {
   readIntentLockfile,
@@ -21,7 +22,7 @@ import {
 } from '../install/config.js'
 import { buildSkillSelectionPlan } from '../install/plan.js'
 import { updateIntentGitignore } from './gitignore.js'
-import { reconcileManagedLinks } from './links.js'
+import { hasNonNativeLinkSource, reconcileManagedLinks } from './links.js'
 import { buildSyncLinkPlan } from './plan.js'
 import {
   INSTALL_STATE_PATH,
@@ -32,6 +33,7 @@ import { toProjectRelativePath } from './targets.js'
 import type { SkillSelection } from '../install/plan.js'
 import type { LinkReconciliation } from './links.js'
 import type { IntentPackage } from '../../shared/types.js'
+import type { ReadFs } from '../../shared/utils.js'
 
 type SyncSkillSelection = Extract<SkillSelection, { mode: 'individual' }>
 
@@ -180,6 +182,7 @@ async function reviewNewDependencies({
   packages,
   reviewedPackages,
   prompts,
+  readFs,
   root,
 }: {
   config: ReturnType<typeof readIntentConsumerConfig>
@@ -188,6 +191,7 @@ async function reviewNewDependencies({
   packages: Array<IntentPackage>
   reviewedPackages: Array<IntentPackage>
   prompts: SyncReviewPrompter
+  readFs: ReadFs
   root: string
 }): Promise<void> {
   const decision = await prompts.reviewNewDependencies(
@@ -294,7 +298,7 @@ async function reviewNewDependencies({
       excludeMatchers: compileExcludePatterns(updatedConfig.exclude),
     },
   )
-  const currentSources = buildCurrentLockfileSources(policy.packages)
+  const currentSources = buildCurrentLockfileSources(policy.packages, readFs)
   const selectedPendingIds = new Set(selection.enabled)
   const selectedPathsBySource = new Map(
     packages.flatMap((pkg) => {
@@ -359,6 +363,11 @@ async function reviewNewDependencies({
     packages: policy.packages,
     root,
   }).expected
+  if (hasNonNativeLinkSource(expected, readFs)) {
+    fail(
+      'Archive-backed/PnP sources cannot use symlink delivery; use hooks instead by setting intent.install.method to "hooks".',
+    )
+  }
   const stateResult = readInstallStateForLinks(root)
   const preflight = reconcileManagedLinks({
     dryRun: true,
@@ -383,6 +392,13 @@ async function reviewNewDependencies({
     stateResult,
   })
   writeManagedLinkState(root, links)
+  if (links.conflicts.length > 0) {
+    fail(
+      `Intent sync found managed link conflicts: ${links.conflicts
+        .map((path) => toProjectRelativePath(root, path))
+        .join(', ')}.`,
+    )
+  }
   prompts.complete(
     'Installed selected skills using the existing delivery settings.',
   )
@@ -413,28 +429,40 @@ export async function runSyncCommand(
       `Intent sync adapter for method "${config.install.method}" is not implemented yet.`,
     )
   }
+  const stateResult = readInstallStateForLinks(root)
+  if (stateResult.status === 'malformed') {
+    fail(
+      `Intent install state is malformed at ${INSTALL_STATE_PATH}. Restore a valid copy, or remove the existing Intent-managed links and ${INSTALL_STATE_PATH}, then run \`intent install\` again.`,
+    )
+  }
 
   let discovery: ReturnType<typeof scanForConfiguredIntents>
   let plan: ReturnType<typeof buildSyncLinkPlan>
+  const fsCache = createIntentFsCache()
   try {
     discovery = scanForConfiguredIntents({
       root,
       config: parseSkillSources(config.skills),
       exclude: config.exclude,
+      fsCache,
     })
     plan = buildSyncLinkPlan({
       config,
-      currentSources: buildCurrentLockfileSources(discovery.policy.packages),
+      currentSources: buildCurrentLockfileSources(
+        discovery.policy.packages,
+        fsCache.getReadFs(),
+      ),
       discovered: discovery.discovered,
       lock,
       packages: discovery.policy.packages,
       root,
     })
   } catch (error) {
+    if (stateResult.status === 'missing') throw error
     const links = reconcileManagedLinks({
       dryRun: options.dryRun === true,
       expected: [],
-      stateResult: readInstallStateForLinks(root),
+      stateResult,
     })
     if (!options.dryRun) {
       writeManagedLinkState(root, links)
@@ -451,11 +479,40 @@ export async function runSyncCommand(
   }
   const { discovered, policy } = discovery
   const { expected, inventory } = plan
-  const links = reconcileManagedLinks({
-    dryRun: options.dryRun === true,
+  if (hasNonNativeLinkSource(expected, fsCache.getReadFs())) {
+    fail(
+      'Archive-backed/PnP sources cannot use symlink delivery; use hooks instead by setting intent.install.method to "hooks".',
+    )
+  }
+  const preflight = reconcileManagedLinks({
+    dryRun: true,
     expected,
-    stateResult: readInstallStateForLinks(root),
+    stateResult,
   })
+  if (preflight.conflicts.length > 0) {
+    fail(
+      `Intent sync found managed link conflicts: ${preflight.conflicts
+        .map((path) => toProjectRelativePath(root, path))
+        .join(', ')}.`,
+    )
+  }
+  const links = options.dryRun
+    ? preflight
+    : reconcileManagedLinks({
+        dryRun: false,
+        expected,
+        stateResult,
+      })
+  if (!options.dryRun) {
+    writeManagedLinkState(root, links)
+  }
+  if (links.conflicts.length > 0) {
+    fail(
+      `Intent sync found managed link conflicts: ${links.conflicts
+        .map((path) => toProjectRelativePath(root, path))
+        .join(', ')}.`,
+    )
+  }
   const summaries = {
     newDependencies: inventory.packages
       .map((pkg) => ({
@@ -489,15 +546,10 @@ export async function runSyncCommand(
     conflicts: links.conflicts.map((path) => toProjectRelativePath(root, path)),
     ...summaries,
   }
-  if (!options.dryRun) {
-    writeManagedLinkState(root, links)
-  }
   const interactiveReview =
     summaries.newDependencies.length > 0 &&
     shouldReviewInteractively(options, runtime)
   output(result, options.json === true, interactiveReview)
-  if (links.conflicts.length > 0)
-    fail('Intent sync found managed link conflicts.')
   if (
     runtime.review === 'fail' &&
     (summaries.newDependencies.length > 0 ||
@@ -560,6 +612,7 @@ export async function runSyncCommand(
       packages,
       reviewedPackages,
       prompts,
+      readFs: fsCache.getReadFs(),
       root,
     })
   }

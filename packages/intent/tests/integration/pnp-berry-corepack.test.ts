@@ -1,7 +1,9 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   readdirSync,
   realpathSync,
   rmSync,
@@ -119,6 +121,21 @@ function scaffoldBerryProject(): string {
   return dir
 }
 
+function configureInstall(cwd: string, method: 'hooks' | 'symlink'): void {
+  const packageJsonPath = join(cwd, 'package.json')
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+  writeJson(packageJsonPath, {
+    ...packageJson,
+    intent: {
+      skills: ['@repro/skills-leaf'],
+      install: {
+        method,
+        targets: method === 'hooks' ? ['claude'] : ['agents'],
+      },
+    },
+  })
+}
+
 describe.skipIf(!shouldRun)('Yarn Berry PnP (zip-backed dependencies)', () => {
   it('discovers and loads skills from a zip-backed dependency', () => {
     const cwd = scaffoldBerryProject()
@@ -148,5 +165,42 @@ describe.skipIf(!shouldRun)('Yarn Berry PnP (zip-backed dependencies)', () => {
       },
     )
     expect(load).toContain('# Core')
+  }, 120_000)
+
+  it('installs hooks and locks a zip-backed dependency', () => {
+    const cwd = scaffoldBerryProject()
+    configureInstall(cwd, 'hooks')
+
+    execFileSync('node', [cliPath, 'install', '--no-input'], {
+      cwd,
+      encoding: 'utf8',
+      timeout: CMD_TIMEOUT_MS,
+      maxBuffer: 5 * 1024 * 1024,
+    })
+
+    expect(existsSync(join(cwd, 'intent.lock'))).toBe(true)
+    expect(existsSync(join(cwd, '.claude', 'settings.json'))).toBe(true)
+  }, 120_000)
+
+  it('rejects symlink delivery for a zip-backed dependency before writing', () => {
+    const cwd = scaffoldBerryProject()
+    configureInstall(cwd, 'symlink')
+
+    const result = spawnSync('node', [cliPath, 'install', '--no-input'], {
+      cwd,
+      encoding: 'utf8',
+      timeout: CMD_TIMEOUT_MS,
+      maxBuffer: 5 * 1024 * 1024,
+    })
+    const output = `${result.stdout}\n${result.stderr}`
+
+    expect(result.status).not.toBe(0)
+    expect(output).toMatch(/archive-backed|PnP/i)
+    expect(output).toMatch(/cannot use symlink delivery.*use hooks/i)
+    expect(output).not.toContain('ENOTDIR')
+    expect(existsSync(join(cwd, 'intent.lock'))).toBe(false)
+    expect(
+      existsSync(join(cwd, '.agents', 'skills', 'npm-repro-skills-leaf-core')),
+    ).toBe(false)
   }, 120_000)
 })

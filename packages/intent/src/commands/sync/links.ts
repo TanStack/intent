@@ -1,6 +1,7 @@
 import {
   lstatSync,
   mkdirSync,
+  existsSync as nativeExistsSync,
   readlinkSync,
   realpathSync,
   rmdirSync,
@@ -9,6 +10,7 @@ import {
 } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import type { InstallStateEntry, ReadInstallStateResult } from './state.js'
+import type { ReadFs } from '../../shared/utils.js'
 
 export interface ExpectedLink {
   path: string
@@ -27,6 +29,17 @@ export interface LinkReconciliation {
   unchanged: Array<string>
   conflicts: Array<string>
   entries: Array<InstallStateEntry>
+}
+
+export function hasNonNativeLinkSource(
+  expected: ReadonlyArray<ExpectedLink>,
+  readFs: ReadFs,
+): boolean {
+  return expected.some(
+    (entry) =>
+      readFs.existsSync(entry.sourceDirectory) &&
+      !nativeExistsSync(entry.sourceDirectory),
+  )
 }
 
 function exists(path: string): boolean {

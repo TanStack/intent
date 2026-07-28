@@ -10,8 +10,9 @@ import { applySourcePolicy } from '../../core/source-policy.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
 import { runInstallHooks } from '../../hooks/install.js'
 import { writeTextFileAtomic } from '../../shared/atomic-write.js'
+import { nodeReadFs } from '../../shared/utils.js'
 import { runSyncCommand } from '../sync/command.js'
-import { reconcileManagedLinks } from '../sync/links.js'
+import { hasNonNativeLinkSource, reconcileManagedLinks } from '../sync/links.js'
 import { buildSyncLinkPlan } from '../sync/plan.js'
 import { wireIntentSyncPrepare } from '../sync/prepare.js'
 import { readInstallStateForLinks } from '../sync/state.js'
@@ -36,6 +37,7 @@ import type {
 } from './config.js'
 import type { SkillSelection } from './plan.js'
 import type { HookAgent } from '../../hooks/types.js'
+import type { ReadFs } from '../../shared/utils.js'
 import type { IntentPackage } from '../../shared/types.js'
 
 interface ConsumerInstallConfig extends IntentConsumerConfig {
@@ -68,6 +70,7 @@ export interface RunConsumerInstallOptions {
   dryRun?: boolean
   existingLockReview?: 'fail'
   prompts: InstallerPrompter
+  readFs?: ReadFs
   root: string
   selection?: SkillSelection
 }
@@ -95,6 +98,7 @@ export async function runConsumerInstall({
   dryRun = false,
   existingLockReview,
   prompts,
+  readFs = nodeReadFs,
   root,
   selection: fixedSelection,
 }: RunConsumerInstallOptions): Promise<void> {
@@ -107,7 +111,7 @@ export async function runConsumerInstall({
     const existingLock = readIntentLockfile(join(root, 'intent.lock'))
     const inventory = buildInstallDeltaInventory(
       discovered,
-      buildCurrentLockfileSources(discovered),
+      buildCurrentLockfileSources(discovered, readFs),
       existingLock,
       existingConfig,
     )
@@ -193,7 +197,7 @@ export async function runConsumerInstall({
     )
     const lockfile = {
       lockfileVersion: 1 as const,
-      sources: buildCurrentLockfileSources(policy.packages),
+      sources: buildCurrentLockfileSources(policy.packages, readFs),
     }
     if (method === 'symlink') {
       const linkPlan = buildSyncLinkPlan({
@@ -204,6 +208,11 @@ export async function runConsumerInstall({
         packages: policy.packages,
         root,
       })
+      if (hasNonNativeLinkSource(linkPlan.expected, readFs)) {
+        throw new Error(
+          'Archive-backed/PnP sources cannot use symlink delivery; use hooks instead by setting intent.install.method to "hooks".',
+        )
+      }
       const preflight = reconcileManagedLinks({
         dryRun: true,
         expected: linkPlan.expected,
