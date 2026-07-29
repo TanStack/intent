@@ -77,6 +77,18 @@ describe('installer selection planning', () => {
     )
   })
 
+  it('leaves a prefixed skill pending when an exact sibling owns its short alias', () => {
+    expect(() =>
+      buildSkillSelectionPlan([pkg('@scope/ui', ['theme', 'ui/theme'])], {
+        mode: 'configured-policy',
+        skills: ['@scope/ui#theme'],
+        exclude: [],
+      }),
+    ).toThrow(
+      'Configured policy leaves "@scope/ui#ui/theme" pending. Add it to intent.skills or intent.exclude before non-interactive install.',
+    )
+  })
+
   it('uses exact discovered source identities for all-found', () => {
     expect(
       buildSkillSelectionPlan(discovered, { mode: 'all-found' }),

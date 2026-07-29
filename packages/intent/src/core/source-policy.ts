@@ -63,15 +63,19 @@ interface SkillSourcePolicyDecision {
   source: ExplicitSkillSource | null
 }
 
+type PackageSkills = ReadonlyArray<IntentPackage['skills'][number]>
+
 interface SkillSourceMatcher {
   source: ExplicitSkillSource
   matchesPackage: (
     packageName: string,
     packageKind?: 'npm' | 'workspace',
   ) => boolean
-  matchesSkill:
-    | ((packageName: string, skillName: string) => boolean)
-    | undefined
+  matchesSkill?: (
+    packageName: string,
+    skillName: string,
+    packageSkills?: PackageSkills,
+  ) => boolean
 }
 
 export interface CompiledSkillSourcePolicy {
@@ -81,15 +85,13 @@ export interface CompiledSkillSourcePolicy {
     packageName: string,
     skillName: string,
     packageKind?: 'npm' | 'workspace',
+    packageSkills?: PackageSkills,
   ) => boolean
-  explainPermits: (
-    packageName: string,
-    packageKind?: 'npm' | 'workspace',
-  ) => SkillSourcePolicyDecision
   explainPermitsSkill: (
     packageName: string,
     skillName: string,
     packageKind?: 'npm' | 'workspace',
+    packageSkills?: PackageSkills,
   ) => SkillSourcePolicyDecision
 }
 
@@ -122,8 +124,16 @@ function compileSkillSourceMatcher(
     matchesSkill:
       matchesSkillName === undefined
         ? undefined
-        : (packageName, skillName) =>
-            skillNameVariants(packageName, skillName).some(matchesSkillName),
+        : (packageName, skillName, packageSkills) => {
+            if (matchesSkillName(skillName)) return true
+
+            return skillNameVariants(packageName, skillName).some(
+              (variant) =>
+                variant !== skillName &&
+                !packageSkills?.some((skill) => skill.name === variant) &&
+                matchesSkillName(variant),
+            )
+          },
   }
 }
 
@@ -137,7 +147,6 @@ export function compileSkillSourcePolicy(
         matchers: [],
         permits: () => true,
         permitsSkill: () => true,
-        explainPermits: () => ({ permitted: true, source: null }),
         explainPermitsSkill: () => ({ permitted: true, source: null }),
       }
     case 'empty':
@@ -145,45 +154,35 @@ export function compileSkillSourcePolicy(
         matchers: [],
         permits: () => false,
         permitsSkill: () => false,
-        explainPermits: () => ({ permitted: false, source: null }),
         explainPermitsSkill: () => ({ permitted: false, source: null }),
       }
     case 'explicit': {
       const matchers = config.sources.map(compileSkillSourceMatcher)
+      const explainPermitsSkill = (
+        packageName: string,
+        skillName: string,
+        packageKind?: 'npm' | 'workspace',
+        packageSkills?: PackageSkills,
+      ): SkillSourcePolicyDecision => {
+        const matcher = matchers.find(
+          (candidate) =>
+            candidate.matchesPackage(packageName, packageKind) &&
+            (candidate.matchesSkill === undefined ||
+              candidate.matchesSkill(packageName, skillName, packageSkills)),
+        )
+        return {
+          permitted: matcher !== undefined,
+          source: matcher?.source ?? null,
+        }
+      }
       return {
         matchers,
         permits: (packageName, packageKind) =>
           matchers.some((matcher) =>
             matcher.matchesPackage(packageName, packageKind),
           ),
-        permitsSkill: (packageName, skillName, packageKind) =>
-          matchers.some(
-            (matcher) =>
-              matcher.matchesPackage(packageName, packageKind) &&
-              (matcher.matchesSkill === undefined ||
-                matcher.matchesSkill(packageName, skillName)),
-          ),
-        explainPermits: (packageName, packageKind) => {
-          const matcher = matchers.find((candidate) =>
-            candidate.matchesPackage(packageName, packageKind),
-          )
-          return {
-            permitted: matcher !== undefined,
-            source: matcher?.source ?? null,
-          }
-        },
-        explainPermitsSkill: (packageName, skillName, packageKind) => {
-          const matcher = matchers.find(
-            (candidate) =>
-              candidate.matchesPackage(packageName, packageKind) &&
-              (candidate.matchesSkill === undefined ||
-                candidate.matchesSkill(packageName, skillName)),
-          )
-          return {
-            permitted: matcher !== undefined,
-            source: matcher?.source ?? null,
-          }
-        },
+        permitsSkill: (...args) => explainPermitsSkill(...args).permitted,
+        explainPermitsSkill,
       }
     }
   }
@@ -346,11 +345,13 @@ export function applySourcePolicy(
   const excludedSkills: Array<ExcludedSkill> = []
 
   for (const pkg of scanResult.packages) {
+    const permitsSkill = (skillName: string) =>
+      sourcePolicy.permitsSkill(pkg.name, skillName, pkg.kind, pkg.skills)
     const packageExclude = findPackageExcludeMatch(pkg.name, excludeMatchers)
     if (packageExclude) {
       if (sourcePolicy.permits(pkg.name, pkg.kind)) {
         for (const skill of pkg.skills) {
-          if (sourcePolicy.permitsSkill(pkg.name, skill.name, pkg.kind)) {
+          if (permitsSkill(skill.name)) {
             excludedSkills.push({
               package: pkg,
               skill,
@@ -372,7 +373,7 @@ export function applySourcePolicy(
     const skills: Array<IntentPackage['skills'][number]> = []
     const hiddenSkills: Array<string> = []
     for (const skill of pkg.skills) {
-      if (!sourcePolicy.permitsSkill(pkg.name, skill.name, pkg.kind)) {
+      if (!permitsSkill(skill.name)) {
         hiddenSkills.push(skill.name)
         continue
       }
@@ -423,7 +424,9 @@ export function applySourcePolicy(
         (pkg) =>
           matcher.matchesPackage(pkg.name, pkg.kind) &&
           (matchesSkill === undefined ||
-            pkg.skills.some((skill) => matchesSkill(pkg.name, skill.name))),
+            pkg.skills.some((skill) =>
+              matchesSkill(pkg.name, skill.name, pkg.skills),
+            )),
       )
       if (notDiscovered) {
         emit(
@@ -471,6 +474,7 @@ export interface PolicedScan {
   hiddenSourceCount: number
   hiddenSources: Array<IntentHiddenSourceSummary>
   excludedSkills: Array<ExcludedSkill>
+  discoveredPackages: Array<IntentPackage>
   scan: ScanResult
   excludePatterns: Array<string>
   droppedNames: Array<string>
@@ -510,6 +514,7 @@ export function scanForPolicedIntents(params: {
     hiddenSourceCount: policy.hiddenSourceCount,
     hiddenSources: audience === 'agent' ? [] : policy.hiddenSources,
     excludedSkills: audience === 'agent' ? [] : policy.excludedSkills,
+    discoveredPackages: scanResult.packages,
     scan: {
       ...scanResult,
       packages: policy.packages,

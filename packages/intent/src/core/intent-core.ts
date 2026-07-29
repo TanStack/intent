@@ -143,6 +143,7 @@ export function listIntentSkills(
                     pkg.name,
                     skill.name,
                     pkg.kind,
+                    pkg.skills,
                   )
                   return decision.source
                     ? `Allowed by intent.skills[${JSON.stringify(decision.source.raw)}]`
@@ -380,13 +381,16 @@ function resolveIntentSkillInCwd(
 
   const scanOptions = toScanOptions(options)
   const scope = getScanScope(scanOptions)
-  const fastPathResolved = resolveSkillUseFastPath(
-    parsedUse,
-    options,
-    projectContext,
-    cwd,
-    fsCache,
-  )
+  const skipFastPath =
+    config.mode === 'explicit' &&
+    sourcePolicy.matchers.some(
+      (matcher) =>
+        matcher.matchesSkill !== undefined &&
+        matcher.matchesPackage(parsedUse.packageName),
+    )
+  const fastPathResolved = skipFastPath
+    ? null
+    : resolveSkillUseFastPath(parsedUse, options, projectContext, cwd, fsCache)
   if (fastPathResolved) {
     if (!sourcePolicy.permits(parsedUse.packageName, fastPathResolved.kind)) {
       const lateRefusal = packageNotListedRefusal(use, parsedUse.packageName)
@@ -395,7 +399,7 @@ function resolveIntentSkillInCwd(
     if (
       !sourcePolicy.permitsSkill(
         parsedUse.packageName,
-        parsedUse.skillName,
+        fastPathResolved.skillName,
         fastPathResolved.kind,
       )
     ) {
@@ -426,7 +430,11 @@ function resolveIntentSkillInCwd(
     )
   }
 
-  const { scan: scanResult, droppedNames } = scanForPolicedIntents({
+  const {
+    scan: scanResult,
+    discoveredPackages,
+    droppedNames,
+  } = scanForPolicedIntents({
     cwd,
     scanOptions: withFsCache(scanOptions, fsCache),
     coreOptions: options,
@@ -437,15 +445,29 @@ function resolveIntentSkillInCwd(
     const lateRefusal = packageNotListedRefusal(use, parsedUse.packageName)
     throw new IntentCoreError(lateRefusal.code, lateRefusal.message)
   }
-  const survivingPackage = scanResult.packages.find(
-    (pkg) => pkg.name === parsedUse.packageName,
-  )
+  let resolved: ReturnType<typeof resolveSkillUse>
+  try {
+    resolved = resolveSkillUse(use, {
+      ...scanResult,
+      packages: discoveredPackages,
+    })
+  } catch (err) {
+    if (err instanceof ResolveSkillUseError) {
+      throw new IntentCoreError(err.code, err.message, {
+        suggestedSkills: err.suggestedSkills,
+      })
+    }
+    throw err
+  }
+  const resolvedPackage = discoveredPackages.find(
+    (pkg) => pkg.name === resolved.packageName,
+  )!
   if (
-    survivingPackage &&
     !sourcePolicy.permitsSkill(
-      parsedUse.packageName,
-      parsedUse.skillName,
-      survivingPackage.kind,
+      resolved.packageName,
+      resolved.skillName,
+      resolved.kind,
+      resolvedPackage.skills,
     )
   ) {
     const lateRefusal = skillNotListedRefusal(
@@ -454,17 +476,6 @@ function resolveIntentSkillInCwd(
       parsedUse.skillName,
     )
     throw new IntentCoreError(lateRefusal.code, lateRefusal.message)
-  }
-  let resolved: ReturnType<typeof resolveSkillUse>
-  try {
-    resolved = resolveSkillUse(use, scanResult)
-  } catch (err) {
-    if (err instanceof ResolveSkillUseError) {
-      throw new IntentCoreError(err.code, err.message, {
-        suggestedSkills: err.suggestedSkills,
-      })
-    }
-    throw err
   }
 
   return toResolvedIntentSkill(

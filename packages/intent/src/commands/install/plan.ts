@@ -111,6 +111,7 @@ export function skillSelectionId(
 function classifySkillPolicy(
   pkg: Pick<IntentPackage, 'kind' | 'name'>,
   skillName: string,
+  packageSkills: ReadonlyArray<SkillEntry>,
   sources: SkillSourcesConfig,
   sourcePolicy: CompiledSkillSourcePolicy,
   excludes: Array<ExcludeMatcher>,
@@ -122,7 +123,7 @@ function classifySkillPolicy(
   ) {
     return 'excluded'
   }
-  return sourcePolicy.permitsSkill(pkg.name, skillName, pkg.kind)
+  return sourcePolicy.permitsSkill(pkg.name, skillName, pkg.kind, packageSkills)
     ? 'enabled'
     : 'pending'
 }
@@ -215,26 +216,30 @@ export function buildSkillSelectionPlan(
     return {
       skills: selection.skills,
       exclude: selection.exclude,
-      packages: packages.map((pkg) => ({
-        name: pkg.name,
-        kind: pkg.kind,
-        skills: sortedSkills(pkg).map((skill) => {
-          const id = skillSelectionId(pkg, skill)
-          const status = classifySkillPolicy(
-            pkg,
-            skill.name,
-            sources,
-            sourcePolicy,
-            excludeMatchers,
-          )
-          if (status === 'pending') {
-            throw new Error(
-              `Configured policy leaves "${id}" pending. Add it to intent.skills or intent.exclude before non-interactive install.`,
+      packages: packages.map((pkg) => {
+        const packageSkills = sortedSkills(pkg)
+        return {
+          name: pkg.name,
+          kind: pkg.kind,
+          skills: packageSkills.map((skill) => {
+            const id = skillSelectionId(pkg, skill)
+            const status = classifySkillPolicy(
+              pkg,
+              skill.name,
+              packageSkills,
+              sources,
+              sourcePolicy,
+              excludeMatchers,
             )
-          }
-          return { id, status }
-        }),
-      })),
+            if (status === 'pending') {
+              throw new Error(
+                `Configured policy leaves "${id}" pending. Add it to intent.skills or intent.exclude before non-interactive install.`,
+              )
+            }
+            return { id, status }
+          }),
+        }
+      }),
     }
   }
   const selected = new Set<string>()
@@ -357,13 +362,15 @@ export function buildInstallDeltaInventory(
     seen.add(key)
     const current = currentByKey.get(key)
     const locked = lockedByKey.get(key)
+    const packageSkills = sortedSkills(pkg)
     return {
       name: pkg.name,
       kind: pkg.kind,
-      skills: sortedSkills(pkg).map((skill) => {
+      skills: packageSkills.map((skill) => {
         const policy = classifySkillPolicy(
           pkg,
           skill.name,
+          packageSkills,
           sources,
           sourcePolicy,
           excludes,

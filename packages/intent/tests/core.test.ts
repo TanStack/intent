@@ -792,6 +792,75 @@ describe('loadIntentSkill', () => {
     )
   })
 
+  it.each([
+    ['@scope/ui#ui/theme', ['ui/theme'], true],
+    ['@scope/ui#ui/*', ['ui/theme'], true],
+    ['@scope/ui#ui/theme', ['theme', 'ui/theme'], false],
+    ['@scope/ui#ui/*', ['theme', 'ui/theme'], false],
+  ] as const)(
+    'loads canonical policy %s from skills %j without redirecting an exact sibling',
+    (policy, skillNames, shortAliasAllowed) => {
+      writeJson(join(root, 'package.json'), {
+        name: 'test-app',
+        private: true,
+        intent: { skills: [policy] },
+      })
+      for (const skillName of skillNames) {
+        writeInstalledIntentPackage(root, {
+          name: '@scope/ui',
+          version: '1.0.0',
+          skillName,
+          description: skillName,
+        })
+      }
+
+      expect(
+        loadIntentSkill('@scope/ui#ui/theme', { cwd: root }).skillName,
+      ).toBe('ui/theme')
+      if (shortAliasAllowed) {
+        expect(
+          loadIntentSkill('@scope/ui#theme', { cwd: root }).skillName,
+        ).toBe('ui/theme')
+      } else {
+        expect(() => loadIntentSkill('@scope/ui#theme', { cwd: root })).toThrow(
+          'Cannot load skill use "@scope/ui#theme": skill "@scope/ui#theme" is not listed in intent.skills.',
+        )
+      }
+    },
+  )
+
+  it('does not authorize a prefixed skill through an ambiguous short alias', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['@scope/ui#theme'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@scope/ui',
+      version: '1.0.0',
+      skillName: 'theme',
+      description: 'Theme',
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@scope/ui',
+      version: '1.0.0',
+      skillName: 'ui/theme',
+      description: 'Prefixed theme',
+    })
+
+    expect(loadIntentSkill('@scope/ui#theme', { cwd: root }).skillName).toBe(
+      'theme',
+    )
+    expect(() => loadIntentSkill('@scope/ui#ui/theme', { cwd: root })).toThrow(
+      'Cannot load skill use "@scope/ui#ui/theme": skill "@scope/ui#ui/theme" is not listed in intent.skills.',
+    )
+
+    writeFileSync(join(root, '.pnp.cjs'), 'module.exports = {}\n')
+    expect(() => loadIntentSkill('@scope/ui#ui/theme', { cwd: root })).toThrow(
+      'Cannot load skill use "@scope/ui#ui/theme": skill "@scope/ui#ui/theme" is not listed in intent.skills.',
+    )
+  })
+
   it('refuses a prefixed skill excluded by canonical name when loaded by short alias', () => {
     const appDir = join(root, 'packages', 'app')
     const routerDir = join(root, 'packages', 'router-core')

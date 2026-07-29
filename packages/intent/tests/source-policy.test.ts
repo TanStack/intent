@@ -269,10 +269,6 @@ describe('compiled policy explanations', () => {
   it('returns the package-level entry that permits a skill', () => {
     const policy = compileSkillSourcePolicy(config(['@scope/a']))
 
-    expect(policy.explainPermits('@scope/a')).toMatchObject({
-      permitted: true,
-      source: { raw: '@scope/a' },
-    })
     expect(policy.explainPermitsSkill('@scope/a', 'x')).toMatchObject({
       permitted: true,
       source: { raw: '@scope/a' },
@@ -301,10 +297,6 @@ describe('compiled policy explanations', () => {
     (value, permitted) => {
       const policy = compileSkillSourcePolicy(config(value))
 
-      expect(policy.explainPermits('@scope/a')).toEqual({
-        permitted,
-        source: null,
-      })
       expect(policy.explainPermitsSkill('@scope/a', 'x')).toEqual({
         permitted,
         source: null,
@@ -388,13 +380,27 @@ describe('applySourcePolicy — skill-level allowlist entries', () => {
     expect(result.packages[0]?.kind).toBe('workspace')
   })
 
-  it('matches a prefixed skill by its short alias', () => {
-    const result = applySourcePolicy(
-      { packages: [pkg('@scope/ui', ['ui/theme', 'ui/layout'])] },
-      { config: config(['@scope/ui#theme']), excludeMatchers: [] },
-    )
-    expect(skillNames(result.packages)).toEqual([['ui/theme']])
-  })
+  it.each(['@scope/ui#theme', '@scope/ui#the*'])(
+    'matches a prefixed skill by its unambiguous short alias with %s',
+    (source) => {
+      const result = applySourcePolicy(
+        { packages: [pkg('@scope/ui', ['ui/theme', 'ui/layout'])] },
+        { config: config([source]), excludeMatchers: [] },
+      )
+      expect(skillNames(result.packages)).toEqual([['ui/theme']])
+    },
+  )
+
+  it.each(['@scope/ui#theme', '@scope/ui#the*'])(
+    'prefers an exact skill name over a prefixed skill short alias with %s',
+    (source) => {
+      const result = applySourcePolicy(
+        { packages: [pkg('@scope/ui', ['theme', 'ui/theme'])] },
+        { config: config([source]), excludeMatchers: [] },
+      )
+      expect(skillNames(result.packages)).toEqual([['theme']])
+    },
+  )
 
   it('reports a skill entry that matched no discovered skill', () => {
     const result = applySourcePolicy(

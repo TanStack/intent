@@ -181,12 +181,10 @@ function getWorkspaceLoadFastPathCandidateDirs(
   return candidates
 }
 
-export type FastPathResolveResult = ResolveSkillResult
-
 function resolveScannedPackageSkill(
   scanned: ReturnType<typeof scanIntentPackageAtRoot>,
   parsedUse: SkillUse,
-): FastPathResolveResult | null {
+): ResolveSkillResult | null {
   const pkg = scanned.package
   if (!pkg || pkg.name !== parsedUse.packageName) return null
 
@@ -217,7 +215,7 @@ function resolveFromPackageRoots(
   parsedUse: SkillUse,
   cwd: string,
   fsCache: IntentFsCache,
-): FastPathResolveResult | null {
+): ResolveSkillResult | null {
   for (const packageRoot of packageRoots) {
     const scanned = scanIntentPackageAtRoot(packageRoot, {
       fallbackName: parsedUse.packageName,
@@ -251,7 +249,7 @@ export function resolveSkillUseFastPath(
   context = resolveProjectContext({ cwd: process.cwd() }),
   cwd = context.cwd,
   fsCache = createIntentFsCache(),
-): FastPathResolveResult | null {
+): ResolveSkillResult | null {
   if (options.globalOnly) return null
   if (shouldSkipFastPathForYarnPnp(context, cwd)) return null
 
