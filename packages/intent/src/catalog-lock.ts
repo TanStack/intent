@@ -34,6 +34,7 @@ export function applyCatalogueLock(
 
   const fsCache = createIntentFsCache()
   fsCache.useFs(readFs)
+  const surfacedUses = new Set(result.skills.map((skill) => skill.use))
   const allowedUses = new Set<string>()
   const verification: Array<CatalogueVerificationEntry> = []
   let pendingCount = 0
@@ -60,6 +61,9 @@ export function applyCatalogueLock(
       lockedSource?.skills.map((skill) => [skill.path, skill]) ?? [],
     )
     for (const scannedSkill of scanned.skills) {
+      const use = formatSkillUse(scanned.name, scannedSkill.name)
+      if (!surfacedUses.has(use)) continue
+
       let skill: ReturnType<typeof buildCurrentLockfileSkill>
       try {
         skill = buildCurrentLockfileSkill(
@@ -81,7 +85,7 @@ export function applyCatalogueLock(
         lockedSkills.get(skill.path)?.contentHash,
       )
       if (status === 'accepted') {
-        allowedUses.add(formatSkillUse(scanned.name, scannedSkill.name))
+        allowedUses.add(use)
       } else {
         if (status === 'new') pendingCount += 1
         else changedCount += 1

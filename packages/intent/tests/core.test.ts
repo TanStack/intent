@@ -1032,6 +1032,59 @@ describe('loadIntentSkill', () => {
     ])
   })
 
+  it('redacts policy-hidden names from full-scan resolution errors', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: {
+        skills: [
+          '@scope/ui#ui/auth',
+          '@scope/ui#ui/auth-visible',
+          '@scope/missing',
+        ],
+      },
+    })
+    for (const skillName of ['ui/auth-visible', 'ui/auth-hidden']) {
+      writeInstalledIntentPackage(root, {
+        name: '@scope/ui',
+        version: '1.0.0',
+        skillName,
+        description: skillName,
+      })
+    }
+    writeInstalledIntentPackage(root, {
+      name: '@scope/hidden',
+      version: '1.0.0',
+      skillName: 'secret',
+      description: 'Hidden package skill',
+    })
+
+    let skillError: unknown
+    try {
+      loadIntentSkill('@scope/ui#auth', { cwd: root })
+    } catch (error) {
+      skillError = error
+    }
+
+    expect(skillError).toBeInstanceOf(IntentCoreError)
+    expect((skillError as IntentCoreError).suggestedSkills).toEqual([
+      'ui/auth-visible',
+    ])
+    expect((skillError as Error).message).toContain('ui/auth-visible')
+    expect((skillError as Error).message).not.toContain('ui/auth-hidden')
+
+    let packageError: unknown
+    try {
+      loadIntentSkill('@scope/missing#auth', { cwd: root })
+    } catch (error) {
+      packageError = error
+    }
+
+    expect(packageError).toBeInstanceOf(IntentCoreError)
+    expect((packageError as Error).message).toContain('@scope/ui')
+    expect((packageError as Error).message).not.toContain('@scope/hidden')
+  })
+
   it('fails clearly when the package is excluded', () => {
     writeInstalledIntentPackage(root, {
       name: '@tanstack/devtools',

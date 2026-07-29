@@ -442,10 +442,16 @@ function resolveIntentSkillInCwd(
       packages: discoveredPackages,
     })
   } catch (err) {
-    if (err instanceof ResolveSkillUseError) {
-      throw new IntentCoreError(err.code, err.message, {
-        suggestedSkills: err.suggestedSkills,
-      })
+    if (!(err instanceof ResolveSkillUseError)) throw err
+    try {
+      resolveSkillUse(use, scanResult)
+    } catch (filteredError) {
+      if (filteredError instanceof ResolveSkillUseError) {
+        throw new IntentCoreError(filteredError.code, filteredError.message, {
+          suggestedSkills: filteredError.suggestedSkills,
+        })
+      }
+      throw filteredError
     }
     throw err
   }

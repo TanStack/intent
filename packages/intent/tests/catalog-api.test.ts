@@ -83,6 +83,22 @@ function fixture(): { root: string; packageRoot: string; skillDir: string } {
   return { root, packageRoot, skillDir }
 }
 
+function getReadFsWithUnhashableDirectory(
+  root: string,
+  unhashableDirectory: string,
+): ReadFs {
+  const nodeFs = getProjectReadFs(root)
+  return {
+    ...nodeFs,
+    realpathSync: ((path: Parameters<ReadFs['realpathSync']>[0]) => {
+      if (String(path).startsWith(unhashableDirectory)) {
+        throw new Error('Injected unhashable directory')
+      }
+      return nodeFs.realpathSync(path)
+    }) as ReadFs['realpathSync'],
+  }
+}
+
 async function getFixtureCatalogContext(
   root: string,
   cacheDir: string,
@@ -243,16 +259,7 @@ describe('getIntentCatalogContext', () => {
   it('withholds an unhashable skill without withholding a healthy sibling or caching', async () => {
     const { root, skillDir } = fixture()
     const cacheDir = join(root, 'cache')
-    const nodeFs = getProjectReadFs(root)
-    const readFs: ReadFs = {
-      ...nodeFs,
-      realpathSync: ((path: Parameters<ReadFs['realpathSync']>[0]) => {
-        if (String(path).startsWith(skillDir)) {
-          throw new Error('Injected unhashable skill')
-        }
-        return nodeFs.realpathSync(path)
-      }) as ReadFs['realpathSync'],
-    }
+    const readFs = getReadFsWithUnhashableDirectory(root, skillDir)
 
     const first = await getFixtureCatalogContext(root, cacheDir, readFs)
     const second = await getFixtureCatalogContext(root, cacheDir, readFs)
@@ -265,6 +272,46 @@ describe('getIntentCatalogContext', () => {
     )
     expect(second.cacheStatus).toBe('miss')
     expect(second.context).toEqual(first.context)
+  })
+
+  it('ignores an excluded unhashable skill during lock verification', () => {
+    const { root, packageRoot, skillDir } = fixture()
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: 'catalog-consumer',
+        private: true,
+        dependencies: { '@fixture/package': '1.0.0' },
+        intent: {
+          skills: ['@fixture/package'],
+          exclude: ['@fixture/package#core'],
+        },
+      }),
+    )
+    const readFs = getReadFsWithUnhashableDirectory(root, skillDir)
+
+    const locked = applyCatalogueLock(
+      listIntentSkills({ audience: 'agent', cwd: root }),
+      root,
+      readFs,
+    )
+
+    expect(locked.result.skills.map((skill) => skill.use)).toEqual([
+      '@fixture/package#sibling',
+    ])
+    expect(locked.result.warnings).not.toContain(
+      '1 skill was withheld because installed content could not be verified.',
+    )
+    expect(locked.verification).toEqual([
+      {
+        packageRoot,
+        skillPath: 'skills/sibling',
+        contentHash: computeSkillContentHash({
+          packageRoot,
+          skillDir: join(packageRoot, 'skills', 'sibling'),
+        }),
+      },
+    ])
   })
 })
 
