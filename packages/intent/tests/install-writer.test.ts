@@ -1,18 +1,21 @@
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { runInstallCommand } from '../src/commands/install/command.js'
 import {
   buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
-  resolveIntentSkillsBlockTargetPath,
+  resolveMapTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from '../src/commands/install/guidance.js'
@@ -23,7 +26,22 @@ import type {
   SkillEntry,
 } from '../src/shared/types.js'
 
+const mapPromptMocks = vi.hoisted(() => ({
+  selectClackMapTarget: vi.fn<(root: string) => Promise<string | null>>(),
+}))
+
+vi.mock('../src/commands/install/prompts.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  selectClackMapTarget: mapPromptMocks.selectClackMapTarget,
+}))
+
 const tempDirs: Array<string> = []
+const originalCwd = process.cwd()
+const originalStdinTTY = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY')
+const originalStdoutTTY = Object.getOwnPropertyDescriptor(
+  process.stdout,
+  'isTTY',
+)
 const packageJson = JSON.parse(
   readFileSync(
     join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'),
@@ -33,9 +51,22 @@ const packageJson = JSON.parse(
 const intentPackagePin = packageVersionToPin(packageJson.version)
 
 afterEach(() => {
+  process.chdir(originalCwd)
+  if (originalStdinTTY) {
+    Object.defineProperty(process.stdin, 'isTTY', originalStdinTTY)
+  } else {
+    delete (process.stdin as { isTTY?: boolean }).isTTY
+  }
+  if (originalStdoutTTY) {
+    Object.defineProperty(process.stdout, 'isTTY', originalStdoutTTY)
+  } else {
+    delete (process.stdout as { isTTY?: boolean }).isTTY
+  }
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
+  vi.restoreAllMocks()
+  vi.clearAllMocks()
 })
 
 function tempRoot(): string {
@@ -92,6 +123,25 @@ function scanResult(packages: Array<IntentPackage>): ScanResult {
       packageJsonReadCount: 0,
     },
   }
+}
+
+function mappedScanResult(): ScanResult {
+  return scanResult([
+    pkg({
+      skills: [skill({ description: 'Core guidance' })],
+    }),
+  ])
+}
+
+function setTTY(value: boolean): void {
+  Object.defineProperty(process.stdin, 'isTTY', {
+    configurable: true,
+    value,
+  })
+  Object.defineProperty(process.stdout, 'isTTY', {
+    configurable: true,
+    value,
+  })
 }
 
 const exampleBlock = `<!-- intent-skills:start -->
@@ -315,6 +365,57 @@ tanstackIntent:
 })
 
 describe('install writer file updates', () => {
+  it('resolves nested project map targets', () => {
+    const root = tempRoot()
+
+    expect(resolveMapTargetPath(root, '.github/copilot-instructions.md')).toBe(
+      join(root, '.github', 'copilot-instructions.md'),
+    )
+  })
+
+  it.each([
+    ['', 'empty'],
+    ['/tmp/outside.md', 'native absolute'],
+    ['C:\\outside.md', 'Windows absolute'],
+    ['../outside.md', 'parent segment'],
+    ['notes/../outside.md', 'nested parent segment'],
+    ['.git/instructions.md', 'git metadata'],
+    ['notes/.git/instructions.md', 'nested git metadata'],
+    ['.GIT/instructions.md', 'case-variant git metadata'],
+  ])('rejects %s as a map target (%s)', (targetPath) => {
+    const root = tempRoot()
+
+    expect(() => resolveMapTargetPath(root, targetPath)).toThrow()
+  })
+
+  it('rejects directory and trailing-separator map targets', () => {
+    const root = tempRoot()
+    mkdirSync(join(root, 'notes'))
+
+    expect(() => resolveMapTargetPath(root, 'notes')).toThrow()
+    expect(() => resolveMapTargetPath(root, 'notes/')).toThrow()
+  })
+
+  it('rejects map targets through a symlinked parent outside the project', () => {
+    const root = tempRoot()
+    const outside = tempRoot()
+    symlinkSync(outside, join(root, 'linked-notes'), 'dir')
+
+    expect(() =>
+      resolveMapTargetPath(root, 'linked-notes/instructions.md'),
+    ).toThrow()
+  })
+
+  it('rejects an existing map target symlinked outside the project', () => {
+    const root = tempRoot()
+    const outside = tempRoot()
+    const outsideFile = join(outside, 'instructions.md')
+    writeFileSync(outsideFile, 'outside\n')
+    symlinkSync(outsideFile, join(root, 'instructions.md'), 'file')
+
+    expect(() => resolveMapTargetPath(root, 'instructions.md')).toThrow()
+  })
+
   it('creates AGENTS.md when no managed block exists', () => {
     const root = tempRoot()
 
@@ -358,6 +459,35 @@ After
 `)
   })
 
+  it('replaces an explicit custom target block exactly once on rerun', () => {
+    const root = tempRoot()
+    const targetPath = resolveMapTargetPath(root, 'notes/assistant.md')
+    const surrounding = 'Project introduction\nProject details\n'
+    mkdirSync(dirname(targetPath), { recursive: true })
+    writeFileSync(targetPath, surrounding)
+
+    writeIntentSkillsBlock({
+      block: exampleBlock,
+      mappingCount: 1,
+      root,
+      targetPath,
+    })
+    const updatedBlock = exampleBlock.replace(
+      'Query data fetching',
+      'Query cache management',
+    )
+    writeIntentSkillsBlock({
+      block: updatedBlock,
+      mappingCount: 1,
+      root,
+      targetPath,
+    })
+
+    const content = readFileSync(targetPath, 'utf8')
+    expect(content.match(/<!-- intent-skills:start -->/g)).toHaveLength(1)
+    expect(content).toBe(`${updatedBlock}\n${surrounding}`)
+  })
+
   it('prepends to an existing AGENTS.md without a managed block', () => {
     const root = tempRoot()
     const agentsPath = join(root, 'AGENTS.md')
@@ -399,15 +529,6 @@ old
       targetPath: claudePath,
     })
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
-  })
-
-  it('resolves the existing managed config as the write target', () => {
-    const root = tempRoot()
-    const claudePath = join(root, 'CLAUDE.md')
-    writeFileSync(claudePath, exampleBlock)
-
-    expect(resolveIntentSkillsBlockTargetPath(root, 1)).toBe(claudePath)
-    expect(resolveIntentSkillsBlockTargetPath(root, 0)).toBe(null)
   })
 
   it('rejects malformed managed blocks before writing', () => {
@@ -728,6 +849,74 @@ tanstackIntent:
         'Managed block must not include local file paths.',
         'Skill mapping `for` must not include local file paths.',
       ]),
+    )
+  })
+})
+
+describe('install map destination command', () => {
+  it('does not prompt or write when there are no mappings', async () => {
+    const root = tempRoot()
+    process.chdir(root)
+    setTTY(true)
+
+    await runInstallCommand({ map: true }, () =>
+      Promise.resolve(scanResult([])),
+    )
+
+    expect(mapPromptMocks.selectClackMapTarget).not.toHaveBeenCalled()
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('updates an existing managed target without prompting', async () => {
+    const root = tempRoot()
+    const targetPath = join(root, 'CLAUDE.md')
+    process.chdir(root)
+    setTTY(true)
+    writeFileSync(targetPath, exampleBlock)
+
+    await runInstallCommand({ map: true }, () =>
+      Promise.resolve(mappedScanResult()),
+    )
+
+    expect(mapPromptMocks.selectClackMapTarget).not.toHaveBeenCalled()
+    expect(readFileSync(targetPath, 'utf8')).toContain('id: "pkg#core"')
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('writes nothing when map destination selection is cancelled', async () => {
+    const root = tempRoot()
+    process.chdir(root)
+    setTTY(true)
+    mapPromptMocks.selectClackMapTarget.mockResolvedValueOnce(null)
+
+    await runInstallCommand({ map: true }, () =>
+      Promise.resolve(mappedScanResult()),
+    )
+
+    expect(mapPromptMocks.selectClackMapTarget).toHaveBeenCalledWith(
+      process.cwd(),
+    )
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('reports the selected map target during dry run without writing', async () => {
+    const root = tempRoot()
+    process.chdir(root)
+    setTTY(true)
+    mapPromptMocks.selectClackMapTarget.mockResolvedValueOnce(
+      '.github/copilot-instructions.md',
+    )
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runInstallCommand({ dryRun: true, map: true }, () =>
+      Promise.resolve(mappedScanResult()),
+    )
+
+    expect(log.mock.calls.flat().join('\n')).toContain(
+      'Generated 1 mapping for .github/copilot-instructions.md.',
+    )
+    expect(existsSync(join(root, '.github', 'copilot-instructions.md'))).toBe(
+      false,
     )
   })
 })

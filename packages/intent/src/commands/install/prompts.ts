@@ -8,8 +8,10 @@ import {
   note,
   outro,
   select,
+  text,
 } from '@clack/prompts'
 import { installTargetsForMethod } from './delivery.js'
+import { SUPPORTED_MAP_TARGETS, resolveMapTargetPath } from './guidance.js'
 import { skillSelectionId } from './plan.js'
 import type { InstallConfirmation, InstallerPrompter } from './consumer.js'
 import type { InstallMethod, InstallTarget } from './delivery.js'
@@ -24,6 +26,42 @@ function cancelled<T>(value: T | symbol): T | null {
 
 function sourceLabel(pkg: IntentPackage): string {
   return pkg.kind === 'workspace' ? `workspace:${pkg.name}` : pkg.name
+}
+
+const OTHER_MAP_TARGET = 'other'
+
+export async function selectClackMapTarget(
+  root: string,
+): Promise<string | null> {
+  const selection = cancelled(
+    await select<string>({
+      message: 'Where should Intent write skill mappings?',
+      options: [
+        ...SUPPORTED_MAP_TARGETS.map((target) => ({
+          value: target,
+          label: target,
+        })),
+        { value: OTHER_MAP_TARGET, label: 'Other project file' },
+      ],
+    }),
+  )
+  if (!selection) return null
+  if (selection !== OTHER_MAP_TARGET) return selection
+
+  const customTarget = cancelled(
+    await text({
+      message: 'Project-relative file path',
+      validate(value) {
+        try {
+          resolveMapTargetPath(root, value ?? '')
+        } catch (error) {
+          return error instanceof Error ? error.message : String(error)
+        }
+        return undefined
+      },
+    }),
+  )
+  return customTarget?.trim() || null
 }
 
 export function groupSkillOptions(

@@ -1,7 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
+import { dirname, isAbsolute, join, posix, resolve, win32 } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { formatIntentCommand } from '../../shared/command-runner.js'
+import { isPathWithin } from '../../shared/utils.js'
 import { isGeneratedMappingSkill } from '../../skills/categories.js'
 import { formatSkillUse, parseSkillUse } from '../../skills/use.js'
 import type { ScanResult, SkillEntry } from '../../shared/types.js'
@@ -11,12 +20,12 @@ const INTENT_SKILLS_END = '<!-- intent-skills:end -->'
 const LOCAL_PATH_VALUE_PATTERN =
   /(?:^|[\s"'])(?:\.{1,2}[\\/]|~[\\/]|[A-Za-z]:[\\/]|\/(?:Users|home|private|tmp|var\/folders)[\\/]|[^\s"']*(?:node_modules|\.pnpm|\.bun|\.yarn|\.intent)[\\/])/i
 
-const SUPPORTED_AGENT_CONFIG_FILES = [
+export const SUPPORTED_MAP_TARGETS = [
   'AGENTS.md',
   'CLAUDE.md',
   '.cursorrules',
   '.github/copilot-instructions.md',
-]
+] as const
 
 export interface IntentSkillsBlockResult {
   block: string
@@ -26,6 +35,7 @@ export interface IntentSkillsBlockResult {
 export interface WriteIntentSkillsBlockOptions extends IntentSkillsBlockResult {
   root: string
   skipWhenEmpty?: boolean
+  targetPath?: string
 }
 
 interface WriteIntentSkillsBlockFileResult {
@@ -261,15 +271,65 @@ export function verifyIntentSkillsBlockFile({
   }
 }
 
-export function resolveIntentSkillsBlockTargetPath(
+export function findExistingIntentSkillsBlockTargetPath(
   root: string,
-  mappingCount: number,
 ): string | null {
-  if (mappingCount === 0) return null
-  return (
-    findExistingConfigWithManagedBlock(root)?.filePath ??
-    join(root, 'AGENTS.md')
-  )
+  return findExistingConfigWithManagedBlock(root)?.filePath ?? null
+}
+
+export function resolveMapTargetPath(
+  root: string,
+  projectRelativePath: string,
+): string {
+  const value = projectRelativePath.trim()
+  if (value === '') throw new Error('Map target path is required.')
+  if (/[\\/]$/.test(value)) {
+    throw new Error('Map target must be a file, not a directory.')
+  }
+  if (isAbsolute(value) || win32.isAbsolute(value)) {
+    throw new Error('Map target must be relative to the project.')
+  }
+
+  const segments = value.replace(/\\/g, '/').split('/')
+  if (
+    segments.some(
+      (segment) => segment === '..' || segment.toLowerCase() === '.git',
+    )
+  ) {
+    throw new Error('Map target cannot use `..` or `.git` path segments.')
+  }
+
+  const normalizedSegments = posix.normalize(segments.join('/')).split('/')
+  const resolvedRoot = resolve(root)
+  const targetPath = resolve(resolvedRoot, ...normalizedSegments)
+  if (!isPathWithin(resolvedRoot, targetPath)) {
+    throw new Error('Map target must stay within the project.')
+  }
+
+  const realRoot = realpathSync(resolvedRoot)
+  let existingPath = targetPath
+  for (;;) {
+    try {
+      lstatSync(existingPath)
+      break
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    const parent = dirname(existingPath)
+    if (parent === existingPath) {
+      throw new Error('Map target must have an existing project ancestor.')
+    }
+    existingPath = parent
+  }
+
+  if (!isPathWithin(realRoot, realpathSync(existingPath))) {
+    throw new Error('Map target cannot resolve outside the project.')
+  }
+  if (existsSync(targetPath) && statSync(targetPath).isDirectory()) {
+    throw new Error('Map target must be a file, not a directory.')
+  }
+
+  return targetPath
 }
 
 function compareNames(a: { name: string }, b: { name: string }): number {
@@ -365,20 +425,30 @@ function findExistingConfigWithManagedBlock(root: string): {
   filePath: string
   managedBlock: ManagedBlock
 } | null {
-  for (const file of SUPPORTED_AGENT_CONFIG_FILES) {
+  for (const file of SUPPORTED_MAP_TARGETS) {
     const filePath = join(root, file)
-    if (!existsSync(filePath)) continue
-
-    const content = readFileSync(filePath, 'utf8')
-    const { managedBlock, errors, hasMarker } = readManagedBlock(content)
-    if (managedBlock) return { content, filePath, managedBlock }
-    if (hasMarker) {
-      throw new Error(
-        `Invalid intent-skills block in ${filePath}: ${errors.join(' ')}`,
-      )
-    }
+    const existing = readConfigWithManagedBlock(filePath)
+    if (existing) return existing
   }
 
+  return null
+}
+
+function readConfigWithManagedBlock(filePath: string): {
+  content: string
+  filePath: string
+  managedBlock: ManagedBlock
+} | null {
+  if (!existsSync(filePath)) return null
+
+  const content = readFileSync(filePath, 'utf8')
+  const { managedBlock, errors, hasMarker } = readManagedBlock(content)
+  if (managedBlock) return { content, filePath, managedBlock }
+  if (hasMarker) {
+    throw new Error(
+      `Invalid intent-skills block in ${filePath}: ${errors.join(' ')}`,
+    )
+  }
   return null
 }
 
@@ -397,6 +467,7 @@ export function writeIntentSkillsBlock({
   mappingCount,
   root,
   skipWhenEmpty = true,
+  targetPath: explicitTargetPath,
 }: WriteIntentSkillsBlockOptions): WriteIntentSkillsBlockResult {
   if (mappingCount === 0 && skipWhenEmpty) {
     return {
@@ -406,8 +477,13 @@ export function writeIntentSkillsBlock({
     }
   }
 
-  const existingTarget = findExistingConfigWithManagedBlock(root)
-  const targetPath = existingTarget?.filePath ?? join(root, 'AGENTS.md')
+  const existingTarget = explicitTargetPath
+    ? readConfigWithManagedBlock(explicitTargetPath)
+    : findExistingConfigWithManagedBlock(root)
+  const targetPath =
+    explicitTargetPath ??
+    existingTarget?.filePath ??
+    join(root, SUPPORTED_MAP_TARGETS[0])
 
   if (existingTarget) {
     const nextContent = replaceManagedBlock(

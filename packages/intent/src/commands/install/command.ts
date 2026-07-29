@@ -8,8 +8,10 @@ import {
   printWarnings,
 } from '../support.js'
 import {
+  SUPPORTED_MAP_TARGETS,
   buildIntentSkillsBlock,
-  resolveIntentSkillsBlockTargetPath,
+  findExistingIntentSkillsBlockTargetPath,
+  resolveMapTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from './guidance.js'
@@ -157,22 +159,33 @@ export async function runInstallCommand(
 
   const scanResult = await scanIntentsOrFail(coreOptions)
   const generated = buildIntentSkillsBlock(scanResult)
+  const root = process.cwd()
+
+  if (generated.mappingCount === 0) {
+    printNoActionableSkills(
+      scanResult.warnings,
+      scanResult.notices,
+      noticeOptions,
+    )
+    return
+  }
+
+  const existingTargetPath = findExistingIntentSkillsBlockTargetPath(root)
+  let targetPath: string
+  if (existingTargetPath) {
+    targetPath = resolveMapTargetPath(root, relative(root, existingTargetPath))
+  } else {
+    let selectedTarget: string = SUPPORTED_MAP_TARGETS[0]
+    if (process.stdin.isTTY && process.stdout.isTTY) {
+      const { selectClackMapTarget } = await import('./prompts.js')
+      const selection = await selectClackMapTarget(root)
+      if (!selection) return
+      selectedTarget = selection
+    }
+    targetPath = resolveMapTargetPath(root, selectedTarget)
+  }
 
   if (options.dryRun) {
-    const targetPath = resolveIntentSkillsBlockTargetPath(
-      process.cwd(),
-      generated.mappingCount,
-    )
-
-    if (!targetPath) {
-      printNoActionableSkills(
-        scanResult.warnings,
-        scanResult.notices,
-        noticeOptions,
-      )
-      return
-    }
-
     console.log(
       `Generated ${formatMappingCount(generated.mappingCount)} for ${formatTargetPath(targetPath)}.`,
     )
@@ -184,17 +197,11 @@ export async function runInstallCommand(
 
   const result = writeIntentSkillsBlock({
     ...generated,
-    root: process.cwd(),
+    root,
+    targetPath,
   })
 
-  if (!result.targetPath) {
-    printNoActionableSkills(
-      scanResult.warnings,
-      scanResult.notices,
-      noticeOptions,
-    )
-    return
-  }
+  if (!result.targetPath) return
 
   const target = formatTargetPath(result.targetPath)
   const verification = verifyIntentSkillsBlockFile({

@@ -23,7 +23,9 @@ import {
 import {
   createClackInstallerPrompter,
   groupSkillOptions,
+  selectClackMapTarget,
 } from '../src/commands/install/prompts.js'
+import { SUPPORTED_MAP_TARGETS } from '../src/commands/install/guidance.js'
 import { runSyncCommand } from '../src/commands/sync/command.js'
 import { readInstallState } from '../src/commands/sync/state.js'
 import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
@@ -36,21 +38,36 @@ import type * as ClackPrompts from '@clack/prompts'
 import type { InstallerPrompter } from '../src/commands/install/consumer.js'
 
 const clackPromptMocks = vi.hoisted(() => ({
+  cancel: vi.fn(),
+  cancelValue: Symbol('cancel'),
   intro: vi.fn(),
+  isCancel: vi.fn<(value: unknown) => boolean>(),
   multiselect: vi.fn<() => Promise<unknown>>(),
   select:
     vi.fn<
       (options: { options: Array<{ value: string }> }) => Promise<unknown>
     >(),
+  text: vi.fn<
+    (options: {
+      validate?: (value: string) => string | Error | undefined
+    }) => Promise<unknown>
+  >(),
 }))
+
+clackPromptMocks.isCancel.mockImplementation(
+  (value) => value === clackPromptMocks.cancelValue,
+)
 
 vi.mock('@clack/prompts', async (importOriginal) => {
   const actual = await importOriginal<typeof ClackPrompts>()
   return {
     ...actual,
+    cancel: clackPromptMocks.cancel,
     intro: clackPromptMocks.intro,
+    isCancel: clackPromptMocks.isCancel,
     multiselect: clackPromptMocks.multiselect,
     select: clackPromptMocks.select,
+    text: clackPromptMocks.text,
   }
 })
 
@@ -132,6 +149,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
+  vi.clearAllMocks()
 })
 
 describe('consumer install', () => {
@@ -204,6 +222,56 @@ describe('consumer install', () => {
     const [{ options }] = clackPromptMocks.select.mock.calls[0]!
     expect(options.map((option) => option.value)).toEqual(['symlink', 'hooks'])
   })
+
+  it('selects a standard map target from the canonical target list', async () => {
+    const root = createProject()
+    clackPromptMocks.select.mockResolvedValueOnce(
+      '.github/copilot-instructions.md',
+    )
+
+    await expect(selectClackMapTarget(root)).resolves.toBe(
+      '.github/copilot-instructions.md',
+    )
+
+    const [{ options }] = clackPromptMocks.select.mock.calls[0]!
+    expect(options.map((option) => option.value)).toEqual([
+      ...SUPPORTED_MAP_TARGETS,
+      'other',
+    ])
+    expect(clackPromptMocks.text).not.toHaveBeenCalled()
+  })
+
+  it('validates Other project file map targets with the safe resolver', async () => {
+    const root = createProject()
+    clackPromptMocks.select.mockResolvedValueOnce('other')
+    clackPromptMocks.text.mockImplementationOnce(({ validate }) => {
+      expect(validate?.('../outside.md')).toBe(
+        'Map target cannot use `..` or `.git` path segments.',
+      )
+      return Promise.resolve('notes/assistant.md')
+    })
+
+    await expect(selectClackMapTarget(root)).resolves.toBe('notes/assistant.md')
+  })
+
+  it.each(['selection', 'Other path'])(
+    'returns null when map target %s is cancelled',
+    async (cancelledPrompt) => {
+      const root = createProject()
+      if (cancelledPrompt === 'selection') {
+        clackPromptMocks.select.mockResolvedValueOnce(
+          clackPromptMocks.cancelValue,
+        )
+      } else {
+        clackPromptMocks.select.mockResolvedValueOnce('other')
+        clackPromptMocks.text.mockResolvedValueOnce(
+          clackPromptMocks.cancelValue,
+        )
+      }
+
+      await expect(selectClackMapTarget(root)).resolves.toBeNull()
+    },
+  )
 
   it('selects the method before requesting applicable targets', async () => {
     const root = createProject()
