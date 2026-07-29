@@ -73,6 +73,30 @@ function isInside(path: string, parent: string): boolean {
   return value === '' || (!value.startsWith('..') && !isAbsolute(value))
 }
 
+function hasContainedParent(path: string, root: string): boolean {
+  try {
+    const resolvedRoot = resolve(root)
+    const resolvedParent = resolve(dirname(path))
+    if (!isInside(resolvedParent, resolvedRoot)) return false
+    const realRoot = realpathSync(resolvedRoot)
+    let existingParent = resolvedParent
+    for (;;) {
+      try {
+        lstatSync(existingParent)
+        break
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return false
+      }
+      const parent = dirname(existingParent)
+      if (parent === existingParent) return false
+      existingParent = parent
+    }
+    return isInside(realpathSync(existingParent), realRoot)
+  } catch {
+    return false
+  }
+}
+
 function sourceTarget(expected: ExpectedLink): string | null {
   try {
     const packageRoot = realpathSync(expected.packageRoot)
@@ -97,13 +121,19 @@ function stateEntry(
   }
 }
 
-function createLink(path: string, target: string): void {
-  mkdirSync(dirname(path), { recursive: true })
-  if (process.platform === 'win32') {
-    symlinkSync(target, path, 'junction')
-    return
+function createLink(path: string, target: string): boolean {
+  try {
+    mkdirSync(dirname(path), { recursive: true })
+    if (process.platform === 'win32') {
+      symlinkSync(target, path, 'junction')
+    } else {
+      symlinkSync(relative(dirname(path), target), path, 'dir')
+    }
+    return true
+  } catch (error) {
+    if (typeof (error as NodeJS.ErrnoException).code === 'string') return false
+    throw error
   }
-  symlinkSync(relative(dirname(path), target), path, 'dir')
 }
 
 // `rmSync` with recursive+force silently leaves some directory symlinks in place.
@@ -137,14 +167,18 @@ function compareStrings(left: string, right: string): number {
 }
 
 export function reconcileManagedLinks({
+  root,
   dryRun,
   expected,
   stateResult,
+  createLink: createManagedLink = createLink,
   removeLink: removeManagedLink = removeLink,
 }: {
+  root: string
   dryRun: boolean
   expected: ReadonlyArray<ExpectedLink>
   stateResult: ReadInstallStateResult
+  createLink?: (path: string, target: string) => boolean
   removeLink?: (path: string) => boolean
 }): LinkReconciliation {
   const result: LinkReconciliation = {
@@ -158,27 +192,38 @@ export function reconcileManagedLinks({
   const expectedByPath = new Map(expected.map((entry) => [entry.path, entry]))
   const prior = stateResult.status === 'found' ? stateResult.state.entries : []
   const priorByPath = new Map(prior.map((entry) => [entry.path, entry]))
+  const preserveConflict = (
+    path: string,
+    priorEntry?: InstallStateEntry,
+  ): void => {
+    result.conflicts.push(path)
+    if (priorEntry) result.entries.push(priorEntry)
+  }
 
   for (const entry of [...expected].sort((left, right) =>
     compareStrings(left.path, right.path),
   )) {
-    const target = sourceTarget(entry)
-    if (!target) {
-      result.conflicts.push(entry.path)
-      const priorEntry = priorByPath.get(entry.path)
-      if (priorEntry) result.entries.push(priorEntry)
+    const priorEntry = priorByPath.get(entry.path)
+    if (!hasContainedParent(entry.path, root)) {
+      preserveConflict(entry.path, priorEntry)
       continue
     }
-    const priorEntry = priorByPath.get(entry.path)
+    const target = sourceTarget(entry)
+    if (!target) {
+      preserveConflict(entry.path, priorEntry)
+      continue
+    }
     if (!exists(entry.path)) {
-      if (!dryRun) createLink(entry.path, target)
+      if (!dryRun && !createManagedLink(entry.path, target)) {
+        preserveConflict(entry.path, priorEntry)
+        continue
+      }
       result.created.push(entry.path)
       result.entries.push(stateEntry(entry, target))
       continue
     }
     if (!isLink(entry.path) || !priorEntry) {
-      result.conflicts.push(entry.path)
-      if (priorEntry) result.entries.push(priorEntry)
+      preserveConflict(entry.path, priorEntry)
       continue
     }
     const current = resolveLinkTarget(entry.path)
@@ -188,25 +233,28 @@ export function reconcileManagedLinks({
       continue
     }
     if (current === priorEntry.linkTarget) {
-      if (!dryRun) {
-        if (!removeManagedLink(entry.path)) {
-          result.conflicts.push(entry.path)
-          result.entries.push(priorEntry)
-          continue
-        }
-        createLink(entry.path, target)
+      if (
+        !dryRun &&
+        (!removeManagedLink(entry.path) ||
+          !createManagedLink(entry.path, target))
+      ) {
+        preserveConflict(entry.path, priorEntry)
+        continue
       }
       result.repaired.push(entry.path)
       result.entries.push(stateEntry(entry, target))
       continue
     }
-    result.conflicts.push(entry.path)
-    result.entries.push(priorEntry)
+    preserveConflict(entry.path, priorEntry)
   }
 
   if (stateResult.status === 'found') {
     for (const priorEntry of prior) {
       if (expectedByPath.has(priorEntry.path)) continue
+      if (!hasContainedParent(priorEntry.path, root)) {
+        preserveConflict(priorEntry.path, priorEntry)
+        continue
+      }
       if (!exists(priorEntry.path)) {
         result.removed.push(priorEntry.path)
         continue
@@ -216,15 +264,13 @@ export function reconcileManagedLinks({
         resolveLinkTarget(priorEntry.path) === priorEntry.linkTarget
       ) {
         if (!dryRun && !removeManagedLink(priorEntry.path)) {
-          result.conflicts.push(priorEntry.path)
-          result.entries.push(priorEntry)
+          preserveConflict(priorEntry.path, priorEntry)
           continue
         }
         result.removed.push(priorEntry.path)
         continue
       }
-      result.conflicts.push(priorEntry.path)
-      result.entries.push(priorEntry)
+      preserveConflict(priorEntry.path, priorEntry)
     }
   }
 

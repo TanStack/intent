@@ -20,7 +20,10 @@ import {
   readIntentConsumerConfig,
   updateIntentConsumerConfigText,
 } from '../install/config.js'
-import { buildSkillSelectionPlan } from '../install/plan.js'
+import {
+  buildSkillSelectionPlan,
+  summarizeInstallDeltaInventory,
+} from '../install/plan.js'
 import { updateIntentGitignore } from './gitignore.js'
 import { hasNonNativeLinkSource, reconcileManagedLinks } from './links.js'
 import { buildSyncLinkPlan } from './plan.js'
@@ -388,6 +391,7 @@ async function reviewNewDependencies({
   }
   const stateResult = readInstallStateForLinks(root)
   const preflight = reconcileManagedLinks({
+    root,
     dryRun: true,
     expected,
     stateResult,
@@ -405,6 +409,7 @@ async function reviewNewDependencies({
   )
   writeIntentLockfile(join(root, 'intent.lock'), prospectiveLock)
   const links = reconcileManagedLinks({
+    root,
     dryRun: false,
     expected,
     stateResult,
@@ -478,6 +483,7 @@ export async function runSyncCommand(
   } catch (error) {
     if (stateResult.status === 'missing') throw error
     const links = reconcileManagedLinks({
+      root,
       dryRun: options.dryRun === true,
       expected: [],
       stateResult,
@@ -502,35 +508,14 @@ export async function runSyncCommand(
       'Archive-backed/PnP sources cannot use symlink delivery; use hooks instead by setting intent.install.method to "hooks".',
     )
   }
-  const summaries = {
-    newDependencies: inventory.packages
-      .map((pkg) => ({
-        name: sourceName(pkg),
-        skillCount: pkg.skills.filter((skill) => skill.policy === 'pending')
-          .length,
-      }))
-      .filter((entry) => entry.skillCount > 0),
-    newSkills: inventory.packages
-      .map((pkg) => ({
-        name: sourceName(pkg),
-        skillCount: pkg.skills.filter(
-          (skill) => skill.policy === 'enabled' && skill.lock === 'new',
-        ).length,
-      }))
-      .filter((entry) => entry.skillCount > 0),
-    changed: inventory.packages
-      .map((pkg) => ({
-        name: sourceName(pkg),
-        skillCount: pkg.skills.filter(
-          (skill) => skill.policy === 'enabled' && skill.lock === 'changed',
-        ).length,
-      }))
-      .filter((entry) => entry.skillCount > 0),
-  }
+  const { newDependencies, newSkills, changed } =
+    summarizeInstallDeltaInventory(inventory)
+  const summaries = { newDependencies, newSkills, changed }
   const interactiveReview =
     summaries.newDependencies.length > 0 &&
     shouldReviewInteractively(options, runtime)
   const preflight = reconcileManagedLinks({
+    root,
     dryRun: true,
     expected,
     stateResult,
@@ -553,6 +538,7 @@ export async function runSyncCommand(
   const links = options.dryRun
     ? preflight
     : reconcileManagedLinks({
+        root,
         dryRun: false,
         expected,
         stateResult,

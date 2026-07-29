@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { updateIntentGitignore } from '../src/commands/sync/gitignore.js'
 import { reconcileManagedLinks } from '../src/commands/sync/links.js'
@@ -157,6 +157,63 @@ describe('managed sync links', () => {
     }
   }
 
+  function ownedEntry(
+    link: ReturnType<typeof expected>,
+    linkTarget = link.sourceDirectory,
+  ) {
+    const { targetDirectory, path, alias, source, skillPath } = link
+    return { targetDirectory, path, alias, source, skillPath, linkTarget }
+  }
+
+  it('rejects outside-parent create, repair, and stale removal', () => {
+    const parent = tempRoot('intent-sync-outside-parent-')
+    const root = join(parent, 'project')
+    const outside = join(parent, 'outside')
+    const priorTarget = join(parent, 'prior-source')
+    mkdirSync(root)
+    mkdirSync(join(outside, 'skills'), { recursive: true })
+    mkdirSync(priorTarget)
+    createDirectoryLink(outside, join(root, '.github'))
+    const link = expected(root)
+
+    const created = reconcileManagedLinks({
+      root,
+      dryRun: false,
+      expected: [link],
+      stateResult: { status: 'missing' },
+    })
+    expect(created.conflicts).toEqual([link.path])
+    expect(existsSync(link.path)).toBe(false)
+
+    createDirectoryLink(priorTarget, link.path)
+    const priorEntry = ownedEntry(link, priorTarget)
+    const stateResult = {
+      status: 'found' as const,
+      state: { version: 1 as const, entries: [priorEntry] },
+    }
+    const repair = reconcileManagedLinks({
+      root,
+      dryRun: false,
+      expected: [link],
+      stateResult,
+    })
+    const stale = reconcileManagedLinks({
+      root,
+      dryRun: false,
+      expected: [],
+      stateResult,
+    })
+
+    expect({
+      repair: [repair.conflicts, repair.repaired, repair.entries],
+      stale: [stale.conflicts, stale.removed, stale.entries],
+    }).toEqual({
+      repair: [[link.path], [], [priorEntry]],
+      stale: [[link.path], [], [priorEntry]],
+    })
+    expect(lstatSync(link.path).isSymbolicLink()).toBe(true)
+  })
+
   it('rejects persisted link paths that traverse outside the project', () => {
     const parent = tempRoot('intent-sync-state-path-')
     const root = join(parent, 'project')
@@ -187,6 +244,7 @@ describe('managed sync links', () => {
 
     const stateResult = readInstallStateForLinks(root)
     const result = reconcileManagedLinks({
+      root,
       dryRun: false,
       expected: [],
       stateResult,
@@ -207,6 +265,7 @@ describe('managed sync links', () => {
     const root = tempRoot('intent-sync-links-')
     const link = expected(root)
     const first = reconcileManagedLinks({
+      root,
       dryRun: false,
       expected: [link],
       stateResult: { status: 'missing' },
@@ -214,6 +273,7 @@ describe('managed sync links', () => {
     expect(first.created).toEqual([link.path])
     expect(lstatSync(link.path).isSymbolicLink()).toBe(true)
     const second = reconcileManagedLinks({
+      root,
       dryRun: false,
       expected: [link],
       stateResult: {
@@ -224,6 +284,7 @@ describe('managed sync links', () => {
     expect(second.unchanged).toEqual([link.path])
     unlinkSync(link.path)
     const repaired = reconcileManagedLinks({
+      root,
       dryRun: false,
       expected: [link],
       stateResult: {
@@ -233,6 +294,7 @@ describe('managed sync links', () => {
     })
     expect(repaired.created).toEqual([link.path])
     const cleanup = reconcileManagedLinks({
+      root,
       dryRun: false,
       expected: [],
       stateResult: {
@@ -250,6 +312,7 @@ describe('managed sync links', () => {
     mkdirSync(join(root, '.github', 'skills'), { recursive: true })
     createDirectoryLink(join(root, 'somewhere-else'), link.path)
     const conflict = reconcileManagedLinks({
+      root,
       dryRun: false,
       expected: [link],
       stateResult: { status: 'missing' },
@@ -260,6 +323,7 @@ describe('managed sync links', () => {
       path: join(root, '.github', 'skills', 'dry-run'),
     }
     const dryRun = reconcileManagedLinks({
+      root,
       dryRun: true,
       expected: [dryRunLink],
       stateResult: { status: 'missing' },
@@ -275,22 +339,14 @@ describe('managed sync links', () => {
     createDirectoryLink(join(root, 'missing'), link.path)
 
     const result = reconcileManagedLinks({
+      root,
       dryRun: false,
       expected: [link],
       stateResult: {
         status: 'found',
         state: {
           version: 1,
-          entries: [
-            {
-              targetDirectory: link.targetDirectory,
-              path: link.path,
-              alias: link.alias,
-              source: link.source,
-              skillPath: link.skillPath,
-              linkTarget: link.sourceDirectory,
-            },
-          ],
+          entries: [ownedEntry(link)],
         },
       },
     })
@@ -318,6 +374,7 @@ describe('managed sync links', () => {
     }))
 
     const result = reconcileManagedLinks({
+      root,
       dryRun: false,
       expected: [],
       stateResult: { status: 'found', state: { version: 1, entries } },
@@ -335,36 +392,87 @@ describe('managed sync links', () => {
     expect(existsSync(removablePath)).toBe(false)
   })
 
-  it('does not report a failed owned-link repair as repaired', () => {
+  it('records a fresh create failure and continues creating later links', () => {
+    const root = tempRoot('intent-sync-create-failure-')
+    const link = expected(root)
+    const createdBefore = {
+      ...link,
+      path: join(dirname(link.path), 'a-created'),
+    }
+    const blocked = { ...link, path: join(dirname(link.path), 'm-blocked') }
+    const created = { ...link, path: join(dirname(link.path), 'z-created') }
+    mkdirSync(dirname(link.path), { recursive: true })
+
+    const result = reconcileManagedLinks({
+      root,
+      dryRun: false,
+      expected: [blocked, created, createdBefore],
+      stateResult: { status: 'missing' },
+      createLink: (path, target) => {
+        if (path === blocked.path) return false
+        createDirectoryLink(target, path)
+        return true
+      },
+    })
+
+    expect(result.conflicts).toEqual([blocked.path])
+    expect(result.created).toEqual([createdBefore.path, created.path])
+    expect(result.entries.map((entry) => entry.path)).toEqual([
+      createdBefore.path,
+      created.path,
+    ])
+    expect(existsSync(blocked.path)).toBe(false)
+    expect(lstatSync(createdBefore.path).isSymbolicLink()).toBe(true)
+    expect(lstatSync(created.path).isSymbolicLink()).toBe(true)
+  })
+
+  it('does not swallow unexpected creation errors', () => {
+    const root = tempRoot('intent-sync-create-error-')
+    const link = expected(root)
+
+    expect(() =>
+      reconcileManagedLinks({
+        root,
+        dryRun: false,
+        expected: [link],
+        stateResult: { status: 'missing' },
+        createLink: () => {
+          throw new Error('unexpected creation error')
+        },
+      }),
+    ).toThrow('unexpected creation error')
+  })
+
+  it.each([
+    { failure: 'removal', removeLink: () => false, linkRemains: true },
+    { failure: 'creation', createLink: () => false, linkRemains: false },
+  ])('retains prior state when owned-link repair $failure fails', (failure) => {
     const root = tempRoot('intent-sync-repair-failure-')
     const link = expected(root)
     const priorTarget = join(root, 'prior-source')
     mkdirSync(priorTarget, { recursive: true })
     mkdirSync(join(root, '.github', 'skills'), { recursive: true })
     createDirectoryLink(priorTarget, link.path)
-    const priorEntry = {
-      targetDirectory: link.targetDirectory,
-      path: link.path,
-      alias: link.alias,
-      source: link.source,
-      skillPath: link.skillPath,
-      linkTarget: priorTarget,
-    }
+    const priorEntry = ownedEntry(link, priorTarget)
 
     const result = reconcileManagedLinks({
+      root,
       dryRun: false,
       expected: [link],
       stateResult: {
         status: 'found',
         state: { version: 1, entries: [priorEntry] },
       },
-      removeLink: () => false,
+      createLink: failure.createLink,
+      removeLink: failure.removeLink,
     })
 
     expect(result.conflicts).toEqual([link.path])
     expect(result.repaired).toEqual([])
     expect(result.entries).toEqual([priorEntry])
-    expect(lstatSync(link.path).isSymbolicLink()).toBe(true)
+    expect(existsSync(link.path)).toBe(failure.linkRemains)
+    if (failure.linkRemains)
+      expect(lstatSync(link.path).isSymbolicLink()).toBe(true)
   })
 
   it('does not swallow unexpected removal errors', () => {
@@ -377,6 +485,7 @@ describe('managed sync links', () => {
 
     expect(() =>
       reconcileManagedLinks({
+        root,
         dryRun: false,
         expected: [],
         stateResult: {

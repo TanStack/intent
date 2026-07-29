@@ -214,6 +214,7 @@ export async function runConsumerInstall({
         )
       }
       const preflight = reconcileManagedLinks({
+        root,
         dryRun: true,
         expected: linkPlan.expected,
         stateResult: readInstallStateForLinks(root),
