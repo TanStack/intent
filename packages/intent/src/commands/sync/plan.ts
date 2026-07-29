@@ -7,6 +7,7 @@ import {
   toProjectRelativePath,
 } from './targets.js'
 import type { IntentConsumerConfig } from '../install/config.js'
+import type { InstallTarget } from '../install/delivery.js'
 import type { InstallDeltaInventory } from '../install/plan.js'
 import type { ExpectedLink } from './links.js'
 import type {
@@ -26,6 +27,7 @@ export function buildSyncLinkPlan({
   lock,
   packages,
   root,
+  targets,
 }: {
   config: IntentConsumerConfig
   currentSources: ReadonlyArray<IntentLockfileSource>
@@ -33,12 +35,11 @@ export function buildSyncLinkPlan({
   lock: ReadIntentLockfileResult
   packages: ReadonlyArray<IntentPackage>
   root: string
+  targets: ReadonlyArray<InstallTarget>
 }): {
   expected: Array<ExpectedLink>
   inventory: InstallDeltaInventory
 } {
-  if (!config.install)
-    throw new Error('Intent install configuration is missing.')
   const inventory = buildInstallDeltaInventory(
     discovered,
     currentSources,
@@ -79,10 +80,7 @@ export function buildSyncLinkPlan({
       return sourceSkill ? [{ pkg, skill: sourceSkill, source }] : []
     })
   })
-  const targetDirectories = resolveSyncTargetDirectories(
-    root,
-    config.install.targets,
-  )
+  const targetDirectories = resolveSyncTargetDirectories(root, targets)
   const expected = accepted.flatMap(({ pkg, skill, source }) => {
     const identity = `${sourceIdentityKey({ kind: pkg.kind, id: pkg.name })}\0${skill.name}`
     const alias = aliases.get(identity)

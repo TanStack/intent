@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import {
   existsSync,
   lstatSync,
@@ -10,9 +11,10 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { writeIntentDeliveryConfig } from '../src/commands/install/delivery.js'
 import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
 import { writeIntentLockfile } from '../src/core/lockfile/lockfile.js'
 import { scanForIntents } from '../src/discovery/scanner.js'
@@ -340,7 +342,7 @@ describe('cli commands', () => {
     expect(getHelpOutput()).not.toContain('--agents')
   })
 
-  it('tells consumers to install before syncing without configuration or a lockfile', async () => {
+  it('does nothing without local delivery configuration', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-sync-unconfigured-'))
     tempDirs.push(root)
     writeJson(join(root, 'package.json'), { name: 'app', private: true })
@@ -348,10 +350,12 @@ describe('cli commands', () => {
 
     const exitCode = await main(['sync'])
 
-    expect(exitCode).toBe(1)
+    expect(exitCode).toBe(0)
+    expect(errorSpy).toHaveBeenCalledOnce()
     expect(errorSpy).toHaveBeenCalledWith(
-      'Intent sync requires intent.install configuration and intent.lock. Run `intent install` first.',
+      'Intent skill delivery is not configured for this checkout. Run `intent install` to configure it.',
     )
+    expect(readdirSync(root)).toEqual(['package.json'])
   })
 
   it('syncs verified links and reports changed, pending, removed, and dry-run work', async () => {
@@ -362,7 +366,6 @@ describe('cli commands', () => {
       private: true,
       intent: {
         skills: ['verified'],
-        install: { method: 'symlink', targets: ['github', 'vscode'] },
       },
     })
     writeInstalledIntentPackage(root, {
@@ -370,6 +373,11 @@ describe('cli commands', () => {
       version: '1.0.0',
       skillName: 'core',
       description: 'Verified skill',
+    })
+    execFileSync('git', ['init', '--quiet'], { cwd: root })
+    writeIntentDeliveryConfig(root, {
+      method: 'symlink',
+      targets: ['github', 'vscode'],
     })
     process.chdir(root)
     const discovered = scanForIntents(root, { scope: 'local' }).packages
@@ -382,8 +390,18 @@ describe('cli commands', () => {
       join(root, '.intent', 'install-state.json'),
       'utf8',
     )
-    const gitignore = readFileSync(join(root, '.gitignore'), 'utf8')
-    expect(gitignore).toContain('.github/skills/npm-verified-core')
+    const excludePath = resolve(
+      root,
+      execFileSync('git', ['rev-parse', '--git-path', 'info/exclude'], {
+        cwd: root,
+        encoding: 'utf8',
+      }).trim(),
+    )
+    const localExclude = readFileSync(excludePath, 'utf8')
+    expect(localExclude).toContain('.intent/delivery.json')
+    expect(localExclude).toContain('.intent/install-state.json')
+    expect(localExclude).toContain('.github/skills/npm-verified-core')
+    expect(existsSync(join(root, '.gitignore'))).toBe(false)
     expect(await main(['sync'])).toBe(0)
     expect(
       readFileSync(join(root, '.intent', 'install-state.json'), 'utf8'),
@@ -459,7 +477,6 @@ describe('cli commands', () => {
       private: true,
       intent: {
         skills: ['dry-package'],
-        install: { method: 'symlink', targets: ['agents'] },
       },
     })
     writeInstalledIntentPackage(dryRoot, {
@@ -467,6 +484,10 @@ describe('cli commands', () => {
       version: '1.0.0',
       skillName: 'core',
       description: 'Dry skill',
+    })
+    writeIntentDeliveryConfig(dryRoot, {
+      method: 'symlink',
+      targets: ['agents'],
     })
     const dryDiscovered = scanForIntents(dryRoot, { scope: 'local' }).packages
     writeIntentLock(dryRoot, dryDiscovered)
@@ -488,7 +509,6 @@ describe('cli commands', () => {
       private: true,
       intent: {
         skills: ['verified#core'],
-        install: { method: 'symlink', targets: ['agents'] },
       },
     })
     writeInstalledIntentPackage(root, {
@@ -496,6 +516,10 @@ describe('cli commands', () => {
       version: '1.0.0',
       skillName: 'core',
       description: 'Verified skill',
+    })
+    writeIntentDeliveryConfig(root, {
+      method: 'symlink',
+      targets: ['agents'],
     })
     process.chdir(root)
 

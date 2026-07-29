@@ -18,36 +18,35 @@ import { wireIntentSyncPrepare } from '../sync/prepare.js'
 import { readInstallStateForLinks } from '../sync/state.js'
 import { toProjectRelativePath } from '../sync/targets.js'
 import {
-  INSTALL_TARGETS,
-  detectInstallTargets,
   hasIntentDevDependency,
   readIntentConsumerConfig,
   updateIntentConsumerConfigText,
 } from './config.js'
 import {
+  INSTALL_TARGETS,
+  detectInstallTargets,
+  readIntentDeliveryConfig,
+  writeIntentDeliveryConfig,
+} from './delivery.js'
+import {
   buildInstallDeltaInventory,
   buildSkillSelectionPlan,
   summarizeInstallDeltaInventory,
 } from './plan.js'
+import type { IntentConsumerConfig } from './config.js'
 import type {
   InstallMethod,
   InstallTarget,
-  IntentConsumerConfig,
-  IntentInstallPreferences,
-} from './config.js'
+  IntentDeliveryConfig,
+} from './delivery.js'
 import type { SkillSelection } from './plan.js'
 import type { HookAgent, HookInstallScope } from '../../hooks/types.js'
 import type { ReadFs } from '../../shared/utils.js'
 import type { IntentPackage } from '../../shared/types.js'
 
-interface ConsumerInstallConfig extends IntentConsumerConfig {
-  install: IntentInstallPreferences
-}
-
 export type InstallConfirmation = 'install' | 'back' | null
 
 export interface InstallerPrompter {
-  advisory: (message: string) => void
   complete: (message: string) => void
   selectMethod: () => Promise<InstallMethod | null>
   selectTargets: (
@@ -60,7 +59,8 @@ export interface InstallerPrompter {
     discovered: ReadonlyArray<IntentPackage>,
   ) => Promise<SkillSelection | null>
   confirmInstall: (confirmation: {
-    config: ConsumerInstallConfig
+    config: IntentConsumerConfig
+    delivery: IntentDeliveryConfig
     skillCount: number
   }) => Promise<InstallConfirmation>
 }
@@ -137,9 +137,9 @@ export async function runConsumerInstall({
   const packageJson = readFileSync(packageJsonPath, 'utf8')
   const intentDevDependency = hasIntentDevDependency(packageJson)
   const existingConfig = readIntentConsumerConfig(packageJson)
-  const install = dryRun ? undefined : existingConfig.install
-  if (install) {
-    const existingLock = readIntentLockfile(join(root, 'intent.lock'))
+  const existingLock = readIntentLockfile(join(root, 'intent.lock'))
+  const delivery = dryRun ? null : readIntentDeliveryConfig(root)
+  if (delivery) {
     const inventory = buildInstallDeltaInventory(
       discovered,
       buildCurrentLockfileSources(discovered, readFs),
@@ -153,24 +153,24 @@ export async function runConsumerInstall({
     const hasChanges =
       newDependencies > 0 || newSkills > 0 || changed > 0 || summary.removed > 0
     if (!hasChanges && existingLock.status === 'found') {
-      if (install.method === 'symlink') {
+      if (delivery.method === 'symlink') {
         prompts.complete('Project is up to date.')
         return
       }
       const userScopeHooksAccepted = await confirmUserScopeHooks(
-        install.targets,
+        delivery.targets,
         prompts,
       )
       if (userScopeHooksAccepted === null) return
       const installedAgents = installConfiguredHooks(
         root,
-        install.targets,
+        delivery.targets,
         userScopeHooksAccepted,
       )
       const repairedHooks =
         installedAgents.length > 0 ? ' Repaired configured hooks.' : ''
       const skippedCopilot =
-        install.targets.includes('github') && !userScopeHooksAccepted
+        delivery.targets.includes('github') && !userScopeHooksAccepted
           ? ' Copilot was skipped because home-directory access was declined.'
           : ''
       prompts.complete(
@@ -183,13 +183,13 @@ export async function runConsumerInstall({
     )
   }
   for (;;) {
-    const method = install ? install.method : await prompts.selectMethod()
+    const method = delivery ? delivery.method : await prompts.selectMethod()
     if (!method) return
-    const targets = install
-      ? install.targets
+    const targets = delivery
+      ? delivery.targets
       : await prompts.selectTargets(method, detectInstallTargets(root))
     if (!targets || targets.length === 0) return
-    if (!install && method === 'symlink') {
+    if (!delivery && method === 'symlink') {
       const symlinkAccepted = await prompts.confirmSymlink()
       if (!symlinkAccepted) return
     }
@@ -197,19 +197,30 @@ export async function runConsumerInstall({
       prompts.complete('No intent-enabled skills found.')
       return
     }
-    const selection = await prompts.selectSkills(discovered)
-    if (!selection) return
-    const plan = buildSkillSelectionPlan(discovered, selection)
+    const hasCommittedTrust =
+      existingLock.status === 'found' &&
+      (existingConfig.skills.length > 0 || existingConfig.exclude.length > 0)
+    const reusingCommittedTrust = !delivery && hasCommittedTrust
+    const selection = reusingCommittedTrust
+      ? null
+      : await prompts.selectSkills(discovered)
+    if (!reusingCommittedTrust && !selection) return
+    const plan = selection
+      ? buildSkillSelectionPlan(discovered, selection)
+      : null
+    const config = plan
+      ? { skills: plan.skills, exclude: plan.exclude }
+      : existingConfig
+    const deliveryConfig = { method, targets }
     const installation = {
-      config: {
-        skills: plan.skills,
-        exclude: plan.exclude,
-        install: { method, targets },
-      } satisfies ConsumerInstallConfig,
-      skillCount: plan.packages.reduce(
+      config,
+      delivery: deliveryConfig,
+      skillCount: (plan?.packages ?? discovered).reduce(
         (count, pkg) =>
           count +
-          pkg.skills.filter((skill) => skill.status === 'enabled').length,
+          pkg.skills.filter(
+            (skill) => !('status' in skill) || skill.status === 'enabled',
+          ).length,
         0,
       ),
     }
@@ -244,6 +255,7 @@ export async function runConsumerInstall({
         lock: { status: 'found', lockfile },
         packages: policy.packages,
         root,
+        targets,
       })
       if (hasNonNativeLinkSource(linkPlan.expected, readFs)) {
         throw new Error(
@@ -287,13 +299,13 @@ export async function runConsumerInstall({
       method === 'hooks' ? await confirmUserScopeHooks(targets, prompts) : false
     if (userScopeHooksAccepted === null) return
 
-    writeTextFileAtomic(packageJsonPath, updatedPackageJson)
-    writeIntentLockfile(join(root, 'intent.lock'), lockfile)
-    if (!intentDevDependency) {
-      prompts.advisory(
-        'Skills will not re-sync automatically because the prepare script was not wired. intent.lock records the accepted skill baseline, but nothing will check it automatically. Add @tanstack/intent as a devDependency to enable both.',
-      )
+    if (updatedPackageJson !== packageJson) {
+      writeTextFileAtomic(packageJsonPath, updatedPackageJson)
     }
+    if (!hasCommittedTrust) {
+      writeIntentLockfile(join(root, 'intent.lock'), lockfile)
+    }
+    writeIntentDeliveryConfig(root, deliveryConfig)
     if (method === 'symlink') {
       await runSyncCommand({ cwd: root }, { review: 'reminder' })
       prompts.complete(

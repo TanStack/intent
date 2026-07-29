@@ -11,9 +11,8 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { updateIntentGitignore } from '../src/commands/sync/gitignore.js'
+import { updateIntentGitExclude } from '../src/commands/sync/gitignore.js'
 import { reconcileManagedLinks } from '../src/commands/sync/links.js'
-import { wireIntentSyncPrepare } from '../src/commands/sync/prepare.js'
 import {
   parseInstallState,
   readInstallState,
@@ -513,30 +512,18 @@ describe('managed sync links', () => {
 })
 
 describe('sync managed text', () => {
-  it('updates only the exact gitignore block while preserving CRLF', () => {
-    const updated = updateIntentGitignore('node_modules/\r\n', [
+  it('updates only the exact local exclude block while preserving CRLF', () => {
+    const updated = updateIntentGitExclude('node_modules/\r\n', [
       '.github/skills/a',
       '.intent/install-state.json',
     ])
     expect(updated).toContain('node_modules/\r\n# intent skill links:start\r\n')
     expect(updated).toContain('.github/skills/a\r\n')
     expect(
-      updateIntentGitignore(updated, [
+      updateIntentGitExclude(updated, [
         '.github/skills/a',
         '.intent/install-state.json',
       ]),
     ).toBe(updated)
-  })
-
-  it('adds and preserves an idempotent prepare sync command', () => {
-    expect(wireIntentSyncPrepare('{"name":"app"}\n')).toContain(
-      '"prepare": "intent sync"',
-    )
-    expect(wireIntentSyncPrepare('{"scripts":{"prepare":"build"}}')).toContain(
-      'build && intent sync',
-    )
-    const existing =
-      '{\r\n  "scripts": { "prepare": "build && intent sync" }\r\n}\r\n'
-    expect(wireIntentSyncPrepare(existing)).toBe(existing)
   })
 })

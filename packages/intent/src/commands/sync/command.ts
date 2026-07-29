@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fail } from '../../shared/cli-error.js'
 import { compileExcludePatterns } from '../../core/excludes.js'
@@ -22,11 +22,15 @@ import {
   updateIntentConsumerConfigText,
 } from '../install/config.js'
 import {
+  DELIVERY_CONFIG_PATH,
+  readIntentDeliveryConfig,
+} from '../install/delivery.js'
+import {
   buildSkillSelectionPlan,
   skillSelectionId,
   summarizeInstallDeltaInventory,
 } from '../install/plan.js'
-import { updateIntentGitignore } from './gitignore.js'
+import { writeIntentGitExclude } from './gitignore.js'
 import { hasNonNativeLinkSource, reconcileManagedLinks } from './links.js'
 import { buildSyncLinkPlan } from './plan.js'
 import {
@@ -99,23 +103,15 @@ function printReminder(
   console.log(`${title}:\n\n${packages}\n\n${action}`)
 }
 
-function writeGitignore(root: string, paths: Array<string>): boolean {
-  const path = join(root, '.gitignore')
-  const before = existsSync(path) ? readFileSync(path, 'utf8') : null
-  const after = updateIntentGitignore(before, paths)
-  if (before === after) return false
-  writeFileSync(path, after, 'utf8')
-  return true
-}
-
 function writeManagedLinkState(root: string, links: LinkReconciliation): void {
   const entries = links.entries.map((entry) => ({
     ...entry,
     path: toProjectRelativePath(root, entry.path),
   }))
   writeInstallState(root, { version: 1, entries })
-  writeGitignore(root, [
+  writeIntentGitExclude(root, [
     ...entries.map((entry) => entry.path),
+    DELIVERY_CONFIG_PATH,
     INSTALL_STATE_PATH,
   ])
 }
@@ -196,6 +192,7 @@ function shouldReviewInteractively(
 
 async function reviewNewDependencies({
   config,
+  deliveryTargets,
   discovered,
   lock,
   packages,
@@ -205,6 +202,9 @@ async function reviewNewDependencies({
   root,
 }: {
   config: ReturnType<typeof readIntentConsumerConfig>
+  deliveryTargets: NonNullable<
+    ReturnType<typeof readIntentDeliveryConfig>
+  >['targets']
   discovered: Array<IntentPackage>
   lock: Extract<ReturnType<typeof readIntentLockfile>, { status: 'found' }>
   packages: Array<IntentPackage>
@@ -386,6 +386,7 @@ async function reviewNewDependencies({
     lock: { status: 'found', lockfile: prospectiveLock },
     packages: policy.packages,
     root,
+    targets: deliveryTargets,
   }).expected
   if (hasNonNativeLinkSource(expected, readFs)) {
     fail(
@@ -436,23 +437,30 @@ export async function runSyncCommand(
 ): Promise<void> {
   const context = resolveProjectContext({ cwd: options.cwd ?? process.cwd() })
   const root = context.workspaceRoot ?? context.packageRoot ?? context.cwd
+  const delivery = readIntentDeliveryConfig(root)
+  if (!delivery) {
+    console.error(
+      'Intent skill delivery is not configured for this checkout. Run `intent install` to configure it.',
+    )
+    return
+  }
   const packageJsonPath = join(root, 'package.json')
   if (!existsSync(packageJsonPath)) {
     fail(
-      'Intent sync requires intent.install configuration and intent.lock. Run `intent install` first.',
+      'Intent sync requires package policy and intent.lock. Run `intent install` first.',
     )
   }
   const packageJson = readFileSync(packageJsonPath, 'utf8')
   const config = readIntentConsumerConfig(packageJson)
   const lock = readIntentLockfile(join(root, 'intent.lock'))
-  if (!config.install || lock.status !== 'found') {
+  if (lock.status !== 'found') {
     fail(
-      'Intent sync requires intent.install configuration and intent.lock. Run `intent install` first.',
+      'Intent sync requires package policy and intent.lock. Run `intent install` first.',
     )
   }
-  if (config.install.method !== 'symlink') {
+  if (delivery.method !== 'symlink') {
     fail(
-      `Intent sync adapter for method "${config.install.method}" is not implemented yet.`,
+      'Hook delivery is repaired by `intent install`; run it to repair configured hooks.',
     )
   }
   const stateResult = readInstallStateForLinks(root)
@@ -482,6 +490,7 @@ export async function runSyncCommand(
       lock,
       packages: discovery.policy.packages,
       root,
+      targets: delivery.targets,
     })
   } catch (error) {
     if (stateResult.status === 'missing') throw error
@@ -622,6 +631,7 @@ export async function runSyncCommand(
       (await import('./prompts.js')).createClackSyncReviewPrompter()
     await reviewNewDependencies({
       config,
+      deliveryTargets: delivery.targets,
       discovered,
       lock,
       packages,

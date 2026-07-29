@@ -14,18 +14,23 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runInteractiveInstall } from '../src/commands/install/command.js'
+import { readIntentConsumerConfig } from '../src/commands/install/config.js'
+import { runConsumerInstall } from '../src/commands/install/consumer.js'
 import {
   detectInstallTargets,
-  readIntentConsumerConfig,
-} from '../src/commands/install/config.js'
-import { runConsumerInstall } from '../src/commands/install/consumer.js'
+  readIntentDeliveryConfig,
+} from '../src/commands/install/delivery.js'
 import {
   createClackInstallerPrompter,
   groupSkillOptions,
 } from '../src/commands/install/prompts.js'
 import { runSyncCommand } from '../src/commands/sync/command.js'
 import { readInstallState } from '../src/commands/sync/state.js'
-import { readIntentLockfile } from '../src/core/lockfile/lockfile.js'
+import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
+import {
+  readIntentLockfile,
+  writeIntentLockfile,
+} from '../src/core/lockfile/lockfile.js'
 import { scanForIntents } from '../src/discovery/scanner.js'
 import type * as ClackPrompts from '@clack/prompts'
 import type { InstallerPrompter } from '../src/commands/install/consumer.js'
@@ -112,7 +117,6 @@ function createPrompts(
   overrides: Partial<InstallerPrompter> = {},
 ): InstallerPrompter {
   return {
-    advisory: () => {},
     complete: () => {},
     selectMethod: () => Promise.resolve('symlink'),
     selectTargets: () => Promise.resolve(['agents']),
@@ -245,7 +249,61 @@ describe('consumer install', () => {
     expect(selectSkills).toHaveBeenCalledOnce()
   })
 
-  it('reports an already-configured project as up to date without interviewing', async () => {
+  it('moves legacy delivery local without changing committed trust or lock', async () => {
+    const root = createProject()
+    const discovered = scanForIntents(root, { scope: 'local' }).packages
+    const packageJsonPath = join(root, 'package.json')
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+    packageJson.description = 'preserve me'
+    packageJson.intent = {
+      skills: ['@tanstack/query'],
+      exclude: [],
+      install: { method: 'symlink', targets: ['agents'] },
+    }
+    writeJson(packageJsonPath, packageJson)
+    writeIntentLockfile(join(root, 'intent.lock'), {
+      lockfileVersion: 1,
+      sources: buildCurrentLockfileSources(discovered),
+    })
+    const lockBefore = readFileSync(join(root, 'intent.lock'))
+    const selectMethod = vi.fn(() => Promise.resolve('symlink' as const))
+    const selectTargets = vi.fn(() =>
+      Promise.resolve<Array<'agents'>>(['agents']),
+    )
+    const selectSkills = vi.fn(() =>
+      Promise.reject(new Error('current trust must not reselect skills')),
+    )
+
+    await runConsumerInstall({
+      discovered,
+      prompts: createPrompts({ selectMethod, selectTargets, selectSkills }),
+      root,
+    })
+
+    expect(selectMethod).toHaveBeenCalledOnce()
+    expect(selectTargets).toHaveBeenCalledOnce()
+    expect(selectSkills).not.toHaveBeenCalled()
+    expect(JSON.parse(readFileSync(packageJsonPath, 'utf8'))).toEqual({
+      name: 'app',
+      private: true,
+      devDependencies: { '@tanstack/intent': '0.4.0' },
+      description: 'preserve me',
+      intent: { skills: ['@tanstack/query'], exclude: [] },
+      scripts: { prepare: 'intent sync' },
+    })
+    expect(readFileSync(join(root, 'intent.lock'))).toEqual(lockBefore)
+    expect(readIntentDeliveryConfig(root)).toEqual({
+      method: 'symlink',
+      targets: ['agents'],
+    })
+    expect(
+      lstatSync(
+        join(root, '.agents', 'skills', 'npm-tanstack-query-fetching'),
+      ).isSymbolicLink(),
+    ).toBe(true)
+  })
+
+  it('wires prepare once and reports an already-configured project as up to date without interviewing', async () => {
     const root = createProject()
     const discovered = scanForIntents(root, { scope: 'local' }).packages
     await runConsumerInstall({ discovered, prompts: createPrompts(), root })
@@ -272,6 +330,9 @@ describe('consumer install', () => {
     expect(selectMethod).not.toHaveBeenCalled()
     expect(selectTargets).not.toHaveBeenCalled()
     expect(selectSkills).not.toHaveBeenCalled()
+    expect(
+      JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts,
+    ).toEqual({ prepare: 'intent sync' })
   })
 
   it('reports a new skill and enters review without re-interviewing delivery', async () => {
@@ -326,8 +387,7 @@ describe('consumer install', () => {
 
   it('installs confirmed skills with policy, lock state, and managed links', async () => {
     const root = createProject()
-    const advisory = vi.fn()
-    const prompts = createPrompts({ advisory })
+    const prompts = createPrompts()
 
     await runInteractiveInstall({
       cwd: root,
@@ -341,11 +401,11 @@ describe('consumer install', () => {
     ).toEqual({
       skills: ['@tanstack/query'],
       exclude: [],
-      install: { method: 'symlink', targets: ['agents'] },
     })
-    expect(
-      JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts,
-    ).toEqual({ prepare: 'intent sync' })
+    expect(readIntentDeliveryConfig(root)).toEqual({
+      method: 'symlink',
+      targets: ['agents'],
+    })
     expect(readIntentLockfile(join(root, 'intent.lock'))).toMatchObject({
       status: 'found',
       lockfile: {
@@ -372,7 +432,6 @@ describe('consumer install', () => {
       },
     })
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
-    expect(advisory).not.toHaveBeenCalled()
   })
 
   it('preserves malformed install state and managed links when sync fails', async () => {
@@ -390,6 +449,7 @@ describe('consumer install', () => {
       'skills',
       'npm-tanstack-query-fetching',
     )
+    writeFileSync(gitignorePath, 'shared\n', 'utf8')
     writeFileSync(statePath, '{malformed ownership state\n', 'utf8')
     const stateBefore = readFileSync(statePath)
     const gitignoreBefore = readFileSync(gitignorePath)
@@ -420,6 +480,7 @@ describe('consumer install', () => {
       'skills',
       'npm-tanstack-query-fetching',
     )
+    writeFileSync(gitignorePath, 'shared\n', 'utf8')
     unlinkSync(statePath)
     const gitignoreBefore = readFileSync(gitignorePath)
 
@@ -547,6 +608,7 @@ describe('consumer install', () => {
       'skills',
       'npm-tanstack-query-fetching',
     )
+    writeFileSync(gitignorePath, 'shared\n', 'utf8')
     unlinkSync(statePath)
     const gitignoreBefore = readFileSync(gitignorePath)
     const outside = join(root, 'outside-content')
@@ -595,7 +657,10 @@ describe('consumer install', () => {
     ).toEqual({
       skills: ['@tanstack/query'],
       exclude: [],
-      install: { method: 'hooks', targets: ['claude', 'codex'] },
+    })
+    expect(readIntentDeliveryConfig(root)).toEqual({
+      method: 'hooks',
+      targets: ['claude', 'codex'],
     })
     expect(
       JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts,
@@ -923,8 +988,7 @@ describe('consumer install', () => {
   it('installs without Intent as a project development dependency', async () => {
     const root = createProject()
     writeJson(join(root, 'package.json'), { name: 'app', private: true })
-    const advisory = vi.fn()
-    const prompts = createPrompts({ advisory })
+    const prompts = createPrompts()
 
     await runConsumerInstall({
       discovered: scanForIntents(root, { scope: 'local' }).packages,
@@ -939,7 +1003,10 @@ describe('consumer install', () => {
     ).toEqual({
       skills: ['@tanstack/query'],
       exclude: [],
-      install: { method: 'symlink', targets: ['agents'] },
+    })
+    expect(readIntentDeliveryConfig(root)).toEqual({
+      method: 'symlink',
+      targets: ['agents'],
     })
     expect(
       JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts,
@@ -955,9 +1022,6 @@ describe('consumer install', () => {
         ],
       },
     })
-    expect(advisory).toHaveBeenCalledWith(
-      'Skills will not re-sync automatically because the prepare script was not wired. intent.lock records the accepted skill baseline, but nothing will check it automatically. Add @tanstack/intent as a devDependency to enable both.',
-    )
   })
 
   it('stops without skill selection when discovery is empty', async () => {
@@ -1031,10 +1095,10 @@ describe('consumer install', () => {
       root,
     })
 
-    expect(
-      readIntentConsumerConfig(readFileSync(join(root, 'package.json'), 'utf8'))
-        .install,
-    ).toEqual({ method: 'symlink', targets: ['cursor'] })
+    expect(readIntentDeliveryConfig(root)).toEqual({
+      method: 'symlink',
+      targets: ['cursor'],
+    })
     expect(
       existsSync(
         join(root, '.cursor', 'skills', 'npm-tanstack-query-fetching'),

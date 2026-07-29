@@ -1,89 +1,10 @@
-import { existsSync, statSync } from 'node:fs'
-import { join } from 'node:path'
 import { applyEdits, modify, parse } from 'jsonc-parser'
 import { compileExcludePatterns } from '../../core/excludes.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
 
-export type InstallMethod = 'symlink' | 'hooks'
-export type InstallTarget =
-  | 'agents'
-  | 'github'
-  | 'vscode'
-  | 'cursor'
-  | 'codex'
-  | 'claude'
-
-export interface IntentInstallPreferences {
-  targets: Array<InstallTarget>
-  method: InstallMethod
-}
-
 export interface IntentConsumerConfig {
   skills: Array<string>
   exclude: Array<string>
-  install?: IntentInstallPreferences
-}
-
-export const INSTALL_TARGETS: ReadonlyArray<{
-  id: InstallTarget
-  label: string
-}> = [
-  { id: 'agents', label: 'Shared .agents directory' },
-  { id: 'github', label: 'GitHub Copilot' },
-  { id: 'vscode', label: 'VS Code' },
-  { id: 'cursor', label: 'Cursor' },
-  { id: 'codex', label: 'Codex' },
-  { id: 'claude', label: 'Claude Code' },
-]
-
-const INSTALL_METHODS: Readonly<
-  Record<InstallMethod, ReadonlySet<InstallTarget>>
-> = {
-  symlink: new Set(INSTALL_TARGETS.map((target) => target.id)),
-  hooks: new Set(['github', 'codex', 'claude']),
-}
-
-export function installTargetsForMethod(
-  method: InstallMethod,
-): typeof INSTALL_TARGETS {
-  return INSTALL_TARGETS.filter((target) =>
-    INSTALL_METHODS[method].has(target.id),
-  )
-}
-
-function isDirectory(root: string, path: string): boolean {
-  const target = join(root, path)
-  return existsSync(target) && statSync(target).isDirectory()
-}
-
-export function detectInstallTargets(root: string): Array<InstallTarget> {
-  return INSTALL_TARGETS.flatMap((target) => {
-    switch (target.id) {
-      case 'agents':
-        return isDirectory(root, '.agents') ||
-          existsSync(join(root, 'AGENTS.md'))
-          ? [target.id]
-          : []
-      case 'github':
-        return existsSync(join(root, '.github/copilot-instructions.md'))
-          ? [target.id]
-          : []
-      case 'vscode':
-        return isDirectory(root, '.vscode') ? [target.id] : []
-      case 'cursor':
-        return isDirectory(root, '.cursor') ||
-          existsSync(join(root, '.cursorrules'))
-          ? [target.id]
-          : []
-      case 'codex':
-        return isDirectory(root, '.codex') ? [target.id] : []
-      case 'claude':
-        return isDirectory(root, '.claude') ||
-          existsSync(join(root, 'CLAUDE.md'))
-          ? [target.id]
-          : []
-    }
-  })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -105,40 +26,6 @@ function validateExcludes(excludes: Array<string>): void {
     throw new Error('intent.exclude must not contain blank entries.')
   }
   compileExcludePatterns(excludes)
-}
-
-function validateInstall(value: unknown): IntentInstallPreferences {
-  if (!isRecord(value)) throw new Error('intent.install must be an object.')
-  for (const key of Object.keys(value)) {
-    if (key !== 'targets' && key !== 'method') {
-      throw new Error(`Unknown intent.install field "${key}".`)
-    }
-  }
-  const targets = requireStringArray(value.targets, 'intent.install.targets')
-  if (targets.length === 0) {
-    throw new Error('intent.install.targets must not be empty.')
-  }
-  const seen = new Set<string>()
-  for (const target of targets) {
-    if (!INSTALL_TARGETS.some((candidate) => candidate.id === target)) {
-      throw new Error(`Unknown install target "${target}".`)
-    }
-    if (seen.has(target))
-      throw new Error(`Duplicate install target "${target}".`)
-    seen.add(target)
-  }
-  if (typeof value.method !== 'string' || !(value.method in INSTALL_METHODS)) {
-    throw new Error(`Unknown install method "${String(value.method)}".`)
-  }
-  const method = value.method as InstallMethod
-  for (const target of targets) {
-    if (!INSTALL_METHODS[method].has(target as InstallTarget)) {
-      throw new Error(
-        `Install method "${method}" is not supported for "${target}".`,
-      )
-    }
-  }
-  return { targets: targets as Array<InstallTarget>, method }
 }
 
 function parsePackageJson(text: string): Record<string, unknown> {
@@ -176,13 +63,7 @@ export function readIntentConsumerConfig(text: string): IntentConsumerConfig {
       : requireStringArray(intent.exclude, 'intent.exclude')
   parseSkillSources(skills)
   validateExcludes(exclude)
-  return {
-    skills,
-    exclude,
-    ...(intent.install === undefined
-      ? {}
-      : { install: validateInstall(intent.install) }),
-  }
+  return { skills, exclude }
 }
 
 function equalsConfig(
@@ -191,8 +72,7 @@ function equalsConfig(
 ): boolean {
   return (
     equalsArray(left.skills, right.skills) &&
-    equalsArray(left.exclude, right.exclude) &&
-    equalsInstall(left.install, right.install)
+    equalsArray(left.exclude, right.exclude)
   )
 }
 
@@ -203,16 +83,6 @@ function equalsArray(
   return (
     left.length === right.length &&
     left.every((entry, index) => entry === right[index])
-  )
-}
-
-function equalsInstall(
-  left: IntentInstallPreferences | undefined,
-  right: IntentInstallPreferences | undefined,
-): boolean {
-  if (left === undefined || right === undefined) return left === right
-  return (
-    left.method === right.method && equalsArray(left.targets, right.targets)
   )
 }
 
@@ -246,16 +116,17 @@ export function updateIntentConsumerConfigText(
   requested: IntentConsumerConfig,
 ): string {
   const existing = readIntentConsumerConfig(text)
+  const intent = parsePackageJson(text).intent
+  const hasLegacyInstall = isRecord(intent) && intent.install !== undefined
   const normalized = {
     skills: requireStringArray(requested.skills, 'intent.skills'),
     exclude: requireStringArray(requested.exclude, 'intent.exclude'),
-    ...(requested.install === undefined
-      ? {}
-      : { install: validateInstall(requested.install) }),
   }
   parseSkillSources(normalized.skills)
   validateExcludes(normalized.exclude)
-  if (equalsConfig(existing, normalized)) return text
+  if (equalsConfig(existing, normalized) && !hasLegacyInstall) {
+    return text
+  }
 
   const bom = text.startsWith('\ufeff') ? '\ufeff' : ''
   const options = formattingOptions(text)
@@ -276,11 +147,11 @@ export function updateIntentConsumerConfigText(
       options,
     )
   }
-  if (!equalsInstall(existing.install, normalized.install)) {
+  if (hasLegacyInstall) {
     updated = applyModification(
       updated,
       ['intent', 'install'],
-      normalized.install,
+      undefined,
       options,
     )
   }

@@ -9,10 +9,10 @@ import {
   outro,
   select,
 } from '@clack/prompts'
-import { installTargetsForMethod } from './config.js'
+import { installTargetsForMethod } from './delivery.js'
 import { skillSelectionId } from './plan.js'
 import type { InstallConfirmation, InstallerPrompter } from './consumer.js'
-import type { InstallMethod, InstallTarget } from './config.js'
+import type { InstallMethod, InstallTarget } from './delivery.js'
 import type { SkillSelection } from './plan.js'
 import type { IntentPackage } from '../../shared/types.js'
 
@@ -82,9 +82,6 @@ export async function selectClackSkills(
 export function createClackInstallerPrompter(): InstallerPrompter {
   intro('Configure TanStack Intent')
   return {
-    advisory(message: string): void {
-      note(message, 'Automatic re-sync is not enabled')
-    },
     complete(message: string): void {
       outro(message)
     },
@@ -149,10 +146,13 @@ export function createClackInstallerPrompter(): InstallerPrompter {
     ): Promise<SkillSelection | null> {
       return selectClackSkills(discovered)
     },
-    async confirmInstall({ config, skillCount }): Promise<InstallConfirmation> {
+    async confirmInstall({
+      delivery,
+      skillCount,
+    }): Promise<InstallConfirmation> {
       return cancelled(
         await select<Exclude<InstallConfirmation, null>>({
-          message: `Install ${skillCount} ${skillCount === 1 ? 'skill' : 'skills'} using ${config.install.method}?`,
+          message: `Install ${skillCount} ${skillCount === 1 ? 'skill' : 'skills'} using ${delivery.method}?`,
           options: [
             { value: 'install', label: 'Install' },
             { value: 'back', label: 'Go back' },

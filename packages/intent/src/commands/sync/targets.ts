@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { join, relative, resolve, sep } from 'node:path'
-import type { InstallTarget } from '../install/config.js'
+import type { InstallTarget } from '../install/delivery.js'
 
 export interface SyncTargetDirectory {
   id: InstallTarget

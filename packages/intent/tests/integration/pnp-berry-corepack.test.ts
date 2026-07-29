@@ -125,7 +125,6 @@ function scaffoldBerryProject(): string {
 
 function createInstallPrompts(method: 'hooks' | 'symlink'): InstallerPrompter {
   return {
-    advisory: () => {},
     complete: () => {},
     selectMethod: () => Promise.resolve(method),
     selectTargets: () =>
