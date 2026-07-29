@@ -49,24 +49,6 @@ export function runInstallHooks({
   )
 }
 
-export function formatHookInstallResult(result: HookInstallResult): string {
-  if (result.status === 'skipped') {
-    return `Skipped Intent hooks for ${result.agent}: ${result.reason}`
-  }
-
-  const target = result.configPath
-    ? formatPath(result.configPath)
-    : result.agent
-  switch (result.status) {
-    case 'created':
-      return `Installed Intent hooks for ${result.agent} (${result.scope}) in ${target}.`
-    case 'updated':
-      return `Updated Intent hooks for ${result.agent} (${result.scope}) in ${target}.`
-    case 'unchanged':
-      return `No changes to Intent hooks for ${result.agent} (${result.scope}); already current.`
-  }
-}
-
 function installAgentHook({
   agent,
   copilotHome,

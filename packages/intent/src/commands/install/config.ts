@@ -161,11 +161,6 @@ export function hasIntentDevDependency(text: string): boolean {
   )
 }
 
-export function hasExplicitIntentSkills(text: string): boolean {
-  const intent = parsePackageJson(text).intent
-  return isRecord(intent) && Object.hasOwn(intent, 'skills')
-}
-
 export function readIntentConsumerConfig(text: string): IntentConsumerConfig {
   const packageJson = parsePackageJson(text)
   const intent = packageJson.intent

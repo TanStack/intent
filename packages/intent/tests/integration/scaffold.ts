@@ -203,6 +203,7 @@ export function scaffoldProject(opts: {
       private: true,
       ...(opts.pnp ? { installConfig: { pnp: true } } : {}),
       dependencies: { [opts.dependency]: '1.0.0' },
+      intent: { skills: ['@test-intent/skills-leaf'] },
     })
     install(root, opts.pm, opts.registryUrl, opts)
     return { root, cwd: root }
@@ -214,6 +215,7 @@ export function scaffoldProject(opts: {
     private: true,
     ...(opts.pm !== 'pnpm' ? { workspaces: ['packages/*'] } : {}),
     ...(opts.pnp ? { installConfig: { pnp: true } } : {}),
+    intent: { skills: ['@test-intent/skills-leaf'] },
   })
   if (opts.pm === 'pnpm') {
     writeFileSync(

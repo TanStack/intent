@@ -11,10 +11,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { HOOK_AGENT_ADAPTERS } from '../src/hooks/adapters.js'
-import {
-  formatHookInstallResult,
-  runInstallHooks,
-} from '../src/hooks/install.js'
+import { runInstallHooks } from '../src/hooks/install.js'
 import { packageVersionToPin } from '../src/shared/command-runner.js'
 
 const tempDirs: Array<string> = []
@@ -311,19 +308,5 @@ describe('hook installer', () => {
       command: 'echo keep',
       note: 'mentions intent-copilot-gate.mjs in documentation',
     })
-  })
-
-  it('formats skipped install results', () => {
-    expect(
-      formatHookInstallResult({
-        agent: 'copilot',
-        configPath: null,
-        reason: 'project scope is not supported; use --scope user',
-        scope: 'project',
-        status: 'skipped',
-      }),
-    ).toBe(
-      'Skipped Intent hooks for copilot: project scope is not supported; use --scope user',
-    )
   })
 })

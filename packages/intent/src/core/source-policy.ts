@@ -30,9 +30,6 @@ import type {
 
 export { ALLOW_ALL_NOTICE }
 
-export const MIGRATION_NOTICE =
-  'intent.skills is not set — all discovered skill sources are surfaced. A future version will require an explicit intent.skills allowlist; add one to opt in to specific sources.'
-
 export const EMPTY_NOTE =
   'intent.skills is empty — no skill sources are permitted.'
 
@@ -141,7 +138,6 @@ export function compileSkillSourcePolicy(
   config: SkillSourcesConfig,
 ): CompiledSkillSourcePolicy {
   switch (config.mode) {
-    case 'absent':
     case 'allow-all':
       return {
         matchers: [],
@@ -436,8 +432,7 @@ export function applySourcePolicy(
     }
   }
 
-  if (config.mode === 'absent') emit(MIGRATION_NOTICE)
-  else if (config.mode === 'allow-all') emit(ALLOW_ALL_NOTICE)
+  if (config.mode === 'allow-all') emit(ALLOW_ALL_NOTICE)
   else if (config.mode === 'empty') emit(EMPTY_NOTE)
 
   return {
@@ -450,8 +445,6 @@ export function applySourcePolicy(
   }
 }
 
-// A null/undefined intent.skills is treated as not-declared so it cannot
-// shadow a stricter parent allowlist.
 export function readSkillSourcesConfig(
   cwd: string,
   context: ProjectContext = resolveProjectContext({ cwd }),
@@ -462,12 +455,11 @@ export function readSkillSourcesConfig(
 
     if ('skills' in intent) {
       const skills = (intent as Record<string, unknown>).skills
-      if (skills === null || skills === undefined) continue
       return parseSkillSources(skills)
     }
   }
 
-  return { mode: 'absent' }
+  return parseSkillSources(undefined)
 }
 
 export interface PolicedScan {

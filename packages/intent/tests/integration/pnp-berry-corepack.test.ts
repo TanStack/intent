@@ -1,9 +1,8 @@
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
   realpathSync,
   rmSync,
@@ -13,6 +12,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
+import { runInteractiveInstall } from '../../src/commands/install/command.js'
+import type { InstallerPrompter } from '../../src/commands/install/consumer.js'
 
 /**
  * Regression guard for discussion #119: skill discovery in a real Yarn Berry
@@ -108,6 +109,7 @@ function scaffoldBerryProject(): string {
     name: 'berry-corepack-repro',
     packageManager: `yarn@${YARN_VERSION}`,
     dependencies: { '@repro/skills-leaf': `file:./${tarball}` },
+    intent: { skills: ['@repro/skills-leaf'] },
   })
 
   // CI makes Berry installs immutable by default; this fixture creates lockfile fresh.
@@ -121,19 +123,18 @@ function scaffoldBerryProject(): string {
   return dir
 }
 
-function configureInstall(cwd: string, method: 'hooks' | 'symlink'): void {
-  const packageJsonPath = join(cwd, 'package.json')
-  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
-  writeJson(packageJsonPath, {
-    ...packageJson,
-    intent: {
-      skills: ['@repro/skills-leaf'],
-      install: {
-        method,
-        targets: method === 'hooks' ? ['claude'] : ['agents'],
-      },
-    },
-  })
+function createInstallPrompts(method: 'hooks' | 'symlink'): InstallerPrompter {
+  return {
+    advisory: () => {},
+    complete: () => {},
+    selectMethod: () => Promise.resolve(method),
+    selectTargets: () =>
+      Promise.resolve(method === 'hooks' ? ['claude'] : ['agents']),
+    confirmSymlink: () => Promise.resolve(true),
+    confirmUserScopeHooks: () => Promise.resolve(false),
+    selectSkills: () => Promise.resolve({ mode: 'all-found' }),
+    confirmInstall: () => Promise.resolve('install'),
+  }
 }
 
 describe.skipIf(!shouldRun)('Yarn Berry PnP (zip-backed dependencies)', () => {
@@ -167,34 +168,31 @@ describe.skipIf(!shouldRun)('Yarn Berry PnP (zip-backed dependencies)', () => {
     expect(load).toContain('# Core')
   }, 120_000)
 
-  it('installs hooks and locks a zip-backed dependency', () => {
+  it('installs hooks and locks a zip-backed dependency', async () => {
     const cwd = scaffoldBerryProject()
-    configureInstall(cwd, 'hooks')
 
-    execFileSync('node', [cliPath, 'install', '--no-input'], {
+    await runInteractiveInstall({
       cwd,
-      encoding: 'utf8',
-      timeout: CMD_TIMEOUT_MS,
-      maxBuffer: 5 * 1024 * 1024,
+      prompts: createInstallPrompts('hooks'),
     })
 
     expect(existsSync(join(cwd, 'intent.lock'))).toBe(true)
     expect(existsSync(join(cwd, '.claude', 'settings.json'))).toBe(true)
   }, 120_000)
 
-  it('rejects symlink delivery for a zip-backed dependency before writing', () => {
+  it('rejects symlink delivery for a zip-backed dependency before writing', async () => {
     const cwd = scaffoldBerryProject()
-    configureInstall(cwd, 'symlink')
 
-    const result = spawnSync('node', [cliPath, 'install', '--no-input'], {
+    const error = await runInteractiveInstall({
       cwd,
-      encoding: 'utf8',
-      timeout: CMD_TIMEOUT_MS,
-      maxBuffer: 5 * 1024 * 1024,
-    })
-    const output = `${result.stdout}\n${result.stderr}`
+      prompts: createInstallPrompts('symlink'),
+    }).then(
+      () => null,
+      (reason: unknown) => reason,
+    )
+    const output = error instanceof Error ? error.message : String(error)
 
-    expect(result.status).not.toBe(0)
+    expect(error).toBeInstanceOf(Error)
     expect(output).toMatch(/archive-backed|PnP/i)
     expect(output).toMatch(/cannot use symlink delivery.*use hooks/i)
     expect(output).not.toContain('ENOTDIR')

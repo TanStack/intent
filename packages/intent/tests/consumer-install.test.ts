@@ -617,9 +617,49 @@ describe('consumer install', () => {
     expect(readInstallState(root)).toEqual({ status: 'missing' })
   })
 
-  it('installs selected GitHub hooks at user scope after confirmation', async () => {
+  it('repairs missing project hooks without re-interviewing or rewriting install state', async () => {
+    const root = createProject()
+    const discovered = scanForIntents(root, { scope: 'local' }).packages
+    await runConsumerInstall({
+      discovered,
+      prompts: createPrompts({
+        selectMethod: () => Promise.resolve('hooks'),
+        selectTargets: () => Promise.resolve(['claude', 'codex']),
+      }),
+      root,
+    })
+    const claudeConfig = join(root, '.claude', 'settings.json')
+    const codexConfig = join(root, '.codex', 'hooks.json')
+    const packageBefore = readFileSync(join(root, 'package.json'))
+    const lockBefore = readFileSync(join(root, 'intent.lock'))
+    const codexBefore = readFileSync(codexConfig)
+    unlinkSync(claudeConfig)
+    const complete = vi.fn()
+
+    await runConsumerInstall({
+      discovered,
+      prompts: createPrompts({
+        complete,
+        selectMethod: () => Promise.reject(new Error('method must not run')),
+        selectTargets: () => Promise.reject(new Error('targets must not run')),
+        selectSkills: () => Promise.reject(new Error('skills must not run')),
+      }),
+      root,
+    })
+
+    expect(existsSync(claudeConfig)).toBe(true)
+    expect(readFileSync(codexConfig)).toEqual(codexBefore)
+    expect(readFileSync(join(root, 'package.json'))).toEqual(packageBefore)
+    expect(readFileSync(join(root, 'intent.lock'))).toEqual(lockBefore)
+    expect(complete).toHaveBeenCalledWith(
+      'Project is up to date. Repaired configured hooks.',
+    )
+  })
+
+  it('installs and repairs GitHub hooks at user scope after confirmation', async () => {
     const root = createProject()
     const copilotHome = join(root, 'copilot-home')
+    const hookConfig = join(copilotHome, 'hooks', 'hooks.json')
     const previousCopilotHome = process.env.COPILOT_HOME
     const confirmUserScopeHooks = vi.fn(() => Promise.resolve(true))
     let output = ''
@@ -639,6 +679,25 @@ describe('consumer install', () => {
         prompts,
         root,
       })
+      expect(confirmUserScopeHooks).toHaveBeenCalledOnce()
+      expect(existsSync(hookConfig)).toBe(true)
+      expect(output).toContain('Installed hook agents: copilot.')
+      unlinkSync(hookConfig)
+
+      await runConsumerInstall({
+        discovered: scanForIntents(root, { scope: 'local' }).packages,
+        prompts: createPrompts({
+          complete(message) {
+            output = message
+          },
+          confirmUserScopeHooks,
+          selectMethod: () => Promise.reject(new Error('method must not run')),
+          selectTargets: () =>
+            Promise.reject(new Error('targets must not run')),
+          selectSkills: () => Promise.reject(new Error('skills must not run')),
+        }),
+        root,
+      })
     } finally {
       if (previousCopilotHome === undefined) {
         delete process.env.COPILOT_HOME
@@ -647,9 +706,52 @@ describe('consumer install', () => {
       }
     }
 
-    expect(confirmUserScopeHooks).toHaveBeenCalledOnce()
-    expect(existsSync(join(copilotHome, 'hooks', 'hooks.json'))).toBe(true)
-    expect(output).toContain('Installed hook agents: copilot.')
+    expect(confirmUserScopeHooks).toHaveBeenCalledTimes(2)
+    expect(existsSync(hookConfig)).toBe(true)
+    expect(output).toBe('Project is up to date. Repaired configured hooks.')
+  })
+
+  it('reports declined GitHub hook repair without claiming a repair', async () => {
+    const root = createProject()
+    const copilotHome = join(root, 'copilot-home')
+    const hookConfig = join(copilotHome, 'hooks', 'hooks.json')
+    const previousCopilotHome = process.env.COPILOT_HOME
+    let output = ''
+    process.env.COPILOT_HOME = copilotHome
+
+    try {
+      await runConsumerInstall({
+        discovered: scanForIntents(root, { scope: 'local' }).packages,
+        prompts: createPrompts({
+          selectMethod: () => Promise.resolve('hooks'),
+          selectTargets: () => Promise.resolve(['github']),
+        }),
+        root,
+      })
+      unlinkSync(hookConfig)
+
+      await runConsumerInstall({
+        discovered: scanForIntents(root, { scope: 'local' }).packages,
+        prompts: createPrompts({
+          complete(message) {
+            output = message
+          },
+          confirmUserScopeHooks: () => Promise.resolve(false),
+        }),
+        root,
+      })
+    } finally {
+      if (previousCopilotHome === undefined) {
+        delete process.env.COPILOT_HOME
+      } else {
+        process.env.COPILOT_HOME = previousCopilotHome
+      }
+    }
+
+    expect(existsSync(hookConfig)).toBe(false)
+    expect(output).toBe(
+      'Project is up to date. Copilot was skipped because home-directory access was declined.',
+    )
   })
 
   it('skips declined Copilot hooks while installing project hooks', async () => {

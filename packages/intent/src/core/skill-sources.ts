@@ -16,12 +16,7 @@ type SkillSource =
     ))
   | { raw: string; id: string; kind: 'git'; ref: string }
 
-/**
- * `absent` (key missing, v0 upgrade path) and `empty` (`[]`) are deliberately
- * distinct: absent is show-all, empty is deny-all.
- */
 export type SkillSourcesConfig =
-  | { mode: 'absent' }
   | { mode: 'empty' }
   | { mode: 'allow-all' }
   | { mode: 'explicit'; sources: Array<SkillSource> }
@@ -54,7 +49,7 @@ export function isSkillSourcesParseError(
  */
 export function parseSkillSources(value: unknown): SkillSourcesConfig {
   if (value === undefined || value === null) {
-    return { mode: 'absent' }
+    return { mode: 'empty' }
   }
 
   if (!Array.isArray(value)) {

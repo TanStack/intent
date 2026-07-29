@@ -135,21 +135,19 @@ export function listIntentSkills(
         type: skill.type,
         framework: skill.framework,
         why: options.why
-          ? config.mode === 'absent'
-            ? 'Available because intent.skills is not set'
-            : config.mode === 'allow-all'
-              ? 'Allowed because intent.skills allows all sources'
-              : (() => {
-                  const decision = sourcePolicy.explainPermitsSkill(
-                    pkg.name,
-                    skill.name,
-                    pkg.kind,
-                    pkg.skills,
-                  )
-                  return decision.source
-                    ? `Allowed by intent.skills[${JSON.stringify(decision.source.raw)}]`
-                    : undefined
-                })()
+          ? config.mode === 'allow-all'
+            ? 'Allowed because intent.skills allows all sources'
+            : (() => {
+                const decision = sourcePolicy.explainPermitsSkill(
+                  pkg.name,
+                  skill.name,
+                  pkg.kind,
+                  pkg.skills,
+                )
+                return decision.source
+                  ? `Allowed by intent.skills[${JSON.stringify(decision.source.raw)}]`
+                  : undefined
+              })()
           : undefined,
       }
     }),

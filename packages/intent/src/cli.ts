@@ -7,7 +7,6 @@ import { fail, isCliFailure } from './shared/cli-error.js'
 import type { CAC } from 'cac'
 import type { HookAgent } from './catalog.js'
 import type { ExcludeCommandOptions } from './commands/exclude.js'
-import type { HooksInstallCommandOptions } from './commands/hooks/command.js'
 import type { CatalogCommandOptions } from './commands/catalog.js'
 import type { InstallCommandOptions } from './commands/install/command.js'
 import type { ListCommandOptions } from './commands/list.js'
@@ -140,26 +139,18 @@ function createCli(): CAC {
   cli
     .command('install', 'Configure trusted skill sources and delivery targets')
     .usage(
-      'install [--map] [--dry-run] [--no-input] [--global] [--global-only] [--no-notices]',
+      'install [--map] [--dry-run] [--global] [--global-only] [--no-notices]',
     )
     .option('--map', 'Write explicit skill-to-task mappings')
     .option('--dry-run', 'Preview installation without writing files')
-    .option(
-      '--no-input',
-      'Install or synchronize from package.json without prompts',
-    )
     .option('--global', 'With --map, include global packages')
     .option('--global-only', 'With --map, use only global packages')
     .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('install')
     .example('install --map')
     .example('install --dry-run')
-    .example('install --no-input')
     .example('install --map --global')
     .action(async (options: InstallCommandOptions) => {
-      if (options.map && options.input === false) {
-        fail('Cannot combine --map and --no-input.')
-      }
       const [{ scanIntentsOrFail }, { runInstallCommand }] = await Promise.all([
         import('./commands/support.js'),
         import('./commands/install/command.js'),
@@ -180,48 +171,27 @@ function createCli(): CAC {
     })
 
   cli
-    .command(
-      'hooks [action]',
-      'Manage agent hooks that surface available skills',
-    )
-    .usage(
-      'hooks <install|run> [--scope project|user] [--agents copilot,claude,codex|all] [--agent copilot|claude|codex]',
-    )
-    .option('--scope <scope>', 'Hook install scope: project or user')
-    .option('--agents <agents>', 'Hook agents: copilot,claude,codex, or all')
+    .command('hooks [action]', 'Run agent hooks that surface available skills')
+    .usage('hooks run --agent copilot|claude|codex')
     .option('--agent <agent>', 'Hook agent: copilot, claude, or codex')
-    .example('hooks install')
-    .example('hooks install --scope user --agents copilot')
     .example('hooks run --agent copilot')
-    .action(
-      async (
-        action: string | undefined,
-        options: HooksInstallCommandOptions & { agent?: string },
-      ) => {
-        if (action === 'install') {
-          const { runHooksInstallCommand } =
-            await import('./commands/hooks/command.js')
-          runHooksInstallCommand(options)
-          return
+    .action(async (action: string | undefined, options: { agent?: string }) => {
+      if (action === 'run') {
+        if (!options.agent) {
+          fail('Missing hook agent. Expected copilot, claude, or codex.')
         }
-
-        if (action === 'run') {
-          if (!options.agent) {
-            fail('Missing hook agent. Expected copilot, claude, or codex.')
-          }
-          if (!['copilot', 'claude', 'codex'].includes(options.agent)) {
-            fail(
-              `Unknown hook agent: ${options.agent}. Expected copilot, claude, or codex.`,
-            )
-          }
-          const { runSessionCatalogueHook } = await import('./catalog.js')
-          await runSessionCatalogueHook({ agent: options.agent as HookAgent })
-          return
+        if (!['copilot', 'claude', 'codex'].includes(options.agent)) {
+          fail(
+            `Unknown hook agent: ${options.agent}. Expected copilot, claude, or codex.`,
+          )
         }
+        const { runSessionCatalogueHook } = await import('./catalog.js')
+        await runSessionCatalogueHook({ agent: options.agent as HookAgent })
+        return
+      }
 
-        fail('Unknown hooks action: expected install or run.')
-      },
-    )
+      fail('Unknown hooks action: expected run.')
+    })
 
   cli
     .command('scaffold', 'Print maintainer scaffold prompt')

@@ -17,6 +17,7 @@ import {
 } from '../src/core/index.js'
 import { computeSkillContentHash } from '../src/core/lockfile/hash.js'
 import { writeIntentLockfile } from '../src/core/lockfile/lockfile.js'
+import { EMPTY_NOTE } from '../src/core/source-policy.js'
 
 const realTmpdir = realpathSync(tmpdir())
 
@@ -85,6 +86,11 @@ let originalCwd: string
 
 beforeEach(() => {
   root = realpathSync(mkdtempSync(join(realTmpdir, 'intent-core-test-')))
+  writeJson(join(root, 'package.json'), {
+    name: 'test-app',
+    private: true,
+    intent: { skills: ['*'] },
+  })
   originalCwd = process.cwd()
 })
 
@@ -182,7 +188,10 @@ describe('listIntentSkills', () => {
     writeJson(join(root, 'package.json'), {
       name: 'test-app',
       private: true,
-      intent: { exclude: ['@tanstack/*devtools*'] },
+      intent: {
+        skills: ['*'],
+        exclude: ['@tanstack/*devtools*'],
+      },
     })
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',
@@ -336,7 +345,11 @@ describe('listIntentSkills', () => {
     expect(result.packages[0]?.skillCount).toBe(1)
   })
 
-  it('warns about migration when intent.skills is absent', () => {
+  it('denies all discovered skills when intent.skills is missing', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+    })
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',
       version: '5.0.0',
@@ -346,10 +359,9 @@ describe('listIntentSkills', () => {
 
     const result = listIntentSkills({ cwd: root })
 
-    expect(result.packages.map((pkg) => pkg.name)).toEqual(['@tanstack/query'])
-    expect(result.notices).toEqual([
-      'intent.skills is not set — all discovered skill sources are surfaced. A future version will require an explicit intent.skills allowlist; add one to opt in to specific sources.',
-    ])
+    expect(result.packages).toEqual([])
+    expect(result.skills).toEqual([])
+    expect(result.notices).toEqual([EMPTY_NOTE])
   })
 
   it('permits nothing and notes an empty allowlist', () => {
@@ -683,6 +695,7 @@ describe('loadIntentSkill', () => {
       name: 'test-monorepo',
       private: true,
       workspaces: ['packages/*'],
+      intent: { skills: ['*'] },
     })
     writeJson(join(appDir, 'package.json'), {
       name: '@test/app',
@@ -719,6 +732,7 @@ describe('loadIntentSkill', () => {
       name: 'test-monorepo',
       private: true,
       workspaces: ['packages/*'],
+      intent: { skills: ['*'] },
     })
     writeJson(join(appDir, 'package.json'), { name: '@test/app' })
     writeJson(join(routerDir, 'package.json'), {
@@ -765,6 +779,7 @@ describe('loadIntentSkill', () => {
       name: 'test-monorepo',
       private: true,
       workspaces: ['packages/*'],
+      intent: { skills: ['*'] },
     })
     writeJson(join(appDir, 'package.json'), {
       name: '@test/app',
@@ -904,6 +919,7 @@ describe('loadIntentSkill', () => {
       name: 'test-monorepo',
       private: true,
       workspaces: ['packages/*'],
+      intent: { skills: ['*'] },
     })
     writeJson(join(appDir, 'package.json'), {
       name: '@test/app',

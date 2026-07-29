@@ -16,15 +16,15 @@ function expectParseError(value: unknown): SkillSourcesParseError {
 }
 
 describe('parseSkillSources — list-level modes', () => {
-  it('treats an absent key (undefined) as the migration show-all mode', () => {
-    expect(parseSkillSources(undefined)).toEqual({ mode: 'absent' })
+  it('treats an undefined value as deny-all', () => {
+    expect(parseSkillSources(undefined)).toEqual({ mode: 'empty' })
   })
 
-  it('treats null as absent', () => {
-    expect(parseSkillSources(null)).toEqual({ mode: 'absent' })
+  it('treats null as deny-all', () => {
+    expect(parseSkillSources(null)).toEqual({ mode: 'empty' })
   })
 
-  it('treats an empty array as deny-all (distinct from absent)', () => {
+  it('treats an empty array as deny-all', () => {
     expect(parseSkillSources([])).toEqual({ mode: 'empty' })
   })
 

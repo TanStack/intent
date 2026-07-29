@@ -21,11 +21,6 @@ export type SkillSelection =
   | { mode: 'all-found' }
   | { mode: 'scope'; scope: string }
   | { mode: 'individual'; enabled: Array<string> }
-  | {
-      mode: 'configured-policy'
-      skills: Array<string>
-      exclude: Array<string>
-    }
 
 export interface SkillSelectionPlan {
   skills: Array<string>
@@ -211,39 +206,6 @@ export function buildSkillSelectionPlan(
 ): SkillSelectionPlan {
   const packages = sortedPackages(discovered)
   assertUniqueDiscovery(packages)
-  if (selection.mode === 'configured-policy') {
-    const sources = parseSkillSources(selection.skills)
-    const sourcePolicy = compileSkillSourcePolicy(sources)
-    const excludeMatchers = compileExcludePatterns(selection.exclude)
-    return {
-      skills: selection.skills,
-      exclude: selection.exclude,
-      packages: packages.map((pkg) => {
-        const packageSkills = sortedSkills(pkg)
-        return {
-          name: pkg.name,
-          kind: pkg.kind,
-          skills: packageSkills.map((skill) => {
-            const id = skillSelectionId(pkg, skill)
-            const status = classifySkillPolicy(
-              pkg,
-              skill.name,
-              packageSkills,
-              sources,
-              sourcePolicy,
-              excludeMatchers,
-            )
-            if (status === 'pending') {
-              throw new Error(
-                `Configured policy leaves "${id}" pending. Add it to intent.skills or intent.exclude before non-interactive install.`,
-              )
-            }
-            return { id, status }
-          }),
-        }
-      }),
-    }
-  }
   const selected = new Set<string>()
   if (selection.mode === 'scope') validateScope(selection.scope)
   if (selection.mode === 'individual') {

@@ -36,7 +36,7 @@ import type {
   IntentInstallPreferences,
 } from './config.js'
 import type { SkillSelection } from './plan.js'
-import type { HookAgent } from '../../hooks/types.js'
+import type { HookAgent, HookInstallScope } from '../../hooks/types.js'
 import type { ReadFs } from '../../shared/utils.js'
 import type { IntentPackage } from '../../shared/types.js'
 
@@ -68,11 +68,9 @@ export interface InstallerPrompter {
 export interface RunConsumerInstallOptions {
   discovered: ReadonlyArray<IntentPackage>
   dryRun?: boolean
-  existingLockReview?: 'fail'
   prompts: InstallerPrompter
   readFs?: ReadFs
   root: string
-  selection?: SkillSelection
 }
 
 function hookAgentForTarget(target: InstallTarget): HookAgent {
@@ -93,14 +91,47 @@ function countSkills(entries: ReadonlyArray<{ skillCount: number }>): number {
   return entries.reduce((count, entry) => count + entry.skillCount, 0)
 }
 
+async function confirmUserScopeHooks(
+  targets: ReadonlyArray<InstallTarget>,
+  prompts: InstallerPrompter,
+): Promise<boolean | null> {
+  if (!targets.includes('github')) return false
+  return prompts.confirmUserScopeHooks()
+}
+
+function installHookAgents(
+  root: string,
+  agents: string,
+  scope: HookInstallScope,
+): Array<HookAgent> {
+  return runInstallHooks({ agents, root, scope })
+    .filter((result) => result.status !== 'skipped')
+    .map((result) => result.agent)
+}
+
+function installConfiguredHooks(
+  root: string,
+  targets: ReadonlyArray<InstallTarget>,
+  userScopeHooksAccepted: boolean,
+): Array<HookAgent> {
+  const hookAgents = targets.map(hookAgentForTarget)
+  const projectAgents = hookAgents.filter((agent) => agent !== 'copilot')
+  const installedAgents =
+    projectAgents.length > 0
+      ? installHookAgents(root, projectAgents.join(','), 'project')
+      : []
+  if (userScopeHooksAccepted) {
+    installedAgents.push(...installHookAgents(root, 'copilot', 'user'))
+  }
+  return installedAgents
+}
+
 export async function runConsumerInstall({
   discovered,
   dryRun = false,
-  existingLockReview,
   prompts,
   readFs = nodeReadFs,
   root,
-  selection: fixedSelection,
 }: RunConsumerInstallOptions): Promise<void> {
   const packageJsonPath = join(root, 'package.json')
   const packageJson = readFileSync(packageJsonPath, 'utf8')
@@ -121,22 +152,31 @@ export async function runConsumerInstall({
     const changed = countSkills(summary.changed)
     const hasChanges =
       newDependencies > 0 || newSkills > 0 || changed > 0 || summary.removed > 0
-    if (
-      !hasChanges &&
-      existingLock.status === 'found' &&
-      existingLockReview !== 'fail'
-    ) {
-      prompts.complete('Project is up to date.')
-      return
-    }
-    if (
-      hasChanges &&
-      existingLock.status === 'found' &&
-      existingLockReview === 'fail'
-    ) {
-      throw new Error(
-        'Intent install requires review before automation can continue.',
+    if (!hasChanges && existingLock.status === 'found') {
+      if (install.method === 'symlink') {
+        prompts.complete('Project is up to date.')
+        return
+      }
+      const userScopeHooksAccepted = await confirmUserScopeHooks(
+        install.targets,
+        prompts,
       )
+      if (userScopeHooksAccepted === null) return
+      const installedAgents = installConfiguredHooks(
+        root,
+        install.targets,
+        userScopeHooksAccepted,
+      )
+      const repairedHooks =
+        installedAgents.length > 0 ? ' Repaired configured hooks.' : ''
+      const skippedCopilot =
+        install.targets.includes('github') && !userScopeHooksAccepted
+          ? ' Copilot was skipped because home-directory access was declined.'
+          : ''
+      prompts.complete(
+        `Project is up to date.${repairedHooks}${skippedCopilot}`,
+      )
+      return
     }
     console.log(
       `Install changes: ${newDependencies} new ${newDependencies === 1 ? 'dependency' : 'dependencies'}, ${newSkills} new ${newSkills === 1 ? 'skill' : 'skills'}, ${changed} changed, ${summary.removed} removed.`,
@@ -153,14 +193,11 @@ export async function runConsumerInstall({
       const symlinkAccepted = await prompts.confirmSymlink()
       if (!symlinkAccepted) return
     }
-    if (
-      fixedSelection === undefined &&
-      discovered.every((pkg) => pkg.skills.length === 0)
-    ) {
+    if (discovered.every((pkg) => pkg.skills.length === 0)) {
       prompts.complete('No intent-enabled skills found.')
       return
     }
-    const selection = fixedSelection ?? (await prompts.selectSkills(discovered))
+    const selection = await prompts.selectSkills(discovered)
     if (!selection) return
     const plan = buildSkillSelectionPlan(discovered, selection)
     const installation = {
@@ -246,12 +283,9 @@ export async function runConsumerInstall({
       return
     }
 
-    let userScopeHooksAccepted = false
-    if (method === 'hooks' && targets.includes('github')) {
-      const accepted = await prompts.confirmUserScopeHooks()
-      if (accepted === null) return
-      userScopeHooksAccepted = accepted
-    }
+    const userScopeHooksAccepted =
+      method === 'hooks' ? await confirmUserScopeHooks(targets, prompts) : false
+    if (userScopeHooksAccepted === null) return
 
     writeTextFileAtomic(packageJsonPath, updatedPackageJson)
     writeIntentLockfile(join(root, 'intent.lock'), lockfile)
@@ -268,25 +302,11 @@ export async function runConsumerInstall({
       return
     }
 
-    const hookAgents = targets.map(hookAgentForTarget)
-    const projectAgents = hookAgents.filter((agent) => agent !== 'copilot')
-    const installedAgents =
-      projectAgents.length > 0
-        ? runInstallHooks({
-            agents: projectAgents.join(','),
-            root,
-            scope: 'project',
-          })
-            .filter((result) => result.status !== 'skipped')
-            .map((result) => result.agent)
-        : []
-    if (userScopeHooksAccepted) {
-      installedAgents.push(
-        ...runInstallHooks({ agents: 'copilot', root, scope: 'user' })
-          .filter((result) => result.status !== 'skipped')
-          .map((result) => result.agent),
-      )
-    }
+    const installedAgents = installConfiguredHooks(
+      root,
+      targets,
+      userScopeHooksAccepted,
+    )
     const skippedCopilot =
       targets.includes('github') && !userScopeHooksAccepted
         ? ' Copilot was skipped because home-directory access was declined.'

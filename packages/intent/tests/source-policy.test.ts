@@ -17,7 +17,6 @@ import {
 import {
   ALLOW_ALL_NOTICE,
   EMPTY_NOTE,
-  MIGRATION_NOTICE,
   applySourcePolicy,
   checkLoadAllowed,
   compileSkillSourcePolicy,
@@ -289,7 +288,7 @@ describe('compiled policy explanations', () => {
   })
 
   it.each([
-    [undefined, true],
+    [undefined, false],
     [['*'], true],
     [[], false],
   ])(
@@ -484,13 +483,13 @@ describe('applySourcePolicy — permit-all and empty modes', () => {
     expect(result.notices).toEqual([ALLOW_ALL_NOTICE])
   })
 
-  it('permits every discovered source under absent config with a migration warning', () => {
+  it('denies every discovered source under undefined config with the empty note', () => {
     const result = applySourcePolicy(
       { packages: [pkg('@scope/a', ['x'])] },
       { config: config(undefined), excludeMatchers: [] },
     )
-    expect(names(result.packages)).toEqual(['@scope/a'])
-    expect(result.notices).toEqual([MIGRATION_NOTICE])
+    expect(names(result.packages)).toEqual([])
+    expect(result.notices).toEqual([EMPTY_NOTE])
   })
 
   it('permits nothing under empty config with a quiet info note', () => {
@@ -523,7 +522,7 @@ describe('applySourcePolicy — exclude interaction', () => {
     expect(names(result.packages)).toEqual(['@scope/a'])
   })
 
-  it('subtracts an excluded package on top of absent (migration) mode', () => {
+  it('denies all packages under undefined config even when excludes are present', () => {
     const result = applySourcePolicy(
       { packages: [pkg('@scope/a', ['x']), pkg('@scope/bad', ['y'])] },
       {
@@ -531,8 +530,8 @@ describe('applySourcePolicy — exclude interaction', () => {
         excludeMatchers: compileExcludePatterns(['@scope/bad']),
       },
     )
-    expect(names(result.packages)).toEqual(['@scope/a'])
-    expect(result.notices).toEqual([MIGRATION_NOTICE])
+    expect(names(result.packages)).toEqual([])
+    expect(result.notices).toEqual([EMPTY_NOTE])
   })
 
   it('treats an unlisted+excluded package as excluded with no unlisted warning', () => {
@@ -611,9 +610,9 @@ describe('readSkillSourcesConfig', () => {
     writeFileSync(filePath, JSON.stringify(data, null, 2))
   }
 
-  it('returns absent when no package.json declares intent.skills', () => {
+  it('returns empty when no package.json declares intent.skills', () => {
     writeJson(join(root, 'package.json'), { name: 'app', private: true })
-    expect(readSkillSourcesConfig(root)).toEqual({ mode: 'absent' })
+    expect(readSkillSourcesConfig(root)).toEqual({ mode: 'empty' })
   })
 
   it('returns empty when intent.skills is an empty array', () => {
@@ -664,7 +663,29 @@ describe('readSkillSourcesConfig', () => {
     })
   })
 
-  it('ignores a null intent.skills so it cannot shadow a stricter parent', () => {
+  it('inherits from the parent when the nearer package omits intent.skills', () => {
+    const appDir = join(root, 'packages', 'app')
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - packages/*\n',
+    )
+    writeJson(join(root, 'package.json'), {
+      name: 'monorepo',
+      private: true,
+      intent: { skills: ['@scope/root'] },
+    })
+    writeJson(join(appDir, 'package.json'), {
+      name: '@scope/app',
+      intent: { exclude: [] },
+    })
+
+    expect(readSkillSourcesConfig(appDir)).toEqual({
+      mode: 'explicit',
+      sources: [{ raw: '@scope/root', id: '@scope/root', kind: 'npm' }],
+    })
+  })
+
+  it('treats null intent.skills as deny-all without inheriting from the parent', () => {
     const appDir = join(root, 'packages', 'app')
     writeFileSync(
       join(root, 'pnpm-workspace.yaml'),
@@ -680,9 +701,6 @@ describe('readSkillSourcesConfig', () => {
       intent: { skills: null },
     })
 
-    expect(readSkillSourcesConfig(appDir)).toEqual({
-      mode: 'explicit',
-      sources: [{ raw: '@scope/root', id: '@scope/root', kind: 'npm' }],
-    })
+    expect(readSkillSourcesConfig(appDir)).toEqual({ mode: 'empty' })
   })
 })
