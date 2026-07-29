@@ -1,5 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { isPathWithin } from '../shared/utils.js'
 import {
   findWorkspaceRoot,
   readWorkspacePatterns,
@@ -86,7 +87,7 @@ function resolveTargetSkillsDir(
 
   const packageSkillsDir = join(packageRoot, 'skills')
 
-  if (isWithinOrEqual(targetPath, packageSkillsDir)) {
+  if (isPathWithin(packageSkillsDir, targetPath)) {
     return packageSkillsDir
   }
 
@@ -95,9 +96,4 @@ function resolveTargetSkillsDir(
   }
 
   return null
-}
-
-function isWithinOrEqual(path: string, parentDir: string): boolean {
-  const rel = relative(parentDir, path)
-  return rel === '' || (!rel.startsWith('..') && !rel.startsWith('/'))
 }

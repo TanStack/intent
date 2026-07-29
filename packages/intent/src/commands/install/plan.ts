@@ -5,6 +5,8 @@ import {
 } from '../../core/excludes.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
 import { compileSkillSourcePolicy } from '../../core/source-policy.js'
+import { sourceIdentityKey } from '../../core/types.js'
+import { classifyLockfileHash } from '../../core/lockfile/lockfile.js'
 import type {
   IntentLockfileSource,
   ReadIntentLockfileResult,
@@ -146,7 +148,7 @@ function sortedSkills(pkg: IntentPackage): Array<SkillEntry> {
 function assertUniqueDiscovery(packages: ReadonlyArray<IntentPackage>): void {
   const sources = new Set<string>()
   for (const pkg of packages) {
-    const source = `${pkg.kind}\0${pkg.name}`
+    const source = sourceIdentityKey({ kind: pkg.kind, id: pkg.name })
     if (sources.has(source)) {
       throw new Error(`Duplicate discovered source "${sourceEntry(pkg)}".`)
     }
@@ -327,10 +329,6 @@ export function buildSkillSelectionPlan(
   }
 }
 
-function sourceKey(source: Pick<IntentLockfileSource, 'kind' | 'id'>): string {
-  return `${source.kind}\0${source.id}`
-}
-
 function currentSkill(
   skill: SkillEntry,
   current: IntentLockfileSource | undefined,
@@ -349,16 +347,19 @@ export function buildInstallDeltaInventory(
   const sourcePolicy = compileSkillSourcePolicy(sources)
   const excludes = compileExcludePatterns(config.exclude)
   const currentByKey = new Map(
-    currentSources.map((source) => [sourceKey(source), source]),
+    currentSources.map((source) => [sourceIdentityKey(source), source]),
   )
   const lockedByKey = new Map(
     lockResult.status === 'found'
-      ? lockResult.lockfile.sources.map((source) => [sourceKey(source), source])
+      ? lockResult.lockfile.sources.map((source) => [
+          sourceIdentityKey(source),
+          source,
+        ])
       : [],
   )
   const seen = new Set<string>()
   const packages = sortedPackages(discovered).map((pkg) => {
-    const key = sourceKey({ kind: pkg.kind, id: pkg.name })
+    const key = sourceIdentityKey({ kind: pkg.kind, id: pkg.name })
     seen.add(key)
     const current = currentByKey.get(key)
     const locked = lockedByKey.get(key)
@@ -381,12 +382,10 @@ export function buildInstallDeltaInventory(
         const lockedEntry = currentEntry
           ? locked?.skills.find((entry) => entry.path === currentEntry.path)
           : undefined
-        const lock: InventoryLockStatus =
-          lockedEntry === undefined || currentEntry === undefined
-            ? 'new'
-            : lockedEntry.contentHash === currentEntry.contentHash
-              ? 'accepted'
-              : 'changed'
+        const lock: InventoryLockStatus = classifyLockfileHash(
+          currentEntry?.contentHash,
+          lockedEntry?.contentHash,
+        )
         return {
           id: skillSelectionId(pkg, skill),
           policy,
@@ -402,8 +401,8 @@ export function buildInstallDeltaInventory(
   }> = []
   if (lockResult.status === 'found') {
     for (const source of lockResult.lockfile.sources) {
-      const current = currentByKey.get(sourceKey(source))
-      if (!seen.has(sourceKey(source)) || !current) {
+      const current = currentByKey.get(sourceIdentityKey(source))
+      if (!seen.has(sourceIdentityKey(source)) || !current) {
         removed.push({ kind: source.kind, id: source.id, path: null })
         continue
       }
@@ -418,8 +417,8 @@ export function buildInstallDeltaInventory(
     packages,
     removed: removed.sort((left, right) => {
       const bySource = compareStrings(
-        `${left.kind}\0${left.id}`,
-        `${right.kind}\0${right.id}`,
+        sourceIdentityKey(left),
+        sourceIdentityKey(right),
       )
       return bySource === 0
         ? compareStrings(left.path ?? '', right.path ?? '')

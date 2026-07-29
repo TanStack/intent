@@ -1,7 +1,7 @@
 import { isUtf8 } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { isAbsolute, join, relative, resolve } from 'node:path'
-import { nodeReadFs } from '../../shared/utils.js'
+import { isAbsolute, join, resolve } from 'node:path'
+import { isPathWithin, nodeReadFs } from '../../shared/utils.js'
 import type { Dirent } from 'node:fs'
 import type { ReadFs } from '../../shared/utils.js'
 
@@ -29,11 +29,6 @@ function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }
 
-function isWithin(parent: string, candidate: string): boolean {
-  const path = relative(parent, candidate)
-  return path === '' || (!path.startsWith('..') && !isAbsolute(path))
-}
-
 function normalizeContent(content: Buffer): Buffer {
   if (content.includes(0) || !isUtf8(content)) return content
   return Buffer.from(content.toString('utf8').replace(/\r\n|\r/g, '\n'), 'utf8')
@@ -53,7 +48,7 @@ function resolveInPackage(
       `Failed to resolve ${label}: ${error instanceof Error ? error.message : String(error)}`,
     )
   }
-  if (!isWithin(packageRoot, resolved)) {
+  if (!isPathWithin(packageRoot, resolved)) {
     throw new Error(`${label} escapes package root through a symlink.`)
   }
   return resolved

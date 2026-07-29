@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildCurrentLockfileSources } from '../src/core/lockfile/lockfile-state.js'
-import { serializeIntentLockfile } from '../src/core/lockfile/lockfile.js'
+import { writeIntentLockfile } from '../src/core/lockfile/lockfile.js'
 import { scanForIntents } from '../src/discovery/scanner.js'
 import { packageVersionToPin } from '../src/shared/command-runner.js'
 import { isMainModule, main } from '../src/cli.js'
@@ -31,6 +31,16 @@ const realTmpdir = realpathSync(tmpdir())
 function writeJson(filePath: string, data: unknown): void {
   mkdirSync(dirname(filePath), { recursive: true })
   writeFileSync(filePath, JSON.stringify(data, null, 2))
+}
+
+function writeIntentLock(
+  root: string,
+  packages: Parameters<typeof buildCurrentLockfileSources>[0] = [],
+): void {
+  writeIntentLockfile(join(root, 'intent.lock'), {
+    lockfileVersion: 1,
+    sources: buildCurrentLockfileSources(packages),
+  })
 }
 
 function writeSkillMd(dir: string, frontmatter: Record<string, unknown>): void {
@@ -314,13 +324,7 @@ describe('cli commands', () => {
     })
     process.chdir(root)
     const discovered = scanForIntents(root, { scope: 'local' }).packages
-    writeFileSync(
-      join(root, 'intent.lock'),
-      serializeIntentLockfile({
-        lockfileVersion: 1,
-        sources: buildCurrentLockfileSources(discovered),
-      }),
-    )
+    writeIntentLock(root, discovered)
 
     expect(await main(['sync'])).toBe(0)
     const linkPath = join(root, '.github', 'skills', 'npm-verified-core')
@@ -416,13 +420,7 @@ describe('cli commands', () => {
       description: 'Dry skill',
     })
     const dryDiscovered = scanForIntents(dryRoot, { scope: 'local' }).packages
-    writeFileSync(
-      join(dryRoot, 'intent.lock'),
-      serializeIntentLockfile({
-        lockfileVersion: 1,
-        sources: buildCurrentLockfileSources(dryDiscovered),
-      }),
-    )
+    writeIntentLock(dryRoot, dryDiscovered)
     process.chdir(dryRoot)
     expect(await main(['sync', '--dry-run', '--json'])).toBe(0)
     expect(
@@ -766,13 +764,7 @@ describe('cli commands', () => {
       description: 'Verified skill',
     })
     const discovered = scanForIntents(root, { scope: 'local' }).packages
-    writeFileSync(
-      join(root, 'intent.lock'),
-      serializeIntentLockfile({
-        lockfileVersion: 1,
-        sources: buildCurrentLockfileSources(discovered),
-      }),
-    )
+    writeIntentLock(root, discovered)
     const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
     const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
     writeFileSync(
@@ -823,13 +815,7 @@ describe('cli commands', () => {
       description: 'Verified skill',
     })
     const discovered = scanForIntents(root, { scope: 'local' }).packages
-    writeFileSync(
-      join(root, 'intent.lock'),
-      serializeIntentLockfile({
-        lockfileVersion: 1,
-        sources: buildCurrentLockfileSources(discovered),
-      }),
-    )
+    writeIntentLock(root, discovered)
     const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
     const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
     writeFileSync(
@@ -870,13 +856,7 @@ describe('cli commands', () => {
       description: 'Verified skill',
     })
     const discovered = scanForIntents(root, { scope: 'local' }).packages
-    writeFileSync(
-      join(root, 'intent.lock'),
-      serializeIntentLockfile({
-        lockfileVersion: 1,
-        sources: buildCurrentLockfileSources(discovered),
-      }),
-    )
+    writeIntentLock(root, discovered)
     writeInstalledIntentPackage(root, {
       name: 'pending',
       version: '1.0.0',
@@ -1068,13 +1048,7 @@ describe('cli commands', () => {
       description: 'Verified skill',
     })
     const discovered = scanForIntents(root, { scope: 'local' }).packages
-    writeFileSync(
-      join(root, 'intent.lock'),
-      serializeIntentLockfile({
-        lockfileVersion: 1,
-        sources: buildCurrentLockfileSources(discovered),
-      }),
-    )
+    writeIntentLock(root, discovered)
     const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
     const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
     process.chdir(root)
@@ -1173,13 +1147,7 @@ describe('cli commands', () => {
       description: 'Verified skill',
     })
     const discovered = scanForIntents(root, { scope: 'local' }).packages
-    writeFileSync(
-      join(root, 'intent.lock'),
-      serializeIntentLockfile({
-        lockfileVersion: 1,
-        sources: buildCurrentLockfileSources(discovered),
-      }),
-    )
+    writeIntentLock(root, discovered)
     process.chdir(root)
 
     const exitCode = await main(['install', '--no-input'])
@@ -1205,10 +1173,7 @@ describe('cli commands', () => {
         install: { method: 'symlink', targets: ['agents'] },
       },
     })
-    writeFileSync(
-      join(root, 'intent.lock'),
-      serializeIntentLockfile({ lockfileVersion: 1, sources: [] }),
-    )
+    writeIntentLock(root)
     const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
     const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
     process.chdir(root)

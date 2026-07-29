@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import type { IntentPackage } from '../../packages/intent/src/shared/types.js'
 
 let builtCliMainPromise: Promise<
   (argv?: Array<string>) => Promise<number>
@@ -34,6 +35,22 @@ export type PackageOptions = {
   requires?: Array<string>
   useDerivedIntent?: boolean
   brokenIntent?: boolean
+}
+
+export function createRepresentativeIntentPackages(): Array<IntentPackage> {
+  return Array.from({ length: 20 }, (_, packageIndex) => ({
+    name: `@bench/package-${String(packageIndex).padStart(2, '0')}`,
+    version: '1.0.0',
+    kind: 'npm',
+    source: 'local',
+    packageRoot: `node_modules/@bench/package-${packageIndex}`,
+    intent: { version: 1, repo: 'bench/packages', docs: 'docs/' },
+    skills: Array.from({ length: 5 }, (_, skillIndex) => ({
+      name: `skill-${skillIndex}`,
+      path: `skills/skill-${skillIndex}/SKILL.md`,
+      description: `Skill ${skillIndex}`,
+    })),
+  }))
 }
 
 const noop = () => undefined

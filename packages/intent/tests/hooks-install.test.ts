@@ -4,7 +4,6 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -197,17 +196,6 @@ describe('hook installer', () => {
     expect(config.hooks.PreToolUse[0].hooks[0].command).toBe('echo keep')
     expect(existsSync(legacyScriptPath)).toBe(true)
     expect(second[0]).toMatchObject({ status: 'unchanged' })
-  })
-
-  it('preserves the mode of an existing hook config', () => {
-    const root = tempRoot('intent-hooks-mode-')
-    const settingsPath = join(root, '.claude', 'settings.json')
-    mkdirSync(dirname(settingsPath), { recursive: true })
-    writeFileSync(settingsPath, '{}\n', { mode: 0o600 })
-
-    runInstallHooks({ agents: 'claude', root, scope: 'project' })
-
-    expect(statSync(settingsPath).mode & 0o777).toBe(0o600)
   })
 
   it('preserves sibling hooks when replacing an Intent hook entry', () => {

@@ -8,7 +8,8 @@ import {
   symlinkSync,
   unlinkSync,
 } from 'node:fs'
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { dirname, relative, resolve } from 'node:path'
+import { isPathWithin } from '../../shared/utils.js'
 import type { InstallStateEntry, ReadInstallStateResult } from './state.js'
 import type { ReadFs } from '../../shared/utils.js'
 
@@ -68,16 +69,11 @@ function isLink(path: string): boolean {
   }
 }
 
-function isInside(path: string, parent: string): boolean {
-  const value = relative(parent, path)
-  return value === '' || (!value.startsWith('..') && !isAbsolute(value))
-}
-
 function hasContainedParent(path: string, root: string): boolean {
   try {
     const resolvedRoot = resolve(root)
     const resolvedParent = resolve(dirname(path))
-    if (!isInside(resolvedParent, resolvedRoot)) return false
+    if (!isPathWithin(resolvedRoot, resolvedParent)) return false
     const realRoot = realpathSync(resolvedRoot)
     let existingParent = resolvedParent
     for (;;) {
@@ -91,7 +87,7 @@ function hasContainedParent(path: string, root: string): boolean {
       if (parent === existingParent) return false
       existingParent = parent
     }
-    return isInside(realpathSync(existingParent), realRoot)
+    return isPathWithin(realRoot, realpathSync(existingParent))
   } catch {
     return false
   }
@@ -101,7 +97,7 @@ function sourceTarget(expected: ExpectedLink): string | null {
   try {
     const packageRoot = realpathSync(expected.packageRoot)
     const sourceDirectory = realpathSync(expected.sourceDirectory)
-    return isInside(sourceDirectory, packageRoot) ? sourceDirectory : null
+    return isPathWithin(packageRoot, sourceDirectory) ? sourceDirectory : null
   } catch {
     return null
   }

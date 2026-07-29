@@ -4,6 +4,7 @@ import { fail } from '../../shared/cli-error.js'
 import { compileExcludePatterns } from '../../core/excludes.js'
 import { createIntentFsCache } from '../../discovery/fs-cache.js'
 import { buildCurrentLockfileSources } from '../../core/lockfile/lockfile-state.js'
+import { sourceIdentityKey } from '../../core/types.js'
 import {
   readIntentLockfile,
   writeIntentLockfile,
@@ -22,6 +23,7 @@ import {
 } from '../install/config.js'
 import {
   buildSkillSelectionPlan,
+  skillSelectionId,
   summarizeInstallDeltaInventory,
 } from '../install/plan.js'
 import { updateIntentGitignore } from './gitignore.js'
@@ -173,10 +175,6 @@ function compareStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
-function sourceKey(source: Pick<IntentPackage, 'kind' | 'name'>): string {
-  return `${source.kind}\0${source.name}`
-}
-
 function sourceName(source: Pick<IntentPackage, 'kind' | 'name'>): string {
   return source.kind === 'workspace' ? `workspace:${source.name}` : source.name
 }
@@ -260,7 +258,7 @@ async function reviewNewDependencies({
   const pendingSelectionPlan = buildSkillSelectionPlan(packages, selection)
   const pendingSkillIds = new Set(
     packages.flatMap((pkg) =>
-      pkg.skills.map((skill) => `${sourceName(pkg)}#${skill.name}`),
+      pkg.skills.map((skill) => skillSelectionId(pkg, skill)),
     ),
   )
   const selectionPlan = buildSkillSelectionPlan(reviewedPackages, {
@@ -270,7 +268,7 @@ async function reviewNewDependencies({
         ...selection.enabled,
         ...reviewedPackages.flatMap((pkg) =>
           pkg.skills
-            .map((skill) => `${sourceName(pkg)}#${skill.name}`)
+            .map((skill) => skillSelectionId(pkg, skill))
             .filter((id) => !pendingSkillIds.has(id)),
         ),
       ]),
@@ -324,16 +322,21 @@ async function reviewNewDependencies({
   const selectedPathsBySource = new Map(
     packages.flatMap((pkg) => {
       const paths = pkg.skills
-        .filter((skill) =>
-          selectedPendingIds.has(`${sourceName(pkg)}#${skill.name}`),
-        )
+        .filter((skill) => selectedPendingIds.has(skillSelectionId(pkg, skill)))
         .map((skill) => `skills/${skill.name}`)
-      return paths.length > 0 ? [[sourceKey(pkg), new Set(paths)] as const] : []
+      return paths.length > 0
+        ? [
+            [
+              sourceIdentityKey({ kind: pkg.kind, id: pkg.name }),
+              new Set(paths),
+            ] as const,
+          ]
+        : []
     }),
   )
   const selectedCurrentSources = new Map(
     currentSources.flatMap((source) => {
-      const key = `${source.kind}\0${source.id}`
+      const key = sourceIdentityKey(source)
       const selectedPaths = selectedPathsBySource.get(key)
       if (!selectedPaths) return []
       return [
@@ -350,14 +353,14 @@ async function reviewNewDependencies({
     }),
   )
   const lockedKeys = new Set(
-    lock.lockfile.sources.map((source) => `${source.kind}\0${source.id}`),
+    lock.lockfile.sources.map((source) => sourceIdentityKey(source)),
   )
   const prospectiveLock = {
     lockfileVersion: 1 as const,
     sources: [
       ...lock.lockfile.sources.map((source) => {
         const selectedSource = selectedCurrentSources.get(
-          `${source.kind}\0${source.id}`,
+          sourceIdentityKey(source),
         )
         if (!selectedSource) return source
         const selectedPaths = new Set(
@@ -567,7 +570,7 @@ export async function runSyncCommand(
   if (interactiveReview) {
     const pendingSkills = new Map(
       inventory.packages.map((pkg) => [
-        `${pkg.kind}\0${pkg.name}`,
+        sourceIdentityKey({ kind: pkg.kind, id: pkg.name }),
         new Set(
           pkg.skills
             .filter((skill) => skill.policy === 'pending')
@@ -576,7 +579,9 @@ export async function runSyncCommand(
       ]),
     )
     const packages = discovered.flatMap((pkg) => {
-      const skills = pendingSkills.get(sourceKey(pkg))
+      const skills = pendingSkills.get(
+        sourceIdentityKey({ kind: pkg.kind, id: pkg.name }),
+      )
       if (!skills || skills.size === 0) return []
       return [
         {
@@ -585,15 +590,19 @@ export async function runSyncCommand(
         },
       ]
     })
-    const reviewedKeys = new Set(packages.map(sourceKey))
+    const reviewedKeys = new Set(
+      packages.map((pkg) =>
+        sourceIdentityKey({ kind: pkg.kind, id: pkg.name }),
+      ),
+    )
     const enabledSkills = new Map(
       policy.packages.map((pkg) => [
-        sourceKey(pkg),
+        sourceIdentityKey({ kind: pkg.kind, id: pkg.name }),
         new Set(pkg.skills.map((skill) => skill.name)),
       ]),
     )
     const reviewedPackages = discovered.flatMap((pkg) => {
-      const key = sourceKey(pkg)
+      const key = sourceIdentityKey({ kind: pkg.kind, id: pkg.name })
       if (!reviewedKeys.has(key)) return []
       const pending = pendingSkills.get(key)
       const enabled = enabledSkills.get(key)

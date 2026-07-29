@@ -1,4 +1,5 @@
 import { dirname, join, resolve } from 'node:path'
+import { sourceIdentityKey } from '../../core/types.js'
 import { buildInstallDeltaInventory } from '../install/plan.js'
 import {
   createSyncAliases,
@@ -54,15 +55,20 @@ export function buildSyncLinkPlan({
         })),
       ),
     ).map((entry) => [
-      `${entry.kind}\0${entry.id}\0${entry.skill}`,
+      `${sourceIdentityKey(entry)}\0${entry.skill}`,
       entry.alias,
     ]),
   )
   const sources = new Map(
-    discovered.map((pkg) => [`${pkg.kind}\0${pkg.name}`, pkg]),
+    discovered.map((pkg) => [
+      sourceIdentityKey({ kind: pkg.kind, id: pkg.name }),
+      pkg,
+    ]),
   )
   const accepted = inventory.packages.flatMap((pkg) => {
-    const source = sources.get(`${pkg.kind}\0${pkg.name}`)
+    const source = sources.get(
+      sourceIdentityKey({ kind: pkg.kind, id: pkg.name }),
+    )
     if (!source) return []
     return pkg.skills.flatMap((skill) => {
       if (skill.policy !== 'enabled' || skill.lock !== 'accepted') return []
@@ -78,7 +84,7 @@ export function buildSyncLinkPlan({
     config.install.targets,
   )
   const expected = accepted.flatMap(({ pkg, skill, source }) => {
-    const identity = `${pkg.kind}\0${pkg.name}\0${skill.name}`
+    const identity = `${sourceIdentityKey({ kind: pkg.kind, id: pkg.name })}\0${skill.name}`
     const alias = aliases.get(identity)
     if (!alias) throw new Error(`Missing sync alias for ${identity}.`)
     return targetDirectories.map((target) => ({

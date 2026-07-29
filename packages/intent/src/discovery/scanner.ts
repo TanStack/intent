@@ -4,9 +4,10 @@
 // to readable roots. Enforced by the `intent/static-discovery` ESLint rule.
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import {
   detectGlobalNodeModules,
+  isPathWithin,
   nodeReadFs,
   parseFrontmatter,
   readScalarField,
@@ -341,11 +342,6 @@ function getPackageShortName(packageName: string): string {
   return packageName.split('/').pop() ?? packageName
 }
 
-function isWithinOrEqual(path: string, parentDir: string): boolean {
-  const rel = relative(parentDir, path)
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
-}
-
 function resolveSkillNameHintPath(
   skillsDir: string,
   hint: string,
@@ -364,7 +360,7 @@ function resolveSkillNameHintPath(
 
   const resolvedSkillsDir = resolve(skillsDir)
   const childDir = resolve(resolvedSkillsDir, ...parts)
-  if (!isWithinOrEqual(childDir, resolvedSkillsDir)) return null
+  if (!isPathWithin(resolvedSkillsDir, childDir)) return null
 
   return {
     childDir,

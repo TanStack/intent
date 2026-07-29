@@ -1,6 +1,7 @@
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { nodeReadFs, toPosixPath } from '../../shared/utils.js'
 import { validateSkillPath } from '../skill-path.js'
+import { sourceIdentityKey } from '../types.js'
 import { computeSkillContentHash } from './hash.js'
 import type { IntentLockfileSource } from './lockfile.js'
 import type { IntentPackage } from '../../shared/types.js'
@@ -8,10 +9,6 @@ import type { ReadFs } from '../../shared/utils.js'
 
 function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
-}
-
-function sourceKey(source: Pick<IntentLockfileSource, 'kind' | 'id'>): string {
-  return `${source.kind}\0${source.id}`
 }
 
 function packageRelativeSkillFile(
@@ -86,7 +83,7 @@ export function buildCurrentLockfileSources(
   }))
   const identities = new Set<string>()
   for (const source of sources) {
-    const identity = sourceKey(source)
+    const identity = sourceIdentityKey(source)
     if (identities.has(identity))
       throw new Error(
         `Duplicate skill source identity: ${source.kind}:${source.id}.`,
@@ -98,5 +95,7 @@ export function buildCurrentLockfileSources(
         `Duplicate skill path for source: ${source.kind}:${source.id}.`,
       )
   }
-  return sources.sort((a, b) => compareStrings(sourceKey(a), sourceKey(b)))
+  return sources.sort((a, b) =>
+    compareStrings(sourceIdentityKey(a), sourceIdentityKey(b)),
+  )
 }

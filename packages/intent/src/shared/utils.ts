@@ -11,14 +11,14 @@ import {
   realpathSync,
 } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { Dirent } from 'node:fs'
 import type { parse as ParseYaml } from 'yaml'
 
 const requireFromHere = createRequire(import.meta.url)
 let parseYaml: typeof ParseYaml | undefined
 
-function getParseYaml(): typeof ParseYaml {
+export function getParseYaml(): typeof ParseYaml {
   parseYaml ??= (requireFromHere('yaml') as { parse: typeof ParseYaml }).parse
   return parseYaml
 }
@@ -64,6 +64,14 @@ export const nodeReadFs: ReadFs = {
  */
 export function toPosixPath(p: string): string {
   return p.split(sep).join('/')
+}
+
+export function isPathWithin(parent: string, candidate: string): boolean {
+  const rel = relative(parent, candidate)
+  return (
+    rel === '' ||
+    (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`))
+  )
 }
 
 export function createFsIdentityCache(

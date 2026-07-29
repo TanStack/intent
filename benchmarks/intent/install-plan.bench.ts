@@ -1,24 +1,9 @@
 import { bench, describe } from 'vitest'
 import { updateIntentConsumerConfigText } from '../../packages/intent/src/commands/install/config.js'
 import { buildSkillSelectionPlan } from '../../packages/intent/src/commands/install/plan.js'
-import type { IntentPackage } from '../../packages/intent/src/shared/types.js'
+import { createRepresentativeIntentPackages } from './helpers.js'
 
-const packages: Array<IntentPackage> = Array.from(
-  { length: 20 },
-  (_, packageIndex) => ({
-    name: `@bench/package-${String(packageIndex).padStart(2, '0')}`,
-    version: '1.0.0',
-    kind: 'npm',
-    source: 'local',
-    packageRoot: `node_modules/@bench/package-${packageIndex}`,
-    intent: { version: 1, repo: 'bench/packages', docs: 'docs/' },
-    skills: Array.from({ length: 5 }, (_, skillIndex) => ({
-      name: `skill-${skillIndex}`,
-      path: `skills/skill-${skillIndex}/SKILL.md`,
-      description: `Skill ${skillIndex}`,
-    })),
-  }),
-)
+const packages = createRepresentativeIntentPackages()
 
 const packageJson = `${JSON.stringify(
   {

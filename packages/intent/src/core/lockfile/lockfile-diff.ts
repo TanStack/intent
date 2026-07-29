@@ -1,4 +1,5 @@
-import { canonicalIntentLockfile } from './lockfile.js'
+import { sourceIdentityKey } from '../types.js'
+import { canonicalIntentLockfile, classifyLockfileHash } from './lockfile.js'
 import type {
   IntentLockfileSkill,
   IntentLockfileSource,
@@ -31,10 +32,6 @@ function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }
 
-function sourceKey(source: Pick<IntentLockfileSource, 'kind' | 'id'>): string {
-  return `${source.kind}\0${source.id}`
-}
-
 export function diffLockfileSources(
   currentSources: ReadonlyArray<IntentLockfileSource>,
   locked: ReadIntentLockfileResult,
@@ -53,20 +50,23 @@ export function diffLockfileSources(
     sources: [...currentSources],
   }).sources
   const currentByKey = new Map(
-    current.map((source) => [sourceKey(source), source]),
+    current.map((source) => [sourceIdentityKey(source), source]),
   )
   const lockedByKey = new Map(
-    locked.lockfile.sources.map((source) => [sourceKey(source), source]),
+    locked.lockfile.sources.map((source) => [
+      sourceIdentityKey(source),
+      source,
+    ]),
   )
   const addedSources = current.filter(
-    (source) => !lockedByKey.has(sourceKey(source)),
+    (source) => !lockedByKey.has(sourceIdentityKey(source)),
   )
   const removedSources = locked.lockfile.sources.filter(
-    (source) => !currentByKey.has(sourceKey(source)),
+    (source) => !currentByKey.has(sourceIdentityKey(source)),
   )
   const changedSources: Array<ChangedLockfileSource> = []
   for (const lockedSource of locked.lockfile.sources) {
-    const currentSource = currentByKey.get(sourceKey(lockedSource))
+    const currentSource = currentByKey.get(sourceIdentityKey(lockedSource))
     if (!currentSource) continue
     const currentSkills = new Map(
       currentSource.skills.map((skill) => [skill.path, skill]),
@@ -82,7 +82,11 @@ export function diffLockfileSources(
     )
     const changedSkills = lockedSource.skills.flatMap((skill) => {
       const currentSkill = currentSkills.get(skill.path)
-      if (!currentSkill || currentSkill.contentHash === skill.contentHash) {
+      if (
+        !currentSkill ||
+        classifyLockfileHash(currentSkill.contentHash, skill.contentHash) !==
+          'changed'
+      ) {
         return []
       }
       return [
@@ -103,7 +107,9 @@ export function diffLockfileSources(
       })
     }
   }
-  changedSources.sort((a, b) => compareStrings(sourceKey(a), sourceKey(b)))
+  changedSources.sort((a, b) =>
+    compareStrings(sourceIdentityKey(a), sourceIdentityKey(b)),
+  )
   return {
     lockfile: 'found',
     addedSources,

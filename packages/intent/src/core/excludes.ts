@@ -1,4 +1,5 @@
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
+import { isPathWithin } from '../shared/utils.js'
 import { resolveProjectContext } from './project-context.js'
 import { readPackageJson } from './package-json.js'
 import type { ProjectContext } from './project-context.js'
@@ -22,11 +23,6 @@ function normalizeExcludePatterns(value: unknown): Array<string> {
     .filter(Boolean)
 }
 
-function isWithinOrEqual(path: string, parentDir: string): boolean {
-  const rel = relative(parentDir, path)
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
-}
-
 function readPackageExcludes(dir: string): Array<string> {
   const pkg = readPackageJson(dir)
   const intent = pkg?.intent
@@ -43,7 +39,7 @@ export function getConfigDirs(
   const dirs: Array<string> = []
   let dir = cwd
 
-  while (isWithinOrEqual(dir, root)) {
+  while (isPathWithin(root, dir)) {
     dirs.push(dir)
     if (dir === root) break
 

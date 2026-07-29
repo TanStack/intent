@@ -5,7 +5,11 @@ import {
   scanIntentPackageAtRoot,
 } from './discovery/scanner.js'
 import { buildCurrentLockfileSources } from './core/lockfile/lockfile-state.js'
-import { readIntentLockfile } from './core/lockfile/lockfile.js'
+import {
+  classifyLockfileHash,
+  readIntentLockfile,
+} from './core/lockfile/lockfile.js'
+import { sourceIdentityKey } from './core/types.js'
 import { formatSkillUse } from './skills/use.js'
 import type { CatalogueVerificationEntry } from './session-catalog.js'
 import type { IntentSkillList } from './core/index.js'
@@ -43,17 +47,23 @@ export function applyCatalogueLock(
       fsCache.getReadFs(),
     )[0]
     if (!currentSource) continue
+    const currentSourceKey = sourceIdentityKey(currentSource)
     const lockedSource = locked.lockfile.sources.find(
-      (source) =>
-        source.kind === currentSource.kind && source.id === currentSource.id,
+      (source) => sourceIdentityKey(source) === currentSourceKey,
     )
     if (!lockedSource) continue
 
     const lockedSkills = new Map(
-      lockedSource.skills.map((skill) => [skill.path, skill.contentHash]),
+      lockedSource.skills.map((skill) => [skill.path, skill]),
     )
     for (const skill of currentSource.skills) {
-      if (lockedSkills.get(skill.path) !== skill.contentHash) continue
+      if (
+        classifyLockfileHash(
+          skill.contentHash,
+          lockedSkills.get(skill.path)?.contentHash,
+        ) !== 'accepted'
+      )
+        continue
       const skillName = skill.path.slice('skills/'.length)
       allowedUses.add(formatSkillUse(currentSource.id, skillName))
       verification.push({

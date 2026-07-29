@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { writeTextFileAtomic } from '../../shared/atomic-write.js'
 import { validateSkillPaths } from '../skill-path.js'
+import { sourceIdentityKey } from '../types.js'
 
 export interface IntentLockfileSkill {
   path: string
@@ -26,8 +27,12 @@ function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }
 
-function sourceKey(source: Pick<IntentLockfileSource, 'kind' | 'id'>): string {
-  return `${source.kind}\0${source.id}`
+export function classifyLockfileHash(
+  currentHash: string | undefined,
+  lockedHash: string | undefined,
+): 'new' | 'accepted' | 'changed' {
+  if (currentHash === undefined || lockedHash === undefined) return 'new'
+  return currentHash === lockedHash ? 'accepted' : 'changed'
 }
 
 function assertRecord(value: unknown, label: string): Record<string, unknown> {
@@ -79,7 +84,7 @@ export function canonicalIntentLockfile(
   const sources = lockfile.sources.map(canonicalSource)
   const seen = new Set<string>()
   for (const source of sources) {
-    const key = sourceKey(source)
+    const key = sourceIdentityKey(source)
     if (seen.has(key)) {
       throw new Error(
         `Duplicate intent.lock source: ${source.kind}:${source.id}.`,
@@ -89,7 +94,9 @@ export function canonicalIntentLockfile(
   }
   return {
     lockfileVersion: 1,
-    sources: sources.sort((a, b) => compareStrings(sourceKey(a), sourceKey(b))),
+    sources: sources.sort((a, b) =>
+      compareStrings(sourceIdentityKey(a), sourceIdentityKey(b)),
+    ),
   }
 }
 

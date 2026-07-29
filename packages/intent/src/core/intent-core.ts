@@ -1,5 +1,6 @@
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
+import { isPathWithin } from '../shared/utils.js'
 import { ResolveSkillUseError, resolveSkillUse } from '../skills/resolver.js'
 import { formatSkillUse, parseSkillUse } from '../skills/use.js'
 import {
@@ -210,17 +211,6 @@ function resolveFromCwd(cwd: string, path: string): string {
   return resolve(cwd, path)
 }
 
-function isResolvedPathInsidePackageRoot(
-  path: string,
-  packageRoot: string,
-): boolean {
-  const relativePath = relative(packageRoot, path)
-  return (
-    relativePath === '' ||
-    (!relativePath.startsWith('..') && !isAbsolute(relativePath))
-  )
-}
-
 function toResolvedIntentSkill(
   cwd: string,
   use: string,
@@ -250,7 +240,7 @@ function toResolvedIntentSkill(
     resolveFromCwd(cwd, resolved.packageRoot),
   )
 
-  if (!isResolvedPathInsidePackageRoot(realResolvedPath, realPackageRoot)) {
+  if (!isPathWithin(realPackageRoot, realResolvedPath)) {
     throw new IntentCoreError(
       'skill-path-outside-package',
       `Resolved skill path for "${use}" is outside package root: ${resolved.path}`,
