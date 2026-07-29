@@ -1,4 +1,11 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -129,5 +136,18 @@ describe('intent lockfile', () => {
       },
     })
     expect(readFileSync(path, 'utf8')).toContain('"id": "example"')
+  })
+
+  it.each([
+    { label: '0o600', mode: 0o600 },
+    { label: '0o664', mode: 0o664 },
+  ])('preserves mode $label of an existing lockfile', ({ mode }) => {
+    const path = join(root(), 'intent.lock')
+    writeFileSync(path, '{"lockfileVersion":1,"sources":[]}\n')
+    chmodSync(path, mode)
+
+    writeIntentLockfile(path, { lockfileVersion: 1, sources: [] })
+
+    expect(statSync(path).mode & 0o777).toBe(mode)
   })
 })

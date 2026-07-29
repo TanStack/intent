@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { applyCatalogueLock } from './catalog-lock.js'
 import { getProjectReadFs } from './discovery/scanner.js'
 import {
@@ -48,17 +47,20 @@ export async function getIntentCatalogContext({
 
 export async function runSessionCatalogueHook({
   agent,
-  event = readEventFromStdin(),
+  event,
 }: {
   agent: HookAgent
   event?: Record<string, unknown>
 }): Promise<void> {
-  const eventName = getLifecycleEventName(agent, event)
+  const resolvedEvent = event ?? (await readEventFromStdin())
+  const eventName = getLifecycleEventName(agent, resolvedEvent)
   if (!eventName) return
 
   let context: string
   try {
-    const result = await getIntentCatalogContext({ cwd: getEventCwd(event) })
+    const result = await getIntentCatalogContext({
+      cwd: getEventCwd(resolvedEvent),
+    })
     context = result.context
   } catch (error) {
     logHookFailure(error)
@@ -81,15 +83,57 @@ function logHookFailure(error: unknown): void {
   )
 }
 
-function readEventFromStdin(): Record<string, unknown> {
-  try {
-    const value = JSON.parse(readFileSync(0, 'utf8')) as unknown
-    return value && typeof value === 'object' && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {}
-  } catch {
-    return {}
+function readEventFromStdin(): Promise<Record<string, unknown>> {
+  if (process.stdin.readableEnded || process.stdin.isTTY === true) {
+    return Promise.resolve({})
   }
+
+  return new Promise((resolve) => {
+    const chunks: Array<Buffer> = []
+    let byteLength = 0
+    let settled = false
+    const timeout = setTimeout(() => finish(true), 1_000)
+
+    const onData = (chunk: Buffer | string): void => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      byteLength += buffer.byteLength
+      if (byteLength > 64 * 1024) {
+        finish(false)
+        return
+      }
+      chunks.push(buffer)
+    }
+    const onEnd = (): void => finish(true)
+    const onError = (): void => finish(false)
+
+    function finish(parse: boolean): void {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      process.stdin.off('data', onData)
+      process.stdin.off('end', onEnd)
+      process.stdin.off('error', onError)
+      process.stdin.pause()
+
+      if (parse) {
+        try {
+          const value = JSON.parse(
+            Buffer.concat(chunks, byteLength).toString('utf8'),
+          ) as unknown
+          if (value && typeof value === 'object' && !Array.isArray(value)) {
+            resolve(value as Record<string, unknown>)
+            return
+          }
+        } catch {}
+      }
+      resolve({})
+    }
+
+    process.stdin.on('data', onData)
+    process.stdin.on('end', onEnd)
+    process.stdin.on('error', onError)
+    process.stdin.resume()
+  })
 }
 
 function getLifecycleEventName(

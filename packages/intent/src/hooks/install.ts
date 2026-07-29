@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, relative } from 'node:path'
+import { relative } from 'node:path'
 import { detectPackageManager } from '../discovery/package-manager.js'
+import { writeTextFileAtomic } from '../shared/atomic-write.js'
 import { fail } from '../shared/cli-error.js'
 import { formatIntentCommand } from '../shared/command-runner.js'
 import { ALL_HOOK_AGENTS, HOOK_AGENT_ADAPTERS } from './adapters.js'
@@ -46,14 +47,6 @@ export function runInstallHooks({
       scope: resolvedScope,
     }),
   )
-}
-
-export function validateHookInstallOptions({
-  agents,
-  scope,
-}: Pick<InstallHooksOptions, 'agents' | 'scope'>): void {
-  parseScope(scope)
-  parseAgents(agents)
 }
 
 export function formatHookInstallResult(result: HookInstallResult): string {
@@ -135,35 +128,14 @@ function upsertAdapterHooks({
 }): Record<string, unknown> {
   switch (configKind) {
     case 'claude-settings':
-      return upsertClaudeHooks(config, catalogCommand)
     case 'codex-hooks':
-      return upsertCodexHooks(config, catalogCommand)
+      return upsertCommandHooks(config, catalogCommand)
     case 'copilot-hooks':
       return upsertCopilotHooks(config, catalogCommand)
   }
 }
 
-function upsertClaudeHooks(
-  config: Record<string, unknown>,
-  catalogCommand: string,
-): Record<string, unknown> {
-  const hooks = objectValue(config.hooks)
-  hooks.SessionStart = upsertHookGroup(arrayValue(hooks.SessionStart), {
-    matcher: 'startup|resume|clear|compact',
-    hooks: [
-      {
-        type: 'command',
-        command: catalogCommand,
-        timeout: 10,
-        statusMessage: CATALOG_STATUS_MESSAGE,
-      },
-    ],
-  })
-  hooks.PreToolUse = removeIntentHooks(arrayValue(hooks.PreToolUse))
-  return { ...config, hooks }
-}
-
-function upsertCodexHooks(
+function upsertCommandHooks(
   config: Record<string, unknown>,
   catalogCommand: string,
 ): Record<string, unknown> {
@@ -254,8 +226,7 @@ function updateJsonConfig(
     return 'unchanged'
   }
 
-  mkdirSync(dirname(filePath), { recursive: true })
-  writeFileSync(filePath, next)
+  writeTextFileAtomic(filePath, next)
   return existed ? 'updated' : 'created'
 }
 
