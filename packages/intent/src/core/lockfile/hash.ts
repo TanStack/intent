@@ -16,13 +16,10 @@ const HASH_LIMITS = {
 export interface ComputeSkillContentHashOptions {
   packageRoot: string
   skillDir: string
-  fs?: HashReadFs
+  fs?: ReadFs
 }
 
 type HashEntry = { path: string; content: Buffer }
-type HashReadFs = ReadFs
-
-const nodeHashReadFs: HashReadFs = nodeReadFs
 const HASH_ENTRY_SEPARATOR = Buffer.from([0])
 
 function compareStrings(a: string, b: string): number {
@@ -77,14 +74,23 @@ function readBoundedFile(fs: ReadFs, filePath: string): Buffer {
   if (stats.size > HASH_LIMITS.maxFileBytes) {
     throw new Error(`Hash file size limit exceeded by ${filePath}.`)
   }
-  const descriptor = fs.openSync!(filePath, 'r')
+  const { openSync, readSync, closeSync } = fs
+  if (!openSync || !readSync || !closeSync) {
+    const content = fs.readFileSync(filePath)
+    if (content.length > HASH_LIMITS.maxFileBytes) {
+      throw new Error(`Hash file size limit exceeded by ${filePath}.`)
+    }
+    return content
+  }
+
+  const descriptor = openSync(filePath, 'r')
   const chunks: Array<Buffer> = []
   let total = 0
   try {
     for (;;) {
       const remaining = HASH_LIMITS.maxFileBytes + 1 - total
       const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, remaining))
-      const bytesRead = fs.readSync!(descriptor, buffer, 0, buffer.length, null)
+      const bytesRead = readSync(descriptor, buffer, 0, buffer.length, null)
       if (bytesRead === 0) break
       total += bytesRead
       if (total > HASH_LIMITS.maxFileBytes) {
@@ -93,15 +99,12 @@ function readBoundedFile(fs: ReadFs, filePath: string): Buffer {
       chunks.push(buffer.subarray(0, bytesRead))
     }
   } finally {
-    fs.closeSync!(descriptor)
+    closeSync(descriptor)
   }
   return Buffer.concat(chunks, total)
 }
 
-function readDirectoryEntries(
-  fs: HashReadFs,
-  path: string,
-): Array<Dirent<string>> {
+function readDirectoryEntries(fs: ReadFs, path: string): Array<Dirent<string>> {
   if (!fs.opendirSync) {
     return fs.readdirSync(path, { encoding: 'utf8', withFileTypes: true })
   }
@@ -126,7 +129,7 @@ function readDirectoryEntries(
 export function computeSkillContentHash({
   packageRoot,
   skillDir,
-  fs = nodeHashReadFs,
+  fs = nodeReadFs,
 }: ComputeSkillContentHashOptions): string {
   const realPackageRoot = fs.realpathSync(resolve(packageRoot))
   const requestedSkillDir = isAbsolute(skillDir)

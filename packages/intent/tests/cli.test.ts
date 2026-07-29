@@ -1202,68 +1202,31 @@ describe('cli commands', () => {
     expect(logSpy).toHaveBeenCalledWith('No excludes configured.')
   })
 
-  it('lists excludes when released config has null skills', async () => {
-    const root = mkdtempSync(
-      join(realTmpdir, 'intent-cli-exclude-list-null-skills-'),
-    )
-    tempDirs.push(root)
-    writeJson(join(root, 'package.json'), {
-      name: 'app',
-      private: true,
-      intent: { skills: null },
-    })
-    process.chdir(root)
+  it.each([{ command: ['list'] }, { command: ['add', 'new-pkg'] }])(
+    'keeps exclude mutations strict for released config ($command)',
+    async ({ command }) => {
+      const root = mkdtempSync(
+        join(realTmpdir, 'intent-cli-exclude-write-legacy-'),
+      )
+      tempDirs.push(root)
+      writeJson(join(root, 'package.json'), {
+        name: 'app',
+        private: true,
+        intent: { skills: null, exclude: ['legacy-pkg'] },
+      })
+      const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+      process.chdir(root)
 
-    const exitCode = await main(['exclude', 'list'])
+      expect(await main(['exclude', ...command])).toBe(1)
 
-    expect(exitCode).toBe(0)
-    expect(logSpy).toHaveBeenCalledWith('No excludes configured.')
-  })
-
-  it('lists only nonblank string excludes from released config', async () => {
-    const root = mkdtempSync(
-      join(realTmpdir, 'intent-cli-exclude-list-legacy-'),
-    )
-    tempDirs.push(root)
-    writeJson(join(root, 'package.json'), {
-      name: 'app',
-      private: true,
-      intent: {
-        skills: [],
-        exclude: ['', '  legacy-pkg  ', null, 42],
-      },
-    })
-    process.chdir(root)
-
-    const exitCode = await main(['exclude', 'list', '--json'])
-    const output = String(logSpy.mock.calls.at(-1)?.[0] ?? '')
-
-    expect(exitCode).toBe(0)
-    expect(JSON.parse(output)).toEqual(['legacy-pkg'])
-  })
-
-  it('keeps exclude mutations strict for released config', async () => {
-    const root = mkdtempSync(
-      join(realTmpdir, 'intent-cli-exclude-write-legacy-'),
-    )
-    tempDirs.push(root)
-    writeJson(join(root, 'package.json'), {
-      name: 'app',
-      private: true,
-      intent: { skills: null, exclude: ['legacy-pkg'] },
-    })
-    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
-    process.chdir(root)
-
-    expect(await main(['exclude', 'add', 'new-pkg'])).toBe(1)
-
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Invalid package.json intent configuration: intent.skills must be an array of strings.',
-    )
-    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
-      packageJsonBefore,
-    )
-  })
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Invalid package.json intent configuration: intent.skills must be an array of strings.',
+      )
+      expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+        packageJsonBefore,
+      )
+    },
+  )
 
   it('adds and lists an exclude pattern', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-exclude-add-'))

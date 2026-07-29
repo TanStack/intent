@@ -21,6 +21,7 @@ import {
   formatSessionCatalogue,
   getSessionCatalogue,
 } from '../src/session-catalog.js'
+import type { ReadFs } from '../src/shared/utils.js'
 
 const roots: Array<string> = []
 
@@ -82,20 +83,31 @@ function fixture(): { root: string; packageRoot: string; skillDir: string } {
   return { root, packageRoot, skillDir }
 }
 
-async function getFixtureCatalogContext(root: string, cacheDir: string) {
-  const readFs = getProjectReadFs(root)
+async function getFixtureCatalogContext(
+  root: string,
+  cacheDir: string,
+  readFs: ReadFs = getProjectReadFs(root),
+) {
+  let warnings: Array<string> = []
   const result = await getSessionCatalogue({
     cacheDir,
     root,
     readFs,
-    discover: () =>
-      applyCatalogueLock(
+    discover: () => {
+      const discovered = applyCatalogueLock(
         listIntentSkills({ audience: 'agent', cwd: root }),
         root,
         readFs,
-      ),
+      )
+      warnings = discovered.result.warnings
+      return discovered
+    },
   })
-  return { ...result, context: formatSessionCatalogue(result.catalogue) }
+  return {
+    ...result,
+    context: formatSessionCatalogue(result.catalogue),
+    warnings,
+  }
 }
 
 afterEach(() => {
@@ -185,18 +197,28 @@ describe('getIntentCatalogContext', () => {
     expect(drifted.cacheStatus).toBe('refresh')
     expect(drifted.context).not.toContain('@fixture/package#core')
     expect(drifted.context).toContain('@fixture/package#sibling')
-    expect(readFileSync(first.cachePath)).toEqual(cachedBytes)
+    expect(drifted.warnings).toContain(
+      '1 skill was withheld because installed content does not match intent.lock.',
+    )
+
+    const unchangedDrifted = await getFixtureCatalogContext(root, cacheDir)
+
+    expect(unchangedDrifted.cacheStatus).toBe('hit')
+    expect(unchangedDrifted.context).not.toContain('@fixture/package#core')
+    expect(unchangedDrifted.context).toContain('@fixture/package#sibling')
+    expect(readFileSync(first.cachePath)).not.toEqual(cachedBytes)
 
     writeFileSync(join(skillDir, 'SKILL.md'), originalSkill)
     const restored = await getFixtureCatalogContext(root, cacheDir)
 
-    expect(restored.cacheStatus).toBe('hit')
+    expect(restored.cacheStatus).toBe('refresh')
     expect(restored.context).toContain('@fixture/package#core')
     expect(restored.context).toContain('@fixture/package#sibling')
   })
 
   it('withholds a newly discovered skill without changing accepted siblings', async () => {
     const { root, packageRoot } = fixture()
+    const cacheDir = join(root, 'cache')
     const newSkillDir = join(packageRoot, 'skills', 'new-skill')
     mkdirSync(newSkillDir, { recursive: true })
     writeFileSync(
@@ -204,11 +226,45 @@ describe('getIntentCatalogContext', () => {
       '---\nname: new-skill\ndescription: New package guidance\n---\n',
     )
 
-    const result = await getIntentCatalogContext({ cwd: root })
+    const first = await getFixtureCatalogContext(root, cacheDir)
+    const second = await getFixtureCatalogContext(root, cacheDir)
 
-    expect(result.context).toContain('@fixture/package#core')
-    expect(result.context).toContain('@fixture/package#sibling')
-    expect(result.context).not.toContain('@fixture/package#new-skill')
+    expect(first.cacheStatus).toBe('miss')
+    expect(first.context).toContain('@fixture/package#core')
+    expect(first.context).toContain('@fixture/package#sibling')
+    expect(first.context).not.toContain('@fixture/package#new-skill')
+    expect(first.warnings).toContain(
+      '1 skill was withheld because no matching intent.lock entry exists.',
+    )
+    expect(second.cacheStatus).toBe('hit')
+    expect(second.context).toEqual(first.context)
+  })
+
+  it('withholds an unhashable skill without withholding a healthy sibling or caching', async () => {
+    const { root, skillDir } = fixture()
+    const cacheDir = join(root, 'cache')
+    const nodeFs = getProjectReadFs(root)
+    const readFs: ReadFs = {
+      ...nodeFs,
+      realpathSync: ((path: Parameters<ReadFs['realpathSync']>[0]) => {
+        if (String(path).startsWith(skillDir)) {
+          throw new Error('Injected unhashable skill')
+        }
+        return nodeFs.realpathSync(path)
+      }) as ReadFs['realpathSync'],
+    }
+
+    const first = await getFixtureCatalogContext(root, cacheDir, readFs)
+    const second = await getFixtureCatalogContext(root, cacheDir, readFs)
+
+    expect(first.cacheStatus).toBe('miss')
+    expect(first.context).not.toContain('@fixture/package#core')
+    expect(first.context).toContain('@fixture/package#sibling')
+    expect(first.warnings).toContain(
+      '1 skill was withheld because installed content could not be verified.',
+    )
+    expect(second.cacheStatus).toBe('miss')
+    expect(second.context).toEqual(first.context)
   })
 })
 

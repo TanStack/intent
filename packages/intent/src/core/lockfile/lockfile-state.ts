@@ -3,7 +3,7 @@ import { nodeReadFs, toPosixPath } from '../../shared/utils.js'
 import { validateSkillPath } from '../skill-path.js'
 import { sourceIdentityKey } from '../types.js'
 import { computeSkillContentHash } from './hash.js'
-import type { IntentLockfileSource } from './lockfile.js'
+import type { IntentLockfileSkill, IntentLockfileSource } from './lockfile.js'
 import type { IntentPackage } from '../../shared/types.js'
 import type { ReadFs } from '../../shared/utils.js'
 
@@ -60,6 +60,22 @@ function skillDirectoryPath(
   return { absolute, relative: validateSkillPath(packageRelativePath) }
 }
 
+export function buildCurrentLockfileSkill(
+  pkg: IntentPackage,
+  skill: IntentPackage['skills'][number],
+  fs: ReadFs = nodeReadFs,
+): IntentLockfileSkill {
+  const path = skillDirectoryPath(pkg, skill.path)
+  return {
+    path: path.relative,
+    contentHash: computeSkillContentHash({
+      packageRoot: pkg.packageRoot,
+      skillDir: path.absolute,
+      fs,
+    }),
+  }
+}
+
 export function buildCurrentLockfileSources(
   packages: ReadonlyArray<IntentPackage>,
   fs: ReadFs = nodeReadFs,
@@ -68,17 +84,7 @@ export function buildCurrentLockfileSources(
     kind: pkg.kind,
     id: pkg.name,
     skills: pkg.skills
-      .map((skill) => {
-        const path = skillDirectoryPath(pkg, skill.path)
-        return {
-          path: path.relative,
-          contentHash: computeSkillContentHash({
-            packageRoot: pkg.packageRoot,
-            skillDir: path.absolute,
-            fs,
-          }),
-        }
-      })
+      .map((skill) => buildCurrentLockfileSkill(pkg, skill, fs))
       .sort((a, b) => compareStrings(a.path, b.path)),
   }))
   const identities = new Set<string>()

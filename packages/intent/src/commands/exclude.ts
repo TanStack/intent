@@ -5,7 +5,6 @@ import { compileExcludePatterns } from '../core/excludes.js'
 import { writeTextFileAtomic } from '../shared/atomic-write.js'
 import {
   readIntentConsumerConfig,
-  readIntentExcludeList,
   updateIntentConsumerConfigText,
 } from './install/config.js'
 import type { IntentConsumerConfig } from './install/config.js'
@@ -110,22 +109,16 @@ export function runExcludeCommand(
   const action = normalizeAction(actionArg)
   const cwd = process.cwd()
   const text = readPackageJsonText(cwd)
+  const config = readConfig(text)
 
   if (action === 'list') {
     if (patternArg) {
       fail('Unexpected pattern for list. Use: intent exclude list [--json]')
     }
-    try {
-      printExcludes(readIntentExcludeList(text), options.json)
-    } catch (err) {
-      fail(
-        `Invalid package.json intent configuration: ${err instanceof Error ? err.message : String(err)}`,
-      )
-    }
+    printExcludes(config.exclude, options.json)
     return
   }
 
-  const config = readConfig(text)
   const currentExcludes = config.exclude
 
   const pattern = normalizePattern(patternArg, action)

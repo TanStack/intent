@@ -4,7 +4,7 @@ import {
   getProjectReadFs,
   scanIntentPackageAtRoot,
 } from './discovery/scanner.js'
-import { buildCurrentLockfileSources } from './core/lockfile/lockfile-state.js'
+import { buildCurrentLockfileSkill } from './core/lockfile/lockfile-state.js'
 import {
   classifyLockfileHash,
   readIntentLockfile,
@@ -20,6 +20,10 @@ export interface LockCheckedCatalogueDiscovery {
   verification: Array<CatalogueVerificationEntry> | null
 }
 
+function formatWithheldWarning(count: number, reason: string): string {
+  return `${count} ${count === 1 ? 'skill was' : 'skills were'} withheld because ${reason}.`
+}
+
 export function applyCatalogueLock(
   result: IntentSkillList,
   workspaceRoot: string,
@@ -32,6 +36,9 @@ export function applyCatalogueLock(
   fsCache.useFs(readFs)
   const allowedUses = new Set<string>()
   const verification: Array<CatalogueVerificationEntry> = []
+  let pendingCount = 0
+  let changedCount = 0
+  let unverifiableCount = 0
 
   for (const summary of result.packages) {
     const scanned = scanIntentPackageAtRoot(summary.packageRoot, {
@@ -42,35 +49,43 @@ export function applyCatalogueLock(
     }).package
     if (!scanned) continue
 
-    const currentSource = buildCurrentLockfileSources(
-      [scanned],
-      fsCache.getReadFs(),
-    )[0]
-    if (!currentSource) continue
-    const currentSourceKey = sourceIdentityKey(currentSource)
+    const currentSourceKey = sourceIdentityKey({
+      kind: scanned.kind,
+      id: scanned.name,
+    })
     const lockedSource = locked.lockfile.sources.find(
       (source) => sourceIdentityKey(source) === currentSourceKey,
     )
-    if (!lockedSource) continue
-
     const lockedSkills = new Map(
-      lockedSource.skills.map((skill) => [skill.path, skill]),
+      lockedSource?.skills.map((skill) => [skill.path, skill]) ?? [],
     )
-    for (const skill of currentSource.skills) {
-      if (
-        classifyLockfileHash(
-          skill.contentHash,
-          lockedSkills.get(skill.path)?.contentHash,
-        ) !== 'accepted'
-      )
+    for (const scannedSkill of scanned.skills) {
+      let skill: ReturnType<typeof buildCurrentLockfileSkill>
+      try {
+        skill = buildCurrentLockfileSkill(
+          scanned,
+          scannedSkill,
+          fsCache.getReadFs(),
+        )
+      } catch {
+        unverifiableCount += 1
         continue
-      const skillName = skill.path.slice('skills/'.length)
-      allowedUses.add(formatSkillUse(currentSource.id, skillName))
+      }
       verification.push({
         packageRoot: summary.packageRoot,
         skillPath: skill.path,
         contentHash: skill.contentHash,
       })
+      const status = classifyLockfileHash(
+        skill.contentHash,
+        lockedSkills.get(skill.path)?.contentHash,
+      )
+      if (status === 'accepted') {
+        allowedUses.add(formatSkillUse(scanned.name, scannedSkill.name))
+      } else {
+        if (status === 'new') pendingCount += 1
+        else changedCount += 1
+      }
     }
   }
 
@@ -86,14 +101,14 @@ export function applyCatalogueLock(
     const skillCount = skillCountByPackage.get(pkg.packageRoot) ?? 0
     return skillCount > 0 ? [{ ...pkg, skillCount }] : []
   })
-  const withheldCount = result.skills.length - skills.length
-  const warnings =
-    withheldCount > 0
-      ? [
-          ...result.warnings,
-          `${withheldCount} ${withheldCount === 1 ? 'skill was' : 'skills were'} withheld because installed content does not match intent.lock.`,
-        ]
-      : result.warnings
+  const warnings = [...result.warnings]
+  for (const [count, reason] of [
+    [pendingCount, 'no matching intent.lock entry exists'],
+    [changedCount, 'installed content does not match intent.lock'],
+    [unverifiableCount, 'installed content could not be verified'],
+  ] as const) {
+    if (count > 0) warnings.push(formatWithheldWarning(count, reason))
+  }
 
   return {
     result: {
@@ -112,6 +127,6 @@ export function applyCatalogueLock(
           }
         : {}),
     },
-    verification: withheldCount > 0 ? null : verification,
+    verification: unverifiableCount > 0 ? null : verification,
   }
 }

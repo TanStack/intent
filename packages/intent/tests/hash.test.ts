@@ -9,6 +9,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { computeSkillContentHash } from '../src/core/lockfile/hash.js'
+import { nodeReadFs } from '../src/shared/utils.js'
+import type { ReadFs } from '../src/shared/utils.js'
 
 const roots: Array<string> = []
 
@@ -63,6 +65,25 @@ describe('computeSkillContentHash', () => {
     expect(
       computeSkillContentHash({ packageRoot: root, skillDir: skill }),
     ).toBe(baseline)
+  })
+
+  it('hashes with a ReadFs that omits optional low-level methods', () => {
+    const { root, skill } = skillRoot()
+    const readFs: ReadFs = {
+      existsSync: nodeReadFs.existsSync,
+      lstatSync: nodeReadFs.lstatSync,
+      readFileSync: nodeReadFs.readFileSync,
+      readdirSync: nodeReadFs.readdirSync,
+      realpathSync: nodeReadFs.realpathSync,
+    }
+
+    expect(
+      computeSkillContentHash({
+        packageRoot: root,
+        skillDir: skill,
+        fs: readFs,
+      }),
+    ).toBe(computeSkillContentHash({ packageRoot: root, skillDir: skill }))
   })
 
   it.each(['references', 'assets', 'scripts'])(

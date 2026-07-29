@@ -190,16 +190,6 @@ export function readIntentConsumerConfig(text: string): IntentConsumerConfig {
   }
 }
 
-export function readIntentExcludeList(text: string): Array<string> {
-  const intent = parsePackageJson(text).intent
-  if (!isRecord(intent) || !Array.isArray(intent.exclude)) return []
-  return intent.exclude.flatMap((entry) => {
-    if (typeof entry !== 'string') return []
-    const trimmed = entry.trim()
-    return trimmed === '' ? [] : [trimmed]
-  })
-}
-
 function equalsConfig(
   left: IntentConsumerConfig,
   right: IntentConsumerConfig,
