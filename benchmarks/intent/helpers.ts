@@ -21,6 +21,7 @@ type ConsoleSnapshot = {
 
 export type SkillOptions = {
   description: string
+  name?: string
   bodyLines?: number
   type?: 'core' | 'framework'
   requires?: Array<string>
@@ -185,7 +186,7 @@ export function writeSkill(
   options: SkillOptions,
 ): void {
   const frontmatter = [
-    `name: ${JSON.stringify(skillName)}`,
+    `name: ${JSON.stringify(options.name ?? skillName)}`,
     `description: ${JSON.stringify(options.description)}`,
   ]
 

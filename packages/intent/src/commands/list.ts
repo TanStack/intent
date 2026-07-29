@@ -148,7 +148,7 @@ export async function runListCommand(
   options: ListCommandOptions,
 ): Promise<void> {
   const audience = detectIntentAudience()
-  const explain = audience === 'human' && options.why === true && !options.json
+  const explain = audience === 'human' && options.why === true
   const result = listIntentSkills({
     ...coreOptionsFromGlobalFlags(options),
     audience,

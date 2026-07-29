@@ -1843,13 +1843,19 @@ describe('cli commands', () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-why-'))
     tempDirs.push(root)
     const pkgDir = join(root, 'node_modules', '@tanstack', 'query')
+    const excludePattern = '@tanstack/query#mutations'
 
     writeFileSync(join(root, 'pnpm-lock.yaml'), '')
     writeJson(join(root, 'package.json'), {
       name: 'app',
       private: true,
       intent: {
-        skills: ['@tanstack/query#fetching', '@tanstack/query#query/cache'],
+        skills: [
+          '@tanstack/query#fetching',
+          '@tanstack/query#query/cache',
+          excludePattern,
+        ],
+        exclude: [excludePattern],
       },
     })
     writeJson(join(pkgDir, 'package.json'), {
@@ -1864,6 +1870,10 @@ describe('cli commands', () => {
     writeSkillMd(join(pkgDir, 'skills', 'query', 'cache'), {
       name: 'query/cache',
       description: 'Query cache skill',
+    })
+    writeSkillMd(join(pkgDir, 'skills', 'mutations'), {
+      name: 'mutations',
+      description: 'Query mutations skill',
     })
 
     process.env.INTENT_AUDIENCE = 'human'
@@ -1880,6 +1890,35 @@ describe('cli commands', () => {
       'Allowed by intent.skills["@tanstack/query#query/cache"]',
     )
     expect(output.indexOf('Allowed by')).toBeLessThan(output.indexOf('Load:'))
+
+    logSpy.mockClear()
+    const jsonExitCode = await main(['list', '--json', '--why'])
+    const jsonOutput = logSpy.mock.calls.flat().join('\n')
+    const parsed = JSON.parse(jsonOutput) as {
+      skills: Array<{ use: string; why?: string }>
+      excludedSkills: Array<{
+        use: string
+        why?: string
+        excluded: true
+      }>
+    }
+
+    expect(jsonExitCode).toBe(0)
+    expect(
+      Object.fromEntries(parsed.skills.map(({ use, why }) => [use, why])),
+    ).toMatchObject({
+      '@tanstack/query#fetching':
+        'Allowed by intent.skills["@tanstack/query#fetching"]',
+      '@tanstack/query#query/cache':
+        'Allowed by intent.skills["@tanstack/query#query/cache"]',
+    })
+    expect(parsed.excludedSkills).toContainEqual(
+      expect.objectContaining({
+        use: excludePattern,
+        excluded: true,
+        why: `Excluded by intent.exclude[${JSON.stringify(excludePattern)}]`,
+      }),
+    )
   })
 
   it.each(['@tanstack/query#fetching', '@tanstack/query'])(
@@ -2722,51 +2761,21 @@ describe('cli commands', () => {
     ])
   })
 
-  it('rejects --global and --global-only together on list', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-mutual-excl-list-'))
-    tempDirs.push(root)
-    process.chdir(root)
+  it.each([['list'], ['install'], ['load', '@tanstack/query#core']])(
+    'rejects --global and --global-only together on %s',
+    async (...command) => {
+      const root = mkdtempSync(join(realTmpdir, 'intent-cli-mutual-excl-'))
+      tempDirs.push(root)
+      process.chdir(root)
 
-    const exitCode = await main(['list', '--global', '--global-only'])
+      const exitCode = await main([...command, '--global', '--global-only'])
 
-    expect(exitCode).toBe(1)
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Use either --global or --global-only, not both.',
-    )
-  })
-
-  it('rejects --global and --global-only together on install', async () => {
-    const root = mkdtempSync(
-      join(realTmpdir, 'intent-cli-mutual-excl-install-'),
-    )
-    tempDirs.push(root)
-    process.chdir(root)
-
-    const exitCode = await main(['install', '--global', '--global-only'])
-
-    expect(exitCode).toBe(1)
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Use either --global or --global-only, not both.',
-    )
-  })
-
-  it('rejects --global and --global-only together on load', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-mutual-excl-load-'))
-    tempDirs.push(root)
-    process.chdir(root)
-
-    const exitCode = await main([
-      'load',
-      '@tanstack/query#core',
-      '--global',
-      '--global-only',
-    ])
-
-    expect(exitCode).toBe(1)
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Use either --global or --global-only, not both.',
-    )
-  })
+      expect(exitCode).toBe(1)
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Use either --global or --global-only, not both.',
+      )
+    },
+  )
 
   it('loads a local skill use as markdown', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-'))

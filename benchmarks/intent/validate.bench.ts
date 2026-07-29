@@ -44,7 +44,6 @@ function createFixture(): ValidateFixture {
     writeSkill(root, domain, {
       description: `${domain} overview and guardrails`,
       bodyLines: 20,
-      type: 'core',
     })
 
     for (let index = 1; index <= 4; index++) {
@@ -53,8 +52,8 @@ function createFixture(): ValidateFixture {
 
       writeSkill(root, skillName, {
         description: `${domain} workflow ${index}`,
+        name: `workflow-${index}`,
         bodyLines: 18,
-        type: isFrameworkSkill ? 'framework' : 'core',
         requires: isFrameworkSkill ? [domain] : undefined,
       })
     }
@@ -124,10 +123,8 @@ describe('intent validate', () => {
     'checks a shipped skills tree',
     async () => {
       const state = getFixture()
-      for (let index = 0; index < 3; index++) {
-        await state.runner.run(['validate'])
-      }
+      await state.runner.run(['validate'])
     },
-    createBenchOptions(setup, teardown),
+    { ...createBenchOptions(setup, teardown), warmupIterations: 1 },
   )
 })
