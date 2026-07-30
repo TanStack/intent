@@ -167,13 +167,12 @@ export function createClackInstallerPrompter(): InstallerPrompter {
     },
     async confirmUserScopeHooks(): Promise<boolean | null> {
       note(
-        'GitHub Copilot hooks are stored in your home directory and affect Copilot sessions in this and other repositories.',
-        'GitHub Copilot hooks apply across repositories',
+        'Hooks are written to your home directory and affect sessions in this and other repositories.',
+        'User-level hooks apply across repositories',
       )
       return cancelled(
         await confirm({
-          message:
-            'Allow Intent to write GitHub Copilot hooks in your home directory?',
+          message: 'Allow Intent to install user-level hooks?',
           initialValue: false,
           vertical: true,
         }),

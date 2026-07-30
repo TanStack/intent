@@ -10,8 +10,9 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runInstallCommand } from '../src/commands/install/command.js'
+import { readIntentConsumerConfig } from '../src/commands/install/config.js'
 import {
   buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
@@ -19,6 +20,7 @@ import {
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from '../src/commands/install/guidance.js'
+import { readIntentLockfile } from '../src/core/lockfile/lockfile.js'
 import { packageVersionToPin } from '../src/shared/command-runner.js'
 import type {
   IntentPackage,
@@ -28,11 +30,13 @@ import type {
 
 const mapPromptMocks = vi.hoisted(() => ({
   selectClackMapTarget: vi.fn<(root: string) => Promise<string | null>>(),
+  selectClackSkills: vi.fn(),
 }))
 
 vi.mock('../src/commands/install/prompts.js', async (importOriginal) => ({
   ...(await importOriginal()),
   selectClackMapTarget: mapPromptMocks.selectClackMapTarget,
+  selectClackSkills: mapPromptMocks.selectClackSkills,
 }))
 
 const tempDirs: Array<string> = []
@@ -73,6 +77,89 @@ function tempRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'intent-install-writer-'))
   tempDirs.push(root)
   return root
+}
+
+function writeJson(path: string, value: unknown): void {
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, JSON.stringify(value, null, 2), 'utf8')
+}
+
+function bootstrapProject(): string {
+  const root = tempRoot()
+  writeJson(join(root, 'package.json'), { name: 'app', private: true })
+  const packageRoot = join(root, 'node_modules', '@tanstack', 'query')
+  writeJson(join(packageRoot, 'package.json'), {
+    name: '@tanstack/query',
+    version: '5.0.0',
+    intent: { version: 1, repo: 'TanStack/query', docs: 'docs/' },
+  })
+  const skillRoot = join(packageRoot, 'skills', 'fetching')
+  mkdirSync(skillRoot, { recursive: true })
+  writeFileSync(
+    join(skillRoot, 'SKILL.md'),
+    '---\nname: fetching\ndescription: Query fetching patterns\n---\n',
+    'utf8',
+  )
+  return root
+}
+
+function writeFetchingSkill(
+  root: string,
+  frontmatterLines: Array<string>,
+): void {
+  writeFileSync(
+    join(
+      root,
+      'node_modules',
+      '@tanstack',
+      'query',
+      'skills',
+      'fetching',
+      'SKILL.md',
+    ),
+    `---\n${frontmatterLines.join('\n')}\n---\n`,
+    'utf8',
+  )
+}
+
+function bootstrapChdir(): {
+  root: string
+  packageJsonPath: string
+  originalPackageJson: string
+} {
+  const root = bootstrapProject()
+  const packageJsonPath = join(root, 'package.json')
+  const originalPackageJson = readFileSync(packageJsonPath, 'utf8')
+  process.chdir(root)
+  return { root, packageJsonPath, originalPackageJson }
+}
+
+function mockBootstrapSelection(target: string | null): void {
+  mapPromptMocks.selectClackSkills.mockResolvedValueOnce({
+    mode: 'all-found',
+  })
+  mapPromptMocks.selectClackMapTarget.mockResolvedValueOnce(target)
+}
+
+function configuredMapProject(): string {
+  const root = tempRoot()
+  writeJson(join(root, 'package.json'), {
+    name: 'app',
+    intent: { skills: ['pkg'], exclude: [] },
+  })
+  return root
+}
+
+function expectNoBootstrapWrites(
+  root: string,
+  originalPackageJson: string,
+): void {
+  expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+    originalPackageJson,
+  )
+  expect(existsSync(join(root, 'intent.lock'))).toBe(false)
+  expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  expect(existsSync(join(root, '.intent', 'delivery.json'))).toBe(false)
 }
 
 function skill(overrides: Partial<SkillEntry>): SkillEntry {
@@ -854,10 +941,257 @@ tanstackIntent:
 })
 
 describe('install map destination command', () => {
-  it('does not prompt or write when there are no mappings', async () => {
+  beforeEach(() => {
+    setTTY(true)
+  })
+
+  it('bootstraps trust and writes the selected map without delivery state', async () => {
+    const root = bootstrapProject()
+    const targetPath = join(root, '.github', 'copilot-instructions.md')
+    process.chdir(root)
+    mockBootstrapSelection('.github/copilot-instructions.md')
+
+    await runInstallCommand({ map: true }, () =>
+      Promise.resolve(scanResult([])),
+    )
+
+    expect(
+      readIntentConsumerConfig(
+        readFileSync(join(root, 'package.json'), 'utf8'),
+      ),
+    ).toEqual({ skills: ['@tanstack/query'], exclude: [] })
+    expect(readIntentLockfile(join(root, 'intent.lock')).status).toBe('found')
+    expect(readFileSync(targetPath, 'utf8')).toContain(
+      'id: "@tanstack/query#fetching"',
+    )
+    expect(existsSync(join(root, '.intent', 'delivery.json'))).toBe(false)
+  })
+
+  it('writes trust only after the bootstrap map verifies', async () => {
+    const { root, packageJsonPath, originalPackageJson } = bootstrapChdir()
+    const targetPath = join(root, 'AGENTS.md')
+    writeFetchingSkill(root, [
+      'name: fetching',
+      'description: Edit /Users/example/project files',
+    ])
+    mockBootstrapSelection('AGENTS.md')
+
+    await expect(
+      runInstallCommand({ map: true }, () => Promise.resolve(scanResult([]))),
+    ).rejects.toThrow('Install verification failed for AGENTS.md:')
+
+    expect(readFileSync(targetPath, 'utf8')).toContain(
+      'Edit /Users/example/project files',
+    )
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(originalPackageJson)
+    expect(existsSync(join(root, 'intent.lock'))).toBe(false)
+    expect(existsSync(join(root, '.intent', 'delivery.json'))).toBe(false)
+  })
+
+  it('falls through to policed map behavior when the TTY root has no package', async () => {
     const root = tempRoot()
     process.chdir(root)
-    setTTY(true)
+    const scan = vi.fn(() => Promise.resolve(scanResult([])))
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runInstallCommand({ map: true }, scan)
+
+    expect(scan).toHaveBeenCalledOnce()
+    expect(log).toHaveBeenCalledWith('No intent-enabled skills found.')
+    expect(mapPromptMocks.selectClackSkills).not.toHaveBeenCalled()
+    expect(existsSync(join(root, 'intent.lock'))).toBe(false)
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('does not bootstrap without a lock outside a TTY', async () => {
+    const { root, originalPackageJson } = bootstrapChdir()
+    setTTY(false)
+    const scan = vi.fn(() => Promise.resolve(scanResult([])))
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runInstallCommand({ map: true }, scan)
+
+    expect(scan).toHaveBeenCalledOnce()
+    expect(log).toHaveBeenCalledWith('No intent-enabled skills found.')
+    expect(mapPromptMocks.selectClackSkills).not.toHaveBeenCalled()
+    expectNoBootstrapWrites(root, originalPackageJson)
+  })
+
+  it('preserves existing policy without a lock and does not bootstrap', async () => {
+    const root = bootstrapProject()
+    const packageJsonPath = join(root, 'package.json')
+    const originalPackageJson = `{
+  "name": "app",
+  "intent": {
+    "skills": ["@tanstack/query"],
+    "exclude": []
+  }
+}
+`
+    writeFileSync(packageJsonPath, originalPackageJson)
+    process.chdir(root)
+    const scan = vi.fn(() => Promise.resolve(scanResult([])))
+
+    await runInstallCommand({ map: true }, scan)
+
+    expect(scan).toHaveBeenCalledOnce()
+    expect(mapPromptMocks.selectClackSkills).not.toHaveBeenCalled()
+    expectNoBootstrapWrites(root, originalPackageJson)
+  })
+
+  it('writes nothing when bootstrap skill selection is cancelled', async () => {
+    const { root, originalPackageJson } = bootstrapChdir()
+    mapPromptMocks.selectClackSkills.mockResolvedValueOnce(null)
+
+    await runInstallCommand({ map: true }, () =>
+      Promise.resolve(scanResult([])),
+    )
+
+    expect(mapPromptMocks.selectClackMapTarget).not.toHaveBeenCalled()
+    expectNoBootstrapWrites(root, originalPackageJson)
+  })
+
+  it('writes nothing when bootstrap map destination selection is cancelled', async () => {
+    const { root, originalPackageJson } = bootstrapChdir()
+    mockBootstrapSelection(null)
+
+    await runInstallCommand({ map: true }, () =>
+      Promise.resolve(scanResult([])),
+    )
+
+    expect(mapPromptMocks.selectClackMapTarget).toHaveBeenCalledWith(
+      process.cwd(),
+    )
+    expectNoBootstrapWrites(root, originalPackageJson)
+  })
+
+  it('does not prompt or write when bootstrap finds no actionable skills', async () => {
+    const { root, originalPackageJson } = bootstrapChdir()
+    writeFetchingSkill(root, [
+      'name: fetching',
+      'description: Query reference',
+      'type: reference',
+    ])
+    const scan = vi.fn(() => Promise.resolve(scanResult([])))
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runInstallCommand({ map: true }, scan)
+
+    expect(log).toHaveBeenCalledWith('No intent-enabled skills found.')
+    expect(scan).not.toHaveBeenCalled()
+    expect(mapPromptMocks.selectClackSkills).not.toHaveBeenCalled()
+    expect(mapPromptMocks.selectClackMapTarget).not.toHaveBeenCalled()
+    expectNoBootstrapWrites(root, originalPackageJson)
+  })
+
+  it('dry-runs bootstrap map output without writing trust or map files', async () => {
+    const { root, originalPackageJson } = bootstrapChdir()
+    mockBootstrapSelection('.github/copilot-instructions.md')
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runInstallCommand({ dryRun: true, map: true }, () =>
+      Promise.resolve(scanResult([])),
+    )
+
+    expect(log.mock.calls.flat().join('\n')).toContain(
+      'Generated 1 mapping for .github/copilot-instructions.md.',
+    )
+    expect(log.mock.calls.flat().join('\n')).toContain(
+      'id: "@tanstack/query#fetching"',
+    )
+    expectNoBootstrapWrites(root, originalPackageJson)
+  })
+
+  it('writes bootstrap artifacts at the workspace root from a package leaf', async () => {
+    const root = bootstrapProject()
+    const leaf = join(root, 'packages', 'app')
+    writeJson(join(root, 'package.json'), {
+      name: 'workspace',
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(leaf, 'package.json'), { name: 'app', private: true })
+    process.chdir(leaf)
+    mockBootstrapSelection('AGENTS.md')
+
+    await runInstallCommand({ map: true }, () =>
+      Promise.resolve(scanResult([])),
+    )
+
+    expect(
+      readIntentConsumerConfig(
+        readFileSync(join(root, 'package.json'), 'utf8'),
+      ),
+    ).toEqual({ skills: ['@tanstack/query'], exclude: [] })
+    expect(readIntentLockfile(join(root, 'intent.lock')).status).toBe('found')
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+      'id: "@tanstack/query#fetching"',
+    )
+    expect(existsSync(join(leaf, 'intent.lock'))).toBe(false)
+    expect(existsSync(join(leaf, 'AGENTS.md'))).toBe(false)
+
+    mapPromptMocks.selectClackMapTarget.mockClear()
+    await runInstallCommand({ map: true }, () =>
+      Promise.resolve(mappedScanResult()),
+    )
+
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+      'id: "pkg#core"',
+    )
+    expect(existsSync(join(leaf, 'AGENTS.md'))).toBe(false)
+    expect(mapPromptMocks.selectClackMapTarget).not.toHaveBeenCalled()
+  })
+
+  it('targets the current package leaf during fallback', async () => {
+    const root = tempRoot()
+    const leaf = join(root, 'packages', 'app')
+    writeJson(join(root, 'package.json'), {
+      name: 'workspace',
+      private: true,
+      workspaces: ['packages/*'],
+      intent: { skills: ['pkg'], exclude: [] },
+    })
+    writeJson(join(leaf, 'package.json'), { name: 'app', private: true })
+    process.chdir(leaf)
+    mapPromptMocks.selectClackMapTarget.mockResolvedValueOnce('AGENTS.md')
+
+    await runInstallCommand({ map: true }, () =>
+      Promise.resolve(mappedScanResult()),
+    )
+
+    expect(mapPromptMocks.selectClackMapTarget).toHaveBeenCalledWith(
+      process.cwd(),
+    )
+    expect(readFileSync(join(leaf, 'AGENTS.md'), 'utf8')).toContain(
+      'id: "pkg#core"',
+    )
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it.each([{ global: true }, { globalOnly: true }])(
+    'skips bootstrap and maps the scanned result with global flags (%o)',
+    async (flag) => {
+      const { root, originalPackageJson } = bootstrapChdir()
+      const scan = vi.fn(() => Promise.resolve(mappedScanResult()))
+      mapPromptMocks.selectClackMapTarget.mockResolvedValueOnce('AGENTS.md')
+
+      await runInstallCommand({ map: true, ...flag }, scan)
+
+      expect(mapPromptMocks.selectClackSkills).not.toHaveBeenCalled()
+      expect(scan).toHaveBeenCalledOnce()
+      expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+        'id: "pkg#core"',
+      )
+      expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+        originalPackageJson,
+      )
+      expect(existsSync(join(root, 'intent.lock'))).toBe(false)
+    },
+  )
+
+  it('does not prompt or write when there are no mappings', async () => {
+    const root = configuredMapProject()
+    process.chdir(root)
 
     await runInstallCommand({ map: true }, () =>
       Promise.resolve(scanResult([])),
@@ -868,10 +1202,9 @@ describe('install map destination command', () => {
   })
 
   it('updates an existing managed target without prompting', async () => {
-    const root = tempRoot()
+    const root = configuredMapProject()
     const targetPath = join(root, 'CLAUDE.md')
     process.chdir(root)
-    setTTY(true)
     writeFileSync(targetPath, exampleBlock)
 
     await runInstallCommand({ map: true }, () =>
@@ -881,42 +1214,5 @@ describe('install map destination command', () => {
     expect(mapPromptMocks.selectClackMapTarget).not.toHaveBeenCalled()
     expect(readFileSync(targetPath, 'utf8')).toContain('id: "pkg#core"')
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
-  })
-
-  it('writes nothing when map destination selection is cancelled', async () => {
-    const root = tempRoot()
-    process.chdir(root)
-    setTTY(true)
-    mapPromptMocks.selectClackMapTarget.mockResolvedValueOnce(null)
-
-    await runInstallCommand({ map: true }, () =>
-      Promise.resolve(mappedScanResult()),
-    )
-
-    expect(mapPromptMocks.selectClackMapTarget).toHaveBeenCalledWith(
-      process.cwd(),
-    )
-    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
-  })
-
-  it('reports the selected map target during dry run without writing', async () => {
-    const root = tempRoot()
-    process.chdir(root)
-    setTTY(true)
-    mapPromptMocks.selectClackMapTarget.mockResolvedValueOnce(
-      '.github/copilot-instructions.md',
-    )
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await runInstallCommand({ dryRun: true, map: true }, () =>
-      Promise.resolve(mappedScanResult()),
-    )
-
-    expect(log.mock.calls.flat().join('\n')).toContain(
-      'Generated 1 mapping for .github/copilot-instructions.md.',
-    )
-    expect(existsSync(join(root, '.github', 'copilot-instructions.md'))).toBe(
-      false,
-    )
   })
 })

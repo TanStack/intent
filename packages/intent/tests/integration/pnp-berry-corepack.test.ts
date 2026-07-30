@@ -13,6 +13,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 import { runInteractiveInstall } from '../../src/commands/install/command.js'
+import { runConsumerInstall } from '../../src/commands/install/consumer.js'
+import { createIntentFsCache } from '../../src/discovery/fs-cache.js'
+import { scanForIntents } from '../../src/discovery/scanner.js'
 import type { InstallerPrompter } from '../../src/commands/install/consumer.js'
 
 /**
@@ -130,7 +133,7 @@ function createInstallPrompts(method: 'hooks' | 'symlink'): InstallerPrompter {
     selectTargets: () =>
       Promise.resolve(method === 'hooks' ? ['claude'] : ['agents']),
     confirmSymlink: () => Promise.resolve(true),
-    confirmUserScopeHooks: () => Promise.resolve(false),
+    confirmUserScopeHooks: () => Promise.resolve(true),
     selectSkills: () => Promise.resolve({ mode: 'all-found' }),
     confirmInstall: () => Promise.resolve('install'),
   }
@@ -169,14 +172,23 @@ describe.skipIf(!shouldRun)('Yarn Berry PnP (zip-backed dependencies)', () => {
 
   it('installs hooks and locks a zip-backed dependency', async () => {
     const cwd = scaffoldBerryProject()
+    const homeDir = mkdtempSync(join(realTmpdir, 'intent-berry-home-'))
+    tempDirs.push(homeDir)
+    const fsCache = createIntentFsCache()
+    const scanOptions = { scope: 'local' as const, fsCache }
+    const scan = scanForIntents(cwd, scanOptions)
 
-    await runInteractiveInstall({
-      cwd,
+    await runConsumerInstall({
+      discovered: scan.packages,
+      homeDir,
       prompts: createInstallPrompts('hooks'),
+      readFs: fsCache.getReadFs(),
+      root: cwd,
     })
 
     expect(existsSync(join(cwd, 'intent.lock'))).toBe(true)
-    expect(existsSync(join(cwd, '.claude', 'settings.json'))).toBe(true)
+    expect(existsSync(join(homeDir, '.claude', 'settings.json'))).toBe(true)
+    expect(existsSync(join(cwd, '.claude', 'settings.json'))).toBe(false)
   }, 120_000)
 
   it('rejects symlink delivery for a zip-backed dependency before writing', async () => {

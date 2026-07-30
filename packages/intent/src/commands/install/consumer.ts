@@ -40,7 +40,7 @@ import type {
   IntentDeliveryConfig,
 } from './delivery.js'
 import type { SkillSelection } from './plan.js'
-import type { HookAgent, HookInstallScope } from '../../hooks/types.js'
+import type { HookAgent } from '../../hooks/types.js'
 import type { ReadFs } from '../../shared/utils.js'
 import type { IntentPackage } from '../../shared/types.js'
 
@@ -66,8 +66,10 @@ export interface InstallerPrompter {
 }
 
 export interface RunConsumerInstallOptions {
+  copilotHome?: string
   discovered: ReadonlyArray<IntentPackage>
   dryRun?: boolean
+  homeDir?: string
   prompts: InstallerPrompter
   readFs?: ReadFs
   root: string
@@ -91,44 +93,23 @@ function countSkills(entries: ReadonlyArray<{ skillCount: number }>): number {
   return entries.reduce((count, entry) => count + entry.skillCount, 0)
 }
 
-async function confirmUserScopeHooks(
-  targets: ReadonlyArray<InstallTarget>,
-  prompts: InstallerPrompter,
-): Promise<boolean | null> {
-  if (!targets.includes('github')) return false
-  return prompts.confirmUserScopeHooks()
-}
-
-function installHookAgents(
+function installConfiguredHooks(
   root: string,
-  agents: string,
-  scope: HookInstallScope,
+  targets: ReadonlyArray<InstallTarget>,
+  homeDir: string | undefined,
+  copilotHome: string | undefined,
 ): Array<HookAgent> {
-  return runInstallHooks({ agents, root, scope })
+  const agents = targets.map(hookAgentForTarget).join(',')
+  return runInstallHooks({ agents, copilotHome, homeDir, root, scope: 'user' })
     .filter((result) => result.status !== 'skipped')
     .map((result) => result.agent)
 }
 
-function installConfiguredHooks(
-  root: string,
-  targets: ReadonlyArray<InstallTarget>,
-  userScopeHooksAccepted: boolean,
-): Array<HookAgent> {
-  const hookAgents = targets.map(hookAgentForTarget)
-  const projectAgents = hookAgents.filter((agent) => agent !== 'copilot')
-  const installedAgents =
-    projectAgents.length > 0
-      ? installHookAgents(root, projectAgents.join(','), 'project')
-      : []
-  if (userScopeHooksAccepted) {
-    installedAgents.push(...installHookAgents(root, 'copilot', 'user'))
-  }
-  return installedAgents
-}
-
 export async function runConsumerInstall({
+  copilotHome,
   discovered,
   dryRun = false,
+  homeDir,
   prompts,
   readFs = nodeReadFs,
   root,
@@ -157,25 +138,17 @@ export async function runConsumerInstall({
         prompts.complete('Project is up to date.')
         return
       }
-      const userScopeHooksAccepted = await confirmUserScopeHooks(
-        delivery.targets,
-        prompts,
-      )
+      const userScopeHooksAccepted = await prompts.confirmUserScopeHooks()
       if (userScopeHooksAccepted === null) return
-      const installedAgents = installConfiguredHooks(
-        root,
-        delivery.targets,
-        userScopeHooksAccepted,
-      )
+      const installedAgents = userScopeHooksAccepted
+        ? installConfiguredHooks(root, delivery.targets, homeDir, copilotHome)
+        : []
       const repairedHooks =
         installedAgents.length > 0 ? ' Repaired configured hooks.' : ''
-      const skippedCopilot =
-        delivery.targets.includes('github') && !userScopeHooksAccepted
-          ? ' Copilot was skipped because home-directory access was declined.'
-          : ''
-      prompts.complete(
-        `Project is up to date.${repairedHooks}${skippedCopilot}`,
-      )
+      const skippedHooks = userScopeHooksAccepted
+        ? ''
+        : ' Hooks were skipped because home-directory access was declined.'
+      prompts.complete(`Project is up to date.${repairedHooks}${skippedHooks}`)
       return
     }
     console.log(
@@ -296,13 +269,13 @@ export async function runConsumerInstall({
     }
 
     const userScopeHooksAccepted =
-      method === 'hooks' ? await confirmUserScopeHooks(targets, prompts) : false
+      method === 'hooks' ? await prompts.confirmUserScopeHooks() : false
     if (userScopeHooksAccepted === null) return
 
     if (updatedPackageJson !== packageJson) {
       writeTextFileAtomic(packageJsonPath, updatedPackageJson)
     }
-    if (!hasCommittedTrust) {
+    if (plan) {
       writeIntentLockfile(join(root, 'intent.lock'), lockfile)
     }
     writeIntentDeliveryConfig(root, deliveryConfig)
@@ -314,17 +287,14 @@ export async function runConsumerInstall({
       return
     }
 
-    const installedAgents = installConfiguredHooks(
-      root,
-      targets,
-      userScopeHooksAccepted,
-    )
-    const skippedCopilot =
-      targets.includes('github') && !userScopeHooksAccepted
-        ? ' Copilot was skipped because home-directory access was declined.'
-        : ''
+    const installedAgents = userScopeHooksAccepted
+      ? installConfiguredHooks(root, targets, homeDir, copilotHome)
+      : []
+    const skippedHooks = userScopeHooksAccepted
+      ? ''
+      : ' Hooks were skipped because home-directory access was declined.'
     prompts.complete(
-      `Installed ${installation.skillCount} ${installation.skillCount === 1 ? 'skill' : 'skills'} using hooks. Installed hook agents: ${installedAgents.length > 0 ? installedAgents.join(', ') : 'none'}.${skippedCopilot}`,
+      `Installed ${installation.skillCount} ${installation.skillCount === 1 ? 'skill' : 'skills'} using hooks. Installed hook agents: ${installedAgents.length > 0 ? installedAgents.join(', ') : 'none'}.${skippedHooks}`,
     )
     return
   }
