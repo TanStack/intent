@@ -168,6 +168,11 @@ function collectPackagingWarnings(context: ProjectContext): Array<string> {
   return warnings
 }
 
+function displayPath(filePath: string): string {
+  const rel = relative(process.cwd(), filePath)
+  return rel.startsWith('..') ? filePath : rel
+}
+
 function formatWarning({ file, message }: ValidationWarning): string {
   return `${file}: ${message}`
 }
@@ -477,7 +482,7 @@ async function runValidateCommandInternal(
     const catalogueSkills: Array<CatalogueValidationSkill> = []
 
     for (const filePath of skillFiles) {
-      const rel = relative(process.cwd(), filePath)
+      const rel = displayPath(filePath)
       const content = readFileSync(filePath, 'utf8')
       const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)/)
 
@@ -685,6 +690,11 @@ async function runValidateCommandInternal(
           file: skill.file,
           message: `unknown metadata.type "${type}"; skill is ${renderedSkill ? 'included in' : 'excluded from'} the catalogue`,
         })
+      } else if (!renderedSkill) {
+        reportCatalogueWarning({
+          file: skill.file,
+          message: `metadata.type "${type}" is excluded from the catalogue; agents will not see this skill`,
+        })
       }
       if (!renderedSkill) continue
 
@@ -737,7 +747,7 @@ async function runValidateCommandInternal(
         validateContext.targetPackageJsonPath ??
         join(packageRoot, 'package.json')
       reportCatalogueWarning({
-        file: relative(process.cwd(), packageJsonPath),
+        file: displayPath(packageJsonPath),
         message: `catalogue renders ${Buffer.byteLength(fullCatalogueText)}/${SESSION_CATALOGUE_MAX_BYTES} bytes; skills outside limits: ${skillsOutsideLimits.map((skill) => skill.id).join(', ')}`,
       })
     }
@@ -778,7 +788,7 @@ async function runValidateCommandInternal(
         const artifactPath = join(artifactsDir, fileName)
         if (!existsSync(artifactPath)) {
           errors.push({
-            file: relative(process.cwd(), artifactPath),
+            file: displayPath(artifactPath),
             message: 'Missing required artifact',
           })
           continue
@@ -787,7 +797,7 @@ async function runValidateCommandInternal(
         const content = readFileSync(artifactPath, 'utf8')
         if (content.trim().length === 0) {
           errors.push({
-            file: relative(process.cwd(), artifactPath),
+            file: displayPath(artifactPath),
             message: 'Artifact file is empty',
           })
           continue
@@ -799,7 +809,7 @@ async function runValidateCommandInternal(
           } catch (err) {
             const detail = err instanceof Error ? err.message : String(err)
             errors.push({
-              file: relative(process.cwd(), artifactPath),
+              file: displayPath(artifactPath),
               message: `Invalid YAML in artifact file: ${detail}`,
             })
           }

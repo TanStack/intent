@@ -3,10 +3,17 @@ import type { SkillEntry } from '../shared/types.js'
 export type SkillCategory = 'maintainer' | 'meta' | 'reference' | 'task'
 
 const MAINTAINER_TYPES = new Set(['maintainer', 'maintainer-only'])
+// core..security are what the authoring meta-skills emit; getSkillCategory maps them to 'task'.
 const KNOWN_SKILL_TYPES = new Set([
   'task',
   'reference',
   'meta',
+  'core',
+  'sub-skill',
+  'framework',
+  'lifecycle',
+  'composition',
+  'security',
   ...MAINTAINER_TYPES,
 ])
 

@@ -2707,6 +2707,48 @@ describe('cli commands', () => {
     )
   })
 
+  it('accepts authoring types and reports catalogue exclusion for known non-task types', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-catalogue-types-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@fixture/types',
+      devDependencies: { '@tanstack/intent': '^0.3.6' },
+      keywords: ['tanstack-intent'],
+      files: ['skills', '!skills/_artifacts'],
+    })
+    const writeTypedSkill = (name: string, type: string): void => {
+      const dir = join(root, 'skills', name)
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(
+        join(dir, 'SKILL.md'),
+        [
+          '---',
+          `name: ${name}`,
+          `description: Describes ${name} behaviour for agents.`,
+          'metadata:',
+          `  type: ${type}`,
+          '---',
+          '',
+          'Skill content here.',
+          '',
+        ].join('\n'),
+      )
+    }
+    writeTypedSkill('core-skill', 'core')
+    writeTypedSkill('composition-skill', 'composition')
+    writeTypedSkill('reference-skill', 'reference')
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).not.toContain('unknown metadata.type')
+    expect(output).toContain(
+      'skills/reference-skill/SKILL.md: metadata.type "reference" is excluded from the catalogue; agents will not see this skill',
+    )
+  })
+
   it('warns instead of crashing when a catalogue use is malformed', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-catalogue-use-'))
     tempDirs.push(root)
@@ -3416,7 +3458,9 @@ describe('cli commands', () => {
   })
 
   it('fails when SKILL.md frontmatter is not a mapping', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-frontmatter-'))
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-validate-frontmatter-'),
+    )
     tempDirs.push(root)
 
     const skillDir = join(root, 'skills', 'db-core')
