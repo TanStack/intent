@@ -3,86 +3,20 @@ title: Overview
 id: overview
 ---
 
-`@tanstack/intent` is a CLI for shipping and consuming Agent Skills as package artifacts.
+An Agent Skill is a set of instructions that helps a coding agent work with a library or handle a particular task. `@tanstack/intent` lets libraries include these skills in their packages, so each package version can carry matching guidance.
 
-Skills are markdown documents that teach AI coding agents how to use your library correctly. Intent versions them with your releases and ships them inside npm packages. It discovers skills from your project and workspace dependencies, then helps agents load them when working on matching tasks.
+Skills come from your dependencies, and a skill tells your agent what to do, so Intent only uses skills from the packages you choose to trust. You decide which packages may provide skills and how your agents receive them.
 
-## What Intent does
+## Use skills from a dependency
 
-Intent provides tooling for two workflows:
+If a dependency already includes skills, start with the [consumer quick start](./getting-started/quick-start-consumers). During installation, you approve the packages you trust to provide skills and choose how to deliver those skills to your agents.
 
-**For consumers:**
+Intent records the sources you approved in `package.json`, the accepted skill contents in `intent.lock`, and your local delivery choice in `.intent/delivery.json`. A package that ships skills contributes nothing until you list it among the sources you trust.
 
-- Discover skills from your project and workspace dependencies
-- Control which packages' skills are surfaced with an allowlist
-- Add lightweight skill loading guidance to your agent config
-- Add hook enforcement for agents that support blocking lifecycle hooks
-- Keep skills synchronized with library versions
+Symlink installs use `sync` to keep agent links current, and it flags new or changed skills for review before they reach your agent. Hooks are another delivery option, and a static guidance block can write the skills into a file such as `AGENTS.md`. Read the [trust model](./concepts/trust-model) for how packages and skill changes are approved, or [configuration](./concepts/configuration) for the available settings.
 
-**For maintainers (library teams):**
+## Publish skills with a library
 
-- Scaffold skills through AI-assisted domain discovery
-- Validate SKILL.md format and packaging
-- Ship skills in the same release pipeline as code
-- Track staleness when source docs change
+If you maintain a library, keep its skills in the package alongside the code they describe, so each release ships the guidance written for it. Start with the [maintainer quick start](./getting-started/quick-start-maintainers).
 
-## How it works
-
-### Discovery and installation
-
-Examples use `npx` for npm projects. In pnpm, Yarn, or Bun projects, use the matching runner:
-
-| Tool | Pattern                                      |
-| ---- | -------------------------------------------- |
-| npm  | `npx @tanstack/intent@latest <command>`      |
-| pnpm | `pnpm dlx @tanstack/intent@latest <command>` |
-| Yarn | `yarn dlx @tanstack/intent@latest <command>` |
-| Bun  | `bunx @tanstack/intent@latest <command>`     |
-
-```bash
-npx @tanstack/intent@latest list
-```
-
-Scans the current project's installed dependencies for intent-enabled packages, including `node_modules`, workspace dependencies, and Yarn PnP projects without `node_modules`. You can narrow which packages are surfaced with `package.json#intent.skills`. See the [Trust model](./concepts/trust-model) and [Configuration](./concepts/configuration) for how the allowlist works.
-Global package scanning is explicit; pass `--global` to include global packages or `--global-only` to ignore local packages.
-When both local and global packages are scanned, local packages take precedence.
-
-```bash
-npx @tanstack/intent@latest install
-```
-
-Creates or updates lightweight `intent-skills` guidance in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.). Existing guidance is updated in place; otherwise `AGENTS.md` is the default target. Pass `--map` to opt in to explicit task-to-skill mappings.
-
-```bash
-npx @tanstack/intent@latest hooks install
-```
-
-Installs hook enforcement for supported agents. Project-scoped hooks are available for Claude Code and Codex. GitHub Copilot CLI project guidance can live in `.github/copilot-instructions.md`, while blocking hooks are user-scoped. Cursor and generic `AGENTS.md` agents use guidance only.
-
-```bash
-npx @tanstack/intent@latest load @tanstack/query#fetching
-```
-
-Loads the matching `SKILL.md` content for the installed package version. Pass `--path` when you need the resolved skill file path for debugging.
-
-### Scaffolding and validation
-
-```bash
-npx @tanstack/intent@latest scaffold
-```
-
-Guides your agent through domain discovery, tree generation, and skill authoring with interactive maintainer interviews.
-
-```bash
-npx @tanstack/intent@latest validate
-```
-
-Enforces SKILL.md format rules and packaging requirements before publish.
-
-### Staleness tracking
-
-```bash
-npx @tanstack/intent@latest stale
-```
-
-Detects when skills reference outdated source documentation or library versions.
+Intent scaffolds skills with your agent, validates their format and packaging before you publish, and reports when a skill looks stale as the library changes. The [registry](./registry) explains how to make a published package discoverable.

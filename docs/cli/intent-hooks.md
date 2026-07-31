@@ -3,49 +3,38 @@ title: intent hooks
 id: intent-hooks
 ---
 
-`intent hooks install` installs lifecycle hooks that surface available Intent skills and enforce loading matching guidance before edits in supported agents.
+`intent hooks run` runs the agent lifecycle hook that shows your coding agent which skills are available at the start of a session. You do not usually run it yourself: `intent install` wires it into the agent's session-start hook when you choose hook delivery.
 
-```bash
-npx @tanstack/intent@latest hooks install [--scope project|user] [--agents copilot,claude,codex|all]
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+@tanstack/intent@latest hooks run --agent copilot|claude|codex
+<!-- ::end:tabs -->
 
 ## Options
 
-- `--scope <scope>`: hook install scope, either `project` or `user`; defaults to `project`
-- `--agents <agents>`: comma-separated hook agents to configure (`copilot`, `claude`, `codex`) or `all`; defaults to `all`
+- `--agent <agent>`: the agent whose hook format to emit, one of `copilot`, `claude`, or `codex`. Required.
 
-## Behavior
+## What it does
 
-- Installs hook behavior without writing an `intent-skills` guidance block.
-- Adds a session-start skill catalog for supported agents so the agent sees available `skill-id: description` entries before it starts work.
-- Keeps edit enforcement in place: supported edit tools are blocked until the agent runs `intent load <skill-id>` for matching guidance.
-- `--scope project` writes project-local hook config for agents that support it.
-- `--scope user` writes user-level agent config and stores runner scripts under `~/.tanstack/intent/hooks`.
-- `--agents all` is the default. In project scope, Copilot is skipped because the supported Copilot CLI hook location is user-scoped.
-- Run `intent install` separately when you also want to write project guidance.
-- Use `package.json#intent.skills` and `package.json#intent.exclude` to control which skills are surfaced in the session catalog.
+At the start of an agent session, the hook prints a short catalogue of the skills your project trusts, each with the command to load it, so the agent knows what is available before it starts work. It reads the session event on stdin and responds only to session-start events; for anything else it prints nothing.
 
-## Hook support
+The catalogue lists only skills accepted in `intent.lock`, and it is capped to keep sessions small: at most 50 skills and about 8 KB, with long descriptions trimmed. If it cannot build the catalogue it fails open, so the session continues and the hook prints a note to run `intent catalog` outside the session to see why.
 
-| Agent | Project scope | User scope | Hooks installed |
-| --- | --- | --- | --- |
-| Claude Code | `.claude/settings.json` | `~/.claude/settings.json` | `SessionStart` skill catalog plus `PreToolUse` edit gate |
-| Codex | `.codex/hooks.json` | `~/.codex/hooks.json` | `SessionStart` skill catalog plus `PreToolUse` edit gate; Codex hook interception is not a complete security boundary |
-| GitHub Copilot CLI | Guidance via `.github/copilot-instructions.md`; blocking hooks are not project-scoped | `$COPILOT_HOME/hooks/hooks.json` or `~/.copilot/hooks/hooks.json` | `SessionStart` skill catalog plus `PreToolUse` edit gate in user scope |
-| Cursor | Guidance only | Guidance only | Use `AGENTS.md` or Cursor rules; no blocking hook is installed |
-| Generic `AGENTS.md` agents | Guidance only | Guidance only | Use the `intent-skills` guidance block; no blocking hook is installed |
+Hooks surface skills; they do not block edits. They are a convenience for getting skills in front of your agent, not a security boundary - the trust guarantees come from the source policy and the lockfile. See the [trust model](../concepts/trust-model).
 
-`.github/copilot-instructions.md` is a supported project guidance target for `intent install`. GitHub Copilot CLI hook enforcement uses the user-scoped Copilot hooks directory because that is the supported hook location.
+## Installing hooks
 
-Codex requires users to review and trust non-managed hooks before they run. If Codex reports hooks awaiting review, open its hook browser and trust the generated Intent hook.
+Choose hook delivery when you run [`intent install`](./intent-install). Because the supported hook locations live in your home directory, these hooks are user-scoped and apply across your repositories, so `install` asks before writing them. It configures a session-start hook for the agents you target and removes any earlier Intent edit-gate hooks.
 
-## Status messages
+| Agent | Hook config |
+| --- | --- |
+| Claude Code | `~/.claude/settings.json` |
+| Codex | `~/.codex/hooks.json` |
+| GitHub Copilot CLI | `~/.copilot/hooks/hooks.json` (or `$COPILOT_HOME/hooks/hooks.json`) |
 
-- Hook installed: `Installed Intent hooks for claude (project) in .claude/settings.json.`
-- Hook skipped: `Skipped Intent hooks for copilot: project scope is not supported; use --scope user`
+Codex may hold new hooks for review; open its hook browser and trust the Intent hook if prompted.
 
 ## Related
 
-- [intent install](./intent-install)
-- [intent list](./intent-list)
-- [intent load](./intent-load)
+- [`intent install`](./intent-install) - set up hook delivery.
+- [`intent list`](./intent-list) - see which skills are available.
+- [`intent load`](./intent-load) - print a skill's guidance.

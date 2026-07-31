@@ -3,61 +3,45 @@ title: intent install
 id: intent-install
 ---
 
-`intent install` creates or updates an `intent-skills` guidance block in a project guidance file.
+`intent install` sets up trusted skill delivery for your project. It records which packages you trust, locks the skill content you accept, and delivers those skills to your coding agents. Run it once to set up a project, and again after dependencies change to review and accept updates. For a step-by-step walkthrough, see the [consumer quick start](../getting-started/quick-start-consumers).
 
-```bash
-npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
-```
+The default is an interactive setup where you choose how skills are delivered: symlinks, lifecycle hooks, or a static guidance block. `--map` writes the static guidance block directly, without the interactive prompts and without a terminal.
+
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+@tanstack/intent@latest install [--map] [--dry-run] [--global] [--global-only] [--no-notices]
+<!-- ::end:tabs -->
 
 ## Options
 
-### Guidance output
+- `--map`: write the static guidance block directly, without the interactive setup.
+- `--dry-run`: report what install would write, and change nothing.
+- `--global`: with `--map`, include global packages after the project packages.
+- `--global-only`: with `--map`, use only global packages.
+- `--no-notices`: suppress non-critical notices on stderr.
 
-- `--map`: write explicit task-to-skill mappings instead of lightweight loading guidance
-- `--dry-run`: print the generated block without writing files
-- `--print-prompt`: print the agent setup prompt instead of writing files
+## Interactive setup
 
-### Mapping scan scope
+The default `install` runs an interactive setup, so it needs a terminal. For CI or a non-interactive shell, use `--map`.
 
-- `--global`: include global packages after project packages when `--map` is passed
-- `--global-only`: install mappings from global packages only when `--map` is passed
-- `--no-notices`: suppress non-critical notices on stderr
+Intent asks how to deliver skills, where to deliver them, and which skills to trust, then confirms before writing. There are three delivery choices:
 
-## Behavior
+- **Symlinks** link the accepted skill folders into your agent directories.
+- **Lifecycle hooks** surface accepted skills at the start of an agent session.
+- **Static guidance block** writes an `intent-skills` block into a file such as `AGENTS.md`.
 
-- Writes lightweight skill loading guidance by default.
-- Creates `AGENTS.md` when no managed block exists.
-- Updates an existing managed block in a supported config file.
-- Preserves all content outside the managed block.
-- Scans packages and writes compact `id`, `run`, and `for` mappings only when `--map` is passed.
-- Surfaces packages permitted by `package.json#intent.skills` in `--map` mode. See [Configuration](../concepts/configuration).
-- Skips reference, meta, maintainer, and maintainer-only skills in `--map` mode.
-- Writes compact skill identities and runnable guidance commands instead of local file paths in `--map` mode.
-- Verifies the managed block before reporting success.
-- Prints `No intent-enabled skills found.` and does not create a config file when `--map` finds no actionable skills.
+Every choice records your trusted sources in `package.json` (`intent.skills`, plus any `intent.exclude`) and the content you accepted in `intent.lock`.
 
-Supported config files: `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`.
+Symlinks and hooks are managed delivery: Intent also writes `.intent/delivery.json` and keeps the skills in place. With symlinks it runs [`intent sync`](./intent-sync) once, adds the links to `.git/info/exclude`, and adds a `prepare: intent sync` script when Intent is a dev dependency, then prints a line such as `Installed 5 skills using symlink.` The static guidance block is a snapshot rather than managed delivery, the same output as the `--map` snapshot below; Intent prints a line such as `Installed 5 skills to AGENTS.md as a static guidance block.`
 
-## Default output
+Use `--dry-run` to preview any of this without writing files. See the [trust model](../concepts/trust-model) for how trusted sources and accepted content combine.
 
-The default block tells agents to discover skills and load matching guidance on demand:
+## Portable snapshot with --map
 
-```markdown
-<!-- intent-skills:start -->
-## Skill Loading
+`install --map` writes the static guidance block without the interactive setup, and unlike the default it does not need a terminal, so it suits CI. The resulting block lists each skill with the command your agent runs to load it. It is a snapshot: it does not update when dependencies change, so re-run the command to refresh it.
 
-Before editing files for a substantial task:
-- Run `npx @tanstack/intent@latest list` from the workspace root to see available local skills.
-- If a listed skill matches the task, run `npx @tanstack/intent@latest load <package>#<skill>` before changing files.
-- Use the loaded `SKILL.md` guidance while making the change.
-- Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.
-- Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
-<!-- intent-skills:end -->
-```
+Supported files are `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, and `.github/copilot-instructions.md`. In a terminal, Intent asks which file to use or lets you name another project file. It includes only packages permitted by `intent.skills` and skips reference, meta, and maintainer skills. `--global` and `--global-only` add global packages. On a project with no policy yet, a terminal run also helps you pick which skills to trust and writes `intent.skills` and `intent.lock`.
 
-## Mapping output
-
-`--map` writes compact skill identities and commands:
+The block stores portable identities and commands, never local file paths:
 
 ```yaml
 <!-- intent-skills:start -->
@@ -69,26 +53,21 @@ tanstackIntent:
 <!-- intent-skills:end -->
 ```
 
-- `id`: portable skill identity in `<package>#<skill>` format
-- `run`: package-manager-aware command agents should run before editing
-- `for`: task-routing phrase for agents
-- The block does not store `load` paths, absolute paths, or package-manager-internal paths
+- `id`: portable skill identity in `<package>#<skill>` form.
+- `run`: the package-manager-aware command to load the skill.
+- `for`: a task-routing phrase for the agent.
 
-## Status messages
+Intent verifies the block after writing and reports the result, such as `Created AGENTS.md with 1 mapping.` or `No changes to AGENTS.md; 2 mappings already current.` If it finds no usable skills it prints `No intent-enabled skills found.` and writes nothing.
 
-- Created: `Created AGENTS.md with 1 mapping.`
-- Updated: `Updated AGENTS.md with 2 mappings.`
-- Unchanged: `No changes to AGENTS.md; 2 mappings already current.`
-- Guidance created: `Created AGENTS.md with skill loading guidance.`
-- Guidance unchanged: `No changes to AGENTS.md; skill loading guidance already current.`
-- Placement tip: `Tip: Keep the intent-skills block near the top of AGENTS.md so agents read it before task-specific instructions.`
-- No actionable skills in `--map` mode: `No intent-enabled skills found.`
+## When install stops
 
-To suppress trust and migration notices in automation, pass `--no-notices`.
+- **No terminal.** The interactive setup needs a TTY. Without one, install stops and points you to `--map`.
+- **Symlinks not possible.** Archive-backed and Yarn Plug'n'Play sources cannot be symlinked. Install stops and tells you to choose hook delivery or the static guidance block instead.
+- **Target conflict.** If a delivery target already contains a conflicting file, install stops and lists the paths so you can move them.
 
 ## Related
 
-- [intent list](./intent-list)
-- [intent load](./intent-load)
-- [intent hooks](./intent-hooks)
-- [Quick Start for Consumers](../getting-started/quick-start-consumers)
+- [Consumer quick start](../getting-started/quick-start-consumers)
+- [Trust model](../concepts/trust-model)
+- [`intent list`](./intent-list)
+- [`intent hooks`](./intent-hooks)

@@ -18,7 +18,7 @@ Intent merges these keys from every `package.json` between the current working d
 
 ## `intent.skills`
 
-`intent.skills` is the allowlist. Only packages it permits contribute skills to `list`, `load`, `install`, and `stale`. See [Trust model](./trust-model) for the reasoning.
+`intent.skills` is the allowlist. Only packages it permits contribute skills to commands like `list` and `load`. Interactive `install` is where you set this list. See [Trust model](./trust-model) for the reasoning.
 
 ### Source entries
 
@@ -31,21 +31,21 @@ Each array entry names one source:
 | `@scope/*` or `workspace:@scope/*` | npm or workspace | Every discovered package of that kind whose name matches the pattern. |
 | `git:<host>/<repo>#<ref>` | git | Reserved. Not yet supported, and rejected until a future version adds it. |
 
-A malformed entry fails the whole command, and every bad entry is reported at once. Package patterns support `*` wildcards, including scoped patterns such as `@tanstack/*`. Intent matches allowlist entries against discovered package names. This matching will tighten in a future version.
+A malformed entry fails the whole command, and every bad entry is reported at once. Package patterns support `*` wildcards, including scoped patterns such as `@tanstack/*`. Intent matches allowlist entries against discovered package names.
 
 ### Special forms
 
 The list as a whole has three special forms:
 
-- **Absent.** No `intent.skills` key. Every discovered package is surfaced, and Intent prints a deprecation notice to stderr on each run until you set `intent.skills`. This is the upgrade path for existing projects. A future version will require an explicit allowlist.
-- **Empty.** `"skills": []`. No package is surfaced. Intent prints an info notice to stderr.
+- **Absent or empty.** No `intent.skills` key, or `"skills": []`. Intent permits no sources, so nothing is surfaced until you list at least one entry. It prints a notice to stderr saying no sources are permitted.
+- **Explicit entries.** Intent surfaces only the packages that match a listed entry.
 - **Wildcard.** `"skills": ["*"]`. Every discovered package is surfaced. Unlike a package pattern such as `@tanstack/*`, this exact entry crosses package scopes and source kinds. Intent prints an acknowledged-risk notice to stderr, since unvetted skills may reach your agent.
 
 A package that ships skills but is not listed is dropped. When packages are dropped this way, Intent prints one summary line naming them so you can opt in. A listed package that was not discovered is reported as well.
 
 ### Existing projects
 
-A project that has not set `intent.skills` keeps working. Intent surfaces every discovered package and prints the deprecation notice described under the absent form. Nothing breaks. Add an allowlist when you are ready, before a future version requires one. Run `intent list` to confirm which packages are surfaced.
+A project that has not set `intent.skills` surfaces no skills until you list at least one source. Configuration written for earlier versions still parses, but Intent no longer treats a missing `intent.skills` as permission to surface every package, so you have to opt in. Run `intent install` to choose which packages to trust, or add entries to `intent.skills` by hand, then run `intent list` to confirm what is surfaced.
 
 ### Suppressing notices temporarily
 

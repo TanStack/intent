@@ -3,43 +3,36 @@ title: intent load
 id: intent-load
 ---
 
-`intent load` loads a compact skill identity from the current install and prints the matching `SKILL.md` content.
+`intent load` prints the `SKILL.md` for a skill in one of your trusted packages, matched to the version installed in your project. Your coding agent runs it to pull a skill's guidance into context, and you can run it yourself to read one.
 
-```bash
-npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+@tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+<!-- ::end:tabs -->
+
+The package may be scoped or unscoped, and the skill may include slash-separated sub-skill names. An unambiguous short skill name works when only one package-prefixed skill matches.
+
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+@tanstack/intent@latest load @tanstack/query#fetching
+@tanstack/intent@latest load @tanstack/query#core/fetching
+@tanstack/intent@latest load some-lib#core --path
+<!-- ::end:tabs -->
 
 ## Options
 
-- `--path`: print the resolved skill path instead of the file content
-- `--json`: print structured JSON with metadata and content
-- `--debug`: print resolution debug details to stderr
-- `--global`: load from project packages first, then global packages
-- `--global-only`: load from global packages only
+- `--path`: print the resolved file path instead of the content. Cannot be combined with `--json`.
+- `--json`: print the content plus metadata as JSON. Cannot be combined with `--path`.
+- `--debug`: print resolution details to stderr.
+- `--global`: load from project packages first, then global packages.
+- `--global-only`: load from global packages only.
 
-## What you get
+## What it checks
 
-- Validates `<package>#<skill>` before scanning
-- Scans project-local packages by default
-- Includes global packages only when `--global` or `--global-only` is passed
-- Refuses before scanning when the target package is not permitted by `package.json#intent.skills`
-- Refuses before scanning when the target package or skill matches `intent.exclude`
-- Prefers local packages when `--global` is used and the same package exists locally and globally
-- Accepts an unambiguous short skill name when a package-prefixed skill exists
-- Prints raw `SKILL.md` content by default
-- Prints the scanner-reported path when `--path` is passed
-- Prints debug details to stderr when `--debug` is passed
+Before printing anything, `load` confirms the skill is one you are allowed to use:
 
-The package can be scoped or unscoped. The skill can include slash-separated sub-skill names.
+- The package must be permitted by `package.json#intent.skills`, and must not be removed by `intent.exclude`.
+- If `intent.lock` exists, the skill must be recorded in it and its content must still match the accepted hash. `load` refuses a skill that was never accepted or whose content changed since you accepted it. Run `intent install` to review and accept a new baseline.
 
-Examples:
-
-```bash
-npx @tanstack/intent@latest load @tanstack/query#fetching
-npx @tanstack/intent@latest load @tanstack/query#core/fetching
-npx @tanstack/intent@latest load @tanstack/router-core#auth-and-guards
-npx @tanstack/intent@latest load some-lib#core --path
-```
+Without a lockfile, `load` applies the source policy only and does not check content. It reads project packages by default; `--global` and `--global-only` add or switch to global packages, and a local package wins when the same one exists in both.
 
 ## JSON output
 
@@ -60,19 +53,16 @@ npx @tanstack/intent@latest load some-lib#core --path
 
 ## Common errors
 
-- Missing separator: `Invalid skill use "@tanstack/query": expected <package>#<skill>.`
-- Empty package: `Invalid skill use "#core": package is required.`
-- Empty skill: `Invalid skill use "@tanstack/query#": skill is required.`
-- Missing package: `Cannot resolve skill use "...": package "..." was not found.`
-- Missing skill: `Cannot resolve skill use "...": skill "..." was not found in package "...".`
-- Skill suggestion: `Did you mean @tanstack/router-core#router-core/auth-and-guards?`
-- Unlisted package: `Cannot load skill use "...": package "..." is not listed in intent.skills.`
-- Excluded package: `Cannot load skill use "...": package "..." is excluded by Intent configuration.`
-- Excluded skill: `Cannot load skill use "...": skill "..." is excluded by Intent configuration.`
+- **Malformed use.** `Invalid skill use "@tanstack/query": expected <package>#<skill>.`, or a similar message for an empty package or skill.
+- **Not found.** `Cannot resolve skill use "...": package "..." was not found.`, or the same for a missing skill, sometimes with a `Did you mean ...?` suggestion.
+- **Not trusted.** `Cannot load skill use "...": package "..." is not listed in intent.skills.`
+- **Excluded.** `Cannot load skill use "...": package "..." is excluded by Intent configuration.`, or the same for a skill.
+- **Not accepted.** `Cannot load skill use "...": skill is not accepted in intent.lock.`
+- **Content changed.** `Cannot load skill use "...": installed content does not match intent.lock.`
 
 ## Related
 
-- [intent list](./intent-list)
-- [intent install](./intent-install)
-- [Trust model](../concepts/trust-model)
-- [Configuration](../concepts/configuration)
+- [`intent list`](./intent-list) - find loadable skills.
+- [`intent install`](./intent-install) - accept skills into the lockfile.
+- [Trust model](../concepts/trust-model) - how the policy and lockfile gate loading.
+- [Configuration](../concepts/configuration) - the `intent.skills` and `intent.exclude` grammar.

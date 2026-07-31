@@ -18,6 +18,10 @@
           "to": "getting-started/quick-start-consumers"
         },
         {
+          "label": "Troubleshooting",
+          "to": "getting-started/troubleshooting"
+        },
+        {
           "label": "Quick Start (Maintainers)",
           "to": "getting-started/quick-start-maintainers"
         },
@@ -46,6 +50,10 @@
         {
           "label": "intent install",
           "to": "cli/intent-install"
+        },
+        {
+          "label": "intent sync",
+          "to": "cli/intent-sync"
         },
         {
           "label": "intent hooks",

@@ -3,123 +3,103 @@ title: Quick Start for Consumers
 id: quick-start-consumers
 ---
 
-Get started using Intent to help your agent discover and load package skills.
+When a library you depend on ships Agent Skills, Intent puts that guidance in front of your coding agent. A skill tells your agent what to do, so you choose which dependencies to trust and how their skills reach your agent.
 
-## 1. Run install
+## Before you start
 
-The install command guides your agent through the setup process:
+You need a project with a `package.json` and at least one installed dependency that ships skills. To check what dependencies in your project offer skills before you set anything up, Intent can scan your `node_modules` and report the candidates:
 
-```bash
-npx @tanstack/intent@latest install
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-Examples use `npx` for npm projects. In pnpm, Yarn, or Bun projects, use the matching runner: `pnpm dlx`, `yarn dlx`, or `bunx`.
+@tanstack/intent@latest list --show-hidden
 
-This creates or updates an `intent-skills` guidance block. It:
+<!-- ::end:tabs -->
 
-1. Checks for existing `intent-skills` guidance in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.)
-2. Writes lightweight instructions for skill discovery and loading
-3. Preserves content outside the managed block
-4. Verifies the managed block before reporting success
+Until you trust a package, its skills stay hidden, so `--show-hidden` is what reveals the candidates. Without it, a fresh project reports no packages even when a dependency ships skills.
 
-If an `intent-skills` block already exists, Intent updates that file in place.
-If no block exists, `AGENTS.md` is the default target.
+## How to run Intent
 
-Intent creates guidance like:
+Every command in this guide works with `npx @tanstack/intent@latest` and no install. That is fine for a quick start or a one-off, but `@latest` fetches whatever version is current, so a new release can change how a command behaves.
 
-```markdown
-<!-- intent-skills:start -->
-## Skill Loading
+For the most stable experience, add Intent as a dev dependency:
 
-Before editing files for a substantial task:
-- Run `pnpm dlx @tanstack/intent@latest list` from the workspace root to see available local skills.
-- If a listed skill matches the task, run `pnpm dlx @tanstack/intent@latest load <package>#<skill>` before changing files.
-- Use the loaded `SKILL.md` guidance while making the change.
-- Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.
-- Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
-<!-- intent-skills:end -->
-```
+<!-- ::start:tabs variant="package-manager" mode="dev-install" -->
 
-Intent detects the package manager when generating this block, so the runner may be `npx`, `pnpm dlx`, `yarn dlx`, or `bunx`.
+@tanstack/intent
 
-To enforce loading guidance before edits in supported agents, opt in to hooks:
+<!-- ::end:tabs -->
 
-```bash
-npx @tanstack/intent@latest hooks install
-```
+Your lockfile then records the exact version, so everyone on your team runs the same Intent and upgrades happen when you choose. With Intent installed and symlink delivery, `install` also adds a `prepare` script that runs `intent sync` after each `npm install`, so your managed links stay current without anyone remembering to run it.
 
-Project-scoped hooks are installed for Claude Code and Codex. `intent install` can write project guidance to `.github/copilot-instructions.md`, but GitHub Copilot CLI hook enforcement is user-scoped, so configure it explicitly:
+## Install skills
 
-```bash
-npx @tanstack/intent@latest hooks install --scope user --agents copilot
-```
+`install` runs an interactive setup, so run it in a terminal. For CI or a non-interactive shell, use [a portable snapshot](#portable-snapshots) instead.
 
-Cursor and generic `AGENTS.md` agents use the guidance block only.
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-Hooks add the available Intent skill catalog to supported agent sessions and keep the edit gate active until the agent loads matching full guidance. To tailor what appears in the session catalog, configure `intent.skills` and `intent.exclude` in `package.json`.
+@tanstack/intent@latest install
 
-## 2. Choose which packages' skills to use
+<!-- ::end:tabs -->
 
-`package.json#intent.skills` is an allowlist of the packages whose skills you want surfaced.
+Intent asks:
 
-```json
-{
-  "intent": {
-    "skills": ["@tanstack/*"]
-  }
-}
-```
+- **How to deliver skills.** You can symlink the skill folders into your agent's directories, install lifecycle hooks that list available skills at the start of a session, or write a static snapshot of skill mappings into an agent file such as `AGENTS.md`.
+- **Where to put them.** Intent pre-selects the agent tools it can detect, such as GitHub Copilot, Cursor, Claude Code, Codex, VS Code, or a shared `.agents` directory. Symlinks support all of these; hooks at this time only support GitHub Copilot, Claude Code, and Codex (if you'd like to add hooks for other agents or platforms, we welcome contributions). You can also choose a custom folder for symlinks or hooks.
+- **Which skills to trust.** Enable every skill it found, everything under a certain package name (eg. `@tanstack/*`), or pick individual skills. Only the packages you enable here can provide skills to your agent.
+- **A final confirmation** before it writes anything.
 
-List the packages or `*` package patterns you trust. Intent then surfaces skills from matching packages and leaves the rest out. See the [source entries](../concepts/configuration#source-entries) in Configuration for the forms an entry can take, and [Trust model](../concepts/trust-model) for why the allowlist exists.
+> [!WARNING]
+> Using symlinks can expose live package content before Intent can re-checks it. This means a skill can be updated in a dependency without Intent reviewing it first. If you want to review new or changed skills before they reach your agent, choose hook delivery instead.
 
-## 3. Use skills in your workflow
+Once finished, Intent prints a line describing how many skills were installed, e.g., `Installed 5 skills using symlink.`
 
-When your agent works on a task that matches an available skill, it loads the matching `SKILL.md` into context.
+## What install writes
 
-Load a skill manually:
+Intent records your choices in three files:
 
-```bash
-npx @tanstack/intent@latest load @tanstack/react-query#core
-```
+- `package.json` holds `intent.skills`, the list of sources you trust, as well as the `intent.exclude` patterns that remove skills or packages you do not want.
+- `intent.lock` holds contains the accepted skill contents, so teams can share the same baseline. It also records the package versions that shipped those skills, so Intent can detect when a dependency update changes its skills, or the contents of a skill you already accepted have changed.
+- `.intent/delivery.json` holds your local delivery method and targets.
 
-This prints the skill content for the installed package version.
+> [!NOTE]
+> If you chose symlinks, Intent adds the managed links to `.git/info/exclude` so they do not get committed.
 
-If you want explicit task-to-skill mappings in your agent config, opt in:
+Commit `package.json` and `intent.lock` if you're looking for the project to share the same trusted sources and accepted skills. `.intent/` stays local to your checkout.
 
-```bash
-npx @tanstack/intent@latest install --map
-```
+## Check that it worked
 
-## 4. Keep skills up-to-date
+List the skills your project now trusts:
 
-Skills version with library releases. When you update a library:
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-```bash
-npm update @tanstack/react-query
-```
+@tanstack/intent@latest list
 
-The new version brings updated skills automatically. The skills are shipped with the library, so you get the version that matches your installed code. If a package is installed both locally and globally and global scanning is enabled, Intent prefers the local version.
+<!-- ::end:tabs -->
 
-If you need to see what skills have changed, run:
+Intent prints a summary such as `5 intent-enabled packages, 12 skills`, then the packages you trusted and their skills. Load one to read its guidance:
 
-```bash
-npx @tanstack/intent@latest list
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-Use `--json` for machine-readable output:
+@tanstack/intent@latest load @tanstack/query#fetching
 
-```bash
-npx @tanstack/intent@latest list --json
-```
+<!-- ::end:tabs -->
 
-Global package scanning is opt-in:
+Replace `@tanstack/query#fetching` with a package and skill from your own list. `load` prints the `SKILL.md` shipped with the version installed in your project, and your agent can run the same command when it needs that guidance.
 
-```bash
-npx @tanstack/intent@latest list --global
-```
+If a command does not behave as described, see [Troubleshooting](./troubleshooting).
 
-You can also check if any skills reference outdated source documentation:
+## Keep skills current
 
-```bash
-npx @tanstack/intent@latest stale
-```
+Updating a dependency can add, remove, or change its skills. With symlink delivery, run [`intent sync`](../cli/intent-sync) to update the links; it flags new or changed skills for review before they reach your agent. Run `install` again when you are ready to accept a new baseline. See the [trust model](../concepts/trust-model) for how that review works.
+
+## Portable snapshots
+
+`install --map` writes a static list of skill mappings into an agent file such as `AGENTS.md` instead of setting up managed delivery:
+
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+@tanstack/intent@latest install --map
+
+<!-- ::end:tabs -->
+
+The snapshot does not update when dependencies change, so re-run the command to refresh it. Hooks and symlinks keep skills current automatically, so they are the more reliable choice for everyday use; reach for `--map` when you want committed guidance or cannot use managed delivery. An MCP server is planned for a future release.
