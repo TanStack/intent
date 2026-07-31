@@ -20,8 +20,7 @@ import {
   buildIntentSkillsBlock,
   findExistingIntentSkillsBlockTargetPath,
   resolveMapTargetPath,
-  verifyIntentSkillsBlockFile,
-  writeIntentSkillsBlock,
+  writeVerifiedIntentSkillsBlock,
 } from './guidance.js'
 import {
   readIntentConsumerConfig,
@@ -55,6 +54,7 @@ async function runInstallWithPrompts({
   await runConsumerInstall({
     discovered: scan.packages,
     dryRun,
+    packageManager: scan.packageManager,
     prompts,
     readFs: fsCache.getReadFs(),
     root,
@@ -283,29 +283,14 @@ export async function runInstallCommand(
     return
   }
 
-  const result = writeIntentSkillsBlock({
-    ...generated,
+  const result = writeVerifiedIntentSkillsBlock({
+    generated,
     root,
     targetPath,
+    formatTargetLabel: formatTargetPath,
   })
 
   if (!result.targetPath) return
-
-  const target = formatTargetPath(result.targetPath)
-  const verification = verifyIntentSkillsBlockFile({
-    expectedBlock: generated.block,
-    expectedMappingCount: generated.mappingCount,
-    targetPath: result.targetPath,
-  })
-
-  if (!verification.ok) {
-    fail(
-      [
-        `Install verification failed for ${target}:`,
-        ...verification.errors.map((error) => `- ${error}`),
-      ].join('\n'),
-    )
-  }
 
   if (bootstrapWrites) {
     writeIntentLockfile(join(root, 'intent.lock'), bootstrapWrites.lockfile)

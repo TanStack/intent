@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runInteractiveInstall } from '../src/commands/install/command.js'
 import { readIntentConsumerConfig } from '../src/commands/install/config.js'
-import { runConsumerInstall } from '../src/commands/install/consumer.js'
+import { runConsumerInstall as runConsumerInstallImpl } from '../src/commands/install/consumer.js'
 import {
   detectInstallTargets,
   readIntentDeliveryConfig,
@@ -35,7 +35,10 @@ import {
 } from '../src/core/lockfile/lockfile.js'
 import { scanForIntents } from '../src/discovery/scanner.js'
 import type * as ClackPrompts from '@clack/prompts'
-import type { InstallerPrompter } from '../src/commands/install/consumer.js'
+import type {
+  InstallerPrompter,
+  RunConsumerInstallOptions,
+} from '../src/commands/install/consumer.js'
 
 const clackPromptMocks = vi.hoisted(() => ({
   cancel: vi.fn(),
@@ -140,6 +143,7 @@ function createPrompts(
   return {
     complete: () => {},
     selectMethod: () => Promise.resolve('symlink'),
+    selectMapTarget: () => Promise.resolve('AGENTS.md'),
     selectTargets: () => Promise.resolve(['agents']),
     confirmSymlink: () => Promise.resolve(true),
     confirmUserScopeHooks: () => Promise.resolve(true),
@@ -147,6 +151,12 @@ function createPrompts(
     confirmInstall: () => Promise.resolve('install'),
     ...overrides,
   }
+}
+
+function runConsumerInstall(
+  options: Omit<RunConsumerInstallOptions, 'packageManager'>,
+): Promise<void> {
+  return runConsumerInstallImpl({ ...options, packageManager: 'pnpm' })
 }
 
 afterEach(() => {
@@ -217,14 +227,18 @@ describe('consumer install', () => {
     })
   })
 
-  it('offers only implemented interactive install methods', async () => {
+  it('offers implemented interactive install choices', async () => {
     clackPromptMocks.select.mockResolvedValueOnce('symlink')
 
     await createClackInstallerPrompter().selectMethod()
 
     expect(clackPromptMocks.select).toHaveBeenCalledOnce()
     const [{ options }] = clackPromptMocks.select.mock.calls[0]!
-    expect(options.map((option) => option.value)).toEqual(['symlink', 'hooks'])
+    expect(options.map((option) => option.value)).toEqual([
+      'symlink',
+      'hooks',
+      'map',
+    ])
   })
 
   it('requests permission to install user-level hooks across repositories', async () => {
@@ -538,6 +552,120 @@ describe('consumer install', () => {
       },
     })
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('installs selected skills as a static guidance block without delivery state', async () => {
+    const root = createProject()
+    const complete = vi.fn()
+
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts({
+        complete,
+        selectMethod: () => Promise.resolve('map'),
+        selectMapTarget: () => Promise.resolve('notes/assistant.md'),
+        selectTargets: () =>
+          Promise.reject(new Error('map must not select delivery targets')),
+        confirmInstall: () =>
+          Promise.reject(new Error('map must not confirm delivery')),
+      }),
+      root,
+    })
+
+    const target = readFileSync(join(root, 'notes', 'assistant.md'), 'utf8')
+    expect(target).toContain('id: "@tanstack/query#fetching"')
+    expect(target).toContain('load @tanstack/query#fetching')
+    expect(
+      readIntentConsumerConfig(
+        readFileSync(join(root, 'package.json'), 'utf8'),
+      ),
+    ).toEqual({ skills: ['@tanstack/query'], exclude: [] })
+    expect(
+      JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts,
+    ).toBeUndefined()
+    expect(readIntentLockfile(join(root, 'intent.lock'))).toMatchObject({
+      status: 'found',
+      lockfile: {
+        sources: [
+          {
+            id: '@tanstack/query',
+            skills: [{ path: 'skills/fetching' }],
+          },
+        ],
+      },
+    })
+    expect(existsSync(join(root, '.intent', 'delivery.json'))).toBe(false)
+    expect(complete).toHaveBeenCalledWith(
+      'Installed 1 skill to notes/assistant.md as a static guidance block.',
+    )
+  })
+
+  it('writes nothing when the static selection produces no mappings', async () => {
+    const root = createProject()
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    writeIntentLockfile(join(root, 'intent.lock'), {
+      lockfileVersion: 1,
+      sources: [],
+    })
+    const lockBefore = readFileSync(join(root, 'intent.lock'), 'utf8')
+    const complete = vi.fn()
+
+    await runConsumerInstall({
+      discovered: scanForIntents(root, { scope: 'local' }).packages,
+      prompts: createPrompts({
+        complete,
+        selectMethod: () => Promise.resolve('map'),
+        selectMapTarget: () =>
+          Promise.reject(new Error('empty map must not select a target')),
+        selectSkills: () =>
+          Promise.resolve({ mode: 'individual', enabled: [] }),
+      }),
+      root,
+    })
+
+    expect(complete).toHaveBeenCalledWith('No intent-enabled skills found.')
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
+    expect(existsSync(join(root, '.intent', 'delivery.json'))).toBe(false)
+  })
+
+  it('prints a static guidance block without writing during dry run', async () => {
+    const root = createProject()
+    const packageJsonBefore = readFileSync(join(root, 'package.json'), 'utf8')
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const complete = vi.fn()
+
+    try {
+      await runConsumerInstall({
+        discovered: scanForIntents(root, { scope: 'local' }).packages,
+        dryRun: true,
+        prompts: createPrompts({
+          complete,
+          selectMethod: () => Promise.resolve('map'),
+          selectMapTarget: () => Promise.resolve('notes/assistant.md'),
+          selectTargets: () =>
+            Promise.reject(new Error('map must not select delivery targets')),
+        }),
+        root,
+      })
+
+      const output = log.mock.calls.flat().join('\n')
+      expect(output).toContain('Generated 1 mapping for notes/assistant.md.')
+      expect(output).toContain('id: "@tanstack/query#fetching"')
+    } finally {
+      log.mockRestore()
+    }
+
+    expect(complete).toHaveBeenCalledWith('Dry run complete.')
+    expect(existsSync(join(root, 'notes', 'assistant.md'))).toBe(false)
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
+      packageJsonBefore,
+    )
+    expect(existsSync(join(root, 'intent.lock'))).toBe(false)
+    expect(existsSync(join(root, '.intent', 'delivery.json'))).toBe(false)
   })
 
   it('preserves malformed install state and managed links when sync fails', async () => {

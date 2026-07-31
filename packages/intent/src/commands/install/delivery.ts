@@ -5,7 +5,8 @@ import { writeIntentGitExclude } from '../sync/gitignore.js'
 
 export const DELIVERY_CONFIG_PATH = '.intent/delivery.json'
 
-export type InstallMethod = 'symlink' | 'hooks'
+export type DeliveryMethod = 'symlink' | 'hooks'
+export type InstallMethod = DeliveryMethod | 'map'
 export type InstallTarget =
   | 'agents'
   | 'github'
@@ -15,7 +16,7 @@ export type InstallTarget =
   | 'claude'
 
 export interface IntentDeliveryConfig {
-  method: InstallMethod
+  method: DeliveryMethod
   targets: Array<InstallTarget>
 }
 
@@ -32,14 +33,14 @@ export const INSTALL_TARGETS: ReadonlyArray<{
 ]
 
 const INSTALL_METHODS: Readonly<
-  Record<InstallMethod, ReadonlySet<InstallTarget>>
+  Record<DeliveryMethod, ReadonlySet<InstallTarget>>
 > = {
   symlink: new Set(INSTALL_TARGETS.map((target) => target.id)),
   hooks: new Set(['github', 'codex', 'claude']),
 }
 
 export function installTargetsForMethod(
-  method: InstallMethod,
+  method: DeliveryMethod,
 ): typeof INSTALL_TARGETS {
   return INSTALL_TARGETS.filter((target) =>
     INSTALL_METHODS[method].has(target.id),
@@ -96,7 +97,7 @@ function validateIntentDeliveryConfig(value: unknown): IntentDeliveryConfig {
   if (!Array.isArray(value.targets) || value.targets.length === 0) {
     throw new Error('Local delivery targets must be a non-empty array.')
   }
-  const method = value.method as InstallMethod
+  const method = value.method as DeliveryMethod
   const targets: Array<InstallTarget> = []
   const seen = new Set<string>()
   for (const target of value.targets) {

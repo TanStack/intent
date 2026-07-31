@@ -130,6 +130,7 @@ function createInstallPrompts(method: 'hooks' | 'symlink'): InstallerPrompter {
   return {
     complete: () => {},
     selectMethod: () => Promise.resolve(method),
+    selectMapTarget: () => Promise.resolve('AGENTS.md'),
     selectTargets: () =>
       Promise.resolve(method === 'hooks' ? ['claude'] : ['agents']),
     confirmSymlink: () => Promise.resolve(true),
@@ -181,6 +182,7 @@ describe.skipIf(!shouldRun)('Yarn Berry PnP (zip-backed dependencies)', () => {
     await runConsumerInstall({
       discovered: scan.packages,
       homeDir,
+      packageManager: scan.packageManager,
       prompts: createInstallPrompts('hooks'),
       readFs: fsCache.getReadFs(),
       root: cwd,

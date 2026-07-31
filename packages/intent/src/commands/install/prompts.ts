@@ -14,7 +14,11 @@ import { installTargetsForMethod } from './delivery.js'
 import { SUPPORTED_MAP_TARGETS, resolveMapTargetPath } from './guidance.js'
 import { skillSelectionId } from './plan.js'
 import type { InstallConfirmation, InstallerPrompter } from './consumer.js'
-import type { InstallMethod, InstallTarget } from './delivery.js'
+import type {
+  DeliveryMethod,
+  InstallMethod,
+  InstallTarget,
+} from './delivery.js'
 import type { SkillSelection } from './plan.js'
 import type { IntentPackage } from '../../shared/types.js'
 
@@ -130,12 +134,16 @@ export function createClackInstallerPrompter(): InstallerPrompter {
           options: [
             { value: 'symlink', label: 'Symlink skill folders' },
             { value: 'hooks', label: 'Install lifecycle hooks' },
+            { value: 'map', label: 'Static file (guidance block)' },
           ],
         }),
       )
     },
+    async selectMapTarget(root: string): Promise<string | null> {
+      return selectClackMapTarget(root)
+    },
     async selectTargets(
-      method: InstallMethod,
+      method: DeliveryMethod,
       detected: ReadonlyArray<InstallTarget>,
     ): Promise<Array<InstallTarget> | null> {
       const targets = installTargetsForMethod(method)

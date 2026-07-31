@@ -16,6 +16,7 @@ import { readIntentConsumerConfig } from '../src/commands/install/config.js'
 import {
   buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
+  buildIntentSkillsBlockFromPackages,
   resolveMapTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
@@ -299,6 +300,12 @@ describe('install writer block builder', () => {
 
     const generated = buildIntentSkillsBlock(result)
 
+    expect(
+      buildIntentSkillsBlockFromPackages(
+        result.packages,
+        result.packageManager,
+      ),
+    ).toEqual(generated)
     expect(generated.mappingCount).toBe(3)
     expect(generated.block).toBe(`<!-- intent-skills:start -->
 # TanStack Intent - before editing files, run the matching guidance command.

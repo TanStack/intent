@@ -9,11 +9,16 @@ import {
 } from 'node:fs'
 import { dirname, isAbsolute, join, posix, resolve, win32 } from 'node:path'
 import { parse as parseYaml } from 'yaml'
+import { fail } from '../../shared/cli-error.js'
 import { formatIntentCommand } from '../../shared/command-runner.js'
 import { isPathWithin } from '../../shared/utils.js'
 import { isGeneratedMappingSkill } from '../../skills/categories.js'
 import { formatSkillUse, parseSkillUse } from '../../skills/use.js'
-import type { ScanResult, SkillEntry } from '../../shared/types.js'
+import type {
+  IntentPackage,
+  ScanResult,
+  SkillEntry,
+} from '../../shared/types.js'
 
 const INTENT_SKILLS_START = '<!-- intent-skills:start -->'
 const INTENT_SKILLS_END = '<!-- intent-skills:end -->'
@@ -345,8 +350,9 @@ function formatWhen(packageName: string, skill: SkillEntry): string {
   return description || `Use ${packageName} ${skill.name}`
 }
 
-export function buildIntentSkillsBlock(
-  scanResult: ScanResult,
+export function buildIntentSkillsBlockFromPackages(
+  packages: ReadonlyArray<IntentPackage>,
+  packageManager: ScanResult['packageManager'],
 ): IntentSkillsBlockResult {
   const lines = [
     INTENT_SKILLS_START,
@@ -355,7 +361,7 @@ export function buildIntentSkillsBlock(
   ]
   let mappingCount = 0
 
-  for (const pkg of [...scanResult.packages].sort(compareNames)) {
+  for (const pkg of [...packages].sort(compareNames)) {
     for (const skill of [...pkg.skills].sort(compareNames)) {
       if (!isGeneratedMappingSkill(skill)) continue
 
@@ -366,7 +372,7 @@ export function buildIntentSkillsBlock(
       lines.push(
         `    run: ${quoteYamlString(
           formatIntentCommand(
-            scanResult.packageManager,
+            packageManager,
             `load ${formatSkillUse(pkg.name, skill.name)}`,
           ),
         )}`,
@@ -384,6 +390,15 @@ export function buildIntentSkillsBlock(
     block: `${lines.join('\n')}\n`,
     mappingCount,
   }
+}
+
+export function buildIntentSkillsBlock(
+  scanResult: ScanResult,
+): IntentSkillsBlockResult {
+  return buildIntentSkillsBlockFromPackages(
+    scanResult.packages,
+    scanResult.packageManager,
+  )
 }
 
 export function buildIntentSkillGuidanceBlock(
@@ -528,4 +543,33 @@ export function writeIntentSkillsBlock({
     status: 'created',
     targetPath,
   }
+}
+
+export function writeVerifiedIntentSkillsBlock({
+  generated,
+  root,
+  targetPath,
+  formatTargetLabel,
+}: {
+  generated: IntentSkillsBlockResult
+  root: string
+  targetPath: string
+  formatTargetLabel: (resolvedTargetPath: string) => string
+}): WriteIntentSkillsBlockResult {
+  const result = writeIntentSkillsBlock({ ...generated, root, targetPath })
+  if (!result.targetPath) return result
+  const verification = verifyIntentSkillsBlockFile({
+    expectedBlock: generated.block,
+    expectedMappingCount: generated.mappingCount,
+    targetPath: result.targetPath,
+  })
+  if (!verification.ok) {
+    fail(
+      [
+        `Install verification failed for ${formatTargetLabel(result.targetPath)}:`,
+        ...verification.errors.map((error) => `- ${error}`),
+      ].join('\n'),
+    )
+  }
+  return result
 }

@@ -10,6 +10,7 @@ import { applySourcePolicy } from '../../core/source-policy.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
 import { runInstallHooks } from '../../hooks/install.js'
 import { writeTextFileAtomic } from '../../shared/atomic-write.js'
+import { detectIntentAudience } from '../../shared/environment.js'
 import { nodeReadFs } from '../../shared/utils.js'
 import { runSyncCommand } from '../sync/command.js'
 import { hasNonNativeLinkSource, reconcileManagedLinks } from '../sync/links.js'
@@ -33,8 +34,15 @@ import {
   buildSkillSelectionPlan,
   summarizeInstallDeltaInventory,
 } from './plan.js'
+import {
+  buildIntentSkillsBlockFromPackages,
+  findExistingIntentSkillsBlockTargetPath,
+  resolveMapTargetPath,
+  writeVerifiedIntentSkillsBlock,
+} from './guidance.js'
 import type { IntentConsumerConfig } from './config.js'
 import type {
+  DeliveryMethod,
   InstallMethod,
   InstallTarget,
   IntentDeliveryConfig,
@@ -42,15 +50,16 @@ import type {
 import type { SkillSelection } from './plan.js'
 import type { HookAgent } from '../../hooks/types.js'
 import type { ReadFs } from '../../shared/utils.js'
-import type { IntentPackage } from '../../shared/types.js'
+import type { IntentPackage, ScanResult } from '../../shared/types.js'
 
 export type InstallConfirmation = 'install' | 'back' | null
 
 export interface InstallerPrompter {
   complete: (message: string) => void
   selectMethod: () => Promise<InstallMethod | null>
+  selectMapTarget: (root: string) => Promise<string | null>
   selectTargets: (
-    method: InstallMethod,
+    method: DeliveryMethod,
     detected: ReadonlyArray<InstallTarget>,
   ) => Promise<Array<InstallTarget> | null>
   confirmSymlink: () => Promise<boolean | null>
@@ -70,6 +79,7 @@ export interface RunConsumerInstallOptions {
   discovered: ReadonlyArray<IntentPackage>
   dryRun?: boolean
   homeDir?: string
+  packageManager: ScanResult['packageManager']
   prompts: InstallerPrompter
   readFs?: ReadFs
   root: string
@@ -110,6 +120,7 @@ export async function runConsumerInstall({
   discovered,
   dryRun = false,
   homeDir,
+  packageManager,
   prompts,
   readFs = nodeReadFs,
   root,
@@ -120,6 +131,35 @@ export async function runConsumerInstall({
   const existingConfig = readIntentConsumerConfig(packageJson)
   const existingLock = readIntentLockfile(join(root, 'intent.lock'))
   const delivery = dryRun ? null : readIntentDeliveryConfig(root)
+  async function resolveSkillSelection(): Promise<{
+    plan: ReturnType<typeof buildSkillSelectionPlan> | null
+    config: IntentConsumerConfig
+    skillCount: number
+  } | null> {
+    const hasCommittedTrust =
+      existingLock.status === 'found' &&
+      (existingConfig.skills.length > 0 || existingConfig.exclude.length > 0)
+    const reusingCommittedTrust = !delivery && hasCommittedTrust
+    const selection = reusingCommittedTrust
+      ? null
+      : await prompts.selectSkills(discovered)
+    if (!reusingCommittedTrust && !selection) return null
+    const plan = selection
+      ? buildSkillSelectionPlan(discovered, selection)
+      : null
+    const config = plan
+      ? { skills: plan.skills, exclude: plan.exclude }
+      : existingConfig
+    const skillCount = (plan?.packages ?? discovered).reduce(
+      (count, pkg) =>
+        count +
+        pkg.skills.filter(
+          (skill) => !('status' in skill) || skill.status === 'enabled',
+        ).length,
+      0,
+    )
+    return { plan, config, skillCount }
+  }
   if (delivery) {
     const inventory = buildInstallDeltaInventory(
       discovered,
@@ -158,6 +198,79 @@ export async function runConsumerInstall({
   for (;;) {
     const method = delivery ? delivery.method : await prompts.selectMethod()
     if (!method) return
+    if (method === 'map') {
+      if (discovered.every((pkg) => pkg.skills.length === 0)) {
+        prompts.complete('No intent-enabled skills found.')
+        return
+      }
+      const resolved = await resolveSkillSelection()
+      if (!resolved) return
+      const { config, skillCount } = resolved
+      const policy = applySourcePolicy(
+        { packages: [...discovered] },
+        {
+          config: parseSkillSources(config.skills),
+          excludeMatchers: compileExcludePatterns(config.exclude),
+        },
+      )
+      const generated = buildIntentSkillsBlockFromPackages(
+        policy.packages,
+        packageManager,
+      )
+      if (generated.mappingCount === 0) {
+        prompts.complete('No intent-enabled skills found.')
+        return
+      }
+
+      const existingTargetPath = findExistingIntentSkillsBlockTargetPath(root)
+      let targetPath: string
+      if (existingTargetPath) {
+        targetPath = existingTargetPath
+      } else {
+        const selectedTarget = await prompts.selectMapTarget(root)
+        if (!selectedTarget) return
+        targetPath = resolveMapTargetPath(root, selectedTarget)
+      }
+      const relativeTarget = toProjectRelativePath(root, targetPath)
+
+      if (dryRun) {
+        console.log(
+          `Generated ${generated.mappingCount} ${generated.mappingCount === 1 ? 'mapping' : 'mappings'} for ${relativeTarget}.`,
+        )
+        console.log(generated.block)
+        prompts.complete('Dry run complete.')
+        return
+      }
+
+      const result = writeVerifiedIntentSkillsBlock({
+        generated,
+        root,
+        targetPath,
+        formatTargetLabel: () => relativeTarget,
+      })
+      if (!result.targetPath) return
+
+      const updatedPackageJson = updateIntentConsumerConfigText(
+        packageJson,
+        config,
+      )
+      if (updatedPackageJson !== packageJson) {
+        writeTextFileAtomic(packageJsonPath, updatedPackageJson)
+      }
+      writeIntentLockfile(join(root, 'intent.lock'), {
+        lockfileVersion: 1,
+        sources: buildCurrentLockfileSources(policy.packages, readFs),
+      })
+      if (result.status !== 'unchanged' && detectIntentAudience() === 'human') {
+        console.log(
+          'The intent-skills block is a snapshot and does not update when dependencies change. Re-run `intent install --map` to regenerate it.',
+        )
+      }
+      prompts.complete(
+        `Installed ${skillCount} ${skillCount === 1 ? 'skill' : 'skills'} to ${relativeTarget} as a static guidance block.`,
+      )
+      return
+    }
     const targets = delivery
       ? delivery.targets
       : await prompts.selectTargets(method, detectInstallTargets(root))
@@ -170,32 +283,14 @@ export async function runConsumerInstall({
       prompts.complete('No intent-enabled skills found.')
       return
     }
-    const hasCommittedTrust =
-      existingLock.status === 'found' &&
-      (existingConfig.skills.length > 0 || existingConfig.exclude.length > 0)
-    const reusingCommittedTrust = !delivery && hasCommittedTrust
-    const selection = reusingCommittedTrust
-      ? null
-      : await prompts.selectSkills(discovered)
-    if (!reusingCommittedTrust && !selection) return
-    const plan = selection
-      ? buildSkillSelectionPlan(discovered, selection)
-      : null
-    const config = plan
-      ? { skills: plan.skills, exclude: plan.exclude }
-      : existingConfig
+    const resolved = await resolveSkillSelection()
+    if (!resolved) return
+    const { plan, config, skillCount } = resolved
     const deliveryConfig = { method, targets }
     const installation = {
       config,
       delivery: deliveryConfig,
-      skillCount: (plan?.packages ?? discovered).reduce(
-        (count, pkg) =>
-          count +
-          pkg.skills.filter(
-            (skill) => !('status' in skill) || skill.status === 'enabled',
-          ).length,
-        0,
-      ),
+      skillCount,
     }
     const confirmation = await prompts.confirmInstall(installation)
     if (confirmation === null) return
