@@ -8,7 +8,20 @@ import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fail, isCliFailure } from '../shared/cli-error.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
+import {
+  buildSessionCatalogue,
+  formatSessionCatalogue,
+} from '../session-catalog.js'
+import { containsLocalPath } from '../shared/local-path.js'
+import { isKnownSkillType } from '../skills/categories.js'
+import {
+  SESSION_CATALOGUE_MAX_BYTES,
+  SESSION_CATALOGUE_MAX_DESCRIPTION_LENGTH,
+  normalizeWhitespace,
+} from '../skills/catalogue-contract.js'
+import { isSkillUseParseError, parseSkillUse } from '../skills/use.js'
 import { printWarnings } from './support.js'
+import type { IntentSkillList, IntentSkillSummary } from '../core/index.js'
 import type { ProjectContext } from '../core/project-context.js'
 
 interface ValidationError {
@@ -30,6 +43,25 @@ interface FrontmatterFixPlan {
 interface SetVersionPlan {
   file: string
   filePath: string
+}
+
+interface CatalogueValidationSkill {
+  file: string
+  rawDescription: string
+  summary: IntentSkillSummary
+}
+
+function catalogueInput(skills: Array<IntentSkillSummary>): IntentSkillList {
+  return {
+    packageManager: 'unknown',
+    skills,
+    packages: [],
+    hiddenSourceCount: 0,
+    hiddenSources: [],
+    warnings: [],
+    notices: [],
+    conflicts: [],
+  }
 }
 
 export interface ValidateCommandOptions {
@@ -325,22 +357,23 @@ function collectAgentSkillSpecWarnings({
         message:
           'Agent Skills spec warning: compatibility should be a non-empty string',
       })
-    } else if (fm.compatibility.length > 500) {
+    } else if ([...fm.compatibility].length > 500) {
       warnings.push({
         file: rel,
-        message: `Agent Skills spec warning: compatibility exceeds 500 characters (${fm.compatibility.length} chars)`,
+        message: `Agent Skills spec warning: compatibility exceeds 500 characters (${[...fm.compatibility].length} chars)`,
       })
     }
   }
 
   if (
     fm['allowed-tools'] !== undefined &&
-    typeof fm['allowed-tools'] !== 'string'
+    (typeof fm['allowed-tools'] !== 'string' ||
+      fm['allowed-tools'].trim().length === 0)
   ) {
     warnings.push({
       file: rel,
       message:
-        'Agent Skills spec warning: allowed-tools should be a space-separated string',
+        'Agent Skills spec warning: allowed-tools should be a non-empty space-separated string',
     })
   }
 
@@ -408,6 +441,10 @@ async function runValidateCommandInternal(
   const fixPlans: Array<FrontmatterFixPlan> = []
   const setVersionPlans: Array<SetVersionPlan> = []
   let validatedCount = 0
+  const reportCatalogueWarning = (warning: ValidationWarning): void => {
+    if (options.check) errors.push(warning)
+    else warnings.push(formatWarning(warning))
+  }
 
   if (explicitDir && findSkillFiles(skillsDirs[0]!).length === 0) {
     fail('No SKILL.md files found')
@@ -424,6 +461,20 @@ async function runValidateCommandInternal(
       cwd: process.cwd(),
       targetPath: skillsDir,
     })
+    const packageRoot = validateContext.packageRoot ?? dirname(skillsDir)
+    let packageName = basename(packageRoot)
+    if (
+      validateContext.targetPackageJsonPath &&
+      existsSync(validateContext.targetPackageJsonPath)
+    ) {
+      try {
+        const packageJson = JSON.parse(
+          readFileSync(validateContext.targetPackageJsonPath, 'utf8'),
+        ) as { name?: unknown }
+        if (typeof packageJson.name === 'string') packageName = packageJson.name
+      } catch {}
+    }
+    const catalogueSkills: Array<CatalogueValidationSkill> = []
 
     for (const filePath of skillFiles) {
       const rel = relative(process.cwd(), filePath)
@@ -440,9 +491,9 @@ async function runValidateCommandInternal(
         continue
       }
 
-      let fm: Record<string, unknown>
+      let parsedFrontmatter: unknown
       try {
-        fm = parseYaml(match[1]) as Record<string, unknown>
+        parsedFrontmatter = parseYaml(match[1])
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err)
         errors.push({
@@ -451,6 +502,14 @@ async function runValidateCommandInternal(
         })
         continue
       }
+      if (!isRecord(parsedFrontmatter)) {
+        errors.push({
+          file: rel,
+          message: 'YAML frontmatter must be a mapping',
+        })
+        continue
+      }
+      const fm = parsedFrontmatter
 
       const fixPlan = collectFrontmatterFixPlan({ filePath, fm, rel })
       if (fixPlan) fixPlans.push(fixPlan)
@@ -467,11 +526,24 @@ async function runValidateCommandInternal(
 
       if (!fm.name) {
         errors.push({ file: rel, message: 'Missing required field: name' })
+      } else if (typeof fm.name !== 'string' || fm.name.trim().length === 0) {
+        errors.push({
+          file: rel,
+          message: 'name must be a non-empty string',
+        })
       }
       if (!fm.description) {
         errors.push({
           file: rel,
           message: 'Missing required field: description',
+        })
+      } else if (
+        typeof fm.description !== 'string' ||
+        fm.description.trim().length === 0
+      ) {
+        errors.push({
+          file: rel,
+          message: 'description must be a non-empty string',
         })
       }
 
@@ -533,11 +605,14 @@ async function runValidateCommandInternal(
         }
       }
 
-      if (typeof fm.description === 'string' && fm.description.length > 1024) {
-        errors.push({
-          file: rel,
-          message: `Description exceeds 1024 character limit (${fm.description.length} chars)`,
-        })
+      if (typeof fm.description === 'string') {
+        const descriptionLength = [...fm.description].length
+        if (descriptionLength > 1024) {
+          errors.push({
+            file: rel,
+            message: `Description exceeds 1024 character limit (${descriptionLength} chars)`,
+          })
+        }
       }
 
       if (
@@ -554,11 +629,138 @@ async function runValidateCommandInternal(
         ...collectAgentSkillSpecWarnings({ fm, rel }).map(formatWarning),
       )
 
+      if (typeof fm.description === 'string') {
+        const skillName = relative(skillsDir, dirname(filePath)).replace(
+          /\\/g,
+          '/',
+        )
+        catalogueSkills.push({
+          file: rel,
+          rawDescription: fm.description,
+          summary: {
+            use: `${packageName}#${skillName}`,
+            packageName,
+            packageRoot,
+            packageVersion: '0.0.0',
+            packageSource: 'local',
+            skillName,
+            description: fm.description,
+            type: readScalarField(fm, 'type'),
+          },
+        })
+      }
+
       const lineCount = content.split(/\r?\n/).length
       if (lineCount > 500) {
         errors.push({
           file: rel,
           message: `Exceeds 500 line limit (${lineCount} lines). Rewrite for conciseness: move API tables to references/, trim verbose examples, and remove content an agent already knows. Do not simply raise the limit.`,
+        })
+      }
+    }
+
+    const renderableSkills: Array<CatalogueValidationSkill> = []
+    const renderedSkills: Array<{
+      description: string
+      input: CatalogueValidationSkill
+    }> = []
+    for (const skill of catalogueSkills) {
+      try {
+        parseSkillUse(skill.summary.use)
+      } catch (error) {
+        reportCatalogueWarning({
+          file: skill.file,
+          message: `malformed catalogue use: ${isSkillUseParseError(error) ? error.message : String(error)}`,
+        })
+        continue
+      }
+
+      renderableSkills.push(skill)
+      const renderedSkill = buildSessionCatalogue(
+        catalogueInput([skill.summary]),
+      ).skills[0]
+      const type = skill.summary.type
+      if (type !== undefined && !isKnownSkillType(type)) {
+        reportCatalogueWarning({
+          file: skill.file,
+          message: `unknown metadata.type "${type}"; skill is ${renderedSkill ? 'included in' : 'excluded from'} the catalogue`,
+        })
+      }
+      if (!renderedSkill) continue
+
+      renderedSkills.push({
+        description: renderedSkill.description,
+        input: skill,
+      })
+      const normalizedLength = [...normalizeWhitespace(skill.rawDescription)]
+        .length
+      const hasLocalPath = containsLocalPath(
+        normalizeWhitespace(skill.rawDescription),
+      )
+      if (hasLocalPath) {
+        reportCatalogueWarning({
+          file: skill.file,
+          message: 'catalogue description contains a local path and is blanked',
+        })
+      }
+      if (
+        !hasLocalPath &&
+        normalizedLength > SESSION_CATALOGUE_MAX_DESCRIPTION_LENGTH
+      ) {
+        const renderedLength = [...renderedSkill.description].length
+        reportCatalogueWarning({
+          file: skill.file,
+          message: `catalogue description is truncated from ${normalizedLength} to ${renderedLength} characters (${normalizedLength - renderedLength} lost)`,
+        })
+      }
+    }
+
+    const packageCatalogueInput = catalogueInput(
+      renderableSkills.map((skill) => skill.summary),
+    )
+    const fullCatalogue = buildSessionCatalogue(packageCatalogueInput, {
+      maxSkills: renderableSkills.length,
+    })
+    const fullCatalogueText = formatSessionCatalogue(fullCatalogue, {
+      maxBytes: Number.MAX_SAFE_INTEGER,
+    })
+    const defaultCatalogue = buildSessionCatalogue(packageCatalogueInput)
+    const defaultCatalogueLines = new Set(
+      formatSessionCatalogue(defaultCatalogue).split('\n'),
+    )
+    const skillsOutsideLimits = fullCatalogue.skills.filter(
+      (skill) =>
+        !defaultCatalogueLines.has(`- ${skill.id}: ${skill.description}`),
+    )
+    if (skillsOutsideLimits.length > 0) {
+      const packageJsonPath =
+        validateContext.targetPackageJsonPath ??
+        join(packageRoot, 'package.json')
+      reportCatalogueWarning({
+        file: relative(process.cwd(), packageJsonPath),
+        message: `catalogue renders ${Buffer.byteLength(fullCatalogueText)}/${SESSION_CATALOGUE_MAX_BYTES} bytes; skills outside limits: ${skillsOutsideLimits.map((skill) => skill.id).join(', ')}`,
+      })
+    }
+
+    const skillsByDescription = new Map<
+      string,
+      Array<CatalogueValidationSkill>
+    >()
+    for (const rendered of renderedSkills) {
+      const matches = skillsByDescription.get(rendered.description) ?? []
+      matches.push(rendered.input)
+      skillsByDescription.set(rendered.description, matches)
+    }
+    for (const matches of skillsByDescription.values()) {
+      if (matches.length < 2) continue
+      for (const skill of matches) {
+        const duplicateUses = matches
+          .filter((match) => match !== skill)
+          .map((match) => match.summary.use)
+          .join(', ')
+        reportCatalogueWarning({
+          file: skill.file,
+          message: `catalogue description duplicates ${duplicateUses}`,
         })
       }
     }

@@ -2626,6 +2626,163 @@ describe('cli commands', () => {
     )
   })
 
+  it('warns when a catalogue description is truncated', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-catalogue-length-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@fixture/catalogue',
+      devDependencies: { '@tanstack/intent': '^0.3.6' },
+      keywords: ['tanstack-intent'],
+      files: ['skills', '!skills/_artifacts'],
+    })
+    writeSkillMd(join(root, 'skills', 'long'), {
+      name: 'long',
+      description: 'a'.repeat(200),
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain(
+      'skills/long/SKILL.md: catalogue description is truncated from 200 to 180 characters (20 lost)',
+    )
+  })
+
+  it('reports per-skill catalogue shaping and classification warnings', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-catalogue-skills-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@fixture/catalogue',
+      devDependencies: { '@tanstack/intent': '^0.3.6' },
+      keywords: ['tanstack-intent'],
+      files: ['skills', '!skills/_artifacts'],
+    })
+    writeSkillMd(join(root, 'skills', 'local'), {
+      name: 'local',
+      description: 'Read /Users/person/project/file.ts',
+    })
+    const unknownDir = join(root, 'skills', 'unknown')
+    mkdirSync(unknownDir, { recursive: true })
+    writeFileSync(
+      join(unknownDir, 'SKILL.md'),
+      [
+        '---',
+        'name: unknown',
+        'description: Unknown catalogue type',
+        'metadata:',
+        '  type: surprising',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+    writeSkillMd(join(root, 'skills', 'duplicate-a'), {
+      name: 'duplicate-a',
+      description: 'Shared description',
+    })
+    writeSkillMd(join(root, 'skills', 'duplicate-b'), {
+      name: 'duplicate-b',
+      description: 'Shared   description',
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain(
+      'skills/local/SKILL.md: catalogue description contains a local path and is blanked',
+    )
+    expect(output).toContain(
+      'skills/unknown/SKILL.md: unknown metadata.type "surprising"; skill is included in the catalogue',
+    )
+    expect(output).toContain(
+      'skills/duplicate-a/SKILL.md: catalogue description duplicates @fixture/catalogue#duplicate-b',
+    )
+    expect(output).toContain(
+      'skills/duplicate-b/SKILL.md: catalogue description duplicates @fixture/catalogue#duplicate-a',
+    )
+  })
+
+  it('warns instead of crashing when a catalogue use is malformed', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-catalogue-use-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '',
+      devDependencies: { '@tanstack/intent': '^0.3.6' },
+      keywords: ['tanstack-intent'],
+      files: ['skills', '!skills/_artifacts'],
+    })
+    writeSkillMd(join(root, 'skills', 'core'), {
+      name: 'core',
+      description: 'Core concepts',
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain(
+      'skills/core/SKILL.md: malformed catalogue use: Invalid skill use "#core": package is required.',
+    )
+  })
+
+  it('reports package catalogue bytes and skills outside the limits', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-catalogue-budget-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@fixture/catalogue',
+      devDependencies: { '@tanstack/intent': '^0.3.6' },
+      keywords: ['tanstack-intent'],
+      files: ['skills', '!skills/_artifacts'],
+    })
+    for (let index = 0; index < 51; index++) {
+      const skillName = `skill-${String(index).padStart(2, '0')}`
+      writeSkillMd(join(root, 'skills', skillName), {
+        name: skillName,
+        description: `${skillName} ${'a'.repeat(160)}`,
+      })
+    }
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('package.json: catalogue renders ')
+    expect(output).toContain('/8000 bytes; skills outside limits:')
+    expect(output).toContain('@fixture/catalogue#skill-50')
+  })
+
+  it('escalates catalogue warnings in check mode', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-catalogue-check-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: '@fixture/catalogue',
+      devDependencies: { '@tanstack/intent': '^0.3.6' },
+      keywords: ['tanstack-intent'],
+      files: ['skills', '!skills/_artifacts'],
+    })
+    writeSkillMd(join(root, 'skills', 'long'), {
+      name: 'long',
+      description: 'a'.repeat(200),
+    })
+    process.chdir(root)
+
+    const exitCode = await main(['validate', '--check'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain('Validation failed with 1 error(s)')
+    expect(output).toContain(
+      'skills/long/SKILL.md: catalogue description is truncated from 200 to 180 characters (20 lost)',
+    )
+  })
+
   it('keeps nested Intent skill names valid without Agent Skills spec warnings', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-nested-'))
     tempDirs.push(root)
@@ -3223,6 +3380,59 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(1)
     expect(output).toContain('metadata must be a mapping')
+  })
+
+  it('validates Agent Skills scalar frontmatter fields', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-scalars-'))
+    tempDirs.push(root)
+
+    const skillDir = join(root, 'skills', 'db-core')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: 42',
+        'description: []',
+        'allowed-tools: "   "',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+      ].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain('name must be a non-empty string')
+    expect(output).toContain('description must be a non-empty string')
+    expect(output).toContain(
+      'Agent Skills spec warning: allowed-tools should be a non-empty space-separated string',
+    )
+  })
+
+  it('fails when SKILL.md frontmatter is not a mapping', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-frontmatter-'))
+    tempDirs.push(root)
+
+    const skillDir = join(root, 'skills', 'db-core')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      ['---', 'null', '---', '', 'Skill content here.', ''].join('\n'),
+    )
+
+    process.chdir(root)
+
+    const exitCode = await main(['validate'])
+    const output = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain('YAML frontmatter must be a mapping')
   })
 
   it('does not flag array-valued top-level keys as non-spec scalars', async () => {

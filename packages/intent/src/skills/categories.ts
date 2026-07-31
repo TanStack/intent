@@ -3,6 +3,16 @@ import type { SkillEntry } from '../shared/types.js'
 export type SkillCategory = 'maintainer' | 'meta' | 'reference' | 'task'
 
 const MAINTAINER_TYPES = new Set(['maintainer', 'maintainer-only'])
+const KNOWN_SKILL_TYPES = new Set([
+  'task',
+  'reference',
+  'meta',
+  ...MAINTAINER_TYPES,
+])
+
+export function isKnownSkillType(type: string): boolean {
+  return KNOWN_SKILL_TYPES.has(type.trim().toLowerCase())
+}
 
 export function getSkillCategory(
   skill: Pick<SkillEntry, 'type'>,

@@ -20,6 +20,13 @@ import { resolveProjectContext } from './core/project-context.js'
 import { computeSkillContentHash } from './core/lockfile/hash.js'
 import { containsLocalPath } from './shared/local-path.js'
 import { isGeneratedMappingSkill } from './skills/categories.js'
+import {
+  SESSION_CATALOGUE_MAX_BYTES,
+  SESSION_CATALOGUE_MAX_DESCRIPTION_LENGTH,
+  SESSION_CATALOGUE_MAX_SKILLS,
+  normalizeWhitespace,
+  truncateText,
+} from './skills/catalogue-contract.js'
 import { parseSkillUse } from './skills/use.js'
 import { findWorkspacePackages } from './setup/workspace-patterns.js'
 import type * as NodePath from 'node:path'
@@ -27,10 +34,7 @@ import type { IntentSkillList } from './core/index.js'
 import type { ReadFs } from './shared/utils.js'
 
 const CACHE_SCHEMA_VERSION = 4
-const DEFAULT_MAX_CONTEXT_BYTES = 8_000
-const DEFAULT_MAX_SKILLS = 50
 const MIN_CONTEXT_BYTES = 512
-const MAX_DESCRIPTION_LENGTH = 180
 const warnedCacheDirectories = new Set<string>()
 const FINGERPRINT_FILES = [
   'package.json',
@@ -87,7 +91,7 @@ export function buildSessionCatalogue(
   result: IntentSkillList,
   options: { maxSkills?: number } = {},
 ): SessionCatalogue {
-  const maxSkills = options.maxSkills ?? DEFAULT_MAX_SKILLS
+  const maxSkills = options.maxSkills ?? SESSION_CATALOGUE_MAX_SKILLS
   const allSkills = result.skills
     .filter(isGeneratedMappingSkill)
     .map((skill): SessionSkillSummary => {
@@ -95,7 +99,10 @@ export function buildSessionCatalogue(
       const normalizedDescription = normalizeWhitespace(skill.description)
       const description = containsLocalPath(normalizedDescription)
         ? ''
-        : truncateText(normalizedDescription, MAX_DESCRIPTION_LENGTH)
+        : truncateText(
+            normalizedDescription,
+            SESSION_CATALOGUE_MAX_DESCRIPTION_LENGTH,
+          )
       return {
         id: skill.use,
         description: description || `Use ${skill.use}`,
@@ -112,7 +119,7 @@ export function formatSessionCatalogue(
   catalogue: SessionCatalogue,
   options: { maxBytes?: number } = {},
 ): string {
-  const maxBytes = options.maxBytes ?? DEFAULT_MAX_CONTEXT_BYTES
+  const maxBytes = options.maxBytes ?? SESSION_CATALOGUE_MAX_BYTES
   if (!Number.isInteger(maxBytes) || maxBytes < MIN_CONTEXT_BYTES) {
     throw new RangeError(
       `Session catalogue maxBytes must be an integer of at least ${MIN_CONTEXT_BYTES}.`,
@@ -318,19 +325,6 @@ export function policyManifestPaths(
 
 function compareOrdinal(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
-}
-
-function normalizeWhitespace(value: string): string {
-  return value.replace(/\s+/g, ' ').trim()
-}
-
-function truncateText(value: string, maxLength: number): string {
-  const codePoints = [...value]
-  if (codePoints.length <= maxLength) return value
-  return `${codePoints
-    .slice(0, maxLength - 3)
-    .join('')
-    .trimEnd()}...`
 }
 
 function formatOmittedSkills(count: number): string {
