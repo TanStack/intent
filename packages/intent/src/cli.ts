@@ -44,10 +44,12 @@ function createCli(): CAC {
     .example('list --json')
     .example('list --global')
     .example('list --why')
-    .action(async (packageName: string | undefined, options: ListCommandOptions) => {
-      const { runListCommand } = await import('./commands/list.js')
-      await runListCommand(packageName, options)
-    })
+    .action(
+      async (packageName: string | undefined, options: ListCommandOptions) => {
+        const { runListCommand } = await import('./commands/list.js')
+        await runListCommand(packageName, options)
+      },
+    )
 
   cli
     .command(

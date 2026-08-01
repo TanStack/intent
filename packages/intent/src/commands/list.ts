@@ -47,10 +47,7 @@ function printListDebug(result: IntentSkillList): void {
   ])
 }
 
-function printVersionConflicts(
-  result: IntentSkillList,
-  debug: boolean,
-): void {
+function printVersionConflicts(result: IntentSkillList, debug: boolean): void {
   if (result.conflicts.length === 0) return
 
   console.log('\nVersion conflicts:\n')
