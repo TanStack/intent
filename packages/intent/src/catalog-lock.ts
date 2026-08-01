@@ -20,6 +20,9 @@ export interface LockCheckedCatalogueDiscovery {
   verification: Array<CatalogueVerificationEntry> | null
 }
 
+export const CATALOG_INSTALL_REQUIRED =
+  'Pause and ask the user to run `intent install` interactively to approve skills and choose the delivery target. Do not continue automatically.'
+
 function formatWithheldWarning(count: number, reason: string): string {
   return `${count} ${count === 1 ? 'skill was' : 'skills were'} withheld because ${reason}.`
 }
@@ -30,7 +33,17 @@ export function applyCatalogueLock(
   readFs: ReadFs = getProjectReadFs(workspaceRoot),
 ): LockCheckedCatalogueDiscovery {
   const locked = readIntentLockfile(join(workspaceRoot, 'intent.lock'))
-  if (locked.status === 'missing') return { result, verification: null }
+  if (locked.status === 'missing') {
+    return {
+      result: {
+        ...result,
+        skills: [],
+        packages: [],
+        warnings: [...result.warnings, CATALOG_INSTALL_REQUIRED],
+      },
+      verification: null,
+    }
+  }
 
   const fsCache = createIntentFsCache()
   fsCache.useFs(readFs)

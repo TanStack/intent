@@ -254,6 +254,9 @@ describe('install writer block builder', () => {
     expect(generated.block).toContain(
       'If an Intent catalog is not already present in this session context',
     )
+    expect(generated.block).toContain(
+      `npx @tanstack/intent@${intentPackagePin} catalog <package>`,
+    )
     expect(generated.block).toContain('If a catalog entry matches the task')
     expect(generated.block).toContain('Do not rerun the catalog for every task')
     expect(generated.block).not.toContain('install --map')

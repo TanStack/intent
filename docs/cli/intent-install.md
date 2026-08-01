@@ -47,6 +47,7 @@ The block stores portable identities and commands, never local file paths:
 ## Intent Skills
 
 If an Intent catalog is not already present in this session context, run `npx @tanstack/intent@latest catalog` once.
+If the catalog omits relevant skills, run `npx @tanstack/intent@latest catalog <package>` for the relevant package.
 If a catalog entry matches the task, run `npx @tanstack/intent@latest load <package>#<skill>` before editing.
 Do not rerun the catalog for every task. If no skill matches, continue normally.
 <!-- intent-skills:end -->

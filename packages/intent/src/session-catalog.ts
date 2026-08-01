@@ -33,7 +33,7 @@ import type * as NodePath from 'node:path'
 import type { IntentSkillList } from './core/index.js'
 import type { ReadFs } from './shared/utils.js'
 
-const CACHE_SCHEMA_VERSION = 4
+const CACHE_SCHEMA_VERSION = 5
 const MIN_CONTEXT_BYTES = 512
 const warnedCacheDirectories = new Set<string>()
 const FINGERPRINT_FILES = [
@@ -51,7 +51,7 @@ const FINGERPRINT_FILES = [
   'deno.lock',
 ]
 
-interface SessionSkillSummary {
+export interface SessionSkillSummary {
   id: string
   description: string
 }
@@ -65,6 +65,12 @@ export interface CatalogueVerificationEntry {
 export interface SessionCatalogue {
   skills: Array<SessionSkillSummary>
   totalSkillCount: number
+  warnings: Array<string>
+}
+
+export interface RenderedSessionCatalogue {
+  context: string
+  skillCount: number
 }
 
 export interface DiscoveredSessionCatalogue {
@@ -76,6 +82,7 @@ interface IntentSessionCatalogueCache {
   schemaVersion: number
   workspaceRoot: string
   policyRoot: string
+  catalogueKey: string
   dependencyFingerprint: string
   catalogue: SessionCatalogue
   verification: Array<CatalogueVerificationEntry>
@@ -94,8 +101,8 @@ export function buildSessionCatalogue(
   const maxSkills = options.maxSkills ?? SESSION_CATALOGUE_MAX_SKILLS
   const allSkills = result.skills
     .filter(isGeneratedMappingSkill)
-    .map((skill): SessionSkillSummary => {
-      parseSkillUse(skill.use)
+    .map((skill) => {
+      const parsed = parseSkillUse(skill.use)
       const normalizedDescription = normalizeWhitespace(skill.description)
       const description = containsLocalPath(normalizedDescription)
         ? ''
@@ -104,33 +111,88 @@ export function buildSessionCatalogue(
             SESSION_CATALOGUE_MAX_DESCRIPTION_LENGTH,
           )
       return {
-        id: skill.use,
-        description: description || `Use ${skill.use}`,
+        packageName: parsed.packageName,
+        summary: {
+          id: skill.use,
+          description: description || `Use ${skill.use}`,
+        },
       }
     })
-    .sort((left, right) => compareOrdinal(left.id, right.id))
+    .sort((left, right) => compareOrdinal(left.summary.id, right.summary.id))
   return {
-    skills: allSkills.slice(0, maxSkills),
+    skills: selectSkillsAcrossPackages(allSkills, maxSkills),
     totalSkillCount: allSkills.length,
+    warnings: [
+      ...new Set(
+        result.warnings.filter((warning) =>
+          /(?:skill was|skills were) withheld because|Pause and ask the user to run `intent install`/.test(
+            warning,
+          ),
+        ),
+      ),
+    ],
   }
+}
+
+function selectSkillsAcrossPackages(
+  skills: Array<{ packageName: string; summary: SessionSkillSummary }>,
+  maxSkills: number,
+): Array<SessionSkillSummary> {
+  const byPackage = new Map<string, Array<SessionSkillSummary>>()
+  for (const skill of skills) {
+    const packageSkills = byPackage.get(skill.packageName)
+    if (packageSkills) packageSkills.push(skill.summary)
+    else byPackage.set(skill.packageName, [skill.summary])
+  }
+
+  const packages = [...byPackage.entries()].sort(([left], [right]) =>
+    compareOrdinal(left, right),
+  )
+  const selected: Array<SessionSkillSummary> = []
+  for (let index = 0; selected.length < maxSkills; index++) {
+    let added = false
+    for (const [, packageSkills] of packages) {
+      const skill = packageSkills[index]
+      if (!skill) continue
+      selected.push(skill)
+      added = true
+      if (selected.length === maxSkills) break
+    }
+    if (!added) break
+  }
+  return selected
 }
 
 export function formatSessionCatalogue(
   catalogue: SessionCatalogue,
-  options: { maxBytes?: number } = {},
+  options: { maxBytes?: number; packageName?: string } = {},
 ): string {
+  return renderSessionCatalogue(catalogue, options).context
+}
+
+export function renderSessionCatalogue(
+  catalogue: SessionCatalogue,
+  options: { maxBytes?: number; packageName?: string } = {},
+): RenderedSessionCatalogue {
   const maxBytes = options.maxBytes ?? SESSION_CATALOGUE_MAX_BYTES
   if (!Number.isInteger(maxBytes) || maxBytes < MIN_CONTEXT_BYTES) {
     throw new RangeError(
       `Session catalogue maxBytes must be an integer of at least ${MIN_CONTEXT_BYTES}.`,
     )
   }
+  const warningLines = catalogue.warnings.flatMap((warning, index) =>
+    index === 0 ? ['', 'Catalog warnings:', `- ${warning}`] : [`- ${warning}`],
+  )
   if (catalogue.skills.length === 0) {
-    return 'No available Intent skills.'
+    const empty = options.packageName
+      ? `No available Intent skills for ${options.packageName}.`
+      : 'No available Intent skills.'
+    return { context: [empty, ...warningLines].join('\n'), skillCount: 0 }
   }
 
   const baseLines = ['Available Intent skills:', '']
   const footerLines = [
+    ...warningLines,
     '',
     'Load a matching skill with `intent load <id>`. If none match, continue normally.',
   ]
@@ -145,7 +207,9 @@ export function formatSessionCatalogue(
     const candidateLines = [
       ...baseLines,
       ...nextSkillLines,
-      ...(omitted > 0 ? [formatOmittedSkills(omitted)] : []),
+      ...(omitted > 0
+        ? [formatOmittedSkills(omitted, options.packageName)]
+        : []),
       ...footerLines,
     ]
     if (!fits(candidateLines, maxBytes)) break
@@ -156,7 +220,7 @@ export function formatSessionCatalogue(
   const lines = [
     ...baseLines,
     ...skillLines,
-    ...(omitted > 0 ? [formatOmittedSkills(omitted)] : []),
+    ...(omitted > 0 ? [formatOmittedSkills(omitted, options.packageName)] : []),
     ...footerLines,
   ]
   if (!fits(lines, maxBytes)) {
@@ -164,7 +228,7 @@ export function formatSessionCatalogue(
       'Session catalogue maxBytes must be large enough for complete guidance.',
     )
   }
-  return lines.join('\n')
+  return { context: lines.join('\n'), skillCount: skillLines.length }
 }
 
 export function resolveCatalogueWorkspaceRoot(cwd: string): string {
@@ -174,6 +238,7 @@ export function resolveCatalogueWorkspaceRoot(cwd: string): string {
 
 export async function getSessionCatalogue(options: {
   cacheDir?: string
+  catalogueKey?: string
   discover: () =>
     | DiscoveredSessionCatalogue
     | Promise<DiscoveredSessionCatalogue>
@@ -184,6 +249,7 @@ export async function getSessionCatalogue(options: {
 }): Promise<SessionCatalogueResult> {
   const {
     cacheDir: suppliedCacheDir,
+    catalogueKey = 'all',
     discover,
     refresh = false,
     root,
@@ -199,7 +265,7 @@ export async function getSessionCatalogue(options: {
   )
   const cachePath = join(
     cache.path,
-    `${createHash('sha256').update(workspaceRoot).update('\0').update(normalizedPolicyRoot).digest('hex')}.json`,
+    `${createHash('sha256').update(workspaceRoot).update('\0').update(normalizedPolicyRoot).update('\0').update(catalogueKey).digest('hex')}.json`,
   )
   const cached = cache.enabled ? readCache(cachePath) : null
 
@@ -207,6 +273,7 @@ export async function getSessionCatalogue(options: {
     !refresh &&
     cached?.workspaceRoot === workspaceRoot &&
     cached.policyRoot === normalizedPolicyRoot &&
+    cached.catalogueKey === catalogueKey &&
     cached.dependencyFingerprint === dependencyFingerprint &&
     verifyCatalogueContent(cached.verification, readFs)
   ) {
@@ -224,6 +291,7 @@ export async function getSessionCatalogue(options: {
       schemaVersion: CACHE_SCHEMA_VERSION,
       workspaceRoot,
       policyRoot: normalizedPolicyRoot,
+      catalogueKey,
       dependencyFingerprint,
       catalogue,
       verification: refreshed.verification,
@@ -327,8 +395,11 @@ function compareOrdinal(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
-function formatOmittedSkills(count: number): string {
-  return `- ${count} additional ${count === 1 ? 'skill' : 'skills'} omitted; narrow the catalogue with package.json intent.skills or intent.exclude.`
+function formatOmittedSkills(count: number, packageName?: string): string {
+  const subject = `${count} additional ${count === 1 ? 'skill' : 'skills'} omitted`
+  return packageName
+    ? `- ${subject} from ${packageName}; load a known skill ID directly if needed.`
+    : `- ${subject}; run \`intent catalog <package>\` for the relevant package.`
 }
 
 function fits(lines: Array<string>, maxBytes: number): boolean {
@@ -447,6 +518,7 @@ function isCacheEntry(value: unknown): value is IntentSessionCatalogueCache {
     entry.schemaVersion === CACHE_SCHEMA_VERSION &&
     typeof entry.workspaceRoot === 'string' &&
     typeof entry.policyRoot === 'string' &&
+    typeof entry.catalogueKey === 'string' &&
     typeof entry.dependencyFingerprint === 'string' &&
     isCatalogue(entry.catalogue) &&
     Array.isArray(entry.verification) &&
@@ -460,7 +532,9 @@ function isCatalogue(value: unknown): value is SessionCatalogue {
   return (
     Array.isArray(catalogue.skills) &&
     catalogue.skills.every(isSkillSummary) &&
-    typeof catalogue.totalSkillCount === 'number'
+    typeof catalogue.totalSkillCount === 'number' &&
+    Array.isArray(catalogue.warnings) &&
+    catalogue.warnings.every((warning) => typeof warning === 'string')
   )
 }
 

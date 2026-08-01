@@ -411,6 +411,11 @@ export function buildIntentSkillGuidanceBlock(
     'catalog',
     commandOptions,
   )
+  const packageCatalogCommand = formatIntentCommand(
+    packageManager,
+    'catalog <package>',
+    commandOptions,
+  )
   const loadCommand = formatIntentCommand(
     packageManager,
     'load <package>#<skill>',
@@ -423,6 +428,7 @@ export function buildIntentSkillGuidanceBlock(
       '## Intent Skills',
       '',
       `If an Intent catalog is not already present in this session context, run \`${catalogCommand}\` once.`,
+      `If the catalog omits relevant skills, run \`${packageCatalogCommand}\` for the relevant package.`,
       `If a catalog entry matches the task, run \`${loadCommand}\` before editing.`,
       'Do not rerun the catalog for every task. If no skill matches, continue normally.',
       INTENT_SKILLS_END,

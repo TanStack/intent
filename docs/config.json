@@ -68,6 +68,10 @@
           "to": "cli/intent-list"
         },
         {
+          "label": "intent catalog",
+          "to": "cli/intent-catalog"
+        },
+        {
           "label": "intent load",
           "to": "cli/intent-load"
         },

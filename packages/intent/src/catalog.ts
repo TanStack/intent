@@ -1,8 +1,9 @@
-import { applyCatalogueLock } from './catalog-lock.js'
+import { applyCatalogueLock, CATALOG_INSTALL_REQUIRED } from './catalog-lock.js'
+import { EMPTY_NOTE } from './core/source-policy.js'
 import { getProjectReadFs } from './discovery/scanner.js'
 import {
-  formatSessionCatalogue,
   getSessionCatalogue,
+  renderSessionCatalogue,
   resolveCatalogueWorkspaceRoot,
 } from './session-catalog.js'
 import type { HookAgent } from './hooks/types.js'
@@ -12,18 +13,25 @@ export type { HookAgent } from './hooks/types.js'
 export interface IntentCatalogContext {
   cacheStatus: 'hit' | 'miss' | 'refresh'
   context: string
+  omittedSkillCount: number
+  skills: Array<{ id: string; description: string }>
+  totalSkillCount: number
+  warnings: Array<string>
 }
 
 export async function getIntentCatalogContext({
   cwd,
+  packageName,
   refresh = false,
 }: {
   cwd: string
+  packageName?: string
   refresh?: boolean
 }): Promise<IntentCatalogContext> {
   const workspaceRoot = resolveCatalogueWorkspaceRoot(cwd)
   const readFs = getProjectReadFs(workspaceRoot)
   const result = await getSessionCatalogue({
+    catalogueKey: packageName ? `package:${packageName}` : 'global',
     root: workspaceRoot,
     policyRoot: cwd,
     readFs,
@@ -34,14 +42,38 @@ export async function getIntentCatalogContext({
         audience: 'agent',
         cwd,
       })
-      return applyCatalogueLock(discovered, workspaceRoot, readFs)
+      if (discovered.notices.includes(EMPTY_NOTE)) {
+        discovered.skills = []
+        discovered.packages = []
+        discovered.warnings = [...discovered.warnings, CATALOG_INSTALL_REQUIRED]
+      }
+      const scoped = packageName
+        ? {
+            ...discovered,
+            skills: discovered.skills.filter(
+              (skill) => skill.packageName === packageName,
+            ),
+            packages: discovered.packages.filter(
+              (pkg) => pkg.name === packageName,
+            ),
+            conflicts: discovered.conflicts.filter(
+              (conflict) => conflict.packageName === packageName,
+            ),
+          }
+        : discovered
+      return applyCatalogueLock(scoped, workspaceRoot, readFs)
     },
   })
-  const context = formatSessionCatalogue(result.catalogue)
+  const rendered = renderSessionCatalogue(result.catalogue, { packageName })
+  const skills = result.catalogue.skills.slice(0, rendered.skillCount)
 
   return {
     cacheStatus: result.cacheStatus,
-    context,
+    context: rendered.context,
+    omittedSkillCount: result.catalogue.totalSkillCount - rendered.skillCount,
+    skills,
+    totalSkillCount: result.catalogue.totalSkillCount,
+    warnings: result.catalogue.warnings,
   }
 }
 

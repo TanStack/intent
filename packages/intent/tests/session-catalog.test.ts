@@ -99,17 +99,24 @@ describe('session catalogue formatting', () => {
 
   it('reports omitted skills within a UTF-8 byte budget', () => {
     const catalogue = buildSessionCatalogue(
-      result(
-        Array.from({ length: 60 }, (_, index) => ({
-          use: `@fixture/package#skill-${String(index).padStart(2, '0')}`,
+      result([
+        ...Array.from({ length: 55 }, (_, index) => ({
+          use: `@fixture/alpha#skill-${String(index).padStart(2, '0')}`,
           description: `Guidance ${'界'.repeat(100)}`,
         })),
-      ),
+        ...Array.from({ length: 5 }, (_, index) => ({
+          use: `@fixture/zeta#skill-${String(index).padStart(2, '0')}`,
+          description: `Guidance ${'界'.repeat(100)}`,
+        })),
+      ]),
     )
     const context = formatSessionCatalogue(catalogue, { maxBytes: 1_200 })
 
     expect(catalogue.skills).toHaveLength(50)
     expect(catalogue.totalSkillCount).toBe(60)
+    expect(
+      catalogue.skills.some((skill) => skill.id.startsWith('@fixture/zeta#')),
+    ).toBe(true)
     expect(Buffer.byteLength(context)).toBeLessThanOrEqual(1_200)
     expect(context).toMatch(/additional skills omitted/)
   })
@@ -135,7 +142,11 @@ describe('session catalogue formatting', () => {
     )
     const context = formatSessionCatalogue(catalogue)
 
-    expect(catalogue).toEqual({ skills: [], totalSkillCount: 0 })
+    expect(catalogue).toEqual({
+      skills: [],
+      totalSkillCount: 0,
+      warnings: [],
+    })
     expect(context).not.toContain('Agent warning')
     expect(context).not.toContain('Maintainer notice')
   })
@@ -150,7 +161,11 @@ describe('session catalogue formatting', () => {
     )
     const context = formatSessionCatalogue(catalogue)
 
-    expect(catalogue).toEqual({ skills: [], totalSkillCount: 0 })
+    expect(catalogue).toEqual({
+      skills: [],
+      totalSkillCount: 0,
+      warnings: [],
+    })
     expect(context).not.toContain('Warning 1')
     expect(context).not.toContain('additional warnings omitted')
     expect(context).not.toContain('Maintainer notice')
@@ -162,7 +177,11 @@ describe('session catalogue formatting', () => {
     )
     const context = formatSessionCatalogue(catalogue)
 
-    expect(catalogue).toEqual({ skills: [], totalSkillCount: 0 })
+    expect(catalogue).toEqual({
+      skills: [],
+      totalSkillCount: 0,
+      warnings: [],
+    })
     expect(context).not.toContain('Warnings:')
     expect(context).not.toContain('Maintainer notice')
   })

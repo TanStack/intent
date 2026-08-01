@@ -53,18 +53,29 @@ function createCli(): CAC {
 
   cli
     .command(
-      'catalog',
+      'catalog [package]',
       'Build compact cached skill context for agent lifecycle hooks',
     )
-    .usage('catalog [--json] [--refresh]')
+    .usage('catalog [package] [--json] [--refresh]')
     .option('--json', 'Output JSON with context and cache metrics')
     .option('--refresh', 'Ignore a valid cached catalogue')
+    .option('--global', 'Unsupported until global catalog support is available')
+    .option(
+      '--global-only',
+      'Unsupported until global catalog support is available',
+    )
     .example('catalog')
+    .example('catalog @tanstack/query')
     .example('catalog --json')
-    .action(async (options: CatalogCommandOptions) => {
-      const { runCatalogCommand } = await import('./commands/catalog.js')
-      await runCatalogCommand(options)
-    })
+    .action(
+      async (
+        packageName: string | undefined,
+        options: CatalogCommandOptions,
+      ) => {
+        const { runCatalogCommand } = await import('./commands/catalog.js')
+        await runCatalogCommand(packageName, options)
+      },
+    )
 
   cli
     .command(

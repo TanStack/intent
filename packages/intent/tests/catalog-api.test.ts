@@ -149,12 +149,15 @@ describe('getIntentCatalogContext', () => {
 
     expect(first.cacheStatus).toBe('miss')
     expect(changed.cacheStatus).toBe('refresh')
-    expect(changed.context).toContain('Changed unverified guidance')
+    expect(changed.context).toContain(
+      'Pause and ask the user to run `intent install` interactively',
+    )
+    expect(changed.context).not.toContain('Changed unverified guidance')
     expect(changed.context).not.toContain('Core package guidance')
     expect(readFileSync(first.cachePath)).toEqual(cachedBytes)
   })
 
-  it('rediscovers changed context when intent.lock is missing', async () => {
+  it('does not expose changed context when intent.lock is missing', async () => {
     const { root, skillDir } = fixture()
     rmSync(join(root, 'intent.lock'))
 
@@ -166,9 +169,12 @@ describe('getIntentCatalogContext', () => {
     const changed = await getIntentCatalogContext({ cwd: root })
 
     expect(first.cacheStatus).toBe('miss')
-    expect(first.context).toContain('Core package guidance')
+    expect(first.context).not.toContain('Core package guidance')
+    expect(first.context).toContain(
+      'Pause and ask the user to run `intent install` interactively',
+    )
     expect(changed.cacheStatus).toBe('miss')
-    expect(changed.context).toContain('Changed guidance')
+    expect(changed.context).not.toContain('Changed guidance')
     expect(changed.context).not.toContain('Core package guidance')
   })
 
@@ -184,12 +190,49 @@ describe('getIntentCatalogContext', () => {
     const changed = await getIntentCatalogContext({ cwd: root })
 
     expect(first.cacheStatus).toBe('miss')
-    expect(Object.keys(first).sort()).toEqual(['cacheStatus', 'context'])
+    expect(Object.keys(first).sort()).toEqual([
+      'cacheStatus',
+      'context',
+      'omittedSkillCount',
+      'skills',
+      'totalSkillCount',
+      'warnings',
+    ])
     expect(first.context).toContain('@fixture/package#core')
     expect(second.cacheStatus).toBe('hit')
     expect(changed.cacheStatus).toBe('refresh')
     expect(changed.context).not.toContain('@fixture/package#core')
     expect(changed.context).toContain('@fixture/package#sibling')
+  })
+
+  it('builds and caches package-scoped catalogues independently', async () => {
+    const { root } = fixture()
+
+    const global = await getIntentCatalogContext({ cwd: root })
+    const scoped = await getIntentCatalogContext({
+      cwd: root,
+      packageName: '@fixture/package',
+    })
+    const missing = await getIntentCatalogContext({
+      cwd: root,
+      packageName: '@fixture/missing',
+    })
+    const scopedAgain = await getIntentCatalogContext({
+      cwd: root,
+      packageName: '@fixture/package',
+    })
+
+    expect(global.cacheStatus).toBe('miss')
+    expect(scoped.cacheStatus).toBe('miss')
+    expect(scoped.skills.map((skill) => skill.id)).toEqual([
+      '@fixture/package#core',
+      '@fixture/package#sibling',
+    ])
+    expect(missing.cacheStatus).toBe('miss')
+    expect(missing.context).toBe(
+      'No available Intent skills for @fixture/missing.',
+    )
+    expect(scopedAgain.cacheStatus).toBe('hit')
   })
 
   it('restores an accepted skill after its exact locked content returns', async () => {
