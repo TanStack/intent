@@ -312,19 +312,15 @@ export async function runListCommand(
     printHiddenSources(result, audience, explain)
   }
 
-  const scopeFlag = options.globalOnly
-    ? ' --global-only'
-    : options.global
-      ? ' --global'
-      : ''
-
   if (audience === 'agent') {
     if (packageName) {
       console.log(`\nSkills in ${packageName}:\n`)
       for (const skill of result.skills) console.log(`  ${skill.use}`)
-      console.log(
-        `\nLoad a skill with \`${formatLoadCommand('<id>', result.packageManager, scopeFlag, localIntent)}\`.`,
-      )
+      if (result.skills.some((skill) => skill.packageSource === 'local')) {
+        console.log(
+          `\nLoad a skill with \`${formatLoadCommand('<id>', result.packageManager, '', localIntent)}\`.`,
+        )
+      }
     } else {
       console.log('\nPackages:\n')
       for (const pkg of result.packages) console.log(`  ${pkg.name}`)
@@ -370,11 +366,13 @@ export async function runListCommand(
         name: skill.skillName,
         description: 'excluded' in skill ? '(excluded)' : skill.description,
         loadCommand:
-          audience === 'human' && !('excluded' in skill)
+          audience === 'human' &&
+          skill.packageSource === 'local' &&
+          !('excluded' in skill)
             ? formatLoadCommand(
                 skill.use,
                 result.packageManager,
-                scopeFlag,
+                '',
                 localIntent,
               )
             : undefined,

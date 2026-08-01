@@ -6,7 +6,7 @@ id: intent-load
 `intent load` prints the `SKILL.md` for a skill in one of your trusted packages, matched to the version installed in your project. Your coding agent runs it to pull a skill's guidance into context, and you can run it yourself to read one.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
-@tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+@tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug]
 <!-- ::end:tabs -->
 
 The package may be scoped or unscoped, and the skill may include slash-separated sub-skill names. An unambiguous short skill name works when only one package-prefixed skill matches.
@@ -22,17 +22,15 @@ The package may be scoped or unscoped, and the skill may include slash-separated
 - `--path`: print the resolved file path instead of the content. Cannot be combined with `--json`.
 - `--json`: print the content plus metadata as JSON. Cannot be combined with `--path`.
 - `--debug`: print resolution details to stderr.
-- `--global`: load from project packages first, then global packages.
-- `--global-only`: load from global packages only.
 
 ## What it checks
 
 Before printing anything, `load` confirms the skill is one you are allowed to use:
 
 - The package must be permitted by `package.json#intent.skills`, and must not be removed by `intent.exclude`.
-- If `intent.lock` exists, the skill must be recorded in it and its content must still match the accepted hash. `load` refuses a skill that was never accepted or whose content changed since you accepted it. Run `intent install` to review and accept a new baseline.
+- `intent.lock` must exist, the skill must be recorded in it, and its content must still match the accepted hash. `load` refuses missing, unaccepted, or changed content. Run `intent install` interactively to review and accept a baseline.
 
-Without a lockfile, `load` applies the source policy only and does not check content. It reads project packages by default; `--global` and `--global-only` add or switch to global packages, and a local package wins when the same one exists in both.
+`load` reads project packages accepted in `intent.lock`.
 
 ## JSON output
 
@@ -51,14 +49,18 @@ Without a lockfile, `load` applies the source policy only and does not check con
 }
 ```
 
+For explicit agent output (`INTENT_AUDIENCE=agent`), `path` and `packageRoot` are blank unless `--debug` is also present. `--path` always prints the requested path.
+
 ## Common errors
 
 - **Malformed use.** `Invalid skill use "@tanstack/query": expected <package>#<skill>.`, or a similar message for an empty package or skill.
-- **Not found.** `Cannot resolve skill use "...": package "..." was not found.`, or the same for a missing skill, sometimes with a `Did you mean ...?` suggestion.
+- **Missing lock.** `Cannot load skill use "...": intent.lock is missing.` A human is told to run interactive install; an agent is told to pause and ask the user.
+- **Invalid lock.** `Cannot load skill use "...": intent.lock is invalid: ...` followed by the same human or agent review instruction.
+- **Not found.** Missing packages direct humans to `intent list`; missing skills provide up to three portable suggestions or direct to `intent list <package>`. Hidden package and skill names are not enumerated.
 - **Not trusted.** `Cannot load skill use "...": package "..." is not listed in intent.skills.`
 - **Excluded.** `Cannot load skill use "...": package "..." is excluded by Intent configuration.`, or the same for a skill.
 - **Not accepted.** `Cannot load skill use "...": skill is not accepted in intent.lock.`
-- **Content changed.** `Cannot load skill use "...": installed content does not match intent.lock.`
+- **Content changed.** `Cannot load skill use "...": installed content does not match intent.lock.` Not-accepted and changed-content errors tell a human to run interactive install and tell an agent to pause and ask the user.
 
 ## Related
 

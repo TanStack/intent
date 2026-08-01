@@ -101,12 +101,10 @@ function createCli(): CAC {
 
   cli
     .command('load [use]', 'Load a compact skill use and print its SKILL.md')
-    .usage('load <use> [--path] [--json] [--debug] [--global] [--global-only]')
+    .usage('load <use> [--path] [--json] [--debug]')
     .option('--path', 'Print the resolved skill path instead of file content')
     .option('--json', 'Output JSON')
     .option('--debug', 'Print resolution debug details to stderr')
-    .option('--global', 'Load from project packages, then global packages')
-    .option('--global-only', 'Load from global packages only')
     .example('load @tanstack/query#core')
     .example('load @tanstack/query#core --path')
     .action(async (use: string | undefined, options: LoadCommandOptions) => {

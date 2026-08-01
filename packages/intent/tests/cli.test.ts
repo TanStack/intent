@@ -53,6 +53,10 @@ function writeIntentLock(
   })
 }
 
+function acceptInstalledSkills(root: string): void {
+  writeIntentLock(root, scanForIntents(root, { scope: 'local' }).packages)
+}
+
 function writeSkillMd(dir: string, frontmatter: Record<string, unknown>): void {
   mkdirSync(dir, { recursive: true })
   const yamlLines = Object.entries(frontmatter)
@@ -2003,9 +2007,7 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Global fetching skill')
-    expect(output).toContain(
-      `Load: npx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching --global`,
-    )
+    expect(output).not.toContain('Load:')
     expect(output).not.toContain(globalPkgDir)
   })
 
@@ -2161,7 +2163,9 @@ describe('cli commands', () => {
       expect(errorSpy).toHaveBeenCalledWith(
         command[0] === 'install'
           ? '`intent install` does not support --global or --global-only. Global catalog support is not available.'
-          : 'Use either --global or --global-only, not both.',
+          : command[0] === 'load'
+            ? 'Unknown option `--global`'
+            : 'Use either --global or --global-only, not both.',
       )
     },
   )
@@ -2177,6 +2181,21 @@ describe('cli commands', () => {
     })
 
     process.chdir(root)
+
+    expect(await main(['load', '@tanstack/query#fetching'])).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Cannot load skill use "@tanstack/query#fetching": intent.lock is missing. Run `intent install` interactively to review and approve skills.',
+    )
+    errorSpy.mockClear()
+
+    process.env.INTENT_AUDIENCE = 'agent'
+    expect(await main(['load', '@tanstack/query#fetching'])).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Cannot load skill use "@tanstack/query#fetching": intent.lock is missing. Pause and ask the user to run `intent install` interactively to review and approve skills. Do not continue automatically.',
+    )
+    delete process.env.INTENT_AUDIENCE
+    errorSpy.mockClear()
+    acceptInstalledSkills(root)
 
     const exitCode = await main(['load', '@tanstack/query#fetching'])
     const output = stdoutWriteSpy.mock.calls.flat().join('')
@@ -2220,6 +2239,7 @@ describe('cli commands', () => {
         '',
       ].join('\n'),
     )
+    acceptInstalledSkills(root)
 
     process.chdir(root)
 
@@ -2254,6 +2274,7 @@ describe('cli commands', () => {
       skillName: 'fetching',
       description: 'Query data fetching patterns',
     })
+    acceptInstalledSkills(root)
 
     process.chdir(root)
 
@@ -2278,6 +2299,7 @@ describe('cli commands', () => {
       name: 'fetching',
       description: 'Query data fetching patterns',
     })
+    acceptInstalledSkills(root)
 
     process.chdir(root)
 
@@ -2297,6 +2319,7 @@ describe('cli commands', () => {
       skillName: 'fetching',
       description: 'Query data fetching patterns',
     })
+    acceptInstalledSkills(root)
 
     process.chdir(root)
 
@@ -2330,6 +2353,7 @@ describe('cli commands', () => {
       skillName: 'fetching',
       description: 'Query data fetching patterns',
     })
+    acceptInstalledSkills(root)
 
     process.chdir(root)
 
@@ -2357,6 +2381,33 @@ describe('cli commands', () => {
       version: '5.0.0',
       warnings: [],
     })
+
+    logSpy.mockClear()
+    process.env.INTENT_AUDIENCE = 'agent'
+    expect(await main(['load', '@tanstack/query#fetching', '--json'])).toBe(0)
+    const agentOutput = logSpy.mock.calls.at(-1)?.[0]
+    const agentParsed = JSON.parse(String(agentOutput)) as {
+      packageRoot: string
+      path: string
+    }
+    expect(agentParsed.packageRoot).toBe('')
+    expect(agentParsed.path).toBe('')
+
+    logSpy.mockClear()
+    expect(
+      await main(['load', '@tanstack/query#fetching', '--json', '--debug']),
+    ).toBe(0)
+    const debugAgentOutput = logSpy.mock.calls.at(-1)?.[0]
+    const debugAgentParsed = JSON.parse(String(debugAgentOutput)) as {
+      packageRoot: string
+      path: string
+    }
+    expect(debugAgentParsed.packageRoot).toBe(
+      join(root, 'node_modules', '@tanstack', 'query'),
+    )
+    expect(debugAgentParsed.path).toBe(
+      'node_modules/@tanstack/query/skills/fetching/SKILL.md',
+    )
   })
 
   it('rewrites relative markdown destinations in json load content', async () => {
@@ -2383,6 +2434,7 @@ describe('cli commands', () => {
         '',
       ].join('\n'),
     )
+    acceptInstalledSkills(root)
 
     process.chdir(root)
 
@@ -2396,7 +2448,7 @@ describe('cli commands', () => {
     )
   })
 
-  it('loads global fallback path when requested', async () => {
+  it('rejects global fallback loading', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-global-'))
     const globalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-load-global-node-modules-'),
@@ -2426,11 +2478,12 @@ describe('cli commands', () => {
     ])
     const output = logSpy.mock.calls.flat().join('\n')
 
-    expect(exitCode).toBe(0)
-    expect(output).toBe(join(globalPkgDir, 'skills', 'fetching', 'SKILL.md'))
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith('Unknown option `--global`')
+    expect(output).toBe('')
   })
 
-  it('loads global-only without using local packages', async () => {
+  it('rejects global-only loading', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-load-global-only-'))
     const globalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-load-global-only-node-modules-'),
@@ -2464,19 +2517,8 @@ describe('cli commands', () => {
       '--global-only',
       '--json',
     ])
-    const output = logSpy.mock.calls.at(-1)?.[0]
-    const parsed = JSON.parse(String(output)) as {
-      path: string
-      source: 'local' | 'global'
-      version: string
-    }
-
-    expect(exitCode).toBe(0)
-    expect(parsed.source).toBe('global')
-    expect(parsed.version).toBe('4.0.0')
-    expect(parsed.path).toBe(
-      join(globalPkgDir, 'skills', 'fetching', 'SKILL.md'),
-    )
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith('Unknown option `--globalOnly`')
   })
 
   it('fails cleanly for invalid load use strings', async () => {
@@ -2502,13 +2544,14 @@ describe('cli commands', () => {
       private: true,
       intent: { skills: ['@tanstack/query'] },
     })
+    writeIntentLock(root)
     process.chdir(root)
 
     const exitCode = await main(['load', '@tanstack/query#fetching'])
 
     expect(exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledWith(
-      'Cannot resolve skill use "@tanstack/query#fetching": package "@tanstack/query" was not found.',
+      'Cannot load skill use "@tanstack/query#fetching": package was not found. Run `intent list` to see trusted packages.',
     )
   })
 
@@ -2521,13 +2564,14 @@ describe('cli commands', () => {
       skillName: 'fetching',
       description: 'Query data fetching patterns',
     })
+    acceptInstalledSkills(root)
     process.chdir(root)
 
     const exitCode = await main(['load', '@tanstack/query#mutations'])
 
     expect(exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledWith(
-      'Cannot resolve skill use "@tanstack/query#mutations": skill "mutations" was not found in package "@tanstack/query". Available skills: fetching.',
+      'Cannot load skill use "@tanstack/query#mutations": skill was not found. Run `intent list @tanstack/query` to see available skills.',
     )
   })
 
@@ -2545,6 +2589,7 @@ describe('cli commands', () => {
       skillName: 'panel',
       description: 'Devtools panel skill',
     })
+    acceptInstalledSkills(root)
     process.chdir(root)
 
     const exitCode = await main(['load', '@tanstack/devtools#panel'])
