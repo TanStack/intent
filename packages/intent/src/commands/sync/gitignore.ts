@@ -7,7 +7,7 @@ const START = '# intent skill links:start'
 const END = '# intent skill links:end'
 const INTENT_STATE = '.intent/'
 
-export function updateIntentGitignore(text: string | null): string {
+function updateIntentGitignore(text: string | null): string {
   const eol = text?.includes('\r\n') ? '\r\n' : '\n'
   const lines = (text ?? '').split(/\r?\n/)
   if (lines.includes(INTENT_STATE)) return text ?? `${INTENT_STATE}${eol}`

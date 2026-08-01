@@ -1,5 +1,6 @@
 import {
   compileExcludePatterns,
+  compileWildcardPattern,
   isPackageExcluded,
   isSkillExcluded,
 } from '../../core/excludes.js'
@@ -227,14 +228,12 @@ export function buildSkillSelectionPlan(
 
   const skills = new Set<string>()
   const exclude = new Set<string>()
+  const matchesScope =
+    selection.mode === 'scope' ? compileWildcardPattern(selection.scope) : null
   const grouped = packages.map((pkg) => {
     const packageSkills = sortedSkills(pkg)
     const packageMatchesScope =
-      selection.mode === 'scope' &&
-      pkg.kind === 'npm' &&
-      new RegExp(
-        `^${selection.scope.slice(0, -1).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
-      ).test(pkg.name)
+      matchesScope !== null && pkg.kind === 'npm' && matchesScope(pkg.name)
     const packageEnabled =
       selection.mode === 'all-found' ||
       packageMatchesScope ||

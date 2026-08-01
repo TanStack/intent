@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { fail } from '../shared/cli-error.js'
+import { isExplicitAgentAudience } from '../shared/environment.js'
 import {
   IntentCoreError,
   loadIntentSkill,
@@ -20,9 +21,7 @@ export interface LoadCommandOptions {
 type LoadAudience = 'agent' | 'human'
 
 function loadAudience(): LoadAudience {
-  return process.env.INTENT_AUDIENCE?.trim().toLowerCase() === 'agent'
-    ? 'agent'
-    : 'human'
+  return isExplicitAgentAudience() ? 'agent' : 'human'
 }
 
 function reviewInstruction(audience: LoadAudience): string {

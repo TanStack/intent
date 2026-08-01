@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fail } from '../../shared/cli-error.js'
+import { isExplicitAgentAudience } from '../../shared/environment.js'
 import { compileExcludePatterns } from '../../core/excludes.js'
 import { createIntentFsCache } from '../../discovery/fs-cache.js'
 import { buildCurrentLockfileSources } from '../../core/lockfile/lockfile-state.js'
@@ -268,7 +269,7 @@ function getSyncExecutionContext(
   options: SyncCommandOptions,
   runtime: SyncCommandRuntime,
 ): SyncExecutionContext {
-  const agent = process.env.INTENT_AUDIENCE?.trim().toLowerCase() === 'agent'
+  const agent = isExplicitAgentAudience()
   const automated =
     agent ||
     process.env.npm_lifecycle_event === 'prepare' ||

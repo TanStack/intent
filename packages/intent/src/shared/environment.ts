@@ -1,6 +1,10 @@
 import { detectAgent, env } from 'std-env'
 import type { IntentAudience } from '../core/types.js'
 
+export function isExplicitAgentAudience(): boolean {
+  return env.INTENT_AUDIENCE?.trim().toLowerCase() === 'agent'
+}
+
 export function detectIntentAudience(
   explicit?: IntentAudience,
 ): IntentAudience {

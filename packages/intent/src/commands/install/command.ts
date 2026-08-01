@@ -11,6 +11,7 @@ import { applySourcePolicy } from '../../core/source-policy.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
 import { writeTextFileAtomic } from '../../shared/atomic-write.js'
 import { fail } from '../../shared/cli-error.js'
+import { isExplicitAgentAudience } from '../../shared/environment.js'
 import {
   coreOptionsFromGlobalFlags,
   noticeOptionsFromGlobalFlags,
@@ -191,7 +192,7 @@ export async function runInstallCommand(
   }
   const coreOptions = coreOptionsFromGlobalFlags(options)
   const noticeOptions = noticeOptionsFromGlobalFlags(options)
-  const audience = process.env.INTENT_AUDIENCE?.trim().toLowerCase()
+  const audience = isExplicitAgentAudience() ? 'agent' : 'human'
   const context = resolveProjectContext({ cwd: process.cwd() })
   const trustedRoot =
     context.workspaceRoot ?? context.packageRoot ?? context.cwd
@@ -244,12 +245,7 @@ export async function runInstallCommand(
     if (!existsSync(lockfilePath) && existsSync(packageJsonPath)) {
       const packageJson = readFileSync(packageJsonPath, 'utf8')
       const config = readIntentConsumerConfig(packageJson)
-      if (
-        config.skills.length === 0 &&
-        config.exclude.length === 0 &&
-        !options.global &&
-        !options.globalOnly
-      ) {
+      if (config.skills.length === 0 && config.exclude.length === 0) {
         root = projectRoot
         const [{ createIntentFsCache }, { scanForIntents }] = await Promise.all(
           [

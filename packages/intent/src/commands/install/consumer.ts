@@ -11,6 +11,7 @@ import { parseSkillSources } from '../../core/skill-sources.js'
 import { runInstallHooks } from '../../hooks/install.js'
 import { writeTextFileAtomic } from '../../shared/atomic-write.js'
 import { printWarnings } from '../../shared/cli-output.js'
+import { isExplicitAgentAudience } from '../../shared/environment.js'
 import { nodeReadFs } from '../../shared/utils.js'
 import { runSyncCommand } from '../sync/command.js'
 import { hasNonNativeLinkSource, reconcileManagedLinks } from '../sync/links.js'
@@ -273,10 +274,7 @@ export async function runConsumerInstall({
         lockfileVersion: 1,
         sources: buildCurrentLockfileSources(policy.packages, readFs),
       })
-      if (
-        result.status !== 'unchanged' &&
-        process.env.INTENT_AUDIENCE?.trim().toLowerCase() !== 'agent'
-      ) {
+      if (result.status !== 'unchanged' && !isExplicitAgentAudience()) {
         console.log(
           'The Intent guidance checks for a session catalog before loading matching skills.',
         )

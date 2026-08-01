@@ -51,7 +51,7 @@ const FINGERPRINT_FILES = [
   'deno.lock',
 ]
 
-export interface SessionSkillSummary {
+interface SessionSkillSummary {
   id: string
   description: string
 }

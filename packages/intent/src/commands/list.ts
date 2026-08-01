@@ -6,6 +6,7 @@ import { warningMentionsPackage } from '../core/excludes.js'
 import { listIntentSkills } from '../core/index.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { ALLOW_ALL_NOTICE } from '../shared/cli-output.js'
+import { isExplicitAgentAudience } from '../shared/environment.js'
 import { hasIntentDevDependency } from './install/config.js'
 import {
   coreOptionsFromGlobalFlags,
@@ -226,10 +227,7 @@ export async function runListCommand(
   packageName: string | undefined,
   options: ListCommandOptions,
 ): Promise<void> {
-  const audience =
-    process.env.INTENT_AUDIENCE?.trim().toLowerCase() === 'agent'
-      ? 'agent'
-      : 'human'
+  const audience = isExplicitAgentAudience() ? 'agent' : 'human'
   const explain = audience === 'human' && options.why === true
   const listed = listIntentSkills({
     ...coreOptionsFromGlobalFlags(options),
