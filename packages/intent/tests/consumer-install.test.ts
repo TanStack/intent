@@ -1872,9 +1872,13 @@ describe('consumer install', () => {
       }
     }
 
-    expect(output).toContain('Pending skills by source:')
-    expect(output).toContain('prepare-package  1 skill')
-    expect(output).toContain('Run `intent install` to review and install them')
+    expect(output).toContain(
+      'Review required: 1 new dependency, 0 new skills, 0 changed.',
+    )
+    expect(output).toContain(
+      'Pause and ask the user to run `intent install` interactively to review and approve skills.',
+    )
+    expect(output).not.toContain('prepare-package')
     expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(packageBefore)
     expect(readFileSync(join(root, 'intent.lock'), 'utf8')).toBe(lockBefore)
   })

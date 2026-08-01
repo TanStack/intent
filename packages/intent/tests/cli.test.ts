@@ -346,7 +346,7 @@ describe('cli commands', () => {
     expect(getHelpOutput()).not.toContain('--agents')
   })
 
-  it('does nothing without local delivery configuration', async () => {
+  it('fails without local delivery configuration', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-sync-unconfigured-'))
     tempDirs.push(root)
     writeJson(join(root, 'package.json'), { name: 'app', private: true })
@@ -354,12 +354,20 @@ describe('cli commands', () => {
 
     const exitCode = await main(['sync'])
 
-    expect(exitCode).toBe(0)
+    expect(exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledOnce()
     expect(errorSpy).toHaveBeenCalledWith(
-      'Intent skill delivery is not configured for this checkout. Run `intent install` to configure it.',
+      'Intent skill delivery is not configured for this checkout. Run `intent install` interactively.',
     )
     expect(readdirSync(root)).toEqual(['package.json'])
+
+    errorSpy.mockClear()
+    process.env.INTENT_AUDIENCE = 'agent'
+    expect(await main(['sync'])).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Intent skill delivery is not configured for this checkout. Pause and ask the user to run `intent install` interactively. Do not continue automatically.',
+    )
+    delete process.env.INTENT_AUDIENCE
   })
 
   it('syncs verified links and reports changed, pending, removed, and dry-run work', async () => {
@@ -409,6 +417,12 @@ describe('cli commands', () => {
     expect(
       readFileSync(join(root, '.intent', 'install-state.json'), 'utf8'),
     ).toBe(state)
+
+    logSpy.mockClear()
+    process.env.INTENT_AUDIENCE = 'agent'
+    expect(await main(['sync'])).toBe(0)
+    expect(logSpy).not.toHaveBeenCalled()
+    delete process.env.INTENT_AUDIENCE
 
     writeSkillMd(
       join(root, 'node_modules', 'verified', 'skills', 'additional'),
@@ -466,6 +480,23 @@ describe('cli commands', () => {
       ].join('\n'),
     )
 
+    logSpy.mockClear()
+    process.env.INTENT_AUDIENCE = 'agent'
+    expect(await main(['sync', '--dry-run', '--json'])).toBe(0)
+    const agentSync = JSON.parse(String(logSpy.mock.calls.at(-1)?.[0])) as {
+      review: {
+        changed: Array<{ name: string }>
+        newDependencies: Array<{ name: string; skillCount: number }>
+      }
+    }
+    expect(agentSync.review.newDependencies).toEqual([
+      { name: '', skillCount: 1 },
+    ])
+    expect(agentSync.review.changed).toEqual([
+      { name: 'verified', skillCount: 1 },
+    ])
+    delete process.env.INTENT_AUDIENCE
+
     rmSync(join(root, 'node_modules', 'verified'), {
       recursive: true,
       force: true,
@@ -496,6 +527,17 @@ describe('cli commands', () => {
     writeIntentLock(dryRoot, dryDiscovered)
     process.chdir(dryRoot)
     expect(await main(['sync', '--dry-run', '--json'])).toBe(0)
+    const dryRunOutput = JSON.parse(String(logSpy.mock.calls.at(-1)?.[0])) as {
+      dryRun: boolean
+      links: { created: Array<string>; unchangedCount: number }
+    }
+    expect(dryRunOutput).toMatchObject({
+      dryRun: true,
+      links: {
+        created: ['.agents/skills/npm-dry-package-core'],
+        unchangedCount: 0,
+      },
+    })
     expect(
       existsSync(join(dryRoot, '.agents', 'skills', 'npm-dry-package-core')),
     ).toBe(false)
@@ -539,10 +581,13 @@ describe('cli commands', () => {
 
     expect(logSpy).toHaveBeenCalledTimes(1)
     expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
-      created: [],
-      repaired: [],
-      removed: [],
-      conflicts: [conflictPath],
+      dryRun: false,
+      links: {
+        created: [],
+        repaired: [],
+        removed: [],
+        conflicts: [conflictPath],
+      },
     })
     expect(existsSync(statePath)).toBe(false)
     expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
@@ -553,7 +598,10 @@ describe('cli commands', () => {
 
     const output = logSpy.mock.calls.flat().join('\n')
     expect(output).toContain('Intent sync: 0 created, 0 repaired, 0 removed.')
-    expect(output).toContain(`Conflicts: ${conflictPath}.`)
+    expect(output).not.toContain(`Conflicts: ${conflictPath}.`)
+    expect(errorSpy).toHaveBeenCalledWith(
+      `Intent sync found managed link conflicts: ${conflictPath}.`,
+    )
     expect(existsSync(statePath)).toBe(false)
     expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
   })

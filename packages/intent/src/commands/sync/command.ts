@@ -84,6 +84,17 @@ interface SyncCommandResult {
   changed: Array<SyncPackageSummary>
 }
 
+interface SyncExecutionContext {
+  agent: boolean
+  automated: boolean
+  dryRun: boolean
+  json: boolean
+}
+
+function countSummarySkills(entries: Array<SyncPackageSummary>): number {
+  return entries.reduce((sum, entry) => sum + entry.skillCount, 0)
+}
+
 function printReminder(
   title: string,
   entries: Array<SyncPackageSummary>,
@@ -133,35 +144,95 @@ function buildSyncCommandResult(
 
 function output(
   result: SyncCommandResult,
-  json: boolean,
+  context: SyncExecutionContext,
   interactiveReview: boolean,
 ): void {
-  if (json) {
-    console.log(JSON.stringify(result))
+  if (context.json) {
+    const reviewEntries = (
+      entries: Array<SyncPackageSummary>,
+      redactNames = false,
+    ) =>
+      entries.map((entry) => ({
+        name: redactNames ? '' : entry.name,
+        skillCount: entry.skillCount,
+      }))
+    console.log(
+      JSON.stringify({
+        dryRun: context.dryRun,
+        links: {
+          created: result.created,
+          repaired: result.repaired,
+          removed: result.removed,
+          conflicts: result.conflicts,
+          unchangedCount: result.unchanged.length,
+        },
+        review: {
+          newDependencies: reviewEntries(result.newDependencies, context.agent),
+          newSkills: reviewEntries(result.newSkills),
+          changed: reviewEntries(result.changed),
+        },
+      }),
+    )
     return
   }
+
+  const linkChangeCount =
+    result.created.length + result.repaired.length + result.removed.length
+  const reviewCount =
+    countSummarySkills(result.newDependencies) +
+    countSummarySkills(result.newSkills) +
+    countSummarySkills(result.changed)
+  if (
+    context.automated &&
+    !context.dryRun &&
+    linkChangeCount === 0 &&
+    reviewCount === 0 &&
+    result.conflicts.length === 0
+  ) {
+    return
+  }
+
   console.log(
     `Intent sync: ${result.created.length} created, ${result.repaired.length} repaired, ${result.removed.length} removed.`,
   )
-  printReminder(
-    'Pending skills by source',
-    result.newDependencies,
-    interactiveReview
-      ? 'Choose how to handle them below.'
-      : 'Run `intent install` to review and install them, or add them to `intent.exclude`.',
-  )
-  printReminder(
-    'New skills found in enabled dependencies',
-    result.newSkills,
-    'Run `intent install` to review and install them.',
-  )
-  printReminder(
-    'Changed skill content',
-    result.changed,
-    'Run `intent install` to review and accept the new baseline.',
-  )
-  if (result.conflicts.length > 0)
-    console.log(`Conflicts: ${result.conflicts.join(', ')}.`)
+  if (context.automated) {
+    if (reviewCount > 0) {
+      const newSkillCount = countSummarySkills(result.newSkills)
+      const changedSkillCount = countSummarySkills(result.changed)
+      console.log(
+        `Review required: ${result.newDependencies.length} new ${result.newDependencies.length === 1 ? 'dependency' : 'dependencies'}, ${newSkillCount} new ${newSkillCount === 1 ? 'skill' : 'skills'}, ${changedSkillCount} changed.`,
+      )
+      console.log(
+        'Pause and ask the user to run `intent install` interactively to review and approve skills.',
+      )
+    }
+  } else {
+    for (const [label, paths] of [
+      ['Created links', result.created],
+      ['Repaired links', result.repaired],
+      ['Removed links', result.removed],
+    ] as const) {
+      if (paths.length > 0) console.log(`${label}:\n  ${paths.join('\n  ')}`)
+    }
+    printReminder(
+      'Pending skills by source',
+      result.newDependencies,
+      interactiveReview
+        ? 'Choose how to handle them below.'
+        : 'Run `intent install` to review and install them, or add them to `intent.exclude`.',
+    )
+    printReminder(
+      'New skills found in enabled dependencies',
+      result.newSkills,
+      'Run `intent install` to review and install them.',
+    )
+    printReminder(
+      'Changed skill content',
+      result.changed,
+      'Run `intent install` to review and accept the new baseline.',
+    )
+  }
+  if (context.dryRun) console.log('No files changed.')
 }
 
 function compareStrings(left: string, right: string): number {
@@ -175,16 +246,51 @@ function sourceName(source: Pick<IntentPackage, 'kind' | 'name'>): string {
 function shouldReviewInteractively(
   options: SyncCommandOptions,
   runtime: SyncCommandRuntime,
+  context: SyncExecutionContext,
 ): boolean {
   if (
     options.dryRun === true ||
     options.json === true ||
+    context.automated ||
     process.env.npm_lifecycle_event === 'prepare'
   ) {
     return false
   }
   if (runtime.review !== undefined) return runtime.review === 'interactive'
   return process.stdin.isTTY === true && process.stdout.isTTY === true
+}
+
+function getSyncExecutionContext(
+  options: SyncCommandOptions,
+  runtime: SyncCommandRuntime,
+): SyncExecutionContext {
+  const agent = process.env.INTENT_AUDIENCE?.trim().toLowerCase() === 'agent'
+  const automated =
+    agent ||
+    process.env.npm_lifecycle_event === 'prepare' ||
+    runtime.review === 'fail'
+  return {
+    agent,
+    automated,
+    dryRun: options.dryRun === true,
+    json: options.json === true,
+  }
+}
+
+function installInstruction(context: SyncExecutionContext): string {
+  return context.agent
+    ? 'Pause and ask the user to run `intent install` interactively. Do not continue automatically.'
+    : 'Run `intent install` interactively.'
+}
+
+function conflictMessage(
+  prefix: string,
+  paths: Array<string>,
+  context: SyncExecutionContext,
+): string {
+  return context.automated
+    ? `${prefix}: ${paths.length}. ${installInstruction(context)}`
+    : `${prefix}: ${paths.join(', ')}.`
 }
 
 async function reviewNewDependencies({
@@ -432,38 +538,61 @@ export async function runSyncCommand(
   options: SyncCommandOptions,
   runtime: SyncCommandRuntime = {},
 ): Promise<void> {
+  const execution = getSyncExecutionContext(options, runtime)
   const context = resolveProjectContext({ cwd: options.cwd ?? process.cwd() })
   const root = context.workspaceRoot ?? context.packageRoot ?? context.cwd
-  const delivery = readIntentDeliveryConfig(root)
-  if (!delivery) {
-    console.error(
-      'Intent skill delivery is not configured for this checkout. Run `intent install` to configure it.',
+  let delivery: ReturnType<typeof readIntentDeliveryConfig>
+  try {
+    delivery = readIntentDeliveryConfig(root)
+  } catch (error) {
+    fail(
+      `Intent delivery configuration is invalid: ${error instanceof Error ? error.message : String(error)}. ${installInstruction(execution)}`,
     )
-    return
+  }
+  if (!delivery) {
+    fail(
+      `Intent skill delivery is not configured for this checkout. ${installInstruction(execution)}`,
+    )
   }
   const packageJsonPath = join(root, 'package.json')
   if (!existsSync(packageJsonPath)) {
     fail(
-      'Intent sync requires package policy and intent.lock. Run `intent install` first.',
+      `Intent sync requires package policy and intent.lock. ${installInstruction(execution)}`,
     )
   }
   const packageJson = readFileSync(packageJsonPath, 'utf8')
-  const config = readIntentConsumerConfig(packageJson)
-  const lock = readIntentLockfile(join(root, 'intent.lock'))
+  let config: ReturnType<typeof readIntentConsumerConfig>
+  try {
+    config = readIntentConsumerConfig(packageJson)
+  } catch (error) {
+    fail(
+      `Intent package policy is invalid: ${error instanceof Error ? error.message : String(error)}. ${installInstruction(execution)}`,
+    )
+  }
+  let lock: ReturnType<typeof readIntentLockfile>
+  try {
+    lock = readIntentLockfile(join(root, 'intent.lock'))
+  } catch (error) {
+    fail(
+      `Intent sync cannot read intent.lock: ${error instanceof Error ? error.message : String(error)}. ${installInstruction(execution)}`,
+    )
+  }
   if (lock.status !== 'found') {
     fail(
-      'Intent sync requires package policy and intent.lock. Run `intent install` first.',
+      `Intent sync requires package policy and intent.lock. ${installInstruction(execution)}`,
     )
   }
   if (delivery.method !== 'symlink') {
     fail(
-      'Hook delivery is repaired by `intent install`; run it to repair configured hooks.',
+      `Hook delivery is repaired by install. ${installInstruction(execution)}`,
     )
   }
   const stateResult = readInstallStateForLinks(root)
   if (stateResult.status === 'malformed') {
     fail(
-      `Intent install state is malformed at ${INSTALL_STATE_PATH}. Restore a valid copy, or remove the existing Intent-managed links and ${INSTALL_STATE_PATH}, then run \`intent install\` again.`,
+      execution.automated
+        ? `Intent install state is malformed. ${installInstruction(execution)}`
+        : `Intent install state is malformed at ${INSTALL_STATE_PATH}. Restore a valid copy, or remove the existing Intent-managed links and ${INSTALL_STATE_PATH}, then run \`intent install\` again.`,
     )
   }
 
@@ -502,9 +631,11 @@ export async function runSyncCommand(
     }
     if (links.conflicts.length > 0) {
       throw new Error(
-        `Intent sync could not revoke managed links after verification failed: ${links.conflicts
-          .map((path) => toProjectRelativePath(root, path))
-          .join(', ')}.`,
+        conflictMessage(
+          'Intent sync could not revoke managed links after verification failed',
+          links.conflicts.map((path) => toProjectRelativePath(root, path)),
+          execution,
+        ),
         { cause: error },
       )
     }
@@ -522,7 +653,7 @@ export async function runSyncCommand(
   const summaries = { newDependencies, newSkills, changed }
   const interactiveReview =
     summaries.newDependencies.length > 0 &&
-    shouldReviewInteractively(options, runtime)
+    shouldReviewInteractively(options, runtime, execution)
   const preflight = reconcileManagedLinks({
     root,
     dryRun: true,
@@ -535,13 +666,15 @@ export async function runSyncCommand(
       : { ...preflight, created: [], repaired: [], removed: [] }
     output(
       buildSyncCommandResult(root, reportedLinks, summaries),
-      options.json === true,
+      execution,
       false,
     )
     fail(
-      `Intent sync found managed link conflicts: ${preflight.conflicts
-        .map((path) => toProjectRelativePath(root, path))
-        .join(', ')}.`,
+      conflictMessage(
+        'Intent sync found managed link conflicts',
+        preflight.conflicts.map((path) => toProjectRelativePath(root, path)),
+        execution,
+      ),
     )
   }
   const links = options.dryRun
@@ -557,14 +690,16 @@ export async function runSyncCommand(
   }
   const result = buildSyncCommandResult(root, links, summaries)
   if (links.conflicts.length > 0) {
-    output(result, options.json === true, false)
+    output(result, execution, false)
     fail(
-      `Intent sync found managed link conflicts: ${links.conflicts
-        .map((path) => toProjectRelativePath(root, path))
-        .join(', ')}.`,
+      conflictMessage(
+        'Intent sync found managed link conflicts',
+        links.conflicts.map((path) => toProjectRelativePath(root, path)),
+        execution,
+      ),
     )
   }
-  output(result, options.json === true, interactiveReview)
+  output(result, execution, interactiveReview)
   if (
     runtime.review === 'fail' &&
     (summaries.newDependencies.length > 0 ||
