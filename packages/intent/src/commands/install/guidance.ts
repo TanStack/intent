@@ -403,24 +403,28 @@ export function buildIntentSkillsBlock(
 
 export function buildIntentSkillGuidanceBlock(
   packageManager: ScanResult['packageManager'] = 'unknown',
+  intentDevDependency = false,
 ): IntentSkillsBlockResult {
-  const listCommand = formatIntentCommand(packageManager, 'list')
+  const commandOptions = { local: intentDevDependency }
+  const catalogCommand = formatIntentCommand(
+    packageManager,
+    'catalog',
+    commandOptions,
+  )
   const loadCommand = formatIntentCommand(
     packageManager,
     'load <package>#<skill>',
+    commandOptions,
   )
 
   return {
     block: `${[
       INTENT_SKILLS_START,
-      '## Skill Loading',
+      '## Intent Skills',
       '',
-      'Before editing files for a substantial task:',
-      `- Run \`${listCommand}\` from the workspace root to see available local skills.`,
-      `- If a listed skill matches the task, run \`${loadCommand}\` before changing files.`,
-      '- Use the loaded `SKILL.md` guidance while making the change.',
-      '- Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.',
-      '- Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.',
+      `If an Intent catalog is not already present in this session context, run \`${catalogCommand}\` once.`,
+      `If a catalog entry matches the task, run \`${loadCommand}\` before editing.`,
+      'Do not rerun the catalog for every task. If no skill matches, continue normally.',
       INTENT_SKILLS_END,
     ].join('\n')}\n`,
     mappingCount: 0,
@@ -550,17 +554,24 @@ export function writeVerifiedIntentSkillsBlock({
   root,
   targetPath,
   formatTargetLabel,
+  verifyMappings = true,
 }: {
   generated: IntentSkillsBlockResult
   root: string
   targetPath: string
   formatTargetLabel: (resolvedTargetPath: string) => string
+  verifyMappings?: boolean
 }): WriteIntentSkillsBlockResult {
-  const result = writeIntentSkillsBlock({ ...generated, root, targetPath })
+  const result = writeIntentSkillsBlock({
+    ...generated,
+    root,
+    skipWhenEmpty: verifyMappings,
+    targetPath,
+  })
   if (!result.targetPath) return result
   const verification = verifyIntentSkillsBlockFile({
     expectedBlock: generated.block,
-    expectedMappingCount: generated.mappingCount,
+    expectedMappingCount: verifyMappings ? generated.mappingCount : undefined,
     targetPath: result.targetPath,
   })
   if (!verification.ok) {

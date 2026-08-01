@@ -138,18 +138,19 @@ function createCli(): CAC {
 
   cli
     .command('install', 'Configure trusted skill sources and delivery targets')
-    .usage(
-      'install [--map] [--dry-run] [--global] [--global-only] [--no-notices]',
-    )
-    .option('--map', 'Write explicit skill-to-task mappings')
+    .usage('install [--map] [--dry-run] [--debug] [--no-notices]')
+    .option('--map', 'Write catalog loading guidance to an agent file')
     .option('--dry-run', 'Preview installation without writing files')
-    .option('--global', 'With --map, include global packages')
-    .option('--global-only', 'With --map, use only global packages')
+    .option('--debug', 'Include package paths in diagnostic output')
+    .option('--global', 'Unsupported until global catalog support is available')
+    .option(
+      '--global-only',
+      'Unsupported until global catalog support is available',
+    )
     .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('install')
     .example('install --map')
     .example('install --dry-run')
-    .example('install --map --global')
     .action(async (options: InstallCommandOptions) => {
       const [{ scanIntentsOrFail }, { runInstallCommand }] = await Promise.all([
         import('./commands/support.js'),

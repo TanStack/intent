@@ -1,5 +1,7 @@
 import { applyEdits, modify, parse } from 'jsonc-parser'
 
+const INTENT_SYNC_COMMAND = 'npx @tanstack/intent sync'
+
 function formattingOptions(text: string): {
   eol: string
   insertSpaces: boolean
@@ -16,7 +18,7 @@ function formattingOptions(text: string): {
 function containsIntentSync(value: string): boolean {
   return value
     .split('&&')
-    .some((segment) => /^\s*intent sync(?:\s|$)/.test(segment))
+    .some((segment) => segment.trim() === INTENT_SYNC_COMMAND)
 }
 
 export function wireIntentSyncPrepare(text: string): string {
@@ -36,10 +38,17 @@ export function wireIntentSyncPrepare(text: string): string {
       ? (scripts as Record<string, unknown>).prepare
       : undefined
   if (typeof prepare === 'string' && containsIntentSync(prepare)) return text
-  const next =
+  const commands =
     typeof prepare === 'string' && prepare.trim()
-      ? `${prepare} && intent sync`
-      : 'intent sync'
+      ? prepare.split('&&').map((command) => command.trim())
+      : []
+  const migrated = commands.map((command) =>
+    command === 'intent sync' ? INTENT_SYNC_COMMAND : command,
+  )
+  const next = [
+    ...migrated,
+    ...(migrated.includes(INTENT_SYNC_COMMAND) ? [] : [INTENT_SYNC_COMMAND]),
+  ].join(' && ')
   const updated = applyEdits(
     body,
     modify(body, ['scripts', 'prepare'], next, {

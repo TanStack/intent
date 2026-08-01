@@ -114,24 +114,34 @@ function applyModification(
 export function updateIntentConsumerConfigText(
   text: string,
   requested: IntentConsumerConfig,
+  writeOptions: { materialize?: boolean } = {},
 ): string {
   const existing = readIntentConsumerConfig(text)
   const intent = parsePackageJson(text).intent
   const hasLegacyInstall = isRecord(intent) && intent.install !== undefined
+  const hasSkills = isRecord(intent) && Object.hasOwn(intent, 'skills')
+  const hasExclude = isRecord(intent) && Object.hasOwn(intent, 'exclude')
   const normalized = {
     skills: requireStringArray(requested.skills, 'intent.skills'),
     exclude: requireStringArray(requested.exclude, 'intent.exclude'),
   }
   parseSkillSources(normalized.skills)
   validateExcludes(normalized.exclude)
-  if (equalsConfig(existing, normalized) && !hasLegacyInstall) {
+  if (
+    equalsConfig(existing, normalized) &&
+    !hasLegacyInstall &&
+    (!writeOptions.materialize || (hasSkills && hasExclude))
+  ) {
     return text
   }
 
   const bom = text.startsWith('\ufeff') ? '\ufeff' : ''
   const options = formattingOptions(text)
   let updated = bom === '' ? text : text.slice(1)
-  if (!equalsArray(existing.skills, normalized.skills)) {
+  if (
+    !equalsArray(existing.skills, normalized.skills) ||
+    (writeOptions.materialize && !hasSkills)
+  ) {
     updated = applyModification(
       updated,
       ['intent', 'skills'],
@@ -139,7 +149,10 @@ export function updateIntentConsumerConfigText(
       options,
     )
   }
-  if (!equalsArray(existing.exclude, normalized.exclude)) {
+  if (
+    !equalsArray(existing.exclude, normalized.exclude) ||
+    (writeOptions.materialize && !hasExclude)
+  ) {
     updated = applyModification(
       updated,
       ['intent', 'exclude'],

@@ -33,7 +33,7 @@ Your lockfile then records the exact version, so everyone on your team runs the 
 
 ## Install skills
 
-`install` runs an interactive setup, so run it in a terminal. For CI or a non-interactive shell, use [a portable snapshot](#portable-snapshots) instead.
+`install` runs an interactive setup, so run it in a terminal. For committed agent loading instructions without managed delivery, use [portable guidance](#portable-guidance) instead.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -43,7 +43,7 @@ Your lockfile then records the exact version, so everyone on your team runs the 
 
 Intent asks:
 
-- **How to deliver skills.** You can symlink the skill folders into your agent's directories, install lifecycle hooks that list available skills at the start of a session, or write a static snapshot of skill mappings into an agent file such as `AGENTS.md`.
+- **How to deliver skills.** You can symlink the skill folders into your agent's directories, install lifecycle hooks that list available skills at the start of a session, or write static catalog loading guidance into an agent file such as `AGENTS.md`.
 - **Where to put them.** Intent pre-selects the agent tools it can detect, such as GitHub Copilot, Cursor, Claude Code, Codex, VS Code, or a shared `.agents` directory. Symlinks support all of these; hooks at this time only support GitHub Copilot, Claude Code, and Codex (if you'd like to add hooks for other agents or platforms, we welcome contributions). You can also choose a custom folder for symlinks or hooks.
 - **Which skills to trust.** Enable every skill it found, everything under a certain package name (eg. `@tanstack/*`), or pick individual skills. Only the packages you enable here can provide skills to your agent.
 - **A final confirmation** before it writes anything.
@@ -57,12 +57,12 @@ Once finished, Intent prints a line describing how many skills were installed, e
 
 Intent records your choices in three files:
 
-- `package.json` holds `intent.skills`, the list of sources you trust, as well as the `intent.exclude` patterns that remove skills or packages you do not want.
+- `package.json` holds explicit `intent.skills` and `intent.exclude` arrays for the sources you trust and the skills or packages you do not want.
 - `intent.lock` holds contains the accepted skill contents, so teams can share the same baseline. It also records the package versions that shipped those skills, so Intent can detect when a dependency update changes its skills, or the contents of a skill you already accepted have changed.
 - `.intent/delivery.json` holds your local delivery method and targets.
 
 > [!NOTE]
-> If you chose symlinks, Intent adds the managed links to `.git/info/exclude` so they do not get committed.
+> Intent adds `.intent/` to the project `.gitignore`. If you chose symlinks, it also adds the generated link paths to the checkout's `.git/info/exclude` so they do not get committed.
 
 Commit `package.json` and `intent.lock` if you're looking for the project to share the same trusted sources and accepted skills. `.intent/` stays local to your checkout.
 
@@ -92,9 +92,9 @@ If a command does not behave as described, see [Troubleshooting](./troubleshooti
 
 Updating a dependency can add, remove, or change its skills. With symlink delivery, run [`intent sync`](../cli/intent-sync) to update the links; it flags new or changed skills for review before they reach your agent. Run `install` again when you are ready to accept a new baseline. See the [trust model](../concepts/trust-model) for how that review works.
 
-## Portable snapshots
+## Portable guidance
 
-`install --map` writes a static list of skill mappings into an agent file such as `AGENTS.md` instead of setting up managed delivery:
+`install --map` writes compact catalog loading instructions into an agent file such as `AGENTS.md` instead of setting up managed delivery:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -102,4 +102,4 @@ Updating a dependency can add, remove, or change its skills. With symlink delive
 
 <!-- ::end:tabs -->
 
-The snapshot does not update when dependencies change, so re-run the command to refresh it. Hooks and symlinks keep skills current automatically, so they are the more reliable choice for everyday use; reach for `--map` when you want committed guidance or cannot use managed delivery. An MCP server is planned for a future release.
+The instructions tell the agent to run `intent catalog` once if a catalog is not already present in session context, then load only a matching skill with `intent load <id>`. When Intent is a dev dependency, generated commands use the local binary; otherwise they use a pinned one-off runner. Hooks inject the same catalog automatically, while symlinks expose accepted skill folders directly.

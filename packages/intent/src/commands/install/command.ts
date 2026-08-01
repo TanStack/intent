@@ -2,13 +2,15 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { compileExcludePatterns } from '../../core/excludes.js'
 import { buildCurrentLockfileSources } from '../../core/lockfile/lockfile-state.js'
-import { writeIntentLockfile } from '../../core/lockfile/lockfile.js'
+import {
+  readIntentLockfile,
+  writeIntentLockfile,
+} from '../../core/lockfile/lockfile.js'
 import { resolveProjectContext } from '../../core/project-context.js'
 import { applySourcePolicy } from '../../core/source-policy.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
 import { writeTextFileAtomic } from '../../shared/atomic-write.js'
 import { fail } from '../../shared/cli-error.js'
-import { detectIntentAudience } from '../../shared/environment.js'
 import {
   coreOptionsFromGlobalFlags,
   noticeOptionsFromGlobalFlags,
@@ -17,12 +19,14 @@ import {
 } from '../support.js'
 import {
   SUPPORTED_MAP_TARGETS,
+  buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
   findExistingIntentSkillsBlockTargetPath,
   resolveMapTargetPath,
   writeVerifiedIntentSkillsBlock,
 } from './guidance.js'
 import {
+  hasIntentDevDependency,
   readIntentConsumerConfig,
   updateIntentConsumerConfigText,
 } from './config.js'
@@ -34,10 +38,12 @@ import type { IntentCoreOptions } from '../../core/index.js'
 import type { ScanResult } from '../../shared/types.js'
 
 async function runInstallWithPrompts({
+  debug,
   dryRun,
   prompts,
   root,
 }: {
+  debug?: boolean
   dryRun?: boolean
   prompts: InstallerPrompter
   root: string
@@ -58,6 +64,7 @@ async function runInstallWithPrompts({
     prompts,
     readFs: fsCache.getReadFs(),
     root,
+    warnings: getInstallWarnings(scan, debug),
   })
 }
 
@@ -68,16 +75,18 @@ export interface InstallCommandOptions extends GlobalScanFlags {
 
 export async function runInteractiveInstall({
   cwd,
+  debug,
   dryRun,
   prompts,
 }: {
   cwd: string
+  debug?: boolean
   dryRun?: boolean
   prompts: InstallerPrompter
 }): Promise<void> {
   const context = resolveProjectContext({ cwd })
   const root = context.workspaceRoot ?? context.packageRoot ?? context.cwd
-  await runInstallWithPrompts({ dryRun, prompts, root })
+  await runInstallWithPrompts({ debug, dryRun, prompts, root })
 }
 
 function formatTargetPath(targetPath: string): string {
@@ -96,6 +105,30 @@ function printNoActionableSkills(
   console.log('No intent-enabled skills found.')
   printWarnings(warnings)
   printNotices(notices, noticeOptions)
+}
+
+function getInstallWarnings(scan: ScanResult, debug = false): Array<string> {
+  const conflictNames = new Set(
+    scan.conflicts.map((conflict) => conflict.packageName),
+  )
+  const warnings = scan.warnings.filter(
+    (warning) => ![...conflictNames].some((name) => warning.includes(name)),
+  )
+  for (const conflict of scan.conflicts) {
+    const variants = conflict.variants
+      .map((variant) => `${variant.version} at ${variant.packageRoot}`)
+      .join(', ')
+    warnings.push(
+      debug
+        ? `Multiple versions of ${conflict.packageName} are installed (${variants}); ${conflict.chosen.version} at ${conflict.chosen.packageRoot} will be used.`
+        : `Multiple versions of ${conflict.packageName} are installed; ${conflict.chosen.version} will be used. Run with --debug to see package paths.`,
+    )
+  }
+  return warnings
+}
+
+function printInstallWarnings(scan: ScanResult, debug = false): void {
+  printWarnings(getInstallWarnings(scan, debug))
 }
 
 function printPlacementTip(targetPath: string): void {
@@ -151,8 +184,33 @@ export async function runInstallCommand(
   options: InstallCommandOptions,
   scanIntentsOrFail: (coreOptions?: IntentCoreOptions) => Promise<ScanResult>,
 ): Promise<void> {
+  if (options.global || options.globalOnly) {
+    fail(
+      '`intent install` does not support --global or --global-only. Global catalog support is not available.',
+    )
+  }
   const coreOptions = coreOptionsFromGlobalFlags(options)
   const noticeOptions = noticeOptionsFromGlobalFlags(options)
+  const audience = process.env.INTENT_AUDIENCE?.trim().toLowerCase()
+  const context = resolveProjectContext({ cwd: process.cwd() })
+  const trustedRoot =
+    context.workspaceRoot ?? context.packageRoot ?? context.cwd
+
+  if (audience === 'agent') {
+    const packageJsonPath = join(trustedRoot, 'package.json')
+    const config = existsSync(packageJsonPath)
+      ? readIntentConsumerConfig(readFileSync(packageJsonPath, 'utf8'))
+      : { skills: [], exclude: [] }
+    const hasCommittedTrust =
+      readIntentLockfile(join(trustedRoot, 'intent.lock')).status === 'found' &&
+      (config.skills.length > 0 || config.exclude.length > 0)
+
+    if (!options.map || !hasCommittedTrust) {
+      fail(
+        'Pause and ask the user to run `intent install` interactively to approve skills and choose the delivery target. Do not continue installation automatically.',
+      )
+    }
+  }
 
   if (!options.map) {
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -163,13 +221,14 @@ export async function runInstallCommand(
     const { createClackInstallerPrompter } = await import('./prompts.js')
     await runInteractiveInstall({
       cwd: process.cwd(),
+      debug: options.debug,
       dryRun: options.dryRun,
       prompts: createClackInstallerPrompter(),
     })
     return
   }
 
-  let root = process.cwd()
+  let root = audience === 'agent' ? trustedRoot : process.cwd()
   let projectRoot = root
   let scanResult: ScanResult | null = null
   let bootstrapWrites: {
@@ -179,7 +238,6 @@ export async function runInstallCommand(
   } | null = null
 
   if (process.stdin.isTTY && process.stdout.isTTY) {
-    const context = resolveProjectContext({ cwd: process.cwd() })
     projectRoot = context.workspaceRoot ?? context.packageRoot ?? context.cwd
     const lockfilePath = join(projectRoot, 'intent.lock')
     const packageJsonPath = join(projectRoot, 'package.json')
@@ -229,19 +287,23 @@ export async function runInstallCommand(
             ),
           },
           packageJsonPath,
-          updatedPackageJson: updateIntentConsumerConfigText(packageJson, {
-            skills: plan.skills,
-            exclude: plan.exclude,
-          }),
+          updatedPackageJson: updateIntentConsumerConfigText(
+            packageJson,
+            {
+              skills: plan.skills,
+              exclude: plan.exclude,
+            },
+            { materialize: true },
+          ),
         }
       }
     }
   }
 
   scanResult ??= await scanIntentsOrFail(coreOptions)
-  const generated = buildIntentSkillsBlock(scanResult)
+  const mappingCount = buildIntentSkillsBlock(scanResult).mappingCount
 
-  if (generated.mappingCount === 0) {
+  if (mappingCount === 0) {
     printNoActionableSkills(
       scanResult.warnings,
       scanResult.notices,
@@ -249,6 +311,14 @@ export async function runInstallCommand(
     )
     return
   }
+  const packageJsonPath = join(root, 'package.json')
+  const intentDevDependency =
+    existsSync(packageJsonPath) &&
+    hasIntentDevDependency(readFileSync(packageJsonPath, 'utf8'))
+  const generated = buildIntentSkillGuidanceBlock(
+    scanResult.packageManager,
+    intentDevDependency,
+  )
 
   let existingTargetPath =
     root !== projectRoot
@@ -275,10 +345,10 @@ export async function runInstallCommand(
 
   if (options.dryRun) {
     console.log(
-      `Generated ${formatMappingCount(generated.mappingCount)} for ${formatTargetPath(targetPath)}.`,
+      `Would write Intent catalog guidance to ${formatTargetPath(targetPath)}.`,
     )
-    console.log(generated.block)
-    printWarnings(scanResult.warnings)
+    console.log('No files changed.')
+    printInstallWarnings(scanResult, options.debug)
     printNotices(scanResult.notices, noticeOptions)
     return
   }
@@ -288,6 +358,7 @@ export async function runInstallCommand(
     root,
     targetPath,
     formatTargetLabel: formatTargetPath,
+    verifyMappings: false,
   })
 
   if (!result.targetPath) return
@@ -303,13 +374,11 @@ export async function runInstallCommand(
   printWriteResult(result)
   printPlacementTip(result.targetPath)
 
-  printWarnings(scanResult.warnings)
+  printInstallWarnings(scanResult, options.debug)
   const snapshotNotices =
-    result.status !== 'unchanged' &&
-    generated.mappingCount > 0 &&
-    detectIntentAudience() === 'human'
+    result.status !== 'unchanged' && audience !== 'agent'
       ? [
-          'The intent-skills block is a snapshot and does not update when dependencies change. Re-run `intent install --map` to regenerate it.',
+          'The Intent guidance checks for a session catalog before loading matching skills.',
         ]
       : []
   printNotices([...snapshotNotices, ...scanResult.notices], noticeOptions)

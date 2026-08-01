@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeTextFileAtomic } from '../../shared/atomic-write.js'
-import { writeIntentGitExclude } from '../sync/gitignore.js'
+import { writeIntentGitignore } from '../sync/gitignore.js'
 
 export const DELIVERY_CONFIG_PATH = '.intent/delivery.json'
 
@@ -157,8 +157,8 @@ export function writeIntentDeliveryConfig(
 ): boolean {
   const path = join(root, DELIVERY_CONFIG_PATH)
   const content = serializeIntentDeliveryConfig(config)
+  writeIntentGitignore(root)
   if (existsSync(path) && readFileSync(path, 'utf8') === content) return false
-  writeIntentGitExclude(root, [DELIVERY_CONFIG_PATH])
   writeTextFileAtomic(path, content)
   return true
 }

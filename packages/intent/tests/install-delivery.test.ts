@@ -71,9 +71,11 @@ describe('local delivery configuration', () => {
     expect(writeIntentDeliveryConfig(root, config)).toBe(true)
     expect(writeIntentDeliveryConfig(root, config)).toBe(false)
     expect(readIntentDeliveryConfig(root)).toEqual(config)
-    expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe('shared\r\n')
+    expect(readFileSync(join(root, '.gitignore'), 'utf8')).toBe(
+      'shared\r\n.intent/\r\n',
+    )
     expect(
       readFileSync(join(root, '.git', 'info', 'exclude'), 'utf8'),
-    ).toContain(DELIVERY_CONFIG_PATH)
+    ).not.toContain(DELIVERY_CONFIG_PATH)
   })
 })

@@ -23,7 +23,7 @@ A skill can be missing because you did not enable its package during install, or
 
 ## Install exits without prompting
 
-Interactive install needs a terminal. In CI or a non-interactive shell, use [a portable snapshot](./quick-start-consumers#portable-snapshots) instead.
+Interactive install needs a terminal. For committed instructions without managed delivery, use [portable guidance](./quick-start-consumers#portable-guidance) instead.
 
 ## Symlinks are not available
 

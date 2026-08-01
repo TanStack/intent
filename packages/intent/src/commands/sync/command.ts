@@ -21,16 +21,13 @@ import {
   readIntentConsumerConfig,
   updateIntentConsumerConfigText,
 } from '../install/config.js'
-import {
-  DELIVERY_CONFIG_PATH,
-  readIntentDeliveryConfig,
-} from '../install/delivery.js'
+import { readIntentDeliveryConfig } from '../install/delivery.js'
 import {
   buildSkillSelectionPlan,
   skillSelectionId,
   summarizeInstallDeltaInventory,
 } from '../install/plan.js'
-import { writeIntentGitExclude } from './gitignore.js'
+import { writeIntentGitExclude, writeIntentGitignore } from './gitignore.js'
 import { hasNonNativeLinkSource, reconcileManagedLinks } from './links.js'
 import { buildSyncLinkPlan } from './plan.js'
 import {
@@ -109,11 +106,11 @@ function writeManagedLinkState(root: string, links: LinkReconciliation): void {
     path: toProjectRelativePath(root, entry.path),
   }))
   writeInstallState(root, { version: 1, entries })
-  writeIntentGitExclude(root, [
-    ...entries.map((entry) => entry.path),
-    DELIVERY_CONFIG_PATH,
-    INSTALL_STATE_PATH,
-  ])
+  writeIntentGitignore(root)
+  writeIntentGitExclude(
+    root,
+    entries.map((entry) => entry.path),
+  )
 }
 
 function buildSyncCommandResult(

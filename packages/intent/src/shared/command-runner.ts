@@ -50,8 +50,11 @@ const runnerByPackageManager: Record<PackageManager, string> = {
 export function formatIntentCommand(
   packageManager: PackageManager,
   args: string,
+  options: { local?: boolean } = {},
 ): string {
-  const command = runnerByPackageManager[packageManager]
+  const command = options.local
+    ? 'npx @tanstack/intent'
+    : runnerByPackageManager[packageManager]
   const trimmedArgs = args.trim()
   return trimmedArgs ? `${command} ${trimmedArgs}` : command
 }

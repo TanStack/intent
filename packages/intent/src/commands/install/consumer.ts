@@ -10,7 +10,7 @@ import { applySourcePolicy } from '../../core/source-policy.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
 import { runInstallHooks } from '../../hooks/install.js'
 import { writeTextFileAtomic } from '../../shared/atomic-write.js'
-import { detectIntentAudience } from '../../shared/environment.js'
+import { printWarnings } from '../../shared/cli-output.js'
 import { nodeReadFs } from '../../shared/utils.js'
 import { runSyncCommand } from '../sync/command.js'
 import { hasNonNativeLinkSource, reconcileManagedLinks } from '../sync/links.js'
@@ -35,6 +35,7 @@ import {
   summarizeInstallDeltaInventory,
 } from './plan.js'
 import {
+  buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlockFromPackages,
   findExistingIntentSkillsBlockTargetPath,
   resolveMapTargetPath,
@@ -83,6 +84,7 @@ export interface RunConsumerInstallOptions {
   prompts: InstallerPrompter
   readFs?: ReadFs
   root: string
+  warnings?: ReadonlyArray<string>
 }
 
 function hookAgentForTarget(target: InstallTarget): HookAgent {
@@ -124,13 +126,14 @@ export async function runConsumerInstall({
   prompts,
   readFs = nodeReadFs,
   root,
+  warnings = [],
 }: RunConsumerInstallOptions): Promise<void> {
   const packageJsonPath = join(root, 'package.json')
   const packageJson = readFileSync(packageJsonPath, 'utf8')
   const intentDevDependency = hasIntentDevDependency(packageJson)
   const existingConfig = readIntentConsumerConfig(packageJson)
   const existingLock = readIntentLockfile(join(root, 'intent.lock'))
-  const delivery = dryRun ? null : readIntentDeliveryConfig(root)
+  const delivery = readIntentDeliveryConfig(root)
   async function resolveSkillSelection(): Promise<{
     plan: ReturnType<typeof buildSkillSelectionPlan> | null
     config: IntentConsumerConfig
@@ -174,7 +177,11 @@ export async function runConsumerInstall({
     const hasChanges =
       newDependencies > 0 || newSkills > 0 || changed > 0 || summary.removed > 0
     if (!hasChanges && existingLock.status === 'found') {
-      if (delivery.method === 'symlink') {
+      if (dryRun || delivery.method === 'symlink') {
+        if (dryRun) {
+          printWarnings([...warnings])
+          console.log('No files changed.')
+        }
         prompts.complete('Project is up to date.')
         return
       }
@@ -213,14 +220,18 @@ export async function runConsumerInstall({
           excludeMatchers: compileExcludePatterns(config.exclude),
         },
       )
-      const generated = buildIntentSkillsBlockFromPackages(
+      const mappingCount = buildIntentSkillsBlockFromPackages(
         policy.packages,
         packageManager,
-      )
-      if (generated.mappingCount === 0) {
+      ).mappingCount
+      if (mappingCount === 0) {
         prompts.complete('No intent-enabled skills found.')
         return
       }
+      const generated = buildIntentSkillGuidanceBlock(
+        packageManager,
+        intentDevDependency,
+      )
 
       const existingTargetPath = findExistingIntentSkillsBlockTargetPath(root)
       let targetPath: string
@@ -234,10 +245,9 @@ export async function runConsumerInstall({
       const relativeTarget = toProjectRelativePath(root, targetPath)
 
       if (dryRun) {
-        console.log(
-          `Generated ${generated.mappingCount} ${generated.mappingCount === 1 ? 'mapping' : 'mappings'} for ${relativeTarget}.`,
-        )
-        console.log(generated.block)
+        console.log(`Would write Intent catalog guidance to ${relativeTarget}.`)
+        printWarnings([...warnings])
+        console.log('No files changed.')
         prompts.complete('Dry run complete.')
         return
       }
@@ -247,12 +257,14 @@ export async function runConsumerInstall({
         root,
         targetPath,
         formatTargetLabel: () => relativeTarget,
+        verifyMappings: false,
       })
       if (!result.targetPath) return
 
       const updatedPackageJson = updateIntentConsumerConfigText(
         packageJson,
         config,
+        { materialize: true },
       )
       if (updatedPackageJson !== packageJson) {
         writeTextFileAtomic(packageJsonPath, updatedPackageJson)
@@ -261,9 +273,12 @@ export async function runConsumerInstall({
         lockfileVersion: 1,
         sources: buildCurrentLockfileSources(policy.packages, readFs),
       })
-      if (result.status !== 'unchanged' && detectIntentAudience() === 'human') {
+      if (
+        result.status !== 'unchanged' &&
+        process.env.INTENT_AUDIENCE?.trim().toLowerCase() !== 'agent'
+      ) {
         console.log(
-          'The intent-skills block is a snapshot and does not update when dependencies change. Re-run `intent install --map` to regenerate it.',
+          'The Intent guidance checks for a session catalog before loading matching skills.',
         )
       }
       prompts.complete(
@@ -299,6 +314,7 @@ export async function runConsumerInstall({
     const updatedConsumerConfig = updateIntentConsumerConfigText(
       packageJson,
       installation.config,
+      { materialize: true },
     )
     const updatedPackageJson =
       method === 'symlink' && intentDevDependency
@@ -359,6 +375,8 @@ export async function runConsumerInstall({
       console.log(
         `Would write intent.lock with ${lockfile.sources.length} ${lockfile.sources.length === 1 ? 'source' : 'sources'}.`,
       )
+      printWarnings([...warnings])
+      console.log('No files changed.')
       prompts.complete('Dry run complete.')
       return
     }

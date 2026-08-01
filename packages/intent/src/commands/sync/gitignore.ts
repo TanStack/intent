@@ -1,10 +1,30 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import { writeTextFileAtomic } from '../../shared/atomic-write.js'
 
 const START = '# intent skill links:start'
 const END = '# intent skill links:end'
+const INTENT_STATE = '.intent/'
+
+export function updateIntentGitignore(text: string | null): string {
+  const eol = text?.includes('\r\n') ? '\r\n' : '\n'
+  const lines = (text ?? '').split(/\r?\n/)
+  if (lines.includes(INTENT_STATE)) return text ?? `${INTENT_STATE}${eol}`
+
+  const prefix = text ?? ''
+  const separator = prefix === '' || prefix.endsWith('\n') ? '' : eol
+  return `${prefix}${separator}${INTENT_STATE}${eol}`
+}
+
+export function writeIntentGitignore(root: string): boolean {
+  const path = join(root, '.gitignore')
+  const before = existsSync(path) ? readFileSync(path, 'utf8') : null
+  const after = updateIntentGitignore(before)
+  if (before === after) return false
+  writeTextFileAtomic(path, after)
+  return true
+}
 
 export function updateIntentGitExclude(
   text: string | null,
@@ -28,8 +48,14 @@ export function writeIntentGitExclude(
   paths: ReadonlyArray<string>,
 ): boolean {
   let gitPath: string
+  let gitRoot: string
   try {
     gitPath = execFileSync('git', ['rev-parse', '--git-path', 'info/exclude'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    gitRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -37,11 +63,14 @@ export function writeIntentGitExclude(
   } catch {
     return false
   }
-  if (gitPath === '') return false
+  if (gitPath === '' || gitRoot === '') return false
 
-  const path = resolve(root, gitPath)
+  const path = isAbsolute(gitPath) ? gitPath : resolve(root, gitPath)
+  const entries = paths.map((entry) =>
+    relative(gitRoot, resolve(root, entry)).replace(/\\/g, '/'),
+  )
   const before = existsSync(path) ? readFileSync(path, 'utf8') : null
-  const after = updateIntentGitExclude(before, paths)
+  const after = updateIntentGitExclude(before, entries)
   if (before === after) return false
   writeTextFileAtomic(path, after)
   return true

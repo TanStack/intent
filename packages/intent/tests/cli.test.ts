@@ -398,10 +398,9 @@ describe('cli commands', () => {
       }).trim(),
     )
     const localExclude = readFileSync(excludePath, 'utf8')
-    expect(localExclude).toContain('.intent/delivery.json')
-    expect(localExclude).toContain('.intent/install-state.json')
     expect(localExclude).toContain('.github/skills/npm-verified-core')
-    expect(existsSync(join(root, '.gitignore'))).toBe(false)
+    expect(localExclude).not.toContain('.intent/')
+    expect(readFileSync(join(root, '.gitignore'), 'utf8')).toContain('.intent/')
     expect(await main(['sync'])).toBe(0)
     expect(
       readFileSync(join(root, '.intent', 'install-state.json'), 'utf8'),
@@ -771,7 +770,7 @@ describe('cli commands', () => {
     )
   })
 
-  it('writes install mappings with --map and is idempotent', async () => {
+  it('writes install catalog guidance with --map and is idempotent', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-map-'))
     const isolatedGlobalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-install-map-empty-global-'),
@@ -796,16 +795,17 @@ describe('cli commands', () => {
       .join('\n')
 
     expect(exitCode).toBe(0)
-    expect(output).toContain('Created AGENTS.md with 1 mapping.')
+    expect(output).toContain('Created AGENTS.md with skill loading guidance.')
     expect(output).toContain(
-      'The intent-skills block is a snapshot and does not update when dependencies change. Re-run `intent install --map` to regenerate it.',
+      'The Intent guidance checks for a session catalog before loading matching skills.',
     )
-    expect(content).toContain('for: "Query data fetching patterns"')
-    expect(content).toContain('id: "@tanstack/query#fetching"')
     expect(content).toContain(
-      `run: "npx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching"`,
+      `npx @tanstack/intent@${intentPackagePin} catalog`,
     )
-    expect(content).not.toContain('load:')
+    expect(content).toContain(
+      `npx @tanstack/intent@${intentPackagePin} load <package>#<skill>`,
+    )
+    expect(content).not.toContain('@tanstack/query#fetching')
     expect(content).not.toContain('snapshot')
     expect(content).not.toContain(root)
 
@@ -816,35 +816,9 @@ describe('cli commands', () => {
 
     expect(secondExitCode).toBe(0)
     expect(secondOutput).toContain(
-      'No changes to AGENTS.md; 1 mapping already current.',
+      'No changes to AGENTS.md; skill loading guidance already current.',
     )
     expect(readFileSync(agentsPath, 'utf8')).toBe(content)
-  })
-
-  it('does not print the install mapping snapshot advisory to agents', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-map-agent-'))
-    const isolatedGlobalRoot = mkdtempSync(
-      join(realTmpdir, 'intent-cli-install-map-agent-empty-global-'),
-    )
-    tempDirs.push(root, isolatedGlobalRoot)
-    writeInstalledIntentPackage(root, {
-      name: '@tanstack/query',
-      version: '5.0.0',
-      skillName: 'fetching',
-      description: 'Query data fetching patterns',
-    })
-
-    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
-    process.env.INTENT_AUDIENCE = 'agent'
-    process.chdir(root)
-
-    const exitCode = await main(['install', '--map'])
-    const output = [...logSpy.mock.calls, ...errorSpy.mock.calls]
-      .flat()
-      .join('\n')
-
-    expect(exitCode).toBe(0)
-    expect(output).not.toContain('snapshot')
   })
 
   it('omits unlisted packages from the install --map block', async () => {
@@ -878,7 +852,8 @@ describe('cli commands', () => {
     const content = readFileSync(join(root, 'AGENTS.md'), 'utf8')
 
     expect(exitCode).toBe(0)
-    expect(content).toContain('id: "@tanstack/query#fetching"')
+    expect(content).toContain('catalog')
+    expect(content).not.toContain('@tanstack/query#fetching')
     expect(content).not.toContain('@tanstack/unlisted')
   })
 
@@ -912,7 +887,7 @@ describe('cli commands', () => {
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
-  it('includes configured global packages during install --map when requested', async () => {
+  it('rejects --global during install', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-global-'))
     const globalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-install-global-node-modules-'),
@@ -935,15 +910,15 @@ describe('cli commands', () => {
     process.chdir(root)
 
     const exitCode = await main(['install', '--map', '--global', '--dry-run'])
-    const output = logSpy.mock.calls.flat().join('\n')
+    const output = errorSpy.mock.calls.flat().join('\n')
 
-    expect(exitCode).toBe(0)
-    expect(output).toContain('Generated 1 mapping for AGENTS.md.')
-    expect(output).toContain('for: "Global fetching skill"')
-    expect(output).toContain('id: "@tanstack/query#fetching"')
+    expect(exitCode).toBe(1)
+    expect(output).toContain(
+      '`intent install` does not support --global or --global-only. Global catalog support is not available.',
+    )
   })
 
-  it('uses only global packages during install --map --global-only', async () => {
+  it('rejects --global-only during install', async () => {
     const root = mkdtempSync(
       join(realTmpdir, 'intent-cli-install-global-only-'),
     )
@@ -973,11 +948,13 @@ describe('cli commands', () => {
     process.chdir(root)
 
     const exitCode = await main(['install', '--map', '--global-only'])
-    const content = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+    const output = errorSpy.mock.calls.flat().join('\n')
 
-    expect(exitCode).toBe(0)
-    expect(content).toContain('id: "@tanstack/query#fetching"')
-    expect(content).not.toContain('@tanstack/local#local-skill')
+    expect(exitCode).toBe(1)
+    expect(output).toContain(
+      '`intent install` does not support --global or --global-only. Global catalog support is not available.',
+    )
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
   it('prints the scaffold prompt', async () => {
@@ -2149,7 +2126,9 @@ describe('cli commands', () => {
 
       expect(exitCode).toBe(1)
       expect(errorSpy).toHaveBeenCalledWith(
-        'Use either --global or --global-only, not both.',
+        command[0] === 'install'
+          ? '`intent install` does not support --global or --global-only. Global catalog support is not available.'
+          : 'Use either --global or --global-only, not both.',
       )
     },
   )

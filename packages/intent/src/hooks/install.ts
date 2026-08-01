@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { relative } from 'node:path'
+import { join, relative } from 'node:path'
+import { hasIntentDevDependency } from '../commands/install/config.js'
 import { detectPackageManager } from '../discovery/package-manager.js'
 import { writeTextFileAtomic } from '../shared/atomic-write.js'
 import { fail } from '../shared/cli-error.js'
@@ -82,6 +83,13 @@ function installAgentHook({
   const catalogCommand = formatIntentCommand(
     detectPackageManager(root),
     `hooks run --agent ${agent}`,
+    {
+      local:
+        existsSync(join(root, 'package.json')) &&
+        hasIntentDevDependency(
+          readFileSync(join(root, 'package.json'), 'utf8'),
+        ),
+    },
   )
   const configStatus = updateJsonConfig(configPath, (config) =>
     upsertAdapterHooks({
@@ -190,6 +198,9 @@ function isIntentHookReference(value: string): boolean {
       value,
     ) ||
     /@tanstack\/intent(?:@[^\s]+)?\s+hooks\s+run\s+--agent\s+(?:copilot|claude|codex)(?:$|\s)/i.test(
+      value,
+    ) ||
+    /(?:^|\s)(?:intent|pnpm\s+exec\s+intent|npm\s+exec\s+--\s+intent|yarn\s+intent|bun\s+run\s+intent)\s+hooks\s+run\s+--agent\s+(?:copilot|claude|codex)(?:$|\s)/i.test(
       value,
     )
   )

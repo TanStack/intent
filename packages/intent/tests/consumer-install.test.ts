@@ -393,7 +393,7 @@ describe('consumer install', () => {
       devDependencies: { '@tanstack/intent': '0.4.0' },
       description: 'preserve me',
       intent: { skills: ['@tanstack/query'], exclude: [] },
-      scripts: { prepare: 'intent sync' },
+      scripts: { prepare: 'npx @tanstack/intent sync' },
     })
     expect(readFileSync(join(root, 'intent.lock'))).toEqual(lockBefore)
     expect(readIntentDeliveryConfig(root)).toEqual({
@@ -436,7 +436,7 @@ describe('consumer install', () => {
     expect(selectSkills).not.toHaveBeenCalled()
     expect(
       JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts,
-    ).toEqual({ prepare: 'intent sync' })
+    ).toEqual({ prepare: 'npx @tanstack/intent sync' })
   })
 
   it('reports a new skill and enters review without re-interviewing delivery', async () => {
@@ -573,8 +573,8 @@ describe('consumer install', () => {
     })
 
     const target = readFileSync(join(root, 'notes', 'assistant.md'), 'utf8')
-    expect(target).toContain('id: "@tanstack/query#fetching"')
-    expect(target).toContain('load @tanstack/query#fetching')
+    expect(target).toContain('npx @tanstack/intent catalog')
+    expect(target).toContain('npx @tanstack/intent load <package>#<skill>')
     expect(
       readIntentConsumerConfig(
         readFileSync(join(root, 'package.json'), 'utf8'),
@@ -653,8 +653,10 @@ describe('consumer install', () => {
       })
 
       const output = log.mock.calls.flat().join('\n')
-      expect(output).toContain('Generated 1 mapping for notes/assistant.md.')
-      expect(output).toContain('id: "@tanstack/query#fetching"')
+      expect(output).toContain(
+        'Would write Intent catalog guidance to notes/assistant.md.',
+      )
+      expect(output).not.toContain('id: "@tanstack/query#fetching"')
     } finally {
       log.mockRestore()
     }

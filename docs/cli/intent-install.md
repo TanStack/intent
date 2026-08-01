@@ -5,18 +5,17 @@ id: intent-install
 
 `intent install` sets up trusted skill delivery for your project. It records which packages you trust, locks the skill content you accept, and delivers those skills to your coding agents. Run it once to set up a project, and again after dependencies change to review and accept updates. For a step-by-step walkthrough, see the [consumer quick start](../getting-started/quick-start-consumers).
 
-The default is an interactive setup where you choose how skills are delivered: symlinks, lifecycle hooks, or a static guidance block. `--map` writes the static guidance block directly, without the interactive prompts and without a terminal.
+The default is an interactive setup where you choose how skills are delivered: symlinks, lifecycle hooks, or a static guidance block. `--map` writes the static guidance block directly, without the interactive delivery prompts and without a terminal.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
-@tanstack/intent@latest install [--map] [--dry-run] [--global] [--global-only] [--no-notices]
+@tanstack/intent@latest install [--map] [--dry-run] [--debug] [--no-notices]
 <!-- ::end:tabs -->
 
 ## Options
 
-- `--map`: write the static guidance block directly, without the interactive setup.
+- `--map`: write catalog loading guidance directly, without managed delivery.
 - `--dry-run`: report what install would write, and change nothing.
-- `--global`: with `--map`, include global packages after the project packages.
-- `--global-only`: with `--map`, use only global packages.
+- `--debug`: include package paths in diagnostic output.
 - `--no-notices`: suppress non-critical notices on stderr.
 
 ## Interactive setup
@@ -29,35 +28,33 @@ Intent asks how to deliver skills, where to deliver them, and which skills to tr
 - **Lifecycle hooks** surface accepted skills at the start of an agent session.
 - **Static guidance block** writes an `intent-skills` block into a file such as `AGENTS.md`.
 
-Every choice records your trusted sources in `package.json` (`intent.skills`, plus any `intent.exclude`) and the content you accepted in `intent.lock`.
+Every choice records your trusted sources in `package.json` as explicit `intent.skills` and `intent.exclude` arrays, and the content you accepted in `intent.lock`.
 
-Symlinks and hooks are managed delivery: Intent also writes `.intent/delivery.json` and keeps the skills in place. With symlinks it runs [`intent sync`](./intent-sync) once, adds the links to `.git/info/exclude`, and adds a `prepare: intent sync` script when Intent is a dev dependency, then prints a line such as `Installed 5 skills using symlink.` The static guidance block is a snapshot rather than managed delivery, the same output as the `--map` snapshot below; Intent prints a line such as `Installed 5 skills to AGENTS.md as a static guidance block.`
+Symlinks and hooks are managed delivery: Intent also writes `.intent/delivery.json`, adds `.intent/` to the project `.gitignore`, and keeps the skills in place. With symlinks it runs [`intent sync`](./intent-sync) once, adds generated link paths to the checkout's `.git/info/exclude`, and adds a `prepare: intent sync` script when Intent is a dev dependency, then prints a line such as `Installed 5 skills using symlink.` Static guidance is committed agent instructions without managed delivery; Intent prints a line such as `Installed 5 skills to AGENTS.md as a static guidance block.`
 
 Use `--dry-run` to preview any of this without writing files. See the [trust model](../concepts/trust-model) for how trusted sources and accepted content combine.
 
-## Portable snapshot with --map
+## Portable guidance with --map
 
-`install --map` writes the static guidance block without the interactive setup, and unlike the default it does not need a terminal, so it suits CI. The resulting block lists each skill with the command your agent runs to load it. It is a snapshot: it does not update when dependencies change, so re-run the command to refresh it.
+`install --map` writes a compact static block without managed delivery. The block tells an agent to run `intent catalog` once when the session does not already contain an Intent catalog, then run `intent load <id>` only when a catalog entry matches the task. It does not embed every skill or description in the agent file.
 
-Supported files are `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, and `.github/copilot-instructions.md`. In a terminal, Intent asks which file to use or lets you name another project file. It includes only packages permitted by `intent.skills` and skips reference, meta, and maintainer skills. `--global` and `--global-only` add global packages. On a project with no policy yet, a terminal run also helps you pick which skills to trust and writes `intent.skills` and `intent.lock`.
+Supported files are `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, and `.github/copilot-instructions.md`. In a terminal, Intent asks which file to use or lets you name another project file. On a project with no policy yet, a terminal run also helps you pick which skills to trust and writes `intent.skills`, `intent.exclude`, and `intent.lock`. An agent may regenerate guidance only when committed trust and lock state already exist; otherwise it stops and asks the user to run `intent install` interactively.
 
 The block stores portable identities and commands, never local file paths:
 
 ```yaml
 <!-- intent-skills:start -->
-# TanStack Intent - before editing files, run the matching guidance command.
-tanstackIntent:
-  - id: "@tanstack/query#fetching"
-    run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
-    for: "Query data fetching patterns"
+## Intent Skills
+
+If an Intent catalog is not already present in this session context, run `npx @tanstack/intent@latest catalog` once.
+If a catalog entry matches the task, run `npx @tanstack/intent@latest load <package>#<skill>` before editing.
+Do not rerun the catalog for every task. If no skill matches, continue normally.
 <!-- intent-skills:end -->
 ```
 
-- `id`: portable skill identity in `<package>#<skill>` form.
-- `run`: the package-manager-aware command to load the skill.
-- `for`: a task-routing phrase for the agent.
+When `@tanstack/intent` is a project dev dependency, generated guidance and hooks use `npx @tanstack/intent`, which resolves the installed package without relying on the ambiguous `intent` binary name. Otherwise they use a pinned one-off runner such as `npx @tanstack/intent@0.4`.
 
-Intent verifies the block after writing and reports the result, such as `Created AGENTS.md with 1 mapping.` or `No changes to AGENTS.md; 2 mappings already current.` If it finds no usable skills it prints `No intent-enabled skills found.` and writes nothing.
+Intent verifies the block after writing and reports whether it created, updated, or left the target unchanged. If it finds no usable skills it prints `No intent-enabled skills found.` and writes nothing. `--dry-run` prints the target and proposed trust/delivery changes without writing the block, trust config, lockfile, or local delivery state. Warnings remain visible during review; use `--debug` when package paths are needed.
 
 ## When install stops
 

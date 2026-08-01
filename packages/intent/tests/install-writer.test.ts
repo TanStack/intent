@@ -56,6 +56,7 @@ const packageJson = JSON.parse(
 const intentPackagePin = packageVersionToPin(packageJson.version)
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   process.chdir(originalCwd)
   if (originalStdinTTY) {
     Object.defineProperty(process.stdin, 'isTTY', originalStdinTTY)
@@ -246,26 +247,32 @@ describe('install writer block builder', () => {
     const generated = buildIntentSkillGuidanceBlock()
 
     expect(generated.mappingCount).toBe(0)
-    expect(generated.block).toContain('## Skill Loading')
+    expect(generated.block).toContain('## Intent Skills')
     expect(generated.block).toContain(
-      `npx @tanstack/intent@${intentPackagePin} list`,
+      `npx @tanstack/intent@${intentPackagePin} catalog`,
     )
-    expect(generated.block).toContain('If a listed skill matches the task')
-    expect(generated.block).toContain('before changing files')
-    expect(generated.block).toContain('Monorepos:')
-    expect(generated.block).toContain('Multiple matches:')
+    expect(generated.block).toContain(
+      'If an Intent catalog is not already present in this session context',
+    )
+    expect(generated.block).toContain('If a catalog entry matches the task')
+    expect(generated.block).toContain('Do not rerun the catalog for every task')
     expect(generated.block).not.toContain('install --map')
     expect(generated.block).not.toContain('--global')
   })
 
-  it('builds package-manager-specific loading guidance', () => {
+  it('builds one-off and installed-package loading guidance', () => {
     const generated = buildIntentSkillGuidanceBlock('pnpm')
+    const localGenerated = buildIntentSkillGuidanceBlock('pnpm', true)
 
     expect(generated.block).toContain(
-      `pnpm dlx @tanstack/intent@${intentPackagePin} list`,
+      `pnpm dlx @tanstack/intent@${intentPackagePin} catalog`,
     )
     expect(generated.block).toContain(
       `pnpm dlx @tanstack/intent@${intentPackagePin} load <package>#<skill>`,
+    )
+    expect(localGenerated.block).toContain('npx @tanstack/intent catalog')
+    expect(localGenerated.block).toContain(
+      'npx @tanstack/intent load <package>#<skill>',
     )
   })
 
@@ -952,6 +959,22 @@ describe('install map destination command', () => {
     setTTY(true)
   })
 
+  it('asks an agent to pause when trust has not been approved', async () => {
+    const { root, originalPackageJson } = bootstrapChdir()
+    vi.stubEnv('INTENT_AUDIENCE', 'agent')
+
+    await expect(
+      runInstallCommand({ map: true }, () =>
+        Promise.resolve(mappedScanResult()),
+      ),
+    ).rejects.toThrow(
+      'Pause and ask the user to run `intent install` interactively to approve skills and choose the delivery target. Do not continue installation automatically.',
+    )
+
+    expect(mapPromptMocks.selectClackSkills).not.toHaveBeenCalled()
+    expectNoBootstrapWrites(root, originalPackageJson)
+  })
+
   it('bootstraps trust and writes the selected map without delivery state', async () => {
     const root = bootstrapProject()
     const targetPath = join(root, '.github', 'copilot-instructions.md')
@@ -968,30 +991,7 @@ describe('install map destination command', () => {
       ),
     ).toEqual({ skills: ['@tanstack/query'], exclude: [] })
     expect(readIntentLockfile(join(root, 'intent.lock')).status).toBe('found')
-    expect(readFileSync(targetPath, 'utf8')).toContain(
-      'id: "@tanstack/query#fetching"',
-    )
-    expect(existsSync(join(root, '.intent', 'delivery.json'))).toBe(false)
-  })
-
-  it('writes trust only after the bootstrap map verifies', async () => {
-    const { root, packageJsonPath, originalPackageJson } = bootstrapChdir()
-    const targetPath = join(root, 'AGENTS.md')
-    writeFetchingSkill(root, [
-      'name: fetching',
-      'description: Edit /Users/example/project files',
-    ])
-    mockBootstrapSelection('AGENTS.md')
-
-    await expect(
-      runInstallCommand({ map: true }, () => Promise.resolve(scanResult([]))),
-    ).rejects.toThrow('Install verification failed for AGENTS.md:')
-
-    expect(readFileSync(targetPath, 'utf8')).toContain(
-      'Edit /Users/example/project files',
-    )
-    expect(readFileSync(packageJsonPath, 'utf8')).toBe(originalPackageJson)
-    expect(existsSync(join(root, 'intent.lock'))).toBe(false)
+    expect(readFileSync(targetPath, 'utf8')).toContain('intent@0.3 catalog')
     expect(existsSync(join(root, '.intent', 'delivery.json'))).toBe(false)
   })
 
@@ -1101,9 +1101,9 @@ describe('install map destination command', () => {
     )
 
     expect(log.mock.calls.flat().join('\n')).toContain(
-      'Generated 1 mapping for .github/copilot-instructions.md.',
+      'Would write Intent catalog guidance to .github/copilot-instructions.md.',
     )
-    expect(log.mock.calls.flat().join('\n')).toContain(
+    expect(log.mock.calls.flat().join('\n')).not.toContain(
       'id: "@tanstack/query#fetching"',
     )
     expectNoBootstrapWrites(root, originalPackageJson)
@@ -1131,9 +1131,7 @@ describe('install map destination command', () => {
       ),
     ).toEqual({ skills: ['@tanstack/query'], exclude: [] })
     expect(readIntentLockfile(join(root, 'intent.lock')).status).toBe('found')
-    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
-      'id: "@tanstack/query#fetching"',
-    )
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain('catalog')
     expect(existsSync(join(leaf, 'intent.lock'))).toBe(false)
     expect(existsSync(join(leaf, 'AGENTS.md'))).toBe(false)
 
@@ -1142,9 +1140,7 @@ describe('install map destination command', () => {
       Promise.resolve(mappedScanResult()),
     )
 
-    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
-      'id: "pkg#core"',
-    )
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain('catalog')
     expect(existsSync(join(leaf, 'AGENTS.md'))).toBe(false)
     expect(mapPromptMocks.selectClackMapTarget).not.toHaveBeenCalled()
   })
@@ -1169,32 +1165,9 @@ describe('install map destination command', () => {
     expect(mapPromptMocks.selectClackMapTarget).toHaveBeenCalledWith(
       process.cwd(),
     )
-    expect(readFileSync(join(leaf, 'AGENTS.md'), 'utf8')).toContain(
-      'id: "pkg#core"',
-    )
+    expect(readFileSync(join(leaf, 'AGENTS.md'), 'utf8')).toContain('catalog')
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
-
-  it.each([{ global: true }, { globalOnly: true }])(
-    'skips bootstrap and maps the scanned result with global flags (%o)',
-    async (flag) => {
-      const { root, originalPackageJson } = bootstrapChdir()
-      const scan = vi.fn(() => Promise.resolve(mappedScanResult()))
-      mapPromptMocks.selectClackMapTarget.mockResolvedValueOnce('AGENTS.md')
-
-      await runInstallCommand({ map: true, ...flag }, scan)
-
-      expect(mapPromptMocks.selectClackSkills).not.toHaveBeenCalled()
-      expect(scan).toHaveBeenCalledOnce()
-      expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
-        'id: "pkg#core"',
-      )
-      expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(
-        originalPackageJson,
-      )
-      expect(existsSync(join(root, 'intent.lock'))).toBe(false)
-    },
-  )
 
   it('does not prompt or write when there are no mappings', async () => {
     const root = configuredMapProject()
@@ -1219,7 +1192,7 @@ describe('install map destination command', () => {
     )
 
     expect(mapPromptMocks.selectClackMapTarget).not.toHaveBeenCalled()
-    expect(readFileSync(targetPath, 'utf8')).toContain('id: "pkg#core"')
+    expect(readFileSync(targetPath, 'utf8')).toContain('catalog')
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 })
