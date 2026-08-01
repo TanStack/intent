@@ -1,7 +1,12 @@
-import { detectIntentAudience } from '../shared/environment.js'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { formatIntentCommand } from '../shared/command-runner.js'
 import { containsLocalPath } from '../shared/local-path.js'
+import { warningMentionsPackage } from '../core/excludes.js'
 import { listIntentSkills } from '../core/index.js'
+import { resolveProjectContext } from '../core/project-context.js'
+import { ALLOW_ALL_NOTICE } from '../shared/cli-output.js'
+import { hasIntentDevDependency } from './install/config.js'
 import {
   coreOptionsFromGlobalFlags,
   noticeOptionsFromGlobalFlags,
@@ -21,6 +26,7 @@ import type { ScanResult } from '../shared/types.js'
 export interface ListCommandOptions extends GlobalScanFlags {
   json?: boolean
   showHidden?: boolean
+  verbose?: boolean
   why?: boolean
 }
 
@@ -41,12 +47,19 @@ function printListDebug(result: IntentSkillList): void {
   ])
 }
 
-function printVersionConflicts(result: IntentSkillList): void {
+function printVersionConflicts(
+  result: IntentSkillList,
+  debug: boolean,
+): void {
   if (result.conflicts.length === 0) return
 
   console.log('\nVersion conflicts:\n')
   for (const conflict of result.conflicts) {
-    console.log(`  ${conflict.packageName} -> using ${conflict.chosen.version}`)
+    console.log(
+      `  ${conflict.packageName}: using ${conflict.chosen.version} (${conflict.variants.length} installed)`,
+    )
+    if (!debug) continue
+
     console.log(`    chosen: ${conflict.chosen.packageRoot}`)
 
     for (const variant of conflict.variants) {
@@ -64,8 +77,73 @@ function visibleWarnings(
   result: IntentSkillList,
   audience: string,
 ): Array<string> {
-  if (audience !== 'agent') return result.warnings
-  return result.warnings.filter((warning) => !containsLocalPath(warning))
+  const conflictNames = result.conflicts.map((conflict) => conflict.packageName)
+  return result.warnings.filter(
+    (warning) =>
+      !conflictNames.some((name) => warningMentionsPackage(warning, name)) &&
+      (audience !== 'agent' || !containsLocalPath(warning)),
+  )
+}
+
+function filterResultByPackage(
+  result: IntentSkillList,
+  packageName: string,
+): IntentSkillList {
+  const packages = result.packages.filter((pkg) => pkg.name === packageName)
+  const skills = result.skills.filter(
+    (skill) => skill.packageName === packageName,
+  )
+  const excludedSkills = result.excludedSkills?.filter(
+    (skill) => skill.packageName === packageName,
+  )
+  const hiddenSources = result.hiddenSources.filter(
+    (source) => source.name === packageName,
+  )
+  const conflicts = result.conflicts.filter(
+    (conflict) => conflict.packageName === packageName,
+  )
+  const warnings = result.warnings.filter((warning) =>
+    warningMentionsPackage(warning, packageName),
+  )
+  const notices = result.notices.filter(
+    (notice) =>
+      notice === ALLOW_ALL_NOTICE ||
+      warningMentionsPackage(notice, packageName),
+  )
+
+  return {
+    ...result,
+    packages,
+    skills,
+    excludedSkills,
+    hiddenSourceCount: hiddenSources.length,
+    hiddenSources,
+    conflicts,
+    warnings,
+    notices,
+    ...(result.debug
+      ? {
+          debug: {
+            ...result.debug,
+            packageCount: packages.length,
+            skillCount: skills.length,
+            warningCount: warnings.length,
+            noticeCount: notices.length,
+            conflictCount: conflicts.length,
+          },
+        }
+      : {}),
+  }
+}
+
+function usesInstalledIntent(): boolean {
+  const context = resolveProjectContext({ cwd: process.cwd() })
+  const root = context.workspaceRoot ?? context.packageRoot ?? context.cwd
+  const packageJsonPath = join(root, 'package.json')
+  return (
+    existsSync(packageJsonPath) &&
+    hasIntentDevDependency(readFileSync(packageJsonPath, 'utf8'))
+  )
 }
 
 function redactPackageRoot<T extends { packageRoot: string }>(entry: T): T {
@@ -112,8 +190,11 @@ function formatLoadCommand(
   skillUse: string,
   packageManager: ScanResult['packageManager'],
   scopeFlag: string,
+  local: boolean,
 ): string {
-  return formatIntentCommand(packageManager, `load ${skillUse}${scopeFlag}`)
+  return formatIntentCommand(packageManager, `load ${skillUse}${scopeFlag}`, {
+    local,
+  })
 }
 
 function printHiddenSources(
@@ -145,17 +226,25 @@ function printHiddenSources(
 }
 
 export async function runListCommand(
+  packageName: string | undefined,
   options: ListCommandOptions,
 ): Promise<void> {
-  const audience = detectIntentAudience()
+  const audience =
+    process.env.INTENT_AUDIENCE?.trim().toLowerCase() === 'agent'
+      ? 'agent'
+      : 'human'
   const explain = audience === 'human' && options.why === true
-  const result = listIntentSkills({
+  const listed = listIntentSkills({
     ...coreOptionsFromGlobalFlags(options),
     audience,
     why: explain,
   })
+  const result = packageName
+    ? filterResultByPackage(listed, packageName)
+    : listed
   const noticeOptions = noticeOptionsFromGlobalFlags(options)
   const warnings = visibleWarnings(result, audience)
+  const localIntent = usesInstalledIntent()
   printListDebug(result)
 
   if (options.json) {
@@ -186,7 +275,11 @@ export async function runListCommand(
     result.packages.length === 0 &&
     (result.excludedSkills?.length ?? 0) === 0
   ) {
-    console.log('No intent-enabled packages found.')
+    console.log(
+      packageName
+        ? `No intent-enabled package found: ${packageName}.`
+        : 'No intent-enabled packages found.',
+    )
     if (options.showHidden && result.hiddenSourceCount > 0) {
       printHiddenSources(result, audience, explain)
     }
@@ -215,11 +308,41 @@ export async function runListCommand(
   }
 
   if (audience === 'human') {
-    printVersionConflicts(result)
+    printVersionConflicts(result, options.debug === true)
   }
 
   if (options.showHidden) {
     printHiddenSources(result, audience, explain)
+  }
+
+  const scopeFlag = options.globalOnly
+    ? ' --global-only'
+    : options.global
+      ? ' --global'
+      : ''
+
+  if (audience === 'agent') {
+    if (packageName) {
+      console.log(`\nSkills in ${packageName}:\n`)
+      for (const skill of result.skills) console.log(`  ${skill.use}`)
+      console.log(
+        `\nLoad a skill with \`${formatLoadCommand('<id>', result.packageManager, scopeFlag, localIntent)}\`.`,
+      )
+    } else {
+      console.log('\nPackages:\n')
+      for (const pkg of result.packages) console.log(`  ${pkg.name}`)
+      console.log(
+        `\nFor local task matching, run \`${formatIntentCommand(result.packageManager, 'catalog', { local: localIntent })}\`.`,
+      )
+    }
+    printWarnings(warnings)
+    return
+  }
+
+  if (!packageName && !options.verbose && !options.why) {
+    printWarnings(warnings)
+    printNotices(result.notices, noticeOptions)
+    return
   }
 
   const displaySkills = [...result.skills, ...(result.excludedSkills ?? [])]
@@ -242,18 +365,6 @@ export async function runListCommand(
   )
   const nameWidth = computeSkillNameWidth(allSkills)
   const showTypes = result.skills.some((skill) => skill.type)
-  const scopeFlag = options.globalOnly
-    ? ' --global-only'
-    : options.global
-      ? ' --global'
-      : ''
-
-  if (audience === 'agent') {
-    console.log(
-      `Load a skill with \`${formatLoadCommand('<id>', result.packageManager, scopeFlag)}\`.`,
-    )
-  }
-
   console.log(`\nSkills:\n`)
   for (const pkg of packagesWithSkills) {
     console.log(`  ${pkg.name}`)
@@ -263,7 +374,12 @@ export async function runListCommand(
         description: 'excluded' in skill ? '(excluded)' : skill.description,
         loadCommand:
           audience === 'human' && !('excluded' in skill)
-            ? formatLoadCommand(skill.use, result.packageManager, scopeFlag)
+            ? formatLoadCommand(
+                skill.use,
+                result.packageManager,
+                scopeFlag,
+                localIntent,
+              )
             : undefined,
         type: skill.type,
         why: skill.why,

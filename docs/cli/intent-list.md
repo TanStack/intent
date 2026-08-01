@@ -3,14 +3,16 @@ title: intent list
 id: intent-list
 ---
 
-`intent list` shows the skills your project can use. It scans installed dependencies and workspace packages, applies your `intent.skills` policy, and prints the packages and skills that reach your agent.
+`intent list` shows the packages your project trusts. Pass a package name or `--verbose` to inspect skills.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
-npx @tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] [--show-hidden] [--why] [--no-notices]
+@tanstack/intent@latest list [package] [--verbose] [--json] [--debug] [--global] [--global-only] [--show-hidden] [--why] [--no-notices]
 <!-- ::end:tabs -->
 
 ## Options
 
+- `package`: show skills for one exact package name.
+- `--verbose`: show every visible skill with its description and load command.
 - `--json`: print the machine-readable list instead of the text tables.
 - `--global`: include global packages after the project packages.
 - `--global-only`: list global packages only.
@@ -21,7 +23,9 @@ npx @tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] [
 
 ## What it shows
 
-`list` prints a summary line, a package table with `PACKAGE`, `SOURCE`, `VERSION`, and `SKILLS` columns, and a skill tree grouped by package. `SOURCE` shows whether a package came from local discovery or global scanning; when the same package is found both locally and globally, the local one is used. If nothing is found, `list` prints `No intent-enabled packages found.`
+For a human, plain `list` prints a summary line and package table with `PACKAGE`, `SOURCE`, `VERSION`, and `SKILLS` columns. `list <package>` shows that package's skill tree; `--verbose` shows every package's tree. `SOURCE` shows whether a package came from local discovery or global scanning; when the same package is found both locally and globally, the local one is used. If nothing is found, `list` prints `No intent-enabled packages found.`
+
+For an agent, plain `list` prints a compact package inventory and directs task matching to `intent catalog`. A package argument prints only portable skill IDs for that package. Hidden source names and local paths remain redacted.
 
 Warnings print under `Warnings:` (each prefixed `⚠`), and notices print under `Notices:` on stderr (each prefixed `ℹ`). Suppress notices for one run with `--no-notices`, or set `INTENT_NO_NOTICES=1` for CI and wrapper scripts.
 
@@ -67,6 +71,7 @@ A package that ships skills but is not permitted is hidden. Outside an agent ses
     }
   ],
   "warnings": ["string"],
+  "notices": ["string"],
   "conflicts": [
     {
       "packageName": "string",
@@ -77,7 +82,7 @@ A package that ships skills but is not permitted is hidden. Outside an agent ses
 }
 ```
 
-Each skill also carries `type` and `framework` when the skill sets them. In an agent session, package paths are blanked and `conflicts` is empty.
+Each skill also carries `type` and `framework` when the skill sets them. In an agent session, package paths are blanked, hidden source details are empty, and `conflicts` is empty; `hiddenSourceCount` still reports how many sources were withheld.
 
 ## Common errors
 

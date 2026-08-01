@@ -115,7 +115,7 @@ describe('listIntentSkills', () => {
       framework: 'react',
     })
 
-    const result = listIntentSkills({ audience: 'human', cwd: root })
+    const result = listIntentSkills({ cwd: root })
 
     expect(result).toEqual({
       packageManager: 'unknown',
@@ -337,7 +337,7 @@ describe('listIntentSkills', () => {
       frontmatter: { name: 'legacy', description: 'Legacy skill' },
     })
 
-    const result = listIntentSkills({ cwd: root })
+    const result = listIntentSkills({ audience: 'human', cwd: root })
 
     expect(result.skills.map((skill) => skill.use)).toEqual([
       '@tanstack/query#fetching',
@@ -357,10 +357,14 @@ describe('listIntentSkills', () => {
       description: 'Query data fetching patterns',
     })
 
-    const result = listIntentSkills({ cwd: root })
+    const result = listIntentSkills({ audience: 'human', cwd: root })
 
     expect(result.packages).toEqual([])
     expect(result.skills).toEqual([])
+    expect(result.hiddenSourceCount).toBe(1)
+    expect(result.hiddenSources).toEqual([
+      { name: '@tanstack/query', skillCount: 1 },
+    ])
     expect(result.notices).toEqual([EMPTY_NOTE])
   })
 
@@ -377,10 +381,11 @@ describe('listIntentSkills', () => {
       description: 'Query data fetching patterns',
     })
 
-    const result = listIntentSkills({ cwd: root })
+    const result = listIntentSkills({ audience: 'human', cwd: root })
 
     expect(result.packages).toEqual([])
     expect(result.skills).toEqual([])
+    expect(result.hiddenSourceCount).toBe(1)
     expect(result.notices).toEqual([
       'intent.skills is empty — no skill sources are permitted.',
     ])

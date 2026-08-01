@@ -21,12 +21,13 @@ function createCli(): CAC {
 
   cli
     .command(
-      'list',
+      'list [package]',
       'Discover intent-enabled packages from the project or workspace',
     )
     .usage(
-      'list [--json] [--debug] [--global] [--global-only] [--show-hidden] [--why] [--no-notices]',
+      'list [package] [--verbose] [--json] [--debug] [--global] [--global-only] [--show-hidden] [--why] [--no-notices]',
     )
+    .option('--verbose', 'Show every skill with descriptions and load commands')
     .option('--json', 'Output JSON')
     .option('--debug', 'Print discovery debug details to stderr')
     .option('--global', 'Include global packages after project packages')
@@ -38,12 +39,14 @@ function createCli(): CAC {
     .option('--why', 'Explain why each shown skill is available or hidden')
     .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('list')
+    .example('list @tanstack/query')
+    .example('list --verbose')
     .example('list --json')
     .example('list --global')
     .example('list --why')
-    .action(async (options: ListCommandOptions) => {
+    .action(async (packageName: string | undefined, options: ListCommandOptions) => {
       const { runListCommand } = await import('./commands/list.js')
-      await runListCommand(options)
+      await runListCommand(packageName, options)
     })
 
   cli

@@ -325,7 +325,7 @@ describe('cli commands', () => {
     const output = getHelpOutput()
 
     expect(exitCode).toBe(0)
-    expect(output).toContain('$ intent list [--json]')
+    expect(output).toContain('$ intent list [package] [--verbose]')
     expect(output).toContain('--json')
     expect(output).toContain('--show-hidden')
   })
@@ -1147,10 +1147,17 @@ describe('cli commands', () => {
     expect(output).toContain('No intent-enabled packages found.')
   })
 
-  it('prints full load commands for every skill in human list output', async () => {
+  it('keeps human list compact until skills are requested', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-load-commands-'))
     tempDirs.push(root)
     writeAllowAllConsumer(root)
+    const consumerPackageJson = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    ) as Record<string, unknown>
+    writeJson(join(root, 'package.json'), {
+      ...consumerPackageJson,
+      devDependencies: { '@tanstack/intent': '0.4.0' },
+    })
     const pkgDir = join(root, 'node_modules', '@tanstack', 'query')
 
     writeFileSync(join(root, 'pnpm-lock.yaml'), '')
@@ -1182,13 +1189,29 @@ describe('cli commands', () => {
     expect(output).toContain('VERSION')
     expect(output).toContain('SKILLS')
     expect(stderr).toContain('Notices:')
-    expect(output).toContain(
-      `Load: pnpm dlx @tanstack/intent@${intentPackagePin} load @tanstack/query#fetching`,
+    expect(output).not.toContain('Skills:')
+    expect(output).not.toContain('Load:')
+
+    logSpy.mockClear()
+    const verboseExitCode = await main(['list', '--verbose'])
+    const verboseOutput = logSpy.mock.calls.flat().join('\n')
+
+    expect(verboseExitCode).toBe(0)
+    expect(verboseOutput).toContain(
+      'Load: npx @tanstack/intent load @tanstack/query#fetching',
     )
-    expect(output).toContain(
-      `Load: pnpm dlx @tanstack/intent@${intentPackagePin} load @tanstack/query#query/cache`,
+    expect(verboseOutput).toContain(
+      'Load: npx @tanstack/intent load @tanstack/query#query/cache',
     )
-    expect(output.match(/Load:/g)).toHaveLength(2)
+    expect(verboseOutput.match(/Load:/g)).toHaveLength(2)
+
+    logSpy.mockClear()
+    const filteredExitCode = await main(['list', '@tanstack/query'])
+    const filteredOutput = logSpy.mock.calls.flat().join('\n')
+
+    expect(filteredExitCode).toBe(0)
+    expect(filteredOutput).toContain('Query fetching skill')
+    expect(filteredOutput).toContain('Query cache skill')
   })
 
   it('explains why human-listed skills are available', async () => {
@@ -1477,16 +1500,14 @@ describe('cli commands', () => {
     expect(output).not.toContain('SKILLS')
     expect(stderr).not.toContain('Notices:')
     expect(stderr).not.toContain('intent.skills is not set')
-    expect(output.split(loadHeader)).toHaveLength(2)
-    expect(output).toContain(
-      `1 intent-enabled packages, 2 skills\n\n${loadHeader}`,
-    )
-    expect(output).not.toContain(
-      `1 intent-enabled packages, 2 skills\n\n\n${loadHeader}`,
-    )
+    expect(output).not.toContain(loadHeader)
     expect(output).not.toContain('Load:')
-    expect(output).toContain('fetching')
-    expect(output).toContain('query/cache')
+    expect(output).not.toContain('fetching')
+    expect(output).not.toContain('query/cache')
+    expect(output).toContain('@tanstack/query')
+    expect(output).toContain(
+      `pnpm dlx @tanstack/intent@${intentPackagePin} catalog`,
+    )
   })
 
   it('reveals hidden skill sources for human list output when requested', async () => {
@@ -1657,7 +1678,7 @@ describe('cli commands', () => {
       process.env.INTENT_AUDIENCE = 'human'
       process.chdir(root)
 
-      const exitCode = await main(['list'])
+      const exitCode = await main(['list', '--verbose'])
       const output = logSpy.mock.calls.flat().join('\n')
 
       expect(exitCode).toBe(0)
@@ -1746,6 +1767,12 @@ describe('cli commands', () => {
       skillName: 'fetching',
       description: 'Query data fetching patterns',
     })
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      dependencies: { '@tanstack/query': '5.0.0' },
+      intent: { skills: ['@tanstack/query'] },
+    })
 
     process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
     process.chdir(root)
@@ -1806,6 +1833,12 @@ describe('cli commands', () => {
       version: '5.0.0',
       skillName: 'fetching',
       description: 'Query data fetching patterns',
+    })
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      dependencies: { '@tanstack/query': '5.0.0' },
+      intent: { skills: ['@tanstack/query'] },
     })
 
     process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
@@ -1965,7 +1998,7 @@ describe('cli commands', () => {
     process.env.INTENT_AUDIENCE = 'human'
     process.chdir(root)
 
-    const exitCode = await main(['list', '--global'])
+    const exitCode = await main(['list', '--global', '--verbose'])
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
@@ -2522,7 +2555,7 @@ describe('cli commands', () => {
     )
   })
 
-  it('keeps full version conflict paths in human list output', async () => {
+  it('shows concise version conflicts unless debug is requested', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-conflicts-'))
     tempDirs.push(root)
     const { queryV4Dir, queryV5Dir } = writeConflictingQueryPackages(root)
@@ -2537,9 +2570,15 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Version conflicts:')
-    expect(output).toContain('@tanstack/query -> using 5.0.0')
-    expect(output).toContain(`chosen: ${queryV5Dir}`)
-    expect(output).toContain(`also found: 4.0.0 at ${queryV4Dir}`)
+    expect(output).toContain('@tanstack/query: using 5.0.0 (2 installed)')
+    expect(output).not.toContain(queryV5Dir)
+    expect(output).not.toContain(queryV4Dir)
+
+    logSpy.mockClear()
+    expect(await main(['list', '--debug'])).toBe(0)
+    const debugOutput = logSpy.mock.calls.flat().join('\n')
+    expect(debugOutput).toContain(`chosen: ${queryV5Dir}`)
+    expect(debugOutput).toContain(`also found: 4.0.0 at ${queryV4Dir}`)
 
     logSpy.mockClear()
     expect(await main(['list', '--json'])).toBe(0)

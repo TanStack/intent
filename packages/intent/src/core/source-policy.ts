@@ -360,7 +360,7 @@ export function applySourcePolicy(
     }
 
     if (!sourcePolicy.permits(pkg.name, pkg.kind)) {
-      if (config.mode === 'explicit') {
+      if (config.mode !== 'allow-all') {
         hiddenSources.push({ name: pkg.name, skillCount: pkg.skills.length })
       }
       continue
@@ -406,7 +406,7 @@ export function applySourcePolicy(
   const partiallyHidden = hiddenSources.filter(
     (source) => source.hiddenSkills !== undefined,
   )
-  if (unlistedSources.length > 0) {
+  if (config.mode === 'explicit' && unlistedSources.length > 0) {
     emit(formatUnlistedNotice(unlistedSources, audience))
   }
   if (partiallyHidden.length > 0) {
