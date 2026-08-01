@@ -64,6 +64,7 @@ export interface SyncReviewPrompter {
 type SyncReviewMode = 'interactive' | 'reminder' | 'fail'
 
 export interface SyncCommandRuntime {
+  quiet?: boolean
   review?: SyncReviewMode
   prompts?: SyncReviewPrompter
 }
@@ -89,6 +90,7 @@ interface SyncExecutionContext {
   automated: boolean
   dryRun: boolean
   json: boolean
+  quiet: boolean
 }
 
 function countSummarySkills(entries: Array<SyncPackageSummary>): number {
@@ -147,6 +149,8 @@ function output(
   context: SyncExecutionContext,
   interactiveReview: boolean,
 ): void {
+  if (context.quiet) return
+
   if (context.json) {
     const reviewEntries = (
       entries: Array<SyncPackageSummary>,
@@ -274,6 +278,7 @@ function getSyncExecutionContext(
     automated,
     dryRun: options.dryRun === true,
     json: options.json === true,
+    quiet: runtime.quiet === true,
   }
 }
 

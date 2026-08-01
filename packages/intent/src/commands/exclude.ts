@@ -2,11 +2,13 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fail } from '../shared/cli-error.js'
 import { compileExcludePatterns } from '../core/excludes.js'
+import { resolveProjectContext } from '../core/project-context.js'
 import { writeTextFileAtomic } from '../shared/atomic-write.js'
 import {
   readIntentConsumerConfig,
   updateIntentConsumerConfigText,
 } from './install/config.js'
+import { readIntentDeliveryConfig } from './install/delivery.js'
 import type { IntentConsumerConfig } from './install/config.js'
 
 export interface ExcludeCommandOptions {
@@ -23,7 +25,9 @@ function normalizeAction(action: string | undefined): ExcludeAction {
 }
 
 function getPackageJsonPath(cwd: string): string {
-  return join(cwd, 'package.json')
+  const context = resolveProjectContext({ cwd })
+  const root = context.workspaceRoot ?? context.packageRoot ?? context.cwd
+  return join(root, 'package.json')
 }
 
 function readPackageJsonText(cwd: string): string {
@@ -32,6 +36,11 @@ function readPackageJsonText(cwd: string): string {
     fail(`No package.json found in ${cwd}`)
   }
   return readFileSync(packageJsonPath, 'utf8')
+}
+
+function getProjectRoot(cwd: string): string {
+  const context = resolveProjectContext({ cwd })
+  return context.workspaceRoot ?? context.packageRoot ?? context.cwd
 }
 
 function readConfig(text: string): IntentConsumerConfig {
@@ -54,6 +63,47 @@ function writeExcludes(
     getPackageJsonPath(cwd),
     updateIntentConsumerConfigText(text, { ...config, exclude: excludes }),
   )
+}
+
+async function reconcileDelivery(cwd: string): Promise<void> {
+  const root = getProjectRoot(cwd)
+  const delivery = readIntentDeliveryConfig(root)
+  if (delivery?.method !== 'symlink') return
+
+  const { runSyncCommand } = await import('./sync/command.js')
+  await runSyncCommand({ cwd: root }, { quiet: true, review: 'reminder' })
+}
+
+async function preflightDelivery(cwd: string): Promise<void> {
+  const root = getProjectRoot(cwd)
+  const delivery = readIntentDeliveryConfig(root)
+  if (delivery?.method !== 'symlink') return
+
+  const { runSyncCommand } = await import('./sync/command.js')
+  await runSyncCommand(
+    { cwd: root, dryRun: true },
+    { quiet: true, review: 'reminder' },
+  )
+}
+
+async function writeAndReconcile(
+  cwd: string,
+  text: string,
+  config: IntentConsumerConfig,
+  excludes: Array<string>,
+): Promise<void> {
+  const packageJsonPath = getPackageJsonPath(cwd)
+  await preflightDelivery(cwd)
+  writeExcludes(cwd, text, config, excludes)
+  try {
+    await reconcileDelivery(cwd)
+  } catch (error) {
+    writeTextFileAtomic(packageJsonPath, text)
+    try {
+      await reconcileDelivery(cwd)
+    } catch {}
+    throw error
+  }
 }
 
 function normalizePattern(
@@ -101,11 +151,11 @@ function printExcludes(excludes: Array<string>, json?: boolean): void {
   }
 }
 
-export function runExcludeCommand(
+export async function runExcludeCommand(
   actionArg: string | undefined,
   patternArg: string | undefined,
   options: ExcludeCommandOptions,
-): void {
+): Promise<void> {
   const action = normalizeAction(actionArg)
   const cwd = process.cwd()
   const text = readPackageJsonText(cwd)
@@ -119,27 +169,30 @@ export function runExcludeCommand(
     return
   }
 
+  if (options.json) {
+    fail('JSON output is only available for `intent exclude list`.')
+  }
+
   const currentExcludes = config.exclude
 
   const pattern = normalizePattern(patternArg, action)
   validatePattern(pattern)
 
+  if (process.env.INTENT_AUDIENCE?.trim().toLowerCase() === 'agent') {
+    fail(
+      `Pause and ask the user to run \`intent exclude ${action} ${pattern}\` themselves. Do not modify trust policy automatically.`,
+    )
+  }
+
   if (action === 'add') {
     if (currentExcludes.includes(pattern)) {
-      if (options.json) {
-        printExcludes(currentExcludes, true)
-        return
-      }
+      await reconcileDelivery(cwd)
       console.log(`Exclude pattern "${pattern}" is already configured.`)
       return
     }
 
     const updated = [...currentExcludes, pattern]
-    writeExcludes(cwd, text, config, updated)
-    if (options.json) {
-      printExcludes(updated, true)
-      return
-    }
+    await writeAndReconcile(cwd, text, config, updated)
     console.log(
       `Added exclude pattern "${pattern}" to package.json intent.exclude.`,
     )
@@ -148,19 +201,12 @@ export function runExcludeCommand(
 
   const updated = currentExcludes.filter((value) => value !== pattern)
   if (updated.length === currentExcludes.length) {
-    if (options.json) {
-      printExcludes(currentExcludes, true)
-      return
-    }
+    await reconcileDelivery(cwd)
     console.log(`Exclude pattern "${pattern}" is not configured.`)
     return
   }
 
-  writeExcludes(cwd, text, config, updated)
-  if (options.json) {
-    printExcludes(updated, true)
-    return
-  }
+  await writeAndReconcile(cwd, text, config, updated)
   console.log(
     `Removed exclude pattern "${pattern}" from package.json intent.exclude.`,
   )

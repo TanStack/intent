@@ -672,13 +672,34 @@ describe('cli commands', () => {
     writeJson(join(root, 'package.json'), {
       name: 'app',
       private: true,
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeIntentDeliveryConfig(root, {
+      method: 'symlink',
+      targets: ['agents'],
     })
     process.chdir(root)
+    acceptInstalledSkills(root)
+    expect(await main(['sync'])).toBe(0)
+    const linkPath = join(
+      root,
+      '.agents',
+      'skills',
+      'npm-tanstack-query-fetching',
+    )
+    expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
+    logSpy.mockClear()
 
     const addExitCode = await main([
       'exclude',
       'add',
-      '@tanstack/router#experimental-*',
+      '@tanstack/query#fetching',
     ])
     const listExitCode = await main(['exclude'])
     const pkg = JSON.parse(
@@ -690,9 +711,10 @@ describe('cli commands', () => {
 
     expect(addExitCode).toBe(0)
     expect(listExitCode).toBe(0)
-    expect(pkg.intent?.exclude).toEqual(['@tanstack/router#experimental-*'])
+    expect(pkg.intent?.exclude).toEqual(['@tanstack/query#fetching'])
+    expect(existsSync(linkPath)).toBe(false)
     expect(output).toContain('Configured excludes:')
-    expect(output).toContain('- @tanstack/router#experimental-*')
+    expect(output).toContain('- @tanstack/query#fetching')
   })
 
   it('removes an exclude pattern', async () => {
@@ -706,6 +728,16 @@ describe('cli commands', () => {
       },
     })
     process.chdir(root)
+
+    process.env.INTENT_AUDIENCE = 'agent'
+    expect(
+      await main(['exclude', 'remove', '@tanstack/router#experimental-*']),
+    ).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Pause and ask the user to run `intent exclude remove @tanstack/router#experimental-*` themselves. Do not modify trust policy automatically.',
+    )
+    delete process.env.INTENT_AUDIENCE
+    errorSpy.mockClear()
 
     const exitCode = await main([
       'exclude',
@@ -743,6 +775,11 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(parsed).toEqual(['@tanstack/router#experimental-*', '*#draft-*'])
+
+    expect(await main(['exclude', 'add', 'other-package', '--json'])).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'JSON output is only available for `intent exclude list`.',
+    )
   })
 
   it('fails cleanly on unknown exclude actions', async () => {

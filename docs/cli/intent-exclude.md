@@ -11,9 +11,9 @@ id: intent-exclude
 
 ## Actions
 
-- `list` (default): print the configured excludes. Add `--json` for machine-readable output.
-- `add <pattern>`: append one exclude pattern.
-- `remove <pattern>`: remove one exclude pattern.
+- `list` (default): print the configured excludes. Add `--json` for machine-readable output. Humans and agents may list policy.
+- `add <pattern>`: append one exclude pattern. This is a user-owned policy change; agents pause and ask the user to run it.
+- `remove <pattern>`: remove one exclude pattern. This is a user-owned policy change; agents pause and ask the user to run it.
 
 ```bash
 npx @tanstack/intent@latest exclude
@@ -26,7 +26,9 @@ For the pattern grammar - whole packages, single skills, and globs - see [Config
 
 ## Behavior
 
-`add` and `remove` edit the `package.json` in the current directory, creating `intent.exclude` if it is missing and keeping existing entries in order. Intent validates a pattern before writing and refuses an invalid `intent` or `intent.exclude` structure. `list` prints `Configured excludes:` with one entry per line, or `No excludes configured.` when the list is empty.
+`add` and `remove` edit the project policy `package.json`, using the workspace root when one owns the current package. They create `intent.exclude` if it is missing and keep existing entries in order. Intent validates a pattern before writing and refuses an invalid `intent` or `intent.exclude` structure. `list` prints `Configured excludes:` with one entry per line, or `No excludes configured.` when the list is empty. `--json` is available only with `list`.
+
+After a mutation, Intent immediately reconciles configured symlink delivery without prompting, so a newly excluded skill is no longer exposed through an existing managed link. Hook delivery reads policy dynamically and needs no reconciliation. `intent.lock` remains unchanged; removing an exclusion can restore content that the user previously accepted.
 
 An excluded package does not trigger the unlisted-source warning, because excluding it is an explicit decision.
 
