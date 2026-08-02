@@ -17,128 +17,174 @@ writeFileSync(
 writeFileSync(join(outDir, 'summary.md'), `${formatSummaryMarkdown(summary)}\n`)
 console.log(formatSummaryMarkdown(summary))
 
-export function summarizeReport(report) {
-  const cases = reportCases(report)
-  const byCondition = groupBy(cases, (item) => item.condition ?? 'unknown')
-  const conditionSummaries = Object.fromEntries(
-    [...byCondition.entries()].map(([condition, items]) => [
-      condition,
-      summarizeCases(items),
-    ]),
+export function summarizeReport(value) {
+  const cases = reportCases(value)
+  const liveSessions = cases.filter(
+    (item) =>
+      item.runKind === 'live-copilot' &&
+      item.runnerStatus === 'completed' &&
+      item.sessionScore,
+  )
+  const byCondition = Object.fromEntries(
+    [...groupBy(liveSessions, (item) => item.condition).entries()].map(
+      ([condition, items]) => [condition, summarizeSessions(items)],
+    ),
+  )
+  const byProfile = liveSessions.map((item) => ({
+    ...summarizeSessions([item]),
+    condition: item.condition,
+    effort: item.effort,
+    model: item.model,
+    profileId: item.profileId,
+  }))
+  const turnOutcomes = Object.fromEntries(
+    [
+      ...groupBy(
+        liveSessions.flatMap((session) =>
+          session.turns.map((turn) => ({ session, turn })),
+        ),
+        ({ session, turn }) => `${session.condition}/${turn.id}`,
+      ).entries(),
+    ].map(([key, items]) => [key, summarizeTurns(items)]),
   )
 
   return {
     generatedAt: new Date().toISOString(),
     totals: {
+      liveSessions: liveSessions.length,
       reportCases: cases.length,
-      testFailures: report.numFailedTests ?? 0,
-      testPasses: report.numPassedTests ?? 0,
-      testSuites: report.numTotalTestSuites ?? 0,
+      testFailures: value.numFailedTests ?? 0,
+      testPasses: value.numPassedTests ?? 0,
+      testSuites: value.numTotalTestSuites ?? 0,
     },
-    byCondition: conditionSummaries,
-    failureClasses: countBy(
-      cases.map((item) => item.failureClass ?? 'unknown'),
-    ),
-    repeatedRuns: repeatedRunSummary(cases),
+    byCondition,
+    byProfile,
+    turnOutcomes,
   }
 }
 
-function reportCases(report) {
-  return (report.testResults ?? []).flatMap((suite) =>
+function reportCases(value) {
+  return (value.testResults ?? []).flatMap((suite) =>
     (suite.assertionResults ?? [])
       .filter((test) => test.meta?.eval)
       .map((test) => {
         const artifacts = test.meta.harness?.run?.artifacts ?? {}
+        const profile = artifacts.profile ?? {}
         const scores = Object.fromEntries(
-          (test.meta.eval.scores ?? []).map((score) => [
-            score.name,
-            score.score ?? 0,
+          (test.meta.eval.scores ?? []).map((entry) => [
+            entry.name,
+            entry.score ?? 0,
           ]),
         )
-        const firstScore = test.meta.eval.scores?.[0]
 
         return {
-          condition: artifacts.condition,
-          failureClass: firstScore?.metadata?.failureClass,
-          fixture: artifacts.fixture,
-          loadedSkills: artifacts.loadedSkills ?? [],
+          condition: artifacts.condition ?? 'unknown',
+          effort: profile.effort ?? artifacts.effort ?? 'unknown',
+          model: profile.model ?? artifacts.model ?? 'unknown',
+          profileId: profile.id ?? artifacts.profileId ?? 'unknown',
+          runKind: artifacts.runKind,
+          runnerStatus: artifacts.runnerStatus,
           scores,
-          taskId: artifacts.taskId ?? test.title,
+          sessionScore: artifacts.sessionScore,
           title: test.title,
+          turns: artifacts.turns ?? [],
         }
       }),
   )
 }
 
-function summarizeCases(cases) {
+function summarizeSessions(cases) {
+  const scores = cases.map((item) => item.sessionScore)
   return {
-    autonomousSuccessRate: rate(cases, 'AutonomousDiscoverySuccess'),
-    correctSkillLoadedRate: rate(cases, 'CorrectSkillLoaded'),
-    count: cases.length,
-    referenceOnlyFalsePositiveRate: rate(cases, 'NoReferenceOnlyFalsePositive'),
-    strictInvocationRate: rate(cases, 'StrictIntentInvocation'),
+    agentCatalogCommands: sum(scores, 'agentCatalogCount'),
+    catalogBehaviorRate: rate(cases, 'CatalogBehavior'),
+    hookCatalogInjections: sum(scores, 'hookCatalogInjections'),
+    relatedDiscoveryRate: ratio(scores, 'relatedCorrect', 'relatedTotal'),
+    runnerCompletionRate: ratio(scores, 'runnerCompletionCount', () => 5),
+    sessionSuccessRate: rate(cases, 'SessionSuccess'),
+    sessions: cases.length,
+    strictSuccesses: cases.filter((item) => item.scores.SessionSuccess === 1)
+      .length,
+    taskCompletionRate: ratio(scores, 'taskCompletionCount', () => 5),
+    unrelatedAbstentionRate: ratio(
+      scores,
+      'unrelatedCorrect',
+      'unrelatedTotal',
+    ),
+    wrongSkillLoads: sum(scores, 'wrongSkillLoads'),
   }
 }
 
-function repeatedRunSummary(cases) {
-  const liveCases = cases.filter((item) => item.title.includes('/run-'))
-  const grouped = groupBy(liveCases, (item) =>
-    item.title.replace(/\/run-\d+$/, ''),
-  )
+function summarizeTurns(items) {
+  let discoveryCorrect = 0
+  let taskCompleted = 0
 
-  return Object.fromEntries(
-    [...grouped.entries()].map(([key, items]) => {
-      const successes = items.map(
-        (item) => item.scores.AutonomousDiscoverySuccess === 1,
-      )
+  for (const { session, turn } of items) {
+    const result = session.sessionScore.turnResults?.find(
+      (candidate) => candidate.id === turn.id,
+    )
+    if (result?.discoveryCorrect) discoveryCorrect++
+    if (turn.taskPassed) taskCompleted++
+  }
 
-      return [
-        key,
-        {
-          passAtK: successes.some(Boolean),
-          passHatK: successes.every(Boolean),
-          runs: items.length,
-          successes: successes.filter(Boolean).length,
-        },
-      ]
-    }),
-  )
+  return {
+    agentCatalogCommands: items.reduce(
+      (total, { turn }) => total + turn.catalogCommands.length,
+      0,
+    ),
+    discoveryRate: items.length === 0 ? 0 : discoveryCorrect / items.length,
+    hookCatalogInjections: items.reduce(
+      (total, { turn }) => total + turn.hookCatalogInjections,
+      0,
+    ),
+    sessions: items.length,
+    taskCompletionRate: items.length === 0 ? 0 : taskCompleted / items.length,
+  }
 }
 
 function formatSummaryMarkdown(summary) {
   const lines = [
-    '# Intent discovery eval summary',
+    '# Intent discovery live session summary',
     '',
-    `Report cases: ${summary.totals.reportCases}`,
+    `Live sessions: ${summary.totals.liveSessions}`,
     `Tests: ${summary.totals.testPasses} passed, ${summary.totals.testFailures} failed`,
     '',
-    '## By condition',
+    '## Strict session success',
     '',
-    '| Condition | Cases | Strict invocation | Correct skill | Autonomous success | No reference-only false positive |',
-    '| --- | ---: | ---: | ---: | ---: | ---: |',
+    '| Mode | Sessions | Strict success | Catalog | Related discovery | Unrelated abstention | Tasks completed | Wrong loads | Agent catalogs | Hook catalogs |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
   ]
 
   for (const [condition, item] of Object.entries(summary.byCondition)) {
     lines.push(
-      `| ${condition} | ${item.count} | ${percent(item.strictInvocationRate)} | ${percent(item.correctSkillLoadedRate)} | ${percent(item.autonomousSuccessRate)} | ${percent(item.referenceOnlyFalsePositiveRate)} |`,
+      `| ${condition} | ${item.sessions} | ${item.strictSuccesses}/${item.sessions} (${percent(item.sessionSuccessRate)}) | ${percent(item.catalogBehaviorRate)} | ${percent(item.relatedDiscoveryRate)} | ${percent(item.unrelatedAbstentionRate)} | ${percent(item.taskCompletionRate)} | ${item.wrongSkillLoads} | ${item.agentCatalogCommands} | ${item.hookCatalogInjections} |`,
     )
   }
 
-  lines.push('', '## Failure classes', '')
-  for (const [failureClass, count] of Object.entries(summary.failureClasses)) {
-    lines.push(`- ${failureClass}: ${count}`)
+  lines.push(
+    '',
+    '## By model profile',
+    '',
+    '| Profile | Model | Effort | Mode | Pass | Catalog | Related | Unrelated | Tasks |',
+    '| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |',
+  )
+  for (const item of summary.byProfile) {
+    lines.push(
+      `| ${item.profileId} | ${item.model} | ${item.effort} | ${item.condition} | ${item.strictSuccesses}/${item.sessions} | ${percent(item.catalogBehaviorRate)} | ${percent(item.relatedDiscoveryRate)} | ${percent(item.unrelatedAbstentionRate)} | ${percent(item.taskCompletionRate)} |`,
+    )
   }
 
-  lines.push('', '## Repeated runs', '')
-  const repeated = Object.entries(summary.repeatedRuns)
-  if (repeated.length === 0) {
-    lines.push('No repeated live runs found.')
-  } else {
-    for (const [key, item] of repeated) {
-      lines.push(
-        `- ${key}: pass@k=${item.passAtK}, pass^k=${item.passHatK}, successes=${item.successes}/${item.runs}`,
-      )
-    }
+  lines.push(
+    '',
+    '## Per-turn outcomes',
+    '',
+    '| Mode / turn | Sessions | Discovery | Task completion | Agent catalogs | Hook catalogs |',
+    '| --- | ---: | ---: | ---: | ---: | ---: |',
+  )
+  for (const [key, item] of Object.entries(summary.turnOutcomes)) {
+    lines.push(
+      `| ${key} | ${item.sessions} | ${percent(item.discoveryRate)} | ${percent(item.taskCompletionRate)} | ${item.agentCatalogCommands} | ${item.hookCatalogInjections} |`,
+    )
   }
 
   return lines.join('\n')
@@ -153,20 +199,28 @@ function groupBy(items, keyFn) {
   return grouped
 }
 
-function countBy(items) {
-  return Object.fromEntries(
-    [...groupBy(items, (item) => item).entries()].map(([key, values]) => [
-      key,
-      values.length,
-    ]),
-  )
-}
-
 function rate(cases, scoreName) {
   if (cases.length === 0) return 0
   return (
     cases.filter((item) => item.scores[scoreName] === 1).length / cases.length
   )
+}
+
+function ratio(items, numerator, denominator) {
+  const total = items.reduce(
+    (value, item) =>
+      value +
+      (typeof denominator === 'function'
+        ? denominator(item)
+        : Number(item[denominator] ?? 0)),
+    0,
+  )
+  if (total === 0) return 0
+  return sum(items, numerator) / total
+}
+
+function sum(items, key) {
+  return items.reduce((total, item) => total + Number(item[key] ?? 0), 0)
 }
 
 function percent(value) {

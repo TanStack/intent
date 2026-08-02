@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
@@ -9,10 +9,14 @@ const taskId = requiredEnv('INTENT_DISCOVERY_TASK_ID')
 const fixture = requiredEnv('INTENT_DISCOVERY_FIXTURE')
 const prompt = requiredEnv('INTENT_DISCOVERY_PROMPT')
 const runId = requiredEnv('INTENT_DISCOVERY_RUN_ID')
+const sessionId = requiredEnv('INTENT_DISCOVERY_SESSION_ID')
+const turnId = requiredEnv('INTENT_DISCOVERY_TURN_ID')
+const model = requiredEnv('INTENT_DISCOVERY_COPILOT_MODEL')
+const effort = requiredEnv('INTENT_DISCOVERY_REASONING_EFFORT')
 const sharePath = join(
   workspace,
   '.intent-eval',
-  `${sanitizeFileName(runId)}.md`,
+  `${sanitizeFileName(runId)}-${sanitizeFileName(turnId)}.md`,
 )
 
 mkdirSync(dirname(sharePath), { recursive: true })
@@ -37,6 +41,12 @@ const args = [
   '--no-ask-user',
   '--no-color',
   '--plain-diff',
+  '--silent',
+  '--session-id',
+  sessionId,
+  '--model',
+  model,
+  ...(effort === 'default' ? [] : ['--effort', effort]),
   '--share',
   sharePath,
 ]
@@ -60,10 +70,7 @@ if (result.stdout.trim()) {
   console.log(result.stdout.trim())
 }
 
-if (existsSync(sharePath)) {
-  console.log(`\nTRANSCRIPT_PATH: ${sharePath}`)
-  console.log(readFileSync(sharePath, 'utf8'))
-}
+console.log(`TRANSCRIPT_PATH: ${sharePath}`)
 
 if (result.stderr.trim()) {
   console.error(result.stderr.trim())

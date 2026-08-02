@@ -118,8 +118,13 @@ function upsertAdapterHooks({
 }): Record<string, unknown> {
   switch (configKind) {
     case 'claude-settings':
+      return upsertCommandHooks(
+        config,
+        catalogCommand,
+        'startup|clear|compact|fork',
+      )
     case 'codex-hooks':
-      return upsertCommandHooks(config, catalogCommand)
+      return upsertCommandHooks(config, catalogCommand, 'startup|clear|compact')
     case 'copilot-hooks':
       return upsertCopilotHooks(config, catalogCommand)
   }
@@ -128,18 +133,22 @@ function upsertAdapterHooks({
 function upsertCommandHooks(
   config: Record<string, unknown>,
   catalogCommand: string,
+  sessionStartMatcher: string,
 ): Record<string, unknown> {
   const hooks = objectValue(config.hooks)
+  const catalogHook = {
+    type: 'command',
+    command: catalogCommand,
+    timeout: 10,
+    statusMessage: CATALOG_STATUS_MESSAGE,
+  }
   hooks.SessionStart = upsertHookGroup(arrayValue(hooks.SessionStart), {
-    matcher: 'startup|resume|clear|compact',
-    hooks: [
-      {
-        type: 'command',
-        command: catalogCommand,
-        timeout: 10,
-        statusMessage: CATALOG_STATUS_MESSAGE,
-      },
-    ],
+    matcher: sessionStartMatcher,
+    hooks: [catalogHook],
+  })
+  hooks.SubagentStart = upsertHookGroup(arrayValue(hooks.SubagentStart), {
+    matcher: '*',
+    hooks: [catalogHook],
   })
   hooks.PreToolUse = removeIntentHooks(arrayValue(hooks.PreToolUse))
   return { ...config, hooks }
@@ -153,8 +162,11 @@ function upsertCopilotHooks(
   hooks.SessionStart = upsertHookGroup(arrayValue(hooks.SessionStart), {
     command: catalogCommand,
   })
+  hooks.subagentStart = upsertHookGroup(arrayValue(hooks.subagentStart), {
+    command: catalogCommand,
+  })
   hooks.PreToolUse = removeIntentHooks(arrayValue(hooks.PreToolUse))
-  return { ...config, hooks }
+  return { ...config, version: 1, hooks }
 }
 
 function upsertHookGroup(

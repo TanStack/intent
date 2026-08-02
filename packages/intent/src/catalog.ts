@@ -1,4 +1,4 @@
-import { applyCatalogueLock, CATALOG_INSTALL_REQUIRED } from './catalog-lock.js'
+import { CATALOG_INSTALL_REQUIRED, applyCatalogueLock } from './catalog-lock.js'
 import { EMPTY_NOTE } from './core/source-policy.js'
 import { getProjectReadFs } from './discovery/scanner.js'
 import {
@@ -173,18 +173,22 @@ function getLifecycleEventName(
   event: Record<string, unknown>,
 ): 'SessionStart' | 'SubagentStart' | null {
   const explicit = event.hook_event_name ?? event.hookEventName
-  if (explicit === 'SessionStart' || explicit === 'sessionStart') {
-    return 'SessionStart'
-  }
   if (explicit === 'SubagentStart' || explicit === 'subagentStart') {
     return 'SubagentStart'
   }
   if (agent === 'copilot') {
     if (typeof event.agentName === 'string') return 'SubagentStart'
+  }
+  if (explicit === 'SessionStart' || explicit === 'sessionStart') {
+    return event.source === 'resume' && agent !== 'copilot'
+      ? null
+      : 'SessionStart'
+  }
+  if (agent === 'copilot') {
     if (
       event.source === 'startup' ||
-      event.source === 'resume' ||
-      event.source === 'new'
+      event.source === 'new' ||
+      event.source === 'resume'
     ) {
       return 'SessionStart'
     }

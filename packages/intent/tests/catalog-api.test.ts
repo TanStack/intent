@@ -404,6 +404,115 @@ describe('runSessionCatalogueHook', () => {
     expect(stderr).not.toHaveBeenCalled()
   })
 
+  it('reinjects Copilot context when a resumed process starts', async () => {
+    const { root } = fixture()
+    const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+
+    await runSessionCatalogueHook({
+      agent: 'copilot',
+      event: { cwd: root, source: 'resume' },
+    })
+
+    expect(JSON.parse(String(stdout.mock.calls[0]![0]))).toMatchObject({
+      additionalContext: expect.stringContaining('@fixture/package#core'),
+    })
+  })
+
+  it.each(['claude', 'codex'] as const)(
+    'does not reinject persisted %s context on an ordinary resume',
+    async (agent) => {
+      const { root } = fixture()
+      const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+
+      await runSessionCatalogueHook({
+        agent,
+        event: {
+          cwd: root,
+          hook_event_name: 'SessionStart',
+          source: 'resume',
+        },
+      })
+
+      expect(stdout).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each(['claude', 'codex'] as const)(
+    'reinjects %s context after compaction',
+    async (agent) => {
+      const { root } = fixture()
+      const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+
+      await runSessionCatalogueHook({
+        agent,
+        event: {
+          cwd: root,
+          hook_event_name: 'SessionStart',
+          source: 'compact',
+        },
+      })
+
+      expect(JSON.parse(String(stdout.mock.calls[0]![0]))).toMatchObject({
+        hookSpecificOutput: {
+          hookEventName: 'SessionStart',
+          additionalContext: expect.stringContaining('@fixture/package#core'),
+        },
+      })
+    },
+  )
+
+  it.each([
+    ['copilot new session', 'copilot', { source: 'new' }],
+    [
+      'Claude fork',
+      'claude',
+      { hook_event_name: 'SessionStart', source: 'fork' },
+    ],
+  ] as const)('injects context for %s', async (_label, agent, event) => {
+    const { root } = fixture()
+    const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+
+    await runSessionCatalogueHook({
+      agent,
+      event: { ...event, cwd: root },
+    })
+
+    expect(stdout).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['copilot', 'claude', 'codex'] as const)(
+    'injects %s context when a subagent starts',
+    async (agent) => {
+      const { root } = fixture()
+      const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+
+      await runSessionCatalogueHook({
+        agent,
+        event:
+          agent === 'copilot'
+            ? { agentName: 'researcher', cwd: root }
+            : { cwd: root, hook_event_name: 'SubagentStart' },
+      })
+
+      const output = JSON.parse(String(stdout.mock.calls[0]![0])) as Record<
+        string,
+        unknown
+      >
+      if (agent === 'copilot') {
+        expect(output).toMatchObject({
+          additionalContext: expect.stringContaining('@fixture/package#core'),
+        })
+      } else {
+        expect(output).toMatchObject({
+          hookSpecificOutput: {
+            hookEventName: 'SubagentStart',
+            additionalContext: expect.stringContaining('@fixture/package#core'),
+          },
+        })
+      }
+    },
+  )
+
   it('writes the documented Codex output shape', async () => {
     const { root } = fixture()
     const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)

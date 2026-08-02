@@ -20,17 +20,16 @@ pnpm eval:intent-discovery:summary
 pnpm eval:intent-discovery:report
 ```
 
-Set `INTENT_DISCOVERY_RUN_COUNT=3` with the live commands to run each live condition three times and include `pass@k` / `pass^k` in the generated summary.
-
-## Live eval speed
+## Live matrix
 
 Only the live `copilot -p` subprocess runs are slow; the saved-transcript suite (`pnpm eval:intent-discovery`) is unaffected.
 
-- `INTENT_DISCOVERY_LIVE_CONCURRENCY` bounds how many live runs execute at once (default `1`, clamped to an integer `>= 1`). Values above `1` measured slower here: concurrent `copilot -p` calls on one account contend upstream (a run with its own isolated `COPILOT_HOME` still slowed ~2x), so raise it only with separate accounts or dedicated infrastructure.
-- `COPILOT_MODEL` selects the Copilot model end-to-end. The adapter passes the process environment through to `copilot -p`, and the CLI honors `COPILOT_MODEL`. `INTENT_DISCOVERY_COPILOT_MODEL` only sets the model label recorded in report metadata; it does not change the model the CLI runs.
-- `INTENT_DISCOVERY_RUN_COUNT` stays `1` by default for iteration. Set it to `3` only when measuring `pass@k` / `pass^k`.
+- The matrix contains 15 isolated sessions: five model/reasoning profiles paired across symlink, map, and hook delivery.
+- Every session preserves one Copilot session and workspace across five turns: unrelated edit, Router, Start, Table v9, unrelated edit.
+- Profiles are `claude-haiku-4.5/default`, `claude-sonnet-4.6/medium`, `claude-opus-4.8/high`, `gpt-5.4-mini/low`, and `gpt-5.6-sol/high`. `default` means the model rejects configurable reasoning effort; no silent fallback is allowed.
+- Sessions run serially by default. `INTENT_DISCOVERY_LIVE_CONCURRENCY` can raise concurrency, but concurrent `copilot -p` calls on one account previously measured slower.
 
-The optional LLM judge is secondary. It can annotate whether final answers appear to apply loaded guidance, but it never changes deterministic scores such as `StrictIntentInvocation`, `CorrectSkillLoaded`, or `AutonomousDiscoverySuccess`.
+The optional LLM judge is secondary. It never changes deterministic session, catalog, discovery, abstention, or task-completion scores.
 
 ## Current scope
 
@@ -38,15 +37,14 @@ This executable slice grades synthetic saved transcripts with Vitest plus `vites
 
 The controlled fixture corpus is limited to current skill-backed surfaces. For this slice, that means TanStack Router, TanStack Start, and TanStack Table v9.
 
-Live Router runs compare four setup conditions:
+Live sessions compare three Intent delivery conditions:
 
-- `no-intent`: no Intent guidance or allowlist is added.
-- `current-intent`: `package.json#intent.skills` plus the current install-style `AGENTS.md` skill-loading guidance.
-- `mapped-intent`: `package.json#intent.skills` plus `AGENTS.md` task-to-skill mappings like `install --map`.
-- `explicit-intent-control`: current install-style setup plus a prompt that explicitly asks the agent to run Intent. This condition is diagnostic and excluded from autonomous scoring.
+- `symlink-intent`: package skills are symlinked into `.github/skills` for native GitHub Copilot discovery.
+- `mapped-intent`: production `install --map` guidance asks the agent to catalog once, load a match for related turns, and continue normally for unrelated turns.
+- `hooked-intent`: the production Copilot lifecycle hook injects the trusted catalog when each new or resumed CLI process and subagent starts; the agent loads matches for related turns and continues normally for unrelated turns. Copilot does not persist hook context across process resumes or expose a post-compaction context injection event.
 
-The live Copilot harness can run an opt-in command backend through `INTENT_DISCOVERY_COPILOT_COMMAND`. When that environment variable is unset, it returns a normalized `unsupported` run with no tool calls and an explicit `LiveCopilotRunnerUnavailableError`. The command runs inside a prepared fixture workspace with task metadata in `INTENT_DISCOVERY_TASK_ID`, `INTENT_DISCOVERY_FIXTURE`, `INTENT_DISCOVERY_PROMPT`, `INTENT_DISCOVERY_RUN_ID`, and `INTENT_DISCOVERY_WORKSPACE`.
+The live Copilot harness can run an opt-in command backend through `INTENT_DISCOVERY_COPILOT_COMMAND`. When unset, it returns a normalized `unsupported` run. Each live session uses a fresh composite fixture, valid trust lock, isolated `COPILOT_HOME`, explicit model and reasoning effort, and one UUID resumed across five separate `copilot -p` processes. Hook delivery requires exactly one catalog injection per process.
 
-`pnpm eval:intent-discovery:live` sets `INTENT_DISCOVERY_RUN_LIVE=1` and `INTENT_DISCOVERY_COPILOT_COMMAND` to the repo-local Copilot CLI adapter. The adapter calls `copilot -p` in the prepared fixture workspace, writes a Copilot share transcript under the generated run directory, and prints the transcript for command capture. Live runs attach the same strict efficacy scores as saved transcripts, so a passing harness run can still report `AutonomousDiscoverySuccess: 0` when Copilot did not invoke Intent or loaded the wrong skill. Do not put API keys or tokens in the command or prompt; provide credentials through the normal Copilot CLI login or secret environment configuration.
+`pnpm eval:intent-discovery:live` sets the repo-local Copilot CLI adapter. Structured events in the isolated home provide turn-local native and shell evidence; share transcripts remain diagnostic artifacts. Do not put API keys or tokens in commands or prompts.
 
-Harness integrity failures fail the eval. Product findings such as reference-only behavior, no discovery attempt, or wrong skill selection are recorded as diagnostic failures, not passing scores. The headline success signal is strict Intent invocation plus the expected skill loaded for autonomous cases.
+The headline is strict successful sessions out of five per mode. A session passes only when catalog behavior is correct, all three related turns use the exact expected guidance, both unrelated turns abstain, all five tasks complete, every runner turn completes, and no wrong guidance loads occur.

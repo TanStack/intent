@@ -1,56 +1,114 @@
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { runInstallHooks } from '../../../packages/intent/src/hooks/install.js'
+import type { IntentDiscoveryCondition } from '../corpus/conditions'
 
 const harnessDir = dirname(fileURLToPath(import.meta.url))
-const hooksSourceDir = join(harnessDir, 'intent-hooks')
 const runsDir = join(dirname(harnessDir), 'runs')
-const gateHomeDir = join(runsDir, '.copilot-homes', 'gate')
-const gateStateDir = join(runsDir, 'latest', 'gate-state')
+const copilotHomesDir = join(runsDir, '.copilot-homes')
+const hookStateDir = join(runsDir, 'latest', 'hook-state')
+const hookObserverPath = join(
+  harnessDir,
+  'intent-hooks',
+  'catalog-observer.mjs',
+)
 
-export type GateRun = {
+export type CopilotRun = {
   copilotHome: string
-  stateFile: string
+  hookCommand?: string
+  hookStateFile?: string
+  sessionId: string
 }
 
-let builtGateHome: string | undefined
+export function prepareCopilotRun({
+  condition,
+  runId,
+  sessionId,
+  workspacePath,
+}: {
+  condition: IntentDiscoveryCondition
+  runId: string
+  sessionId: string
+  workspacePath: string
+}): CopilotRun {
+  const copilotHome = buildCopilotHome(condition, runId)
 
-export function prepareGateRun(runId: string): GateRun {
-  const copilotHome = buildGateHome()
+  if (condition !== 'hooked-intent') return { copilotHome, sessionId }
 
-  mkdirSync(gateStateDir, { recursive: true })
-  const stateFile = join(gateStateDir, `${runId}.jsonl`)
-  rmSync(stateFile, { force: true })
+  const hookCommand = installObservedCatalogHook({
+    copilotHome,
+    workspacePath,
+  })
+  mkdirSync(hookStateDir, { recursive: true })
+  const hookStateFile = join(hookStateDir, `${runId}.jsonl`)
+  rmSync(hookStateFile, { force: true })
 
-  return { copilotHome, stateFile }
+  return { copilotHome, hookCommand, hookStateFile, sessionId }
 }
 
-function buildGateHome(): string {
-  if (builtGateHome) {
-    return builtGateHome
-  }
-
+function buildCopilotHome(
+  condition: IntentDiscoveryCondition,
+  runId: string,
+): string {
   const realHome = join(homedir(), '.copilot')
+  const copilotHome = join(copilotHomesDir, condition, runId)
 
-  mkdirSync(join(gateHomeDir, 'hooks'), { recursive: true })
-  copyIfPresent(join(realHome, 'config.json'), join(gateHomeDir, 'config.json'))
+  rmSync(copilotHome, { recursive: true, force: true })
+  mkdirSync(join(copilotHome, 'hooks'), { recursive: true })
+  copyIfPresent(join(realHome, 'config.json'), join(copilotHome, 'config.json'))
   copyIfPresent(
     join(realHome, 'permissions-config.json'),
-    join(gateHomeDir, 'permissions-config.json'),
+    join(copilotHome, 'permissions-config.json'),
   )
-  copyIfPresent(join(realHome, 'ide'), join(gateHomeDir, 'ide'))
+  copyIfPresent(join(realHome, 'ide'), join(copilotHome, 'ide'))
 
-  const command = `node ${join(hooksSourceDir, 'gate.mjs')}`
+  return copilotHome
+}
 
-  writeFileSync(
-    join(gateHomeDir, 'hooks', 'hooks.json'),
-    `${JSON.stringify({ hooks: { PreToolUse: [{ command }] } }, null, 2)}\n`,
-  )
+function installObservedCatalogHook({
+  copilotHome,
+  workspacePath,
+}: {
+  copilotHome: string
+  workspacePath: string
+}): string {
+  runInstallHooks({
+    agents: 'copilot',
+    copilotHome,
+    root: workspacePath,
+    scope: 'user',
+  })
 
-  builtGateHome = gateHomeDir
+  const configPath = join(copilotHome, 'hooks', 'hooks.json')
+  const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
+    hooks?: {
+      SessionStart?: Array<{ command?: unknown }>
+      subagentStart?: Array<{ command?: unknown }>
+    }
+  }
+  const command = config.hooks?.SessionStart?.[0]?.command
+  if (typeof command !== 'string' || command === '') {
+    throw new Error('Intent did not install a Copilot SessionStart hook.')
+  }
+  const subagentCommand = config.hooks?.subagentStart?.[0]?.command
+  if (subagentCommand !== command) {
+    throw new Error('Intent did not install a matching Copilot subagent hook.')
+  }
 
-  return gateHomeDir
+  config.hooks!.SessionStart![0]!.command = `node ${hookObserverPath}`
+  config.hooks!.subagentStart![0]!.command = `node ${hookObserverPath}`
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`)
+
+  return command
 }
 
 function copyIfPresent(source: string, destination: string): void {

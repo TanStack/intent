@@ -93,6 +93,9 @@ describe('session catalogue formatting', () => {
     ])
     expect(context).toContain('@fixture/package#a: Use @fixture/package#a')
     expect(catalogue.skills[0]?.description).toBe('Use @fixture/package#a')
+    expect(context).toContain(
+      'Before substantial work, run `intent load <id>` for each relevant skill listed above. If none apply, do not load a skill and continue normally.',
+    )
     expect(context).not.toContain('person')
     expect(Buffer.byteLength(context)).toBeLessThanOrEqual(8_000)
   })

@@ -4,24 +4,14 @@ import type { HarnessRun, ToolCallRecord } from 'vitest-evals'
 
 export type ParsedIntentCommand = {
   raw: string
-  executable:
-    | 'bunx @tanstack/intent'
-    | 'bunx @tanstack/intent@latest'
-    | 'intent'
-    | 'pnpm exec intent'
-    | 'pnpm dlx @tanstack/intent'
-    | 'pnpm dlx @tanstack/intent@latest'
-    | 'npx @tanstack/intent'
-    | 'npx @tanstack/intent@latest'
-    | 'yarn dlx @tanstack/intent'
-    | 'yarn dlx @tanstack/intent@latest'
-  action: 'list' | 'load'
+  executable: string
+  action: 'catalog' | 'list' | 'load'
   skillUse?: string
   source: 'tool-call' | 'tool-message'
 }
 
 const commandPattern =
-  /^\s*\$?\s*(?:(?:cd\s+.+?\s+&&\s+))?((?:bunx\s+@tanstack\/intent(?:@latest)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i
+  /^\s*\$?\s*(?:(?:cd\s+.+?\s+&&\s+))?((?:bunx\s+@tanstack\/intent(?:@[^\s]+)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@[^\s]+)?)|(?:npx\s+@tanstack\/intent(?:@[^\s]+)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@[^\s]+)?)|(?:intent))\s+(catalog|list|load)(?:\s+([^\s|;&]+))?/i
 
 export function parseIntentCommand(
   raw: string,
@@ -33,12 +23,10 @@ export function parseIntentCommand(
     return undefined
   }
 
-  const executable = match[1].replace(
-    /\s+/g,
-    ' ',
-  ) as ParsedIntentCommand['executable']
+  const executable = match[1].replace(/\s+/g, ' ')
   const action = match[2].toLowerCase() as ParsedIntentCommand['action']
-  const skillUse = action === 'load' ? match[3] : undefined
+  const skillUse =
+    action === 'load' && match[3] ? unquoteShellWord(match[3]) : undefined
 
   if (action === 'load' && !skillUse) {
     return undefined
@@ -51,6 +39,23 @@ export function parseIntentCommand(
     skillUse,
     source,
   }
+}
+
+function unquoteShellWord(value: string): string {
+  const quote = value[0]
+  return (quote === "'" || quote === '"') && value.at(-1) === quote
+    ? value.slice(1, -1)
+    : value
+}
+
+export function parseIntentCommands(
+  raw: string,
+  source: ParsedIntentCommand['source'],
+): Array<ParsedIntentCommand> {
+  return raw.split(/&&|\|\||;|\|/).flatMap((part) => {
+    const parsed = parseIntentCommand(part, source)
+    return parsed ? [parsed] : []
+  })
 }
 
 export function intentCommandsFromRun(
@@ -86,6 +91,28 @@ export function loadedSkillUsesFromRun(run: HarnessRun): Array<string> {
     .map((command) => command.skillUse as string)
 
   return [...new Set([...artifactSkills, ...commandSkills])]
+}
+
+export function nativeSkillNamesFromTranscript(
+  transcript: string,
+): Array<string> {
+  const names = new Set<string>()
+
+  for (const line of transcript.split('\n')) {
+    const match = line.match(/^\s*\u25cf\s+skill\(([^)\r\n]+)\)\s*$/)
+    const name = match?.[1]?.trim()
+    if (name) names.add(name)
+  }
+
+  return [...names]
+}
+
+export function nativeSkillUsesFromRun(run: HarnessRun): Array<string> {
+  return Array.isArray(run.artifacts?.nativeSkillsLoaded)
+    ? run.artifacts.nativeSkillsLoaded.filter(
+        (candidate): candidate is string => typeof candidate === 'string',
+      )
+    : []
 }
 
 function intentCommandsFromToolMessages(

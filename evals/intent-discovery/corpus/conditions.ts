@@ -8,7 +8,7 @@ const intentDiscoveryConditions = [
     countsTowardAutonomousScore: true,
   },
   {
-    id: 'current-intent',
+    id: 'symlink-intent',
     countsTowardAutonomousScore: true,
   },
   {

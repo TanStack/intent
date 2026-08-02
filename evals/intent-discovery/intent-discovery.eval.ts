@@ -5,7 +5,10 @@ import { correctSkillLoaded } from './graders/correct-skill-loaded'
 import { attachEvalMetadata, score } from './graders/eval-metadata'
 import { classifyFailure } from './graders/failure-classifier'
 import { referenceOnly } from './graders/reference-only'
-import { strictIntentInvocation } from './graders/strict-invocation'
+import {
+  discoveryInvocation,
+  strictIntentInvocation,
+} from './graders/strict-invocation'
 import { savedTranscriptCases } from './fixtures/saved-transcripts'
 import { savedTranscriptHarness } from './harness/saved-transcript-harness'
 import type { HarnessContext } from 'vitest-evals'
@@ -15,9 +18,22 @@ describe('Intent discovery saved transcripts', () => {
     it(evalCase.id, async (context) => {
       const result = await runSavedTranscript(evalCase)
       const strict = strictIntentInvocation(result)
-      const loaded = correctSkillLoaded(result, evalCase.expectedSkillAreas)
-      const reference = referenceOnly(result, evalCase.expectedSkillAreas)
-      const failureClass = classifyFailure(result, evalCase.expectedSkillAreas)
+      const discovery = discoveryInvocation(result, evalCase.condition)
+      const loaded = correctSkillLoaded(
+        result,
+        evalCase.expectedSkillAreas,
+        evalCase.condition,
+      )
+      const reference = referenceOnly(
+        result,
+        evalCase.expectedSkillAreas,
+        evalCase.condition,
+      )
+      const failureClass = classifyFailure(
+        result,
+        evalCase.expectedSkillAreas,
+        evalCase.condition,
+      )
       const autonomous = countsTowardAutonomousScore({
         condition: evalCase.condition,
         explicitnessLevel: evalCase.explicitnessLevel,
@@ -25,13 +41,16 @@ describe('Intent discovery saved transcripts', () => {
       const scores = [
         score(
           'AutonomousDiscoverySuccess',
-          autonomous && strict.passed && loaded.passed,
+          autonomous && discovery.passed && loaded.passed,
           {
             rationale:
-              'Scores only autonomous runs where Copilot invoked Intent and loaded the expected skill.',
+              'Scores only autonomous runs where Copilot used the condition-required discovery mechanism and loaded the expected skill.',
             failureClass,
           },
         ),
+        score('DiscoveryInvocation', discovery.passed, {
+          mechanism: discovery.mechanism,
+        }),
         score('StrictIntentInvocation', strict.passed, {
           matchedCommand: strict.matchedCommand,
           source: strict.source,

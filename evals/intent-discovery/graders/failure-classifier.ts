@@ -1,6 +1,7 @@
 import { correctSkillLoaded } from './correct-skill-loaded'
 import { referenceOnly } from './reference-only'
-import { strictIntentInvocation } from './strict-invocation'
+import { discoveryInvocation } from './strict-invocation'
+import type { IntentDiscoveryCondition } from '../corpus/conditions'
 import type {
   ExpectedSkillArea,
   IntentDiscoveryFailureClass,
@@ -10,27 +11,28 @@ import type { HarnessRun } from 'vitest-evals'
 export function classifyFailure(
   run: HarnessRun,
   expectedSkillAreas: Array<ExpectedSkillArea>,
+  condition: IntentDiscoveryCondition,
 ): IntentDiscoveryFailureClass {
   if (run.errors.length > 0) {
     return 'harness-error'
   }
 
-  const strict = strictIntentInvocation(run)
-  const skillLoaded = correctSkillLoaded(run, expectedSkillAreas)
+  const invocation = discoveryInvocation(run, condition)
+  const skillLoaded = correctSkillLoaded(run, expectedSkillAreas, condition)
 
-  if (strict.passed && skillLoaded.passed) {
+  if (invocation.passed && skillLoaded.passed) {
     return 'strict-success'
   }
 
-  if (strict.passed && skillLoaded.loadedSkills.length > 0) {
+  if (invocation.passed && skillLoaded.loadedSkills.length > 0) {
     return 'wrong-skill-selected'
   }
 
-  if (strict.passed) {
+  if (invocation.passed) {
     return 'command-attempted-but-failed'
   }
 
-  if (referenceOnly(run, expectedSkillAreas)) {
+  if (referenceOnly(run, expectedSkillAreas, condition)) {
     return 'reference-only'
   }
 

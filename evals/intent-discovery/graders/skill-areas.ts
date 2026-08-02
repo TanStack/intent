@@ -3,7 +3,13 @@ import type { ExpectedSkillArea } from '../corpus/tasks'
 
 const skillAreaPatterns: Record<ExpectedSkillArea, Array<RegExp>> = {
   router: [/router/i, /routing/i, /@tanstack\/router/i],
-  start: [/tanstack start/i, /react-start/i, /server function/i, /full-stack/i],
+  start: [
+    /tanstack start/i,
+    /@tanstack\/start/i,
+    /react-start/i,
+    /server function/i,
+    /full-stack/i,
+  ],
   'table-v9': [
     /tanstack table/i,
     /react-table/i,

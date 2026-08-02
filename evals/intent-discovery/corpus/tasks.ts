@@ -8,6 +8,7 @@ const expectedSkillAreas = ['router', 'start', 'table-v9'] as const
 export type ExpectedSkillArea = (typeof expectedSkillAreas)[number]
 
 export type IntentDiscoveryFixture =
+  | 'multi-turn'
   | 'router-basic'
   | 'start-basic'
   | 'table-v9-basic'
@@ -46,9 +47,9 @@ export type IntentDiscoveryTask = {
 
 export const tasks: Array<IntentDiscoveryTask> = [
   {
-    id: 'router-current-intent-loads-router',
+    id: 'router-mapped-intent-loads-router',
     fixture: 'router-basic',
-    condition: 'current-intent',
+    condition: 'mapped-intent',
     explicitnessLevel: 2,
     prompt: 'Add a route that loads user data before rendering the page.',
     expectedSkillAreas: ['router'],
@@ -74,9 +75,9 @@ export const tasks: Array<IntentDiscoveryTask> = [
     },
   },
   {
-    id: 'table-v9-current-intent-loads-wrong-skill',
+    id: 'table-v9-mapped-intent-loads-wrong-skill',
     fixture: 'table-v9-basic',
-    condition: 'current-intent',
+    condition: 'mapped-intent',
     explicitnessLevel: 2,
     prompt: 'Add a TanStack Table v9 column with sortable user roles.',
     expectedSkillAreas: ['table-v9'],

@@ -1,4 +1,11 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -26,48 +33,41 @@ describe('Intent discovery condition setup', () => {
     }
   })
 
-  it('writes current Intent guidance without mappings', () => {
+  it('symlinks package skills for native GitHub Copilot discovery', () => {
     const prepared = prepareInTemp()
 
     try {
       const result = applyIntentCondition({
-        condition: 'current-intent',
+        condition: 'symlink-intent',
         expectedSkillAreas: ['router'],
         workspacePath: prepared.workspacePath,
       })
-      const agents = readFileSync(
-        join(prepared.workspacePath, 'AGENTS.md'),
-        'utf8',
+      const linkPath = join(
+        prepared.workspacePath,
+        '.github',
+        'skills',
+        'npm-tanstack-router-routing',
       )
-      const packageJson = readFileSync(
-        join(prepared.workspacePath, 'package.json'),
-        'utf8',
+      const skillPath = join(
+        prepared.workspacePath,
+        'node_modules',
+        '@tanstack',
+        'router',
+        'skills',
+        'routing',
       )
 
-      expect(result.filesWritten).toHaveLength(4)
-      expect(agents).toContain('Skill Loading')
-      expect(agents).toContain('npx @tanstack/intent@latest list')
-      expect(agents).not.toContain('\ntanstackIntent:\n')
-      expect(packageJson).toContain('"@tanstack/router"')
-      expect(
-        existsSync(
-          join(
-            prepared.workspacePath,
-            'node_modules',
-            '@tanstack',
-            'router',
-            'skills',
-            'routing',
-            'SKILL.md',
-          ),
-        ),
-      ).toBe(true)
+      expect(result.filesWritten).toContain(linkPath)
+      expect(existsSync(join(prepared.workspacePath, 'AGENTS.md'))).toBe(false)
+      expect(existsSync(join(prepared.workspacePath, 'intent.lock'))).toBe(true)
+      expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
+      expect(realpathSync(linkPath)).toBe(realpathSync(skillPath))
     } finally {
       prepared.cleanup()
     }
   })
 
-  it('writes mapped Intent guidance with use values', () => {
+  it('writes catalog-once guidance for mapped delivery', () => {
     const prepared = prepareInTemp()
 
     try {
@@ -81,11 +81,28 @@ describe('Intent discovery condition setup', () => {
         'utf8',
       )
 
-      expect(agents).toContain('tanstackIntent:')
-      expect(agents).toContain('id: "@tanstack/router#routing"')
-      expect(agents).toContain(
-        'run: "npx @tanstack/intent@latest load @tanstack/router#routing"',
-      )
+      expect(agents).toContain('## Intent Skills')
+      expect(agents).toContain('npx @tanstack/intent catalog')
+      expect(agents).toContain('npx @tanstack/intent load <package>#<skill>')
+      expect(agents).not.toContain('tanstackIntent:')
+      expect(existsSync(join(prepared.workspacePath, 'intent.lock'))).toBe(true)
+    } finally {
+      prepared.cleanup()
+    }
+  })
+
+  it('prepares trusted skills for hook delivery without agent guidance', () => {
+    const prepared = prepareInTemp()
+
+    try {
+      applyIntentCondition({
+        condition: 'hooked-intent',
+        expectedSkillAreas: ['router'],
+        workspacePath: prepared.workspacePath,
+      })
+
+      expect(existsSync(join(prepared.workspacePath, 'AGENTS.md'))).toBe(false)
+      expect(existsSync(join(prepared.workspacePath, 'intent.lock'))).toBe(true)
     } finally {
       prepared.cleanup()
     }

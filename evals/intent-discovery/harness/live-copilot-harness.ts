@@ -1,20 +1,19 @@
 import { createHarness } from 'vitest-evals'
-import { intentCommandsFromToolCalls } from './parse-intent-commands'
 import { prepareFixtureWorkspace } from './prepare-fixture'
 import {
   LiveCopilotRunnerUnavailableError,
-  runCopilotTask,
-} from './run-copilot-task'
+  runCopilotSession,
+} from './run-copilot-session'
 import { applyIntentCondition } from './setup-intent-condition'
-import type { IntentDiscoveryTask } from '../corpus/tasks'
+import type { LiveSessionCase } from '../corpus/live-sessions'
 
 export type LiveCopilotOutput = {
-  finalAnswer: string
   runId: string
+  sessionPassed: boolean
 }
 
 export const liveCopilotHarness = createHarness<
-  IntentDiscoveryTask,
+  LiveSessionCase,
   LiveCopilotOutput
 >({
   name: 'intent-discovery-live-copilot',
@@ -26,7 +25,7 @@ export const liveCopilotHarness = createHarness<
       prepared = prepareFixtureWorkspace({ fixture: input.fixture })
       const appliedCondition = applyIntentCondition({
         condition: input.condition,
-        expectedSkillAreas: input.expectedSkillAreas,
+        expectedSkillAreas: ['router', 'start', 'table-v9'],
         workspacePath: prepared.workspacePath,
       })
 
@@ -38,37 +37,29 @@ export const liveCopilotHarness = createHarness<
         setArtifact,
       })
 
-      const run = await runCopilotTask({
-        task: input,
+      const run = await runCopilotSession({
+        input,
         runId,
         sourcePath: prepared.sourcePath,
         workspacePath: prepared.workspacePath,
       })
-      const intentCommands = intentCommandsFromToolCalls(run.toolCalls)
-
-      setArtifact('transcriptPath', run.transcriptPath ?? '')
-      setArtifact('commandsInvoked', run.commandsInvoked)
-      setArtifact(
-        'intentCommandsInvoked',
-        run.intentCommandsInvoked.length > 0
-          ? run.intentCommandsInvoked
-          : intentCommands.map((command) => command.raw),
-      )
-      setArtifact('intentCommandOutputs', run.intentCommandOutputs)
-      setArtifact('loadedSkills', run.loadedSkills)
-      setArtifact('fileDiff', run.fileDiff ?? '')
+      setArtifact('profile', input.profile)
+      setArtifact('sessionId', run.sessionId)
+      setArtifact('sessionScore', run.score)
+      setArtifact('turns', run.turns)
+      setArtifact('fileDiff', run.fileDiff)
       setArtifact('agentErrors', run.agentErrors)
 
       return {
         output: {
-          finalAnswer: run.finalAnswer,
           runId: run.runId,
+          sessionPassed: run.score.passed,
         },
         messages: run.messages,
         toolCalls: run.toolCalls,
-        usage: run.usage ?? {
-          provider: 'copilot',
-          model: 'unknown',
+        usage: {
+          provider: 'copilot-command',
+          model: input.profile.model,
         },
         artifacts: {
           runKind: 'live-copilot',
@@ -94,28 +85,27 @@ export const liveCopilotHarness = createHarness<
       const normalizedError = normalizeRunnerError(error)
 
       setArtifact('transcriptPath', '')
-      setArtifact('commandsInvoked', [])
-      setArtifact('intentCommandsInvoked', [])
-      setArtifact('intentCommandOutputs', [])
-      setArtifact('loadedSkills', [])
+      setArtifact('profile', input.profile)
+      setArtifact('sessionScore', {})
+      setArtifact('turns', [])
       setArtifact('fileDiff', '')
       setArtifact('agentErrors', [normalizedError.message])
 
       return {
         output: {
-          finalAnswer: '',
           runId,
+          sessionPassed: false,
         },
         messages: [
           {
             role: 'user',
-            content: input.prompt,
+            content: input.turns.map((turn) => turn.prompt).join('\n\n'),
           },
         ],
         toolCalls: [],
         usage: {
           provider: 'copilot',
-          model: 'unknown',
+          model: input.profile.model,
         },
         artifacts: {
           runKind: 'live-copilot',
@@ -154,7 +144,7 @@ function setCommonArtifacts({
   workspacePath,
   setArtifact,
 }: {
-  input: IntentDiscoveryTask
+  input: LiveSessionCase
   runId: string
   setupFilesWritten: Array<string>
   workspacePath: string
@@ -163,9 +153,10 @@ function setCommonArtifacts({
   setArtifact('runId', runId)
   setArtifact('taskId', input.id)
   setArtifact('condition', input.condition)
+  setArtifact('effort', input.profile.effort)
   setArtifact('fixture', input.fixture)
-  setArtifact('prompt', input.prompt)
-  setArtifact('expectedSkillAreas', input.expectedSkillAreas)
+  setArtifact('model', input.profile.model)
+  setArtifact('profileId', input.profile.id)
   setArtifact('setupFilesWritten', setupFilesWritten)
   setArtifact('workspacePath', workspacePath)
 }

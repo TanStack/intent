@@ -16,7 +16,7 @@ export type SavedTranscriptCase = IntentDiscoveryTask & {
 const taskById = new Map(tasks.map((task) => [task.id, task]))
 
 export const savedTranscriptCases: Array<SavedTranscriptCase> = [
-  savedTranscript('router-current-intent-loads-router', {
+  savedTranscript('router-mapped-intent-loads-router', {
     finalAnswer:
       'I loaded @tanstack/router#routing and used its route loader guidance before making the route change.',
     messages: [
@@ -94,7 +94,7 @@ export const savedTranscriptCases: Array<SavedTranscriptCase> = [
     loadedSkills: [],
     agentErrors: [],
   }),
-  savedTranscript('table-v9-current-intent-loads-wrong-skill', {
+  savedTranscript('table-v9-mapped-intent-loads-wrong-skill', {
     finalAnswer:
       'I loaded @tanstack/router#routing, but the task needed TanStack Table v9 column guidance.',
     messages: [

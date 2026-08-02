@@ -194,7 +194,7 @@ export function renderSessionCatalogue(
   const footerLines = [
     ...warningLines,
     '',
-    'Load a matching skill with `intent load <id>`. If none match, continue normally.',
+    'Before substantial work, run `intent load <id>` for each relevant skill listed above. If none apply, do not load a skill and continue normally.',
   ]
   const skillLines: Array<string> = []
 

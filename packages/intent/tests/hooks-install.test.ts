@@ -87,9 +87,15 @@ describe('hook installer', () => {
     const claudeConfig = readJson(join(root, '.claude', 'settings.json'))
     expect(claudeConfig.hooks.SessionStart).toHaveLength(1)
     expect(claudeConfig.hooks.SessionStart[0].matcher).toBe(
-      'startup|resume|clear|compact',
+      'startup|clear|compact|fork',
     )
     expect(claudeConfig.hooks.SessionStart[0].hooks[0]).toMatchObject({
+      command: `pnpm dlx @tanstack/intent@${intentPackagePin} hooks run --agent claude`,
+      type: 'command',
+    })
+    expect(claudeConfig.hooks.SubagentStart).toHaveLength(1)
+    expect(claudeConfig.hooks.SubagentStart[0].matcher).toBe('*')
+    expect(claudeConfig.hooks.SubagentStart[0].hooks[0]).toMatchObject({
       command: `pnpm dlx @tanstack/intent@${intentPackagePin} hooks run --agent claude`,
       type: 'command',
     })
@@ -97,9 +103,14 @@ describe('hook installer', () => {
 
     const codexConfig = readJson(join(root, '.codex', 'hooks.json'))
     expect(codexConfig.hooks.SessionStart[0].matcher).toBe(
-      'startup|resume|clear|compact',
+      'startup|clear|compact',
     )
     expect(codexConfig.hooks.SessionStart[0].hooks[0].command).toBe(
+      `pnpm dlx @tanstack/intent@${intentPackagePin} hooks run --agent codex`,
+    )
+    expect(codexConfig.hooks.SubagentStart).toHaveLength(1)
+    expect(codexConfig.hooks.SubagentStart[0].matcher).toBe('*')
+    expect(codexConfig.hooks.SubagentStart[0].hooks[0].command).toBe(
       `pnpm dlx @tanstack/intent@${intentPackagePin} hooks run --agent codex`,
     )
     expect(codexConfig.hooks.PreToolUse).toEqual([])
@@ -128,9 +139,16 @@ describe('hook installer', () => {
     const config = readJson(join(copilotHome, 'hooks', 'hooks.json'))
     const sessionCommand = config.hooks.SessionStart[0].command as string
 
+    expect(config.version).toBe(1)
     expect(sessionCommand).toBe(
       `npx @tanstack/intent@${intentPackagePin} hooks run --agent copilot`,
     )
+    expect(config.hooks.subagentStart).toEqual([
+      {
+        command: `npx @tanstack/intent@${intentPackagePin} hooks run --agent copilot`,
+      },
+    ])
+    expect(config.hooks.SubagentStart).toBeUndefined()
     expect(config.hooks.PreToolUse).toEqual([])
     expect(
       existsSync(

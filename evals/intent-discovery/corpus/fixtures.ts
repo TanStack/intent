@@ -8,6 +8,20 @@ export type IntentDiscoveryFixtureDefinition = {
 }
 
 export const fixtures = {
+  'multi-turn': {
+    id: 'multi-turn',
+    purpose:
+      'Persistent unrelated, Router, Start, Table v9, and unrelated turns.',
+    skillAreas: ['router', 'start', 'table-v9'],
+    files: [
+      'package.json',
+      'src/lib/format-display-name.ts',
+      'src/lib/sort-user-ids.ts',
+      'src/routes/users.$userId.tsx',
+      'src/routes/users.tsx',
+      'src/user-table.tsx',
+    ],
+  },
   'router-basic': {
     id: 'router-basic',
     purpose: 'Route discovery and route loader changes.',

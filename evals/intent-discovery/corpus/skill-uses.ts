@@ -2,7 +2,7 @@ import type { ExpectedSkillArea } from './tasks'
 
 export const expectedSkillUseByArea = {
   router: '@tanstack/router#routing',
-  start: '@tanstack/start#routing',
+  start: '@tanstack/start#server-functions',
   'table-v9': '@tanstack/table#v9-columns',
 } satisfies Record<ExpectedSkillArea, string>
 
