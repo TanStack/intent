@@ -168,7 +168,16 @@ function rewriteMarkdownDestination({
   const { pathPart, suffix } = splitDestinationSuffix(destination)
   if (isExternalOrAbsoluteDestination(pathPart)) return destination
 
-  const resolvedDestinationPath = resolve(context.skillDir, pathPart)
+  const escapedCharacters: Array<string> = []
+  const pathForResolution = pathPart.replace(
+    /\\(.)/g,
+    (_, character: string) => {
+      const marker = `\0${escapedCharacters.length}\0`
+      escapedCharacters.push(character)
+      return marker
+    },
+  )
+  const resolvedDestinationPath = resolve(context.skillDir, pathForResolution)
   const relativeToPackageRoot = relative(
     context.resolvedPackageRoot,
     resolvedDestinationPath,
@@ -188,7 +197,12 @@ function rewriteMarkdownDestination({
       ? relativeToCwd
       : resolvedDestinationPath
 
-  return `${toPosixPath(rewrittenPath)}${suffix}`
+  const restoredPath = escapedCharacters.reduce(
+    (path, character, index) => path.replace(`\0${index}\0`, `\\${character}`),
+    toPosixPath(rewrittenPath),
+  )
+
+  return `${restoredPath}${suffix}`
 }
 
 function rewriteMarkdownLineDestinations({

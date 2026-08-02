@@ -28,6 +28,12 @@ describe('rewriteLoadedSkillMarkdownDestinations', () => {
     )
   })
 
+  it('preserves placeholder-like text in escaped destinations', () => {
+    expect(rewrite('![Diagram](assets/__INTENT_ESCAPED_0__\\).png)')).toBe(
+      '![Diagram](node_modules/pkg/skills/core/assets/__INTENT_ESCAPED_0__\\).png)',
+    )
+  })
+
   it('preserves malformed inline links', () => {
     expect(rewrite('[Broken](docs/api.md')).toBe('[Broken](docs/api.md')
   })

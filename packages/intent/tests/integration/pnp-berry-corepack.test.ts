@@ -14,6 +14,8 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 import { runInteractiveInstall } from '../../src/commands/install/command.js'
 import { runConsumerInstall } from '../../src/commands/install/consumer.js'
+import { buildCurrentLockfileSources } from '../../src/core/lockfile/lockfile-state.js'
+import { writeIntentLockfile } from '../../src/core/lockfile/lockfile.js'
 import { createIntentFsCache } from '../../src/discovery/fs-cache.js'
 import { scanForIntents } from '../../src/discovery/scanner.js'
 import type { InstallerPrompter } from '../../src/commands/install/consumer.js'
@@ -41,6 +43,33 @@ const YARN_VERSION = '4.12.0'
 // execFileSync is synchronous, so Vitest's test timeout cannot interrupt it.
 const CMD_TIMEOUT_MS = 90_000
 const isCI = Boolean(process.env.CI)
+const npmCommand = process.platform === 'win32' ? process.execPath : 'npm'
+const npmArgs =
+  process.platform === 'win32'
+    ? [
+        join(
+          dirname(process.execPath),
+          'node_modules',
+          'npm',
+          'bin',
+          'npm-cli.js',
+        ),
+      ]
+    : []
+const corepackCommand =
+  process.platform === 'win32' ? process.execPath : 'corepack'
+const corepackArgs =
+  process.platform === 'win32'
+    ? [
+        join(
+          dirname(process.execPath),
+          'node_modules',
+          'corepack',
+          'dist',
+          'corepack.js',
+        ),
+      ]
+    : []
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const cliPath = join(thisDir, '..', '..', 'dist', 'cli.mjs')
 const realTmpdir = realpathSync(tmpdir())
@@ -51,12 +80,16 @@ const corepackEnv = { ...process.env, COREPACK_ENABLE_DOWNLOAD_PROMPT: '0' }
 function berryAvailable(): boolean {
   try {
     // Run in a neutral cwd so a repo `packageManager` pin does not interfere.
-    execFileSync('corepack', [`yarn@${YARN_VERSION}`, '--version'], {
-      cwd: realTmpdir,
-      env: corepackEnv,
-      stdio: 'ignore',
-      timeout: CMD_TIMEOUT_MS,
-    })
+    execFileSync(
+      corepackCommand,
+      [...corepackArgs, `yarn@${YARN_VERSION}`, '--version'],
+      {
+        cwd: realTmpdir,
+        env: corepackEnv,
+        stdio: 'ignore',
+        timeout: CMD_TIMEOUT_MS,
+      },
+    )
     return true
   } catch {
     return false
@@ -97,7 +130,7 @@ function scaffoldBerryProject(): string {
     join(pkgSrc, 'skills', 'core', 'SKILL.md'),
     '---\nname: core\ndescription: Core skill from the leaf package.\n---\n# Core\n',
   )
-  execFileSync('npm', ['pack', '--pack-destination', dir], {
+  execFileSync(npmCommand, [...npmArgs, 'pack', '--pack-destination', dir], {
     cwd: pkgSrc,
     timeout: CMD_TIMEOUT_MS,
   })
@@ -116,13 +149,17 @@ function scaffoldBerryProject(): string {
   })
 
   // CI makes Berry installs immutable by default; this fixture creates lockfile fresh.
-  execFileSync('corepack', ['yarn', 'install', '--no-immutable'], {
-    cwd: dir,
-    stdio: 'pipe',
-    env: corepackEnv,
-    timeout: CMD_TIMEOUT_MS,
-    maxBuffer: 10 * 1024 * 1024,
-  })
+  execFileSync(
+    corepackCommand,
+    [...corepackArgs, 'yarn', 'install', '--no-immutable'],
+    {
+      cwd: dir,
+      stdio: 'pipe',
+      env: corepackEnv,
+      timeout: CMD_TIMEOUT_MS,
+      maxBuffer: 10 * 1024 * 1024,
+    },
+  )
   return dir
 }
 
@@ -157,6 +194,14 @@ describe.skipIf(!shouldRun)('Yarn Berry PnP (zip-backed dependencies)', () => {
     expect(
       parsed.skills.map((s: { skillName: string }) => s.skillName),
     ).toContain('core')
+
+    const fsCache = createIntentFsCache()
+    const scanOptions = { scope: 'local' as const, fsCache }
+    const scan = scanForIntents(cwd, scanOptions)
+    writeIntentLockfile(join(cwd, 'intent.lock'), {
+      lockfileVersion: 1,
+      sources: buildCurrentLockfileSources(scan.packages, fsCache.getReadFs()),
+    })
 
     const load = execFileSync(
       'node',

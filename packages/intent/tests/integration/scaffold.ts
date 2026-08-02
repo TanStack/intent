@@ -11,6 +11,9 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildCurrentLockfileSources } from '../../src/core/lockfile/lockfile-state.js'
+import { writeIntentLockfile } from '../../src/core/lockfile/lockfile.js'
+import { scanForIntents } from '../../src/discovery/scanner.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const fixturesDir = join(thisDir, '..', 'fixtures', 'integration')
@@ -206,6 +209,12 @@ export function scaffoldProject(opts: {
       intent: { skills: ['@test-intent/skills-leaf'] },
     })
     install(root, opts.pm, opts.registryUrl, opts)
+    writeIntentLockfile(join(root, 'intent.lock'), {
+      lockfileVersion: 1,
+      sources: buildCurrentLockfileSources(
+        scanForIntents(root, { scope: 'local' }).packages,
+      ),
+    })
     return { root, cwd: root }
   }
 
@@ -236,6 +245,13 @@ export function scaffoldProject(opts: {
   })
 
   install(root, opts.pm, opts.registryUrl, opts)
+
+  writeIntentLockfile(join(root, 'intent.lock'), {
+    lockfileVersion: 1,
+    sources: buildCurrentLockfileSources(
+      scanForIntents(root, { scope: 'local' }).packages,
+    ),
+  })
 
   return {
     root,

@@ -12,6 +12,7 @@ import { parseSkillSources } from '../../core/skill-sources.js'
 import { writeTextFileAtomic } from '../../shared/atomic-write.js'
 import { fail } from '../../shared/cli-error.js'
 import { isExplicitAgentAudience } from '../../shared/environment.js'
+import { toPosixPath } from '../../shared/utils.js'
 import {
   coreOptionsFromGlobalFlags,
   noticeOptionsFromGlobalFlags,
@@ -91,7 +92,7 @@ export async function runInteractiveInstall({
 }
 
 function formatTargetPath(targetPath: string): string {
-  return relative(process.cwd(), targetPath) || targetPath
+  return toPosixPath(relative(process.cwd(), targetPath) || targetPath)
 }
 
 function formatMappingCount(mappingCount: number): string {

@@ -8,6 +8,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fail, isCliFailure } from '../shared/cli-error.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
+import { toPosixPath } from '../shared/utils.js'
 import {
   buildSessionCatalogue,
   formatSessionCatalogue,
@@ -170,7 +171,7 @@ function collectPackagingWarnings(context: ProjectContext): Array<string> {
 
 function displayPath(filePath: string): string {
   const rel = relative(process.cwd(), filePath)
-  return rel.startsWith('..') ? filePath : rel
+  return toPosixPath(rel.startsWith('..') ? filePath : rel)
 }
 
 function formatWarning({ file, message }: ValidationWarning): string {

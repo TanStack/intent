@@ -1634,6 +1634,32 @@ describe('cli commands', () => {
     expect(stderr).toContain('Add to opt in')
   })
 
+  it('distinguishes hidden sources from missing intent-enabled packages', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-only-hidden-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: [] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    process.env.INTENT_AUDIENCE = 'human'
+    process.chdir(root)
+
+    expect(await main(['list', '--show-hidden'])).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(output).toContain('No permitted intent-enabled packages found.')
+    expect(output).not.toContain('No intent-enabled packages found.')
+    expect(output).toContain('Hidden skill sources:')
+    expect(output).toContain('@tanstack/query')
+  })
+
   it('explains already-visible hidden sources without revealing more', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-list-hidden-why-'))
     tempDirs.push(root)
@@ -2713,8 +2739,12 @@ describe('cli commands', () => {
     logSpy.mockClear()
     expect(await main(['list', '--json'])).toBe(0)
     const jsonOutput = String(logSpy.mock.calls.at(-1)?.[0] ?? '')
-    expect(jsonOutput).toContain(queryV4Dir)
-    expect(jsonOutput).toContain(queryV5Dir)
+    const json = JSON.parse(jsonOutput) as {
+      conflicts: Array<{ variants: Array<{ packageRoot: string }> }>
+    }
+    expect(
+      json.conflicts[0]?.variants.map((variant) => variant.packageRoot),
+    ).toEqual([queryV4Dir, queryV5Dir])
   })
 
   it('redacts version conflict paths from agent list output', async () => {

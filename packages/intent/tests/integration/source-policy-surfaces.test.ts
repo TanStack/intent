@@ -278,7 +278,7 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     )
   })
 
-  it('install --map writes only the listed package into the block', async () => {
+  it('install --map reports static catalogue guidance without source names', async () => {
     writeStandaloneFixture()
     const isolatedGlobalRoot = mkdtempSync(
       join(realTmpdir, 'intent-g4-global-'),
@@ -290,9 +290,13 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
-    expect(output).toContain(`id: "${LISTED}#core"`)
-    expect(output).not.toContain(`id: "${UNLISTED}#core"`)
-    expect(output).not.toContain(`id: "${EXCLUDED}#core"`)
+    expect(output).toContain(
+      'Would write Intent catalog guidance to AGENTS.md.',
+    )
+    expect(output).toContain('No files changed.')
+    expect(output).not.toContain(LISTED)
+    expect(output).not.toContain(UNLISTED)
+    expect(output).not.toContain(EXCLUDED)
 
     rmSync(isolatedGlobalRoot, { recursive: true, force: true })
   })

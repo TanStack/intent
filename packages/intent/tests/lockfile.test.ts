@@ -138,7 +138,7 @@ describe('intent lockfile', () => {
     expect(readFileSync(path, 'utf8')).toContain('"id": "example"')
   })
 
-  it.each([
+  it.skipIf(process.platform === 'win32').each([
     { label: '0o600', mode: 0o600 },
     { label: '0o664', mode: 0o664 },
   ])('preserves mode $label of an existing lockfile', ({ mode }) => {

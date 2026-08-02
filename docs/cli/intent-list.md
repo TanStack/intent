@@ -23,7 +23,7 @@ id: intent-list
 
 ## What it shows
 
-For a human, plain `list` prints a summary line and package table with `PACKAGE`, `SOURCE`, `VERSION`, and `SKILLS` columns. `list <package>` shows that package's skill tree; `--verbose` shows every package's tree. `SOURCE` shows whether a package came from local discovery or global scanning; when the same package is found both locally and globally, the local one is used. If nothing is found, `list` prints `No intent-enabled packages found.`
+For a human, plain `list` prints a summary line and package table with `PACKAGE`, `SOURCE`, `VERSION`, and `SKILLS` columns. `list <package>` shows that package's skill tree; `--verbose` shows every package's tree. `SOURCE` shows whether a package came from local discovery or global scanning; when the same package is found both locally and globally, the local one is used. If nothing is found, `list` prints `No intent-enabled packages found.` If `--show-hidden` finds only unpermitted sources, it prints `No permitted intent-enabled packages found.` before listing them.
 
 For an agent, plain `list` prints a compact package inventory and directs task matching to `intent catalog`. A package argument prints only portable skill IDs for that package. Hidden source names and local paths remain redacted.
 

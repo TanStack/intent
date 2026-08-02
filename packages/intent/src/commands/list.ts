@@ -270,10 +270,18 @@ export async function runListCommand(
     result.packages.length === 0 &&
     (result.excludedSkills?.length ?? 0) === 0
   ) {
+    const hasVisibleHiddenSources =
+      audience === 'human' &&
+      options.showHidden === true &&
+      result.hiddenSourceCount > 0
     console.log(
       packageName
-        ? `No intent-enabled package found: ${packageName}.`
-        : 'No intent-enabled packages found.',
+        ? hasVisibleHiddenSources
+          ? `No permitted intent-enabled package found: ${packageName}.`
+          : `No intent-enabled package found: ${packageName}.`
+        : hasVisibleHiddenSources
+          ? 'No permitted intent-enabled packages found.'
+          : 'No intent-enabled packages found.',
     )
     if (options.showHidden && result.hiddenSourceCount > 0) {
       printHiddenSources(result, audience, explain)
@@ -364,9 +372,7 @@ export async function runListCommand(
         name: skill.skillName,
         description: 'excluded' in skill ? '(excluded)' : skill.description,
         loadCommand:
-          audience === 'human' &&
-          skill.packageSource === 'local' &&
-          !('excluded' in skill)
+          skill.packageSource === 'local' && !('excluded' in skill)
             ? formatLoadCommand(
                 skill.use,
                 result.packageManager,
@@ -383,7 +389,5 @@ export async function runListCommand(
   }
 
   printWarnings(warnings)
-  if (audience === 'human') {
-    printNotices(result.notices, noticeOptions)
-  }
+  printNotices(result.notices, noticeOptions)
 }

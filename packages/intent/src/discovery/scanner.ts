@@ -74,6 +74,8 @@ interface NodeModuleInternals {
 }
 
 const requireFromHere = createRequire(import.meta.url)
+const nodeModuleApi = requireFromHere('node:module') as NodeModuleInternals
+const pnpReadFs = requireFromHere('node:fs') as unknown as ReadFs
 let semver: typeof Semver | undefined
 
 function getSemver(): typeof Semver {
@@ -124,14 +126,14 @@ function loadPnpApi(root: string): LoadedPnp | null {
     )
   }
 
-  const moduleApi = requireFromHere('node:module') as NodeModuleInternals
+  const moduleApi = nodeModuleApi
   const originalResolveFilename = moduleApi._resolveFilename
   // Capture `fs` before setup(). Yarn's `setup()` patches the `fs` module in
   // place (libzip layer for reading inside `.yarn/cache/*.zip`), so this
   // reference becomes patched without routing a post-setup `require('node:fs')`
   // through Yarn's resolver hook (which rejects the `node:fs` specifier under
   // Yarn 1 PnP).
-  const readFs = requireFromHere('node:fs') as unknown as ReadFs
+  const readFs = pnpReadFs
 
   try {
     // Yarn PnP patches CommonJS resolution during setup, so cache yaml before

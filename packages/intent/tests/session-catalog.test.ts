@@ -218,13 +218,14 @@ describe('session catalogue cache', () => {
     const root = tempRoot('intent-catalog-missing-temp-')
     const missingTempRoot = join(root, 'missing')
     writeFileSync(join(root, 'package.json'), '{}')
-    const originalTmpdir = process.env.TMPDIR
+    const tempDirEnvKey = process.platform === 'win32' ? 'TEMP' : 'TMPDIR'
+    const originalTmpdir = process.env[tempDirEnvKey]
     const stderr = vi
       .spyOn(process.stderr, 'write')
       .mockImplementation(() => true)
 
     try {
-      process.env.TMPDIR = missingTempRoot
+      process.env[tempDirEnvKey] = missingTempRoot
       vi.resetModules()
       const catalog = await import('../src/session-catalog.js')
       const discovered = await catalog.getSessionCatalogue({
@@ -251,8 +252,8 @@ describe('session catalogue cache', () => {
         ),
       ).toHaveLength(1)
     } finally {
-      if (originalTmpdir === undefined) delete process.env.TMPDIR
-      else process.env.TMPDIR = originalTmpdir
+      if (originalTmpdir === undefined) delete process.env[tempDirEnvKey]
+      else process.env[tempDirEnvKey] = originalTmpdir
       vi.resetModules()
       stderr.mockRestore()
     }
