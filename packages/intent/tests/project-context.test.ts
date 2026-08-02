@@ -82,6 +82,25 @@ describe('resolveProjectContext', () => {
     })
   })
 
+  it('treats a nested package outside workspace patterns as standalone', () => {
+    const root = createRoot()
+    createPnpmWorkspaceRoot(root)
+    const packageRoot = join(root, 'example', 'start-basic')
+    writeJson(join(packageRoot, 'package.json'), { name: 'start-basic' })
+
+    const context = resolveProjectContext({ cwd: packageRoot })
+
+    expect(context).toEqual({
+      cwd: packageRoot,
+      workspaceRoot: null,
+      packageRoot,
+      isMonorepo: false,
+      workspacePatterns: [],
+      targetPackageJsonPath: join(packageRoot, 'package.json'),
+      targetSkillsDir: null,
+    })
+  })
+
   it('resolves an explicit skills dir path back to the owning package', () => {
     const root = createRoot()
     createPnpmWorkspaceRoot(root)

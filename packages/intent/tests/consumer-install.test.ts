@@ -115,6 +115,33 @@ function createProject(): string {
   return root
 }
 
+function createNestedStandaloneProject(): {
+  packageRoot: string
+  workspaceRoot: string
+} {
+  const workspaceRoot = realpathSync(
+    mkdtempSync(join(tmpdir(), 'intent-consumer-nested-')),
+  )
+  roots.push(workspaceRoot)
+  writeJson(join(workspaceRoot, 'package.json'), {
+    name: 'repo',
+    private: true,
+  })
+  writeFileSync(
+    join(workspaceRoot, 'pnpm-workspace.yaml'),
+    "packages:\n  - 'packages/*'\n",
+    'utf8',
+  )
+  const packageRoot = join(workspaceRoot, 'example', 'start-basic')
+  writeJson(join(packageRoot, 'package.json'), {
+    name: 'start-basic',
+    private: true,
+    devDependencies: { '@tanstack/intent': '0.4.0' },
+  })
+  addSkillPackage(packageRoot, '@tanstack/query', ['fetching'])
+  return { packageRoot, workspaceRoot }
+}
+
 function addSkillPackage(
   root: string,
   name: string,
@@ -407,10 +434,12 @@ describe('consumer install', () => {
     ).toBe(true)
   })
 
-  it('wires prepare once and reports an already-configured project as up to date without interviewing', async () => {
+  it('repairs missing managed links without re-interviewing', async () => {
     const root = createProject()
     const discovered = scanForIntents(root, { scope: 'local' }).packages
     await runConsumerInstall({ discovered, prompts: createPrompts(), root })
+    const link = join(root, '.agents', 'skills', 'npm-tanstack-query-fetching')
+    unlinkSync(link)
     const complete = vi.fn()
     const selectMethod = vi.fn(() =>
       Promise.reject(new Error('method must not run')),
@@ -434,6 +463,7 @@ describe('consumer install', () => {
     expect(selectMethod).not.toHaveBeenCalled()
     expect(selectTargets).not.toHaveBeenCalled()
     expect(selectSkills).not.toHaveBeenCalled()
+    expect(lstatSync(link).isSymbolicLink()).toBe(true)
     expect(
       JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts,
     ).toEqual({ prepare: 'npx @tanstack/intent sync' })
@@ -552,6 +582,29 @@ describe('consumer install', () => {
       },
     })
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('installs into a nested project excluded from ancestor workspace patterns', async () => {
+    const { packageRoot, workspaceRoot } = createNestedStandaloneProject()
+
+    await runInteractiveInstall({
+      cwd: packageRoot,
+      prompts: createPrompts(),
+    })
+
+    expect(
+      readIntentConsumerConfig(
+        readFileSync(join(packageRoot, 'package.json'), 'utf8'),
+      ),
+    ).toEqual({ skills: ['@tanstack/query'], exclude: [] })
+    expect(readIntentLockfile(join(packageRoot, 'intent.lock')).status).toBe(
+      'found',
+    )
+    expect(readIntentDeliveryConfig(packageRoot)).toEqual({
+      method: 'symlink',
+      targets: ['agents'],
+    })
+    expect(existsSync(join(workspaceRoot, 'intent.lock'))).toBe(false)
   })
 
   it('installs selected skills as a static guidance block without delivery state', async () => {

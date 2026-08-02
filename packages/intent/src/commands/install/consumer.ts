@@ -178,11 +178,15 @@ export async function runConsumerInstall({
     const hasChanges =
       newDependencies > 0 || newSkills > 0 || changed > 0 || summary.removed > 0
     if (!hasChanges && existingLock.status === 'found') {
-      if (dryRun || delivery.method === 'symlink') {
-        if (dryRun) {
-          printWarnings([...warnings])
-          console.log('No files changed.')
-        }
+      if (delivery.method === 'symlink') {
+        await runSyncCommand({ cwd: root, dryRun }, { review: 'reminder' })
+        printWarnings([...warnings])
+        prompts.complete('Project is up to date.')
+        return
+      }
+      if (dryRun) {
+        printWarnings([...warnings])
+        console.log('No files changed.')
         prompts.complete('Project is up to date.')
         return
       }

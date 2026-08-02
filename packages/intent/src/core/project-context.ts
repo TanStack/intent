@@ -1,7 +1,8 @@
 import { existsSync, statSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { isPathWithin } from '../shared/utils.js'
 import {
+  findWorkspacePackages,
   findWorkspaceRoot,
   readWorkspacePatterns,
 } from '../setup/workspace-patterns.js'
@@ -33,9 +34,18 @@ export function resolveProjectContext({
     ? resolve(resolvedCwd, targetPath)
     : resolvedCwd
   const packageRoot = findOwningPackageRoot(resolvedTargetPath)
-  const workspaceRoot =
+  const candidateWorkspaceRoot =
     findWorkspaceRoot(packageRoot ?? resolvedTargetPath) ??
     findWorkspaceRoot(resolvedCwd)
+  const workspaceRoot =
+    candidateWorkspaceRoot &&
+    (!packageRoot ||
+      relative(candidateWorkspaceRoot, packageRoot) === '' ||
+      findWorkspacePackages(candidateWorkspaceRoot).some(
+        (workspacePackage) => relative(workspacePackage, packageRoot) === '',
+      ))
+      ? candidateWorkspaceRoot
+      : null
   const workspacePatterns = workspaceRoot
     ? (readWorkspacePatterns(workspaceRoot) ?? [])
     : []
