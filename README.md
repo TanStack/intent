@@ -1,5 +1,19 @@
 <div align="center">
-  <img src="./media/header_intent.png" >
+  <picture>
+    <source
+      media="(prefers-color-scheme: dark)"
+      srcset="https://tanstack.com/api/readme/intent.png?theme=dark"
+    />
+    <source
+      media="(prefers-color-scheme: light)"
+      srcset="https://tanstack.com/api/readme/intent.png"
+    />
+    <img
+      src="https://tanstack.com/api/readme/intent.png"
+      alt="TanStack Intent"
+      width="900"
+    />
+  </picture>
 </div>
 
 <br />
