@@ -18,7 +18,6 @@ describe('hooked-intent condition setup', () => {
       const run = prepareCopilotRun({
         condition: 'hooked-intent',
         runId: 'test-hook-setup',
-        sessionId: '00000000-0000-4000-8000-000000000001',
         workspacePath: prepared.workspacePath,
       })
       const config = JSON.parse(

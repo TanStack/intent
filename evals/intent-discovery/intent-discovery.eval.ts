@@ -1,53 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { failedSpans, toolCalls } from 'vitest-evals'
-import { countsTowardAutonomousScore } from './corpus/conditions'
-import { correctSkillLoaded } from './graders/correct-skill-loaded'
+import { failedSpans } from 'vitest-evals'
+import { gradeDiscovery } from './graders/discovery'
 import { attachEvalMetadata, score } from './graders/eval-metadata'
-import { classifyFailure } from './graders/failure-classifier'
-import { referenceOnly } from './graders/reference-only'
-import {
-  discoveryInvocation,
-  strictIntentInvocation,
-} from './graders/strict-invocation'
 import { savedTranscriptCases } from './fixtures/saved-transcripts'
-import { savedTranscriptHarness } from './harness/saved-transcript-harness'
-import type { HarnessContext } from 'vitest-evals'
+import type { HarnessRun } from 'vitest-evals'
+
+const harnessName = 'intent-discovery-saved-transcript'
 
 describe('Intent discovery saved transcripts', () => {
   for (const evalCase of savedTranscriptCases) {
-    it(evalCase.id, async (context) => {
-      const result = await runSavedTranscript(evalCase)
-      const strict = strictIntentInvocation(result)
-      const discovery = discoveryInvocation(result, evalCase.condition)
-      const loaded = correctSkillLoaded(
-        result,
-        evalCase.expectedSkillAreas,
-        evalCase.condition,
-      )
-      const reference = referenceOnly(
-        result,
-        evalCase.expectedSkillAreas,
-        evalCase.condition,
-      )
-      const failureClass = classifyFailure(
-        result,
-        evalCase.expectedSkillAreas,
-        evalCase.condition,
-      )
-      const autonomous = countsTowardAutonomousScore({
-        condition: evalCase.condition,
-        explicitnessLevel: evalCase.explicitnessLevel,
-      })
+    it(evalCase.id, (context) => {
+      const result = savedTranscriptRun(evalCase)
+      const { discovery, failureClass, loaded, reference, strict } =
+        gradeDiscovery(result, evalCase.expectedSkillAreas, evalCase.condition)
       const scores = [
-        score(
-          'AutonomousDiscoverySuccess',
-          autonomous && discovery.passed && loaded.passed,
-          {
-            rationale:
-              'Scores only autonomous runs where Copilot used the condition-required discovery mechanism and loaded the expected skill.',
-            failureClass,
-          },
-        ),
+        score('AutonomousDiscoverySuccess', discovery.passed && loaded.passed, {
+          rationale:
+            'Scores only autonomous runs where Copilot used the condition-required discovery mechanism and loaded the expected skill.',
+          failureClass,
+        }),
         score('DiscoveryInvocation', discovery.passed, {
           mechanism: discovery.mechanism,
         }),
@@ -65,7 +36,7 @@ describe('Intent discovery saved transcripts', () => {
       ]
 
       attachEvalMetadata({
-        harnessName: savedTranscriptHarness.name,
+        harnessName,
         run: result,
         scores,
         task: context.task,
@@ -74,26 +45,29 @@ describe('Intent discovery saved transcripts', () => {
       expect(result.errors).toHaveLength(0)
       expect(failedSpans(result)).toHaveLength(0)
       expect(result.output.finalAnswer.length).toBeGreaterThan(0)
-      expect(toolCalls(result).length).toBe(evalCase.toolCalls.length)
-      expect(strict.passed).toBe(evalCase.expected.strictInvocation)
-      expect(loaded.passed).toBe(evalCase.expected.correctSkillLoaded)
-      expect(reference).toBe(evalCase.expected.referenceOnly)
-      expect(failureClass).toBe(evalCase.expected.failureClass)
-      expect(autonomous).toBe(evalCase.explicitnessLevel !== 4)
+      expect(strict.passed).toBe(evalCase.strictInvocation)
+      expect(loaded.passed).toBe(evalCase.correctSkillLoaded)
+      expect(reference).toBe(evalCase.referenceOnly)
+      expect(failureClass).toBe(evalCase.failureClass)
     })
   }
 })
 
-async function runSavedTranscript(
+function savedTranscriptRun(
   evalCase: (typeof savedTranscriptCases)[number],
-) {
-  const artifacts: HarnessContext['artifacts'] = {}
-  const context: HarnessContext = {
-    artifacts,
-    setArtifact(name, value) {
-      artifacts[name] = value
+): HarnessRun<{ finalAnswer: string; runId: string }> {
+  const runId = `saved:${evalCase.id}`
+  return {
+    output: { finalAnswer: evalCase.finalAnswer, runId },
+    session: { messages: evalCase.messages },
+    usage: { provider: 'saved-transcript', model: 'synthetic' },
+    artifacts: {
+      condition: evalCase.condition,
+      expectedSkillAreas: evalCase.expectedSkillAreas,
+      runKind: 'saved-transcript',
+      taskId: evalCase.id,
     },
+    errors: [],
+    traces: [],
   }
-
-  return savedTranscriptHarness.run(evalCase, context)
 }

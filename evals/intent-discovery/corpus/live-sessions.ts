@@ -14,6 +14,7 @@ export type LiveSessionTurn = {
   expectedSkillArea?: ExpectedSkillArea
   validation:
     | 'format-display-name'
+    | 'format-table-heading'
     | 'router'
     | 'sort-user-ids'
     | 'start'
@@ -24,7 +25,7 @@ export type LiveSessionCase = {
   id: string
   condition: Extract<
     IntentDiscoveryCondition,
-    'hooked-intent' | 'mapped-intent' | 'symlink-intent'
+    'hooked-intent' | 'mapped-intent' | 'no-intent' | 'symlink-intent'
   >
   fixture: IntentDiscoveryFixture
   profile: LiveSessionProfile
@@ -56,6 +57,13 @@ export const liveSessionTurns: ReadonlyArray<LiveSessionTurn> = [
     validation: 'router',
   },
   {
+    id: 'table-heading',
+    kind: 'unrelated',
+    prompt:
+      'Update src/format-table-heading.ts so formatTableHeading converts repeated hyphens and surrounding whitespace into a title-cased heading.',
+    validation: 'format-table-heading',
+  },
+  {
     id: 'start-server-function',
     kind: 'related',
     prompt:
@@ -80,15 +88,16 @@ export const liveSessionTurns: ReadonlyArray<LiveSessionTurn> = [
   },
 ]
 
-const modeOrders: ReadonlyArray<ReadonlyArray<LiveSessionCase['condition']>> = [
-  ['symlink-intent', 'mapped-intent', 'hooked-intent'],
-  ['mapped-intent', 'hooked-intent', 'symlink-intent'],
-  ['hooked-intent', 'symlink-intent', 'mapped-intent'],
+const liveConditions: ReadonlyArray<LiveSessionCase['condition']> = [
+  'no-intent',
+  'symlink-intent',
+  'mapped-intent',
+  'hooked-intent',
 ]
 
 export const liveSessionCases: ReadonlyArray<LiveSessionCase> =
-  liveSessionProfiles.flatMap((profile, profileIndex) =>
-    modeOrders[profileIndex % modeOrders.length]!.map((condition) => ({
+  liveSessionProfiles.flatMap((profile) =>
+    liveConditions.map((condition) => ({
       id: `${profile.id}-${condition}`,
       condition,
       fixture: 'multi-turn',

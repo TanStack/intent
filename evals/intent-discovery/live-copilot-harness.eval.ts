@@ -15,7 +15,9 @@ const smokeCase = liveSessionCases[0]!
 
 describe('Intent discovery live Copilot harness', () => {
   it('returns an explicit unsupported result without a command backend', async () => {
-    const result = await withoutCopilotCommand(() => runLiveHarness(smokeCase))
+    const result = await withCopilotCommand(undefined, () =>
+      runLiveHarness(smokeCase),
+    )
 
     expect(result.output).toEqual({
       runId: `live:${smokeCase.id}`,
@@ -32,13 +34,8 @@ describe('Intent discovery live Copilot harness', () => {
     expect(failedSpans(result)).toHaveLength(1)
   })
 
-  it('reuses one session ID across all five command turns', async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'intent-eval-session-'))
-    const fakeRunnerPath = join(tempDir, 'fake-session-runner.mjs')
-    const previousCommand = process.env.INTENT_DISCOVERY_COPILOT_COMMAND
-
-    writeFileSync(
-      fakeRunnerPath,
+  it('reuses one session ID across all six command turns', async () => {
+    await withFakeRunner(
       [
         "import { appendFileSync, mkdirSync } from 'node:fs'",
         "import { dirname, join } from 'node:path'",
@@ -47,39 +44,49 @@ describe('Intent discovery live Copilot harness', () => {
         'const turnId = process.env.INTENT_DISCOVERY_TURN_ID',
         "const events = join(home, 'session-state', sessionId, 'events.jsonl')",
         'mkdirSync(dirname(events), { recursive: true })',
+        "appendFileSync(events, `${JSON.stringify({ type: 'user.message', data: { content: process.env.INTENT_DISCOVERY_PROMPT } })}\n`)",
         "const commands = { 'unrelated-format': 'npx @tanstack/intent catalog', 'router-loader': 'npx @tanstack/intent load @tanstack/router#routing', 'start-server-function': 'npx @tanstack/intent load @tanstack/start#server-functions', 'table-sorting': 'npx @tanstack/intent load @tanstack/table#v9-columns' }",
         'const command = commands[turnId]',
         "if (command) appendFileSync(events, `${JSON.stringify({ type: 'tool.execution_start', data: { toolName: 'bash', arguments: { command } } })}\\n`)",
         "appendFileSync(events, `${JSON.stringify({ type: 'assistant.message', data: { content: sessionId, model: process.env.INTENT_DISCOVERY_COPILOT_MODEL } })}\\n`)",
         'console.log(`completed ${turnId}`)',
       ].join('\n'),
+      async () => {
+        const mappedCase = liveSessionCases.find(
+          (session) => session.condition === 'mapped-intent',
+        )!
+        const result = await runLiveHarness(mappedCase)
+        const turns = result.artifacts?.turns as Array<{
+          catalogCommands: Array<string>
+          finalAnswer: string
+          intentLoads: Array<string>
+        }>
+
+        expect(result.artifacts?.runnerStatus).toBe('completed')
+        expect(turns).toHaveLength(6)
+        expect(turns[0]?.catalogCommands).toHaveLength(1)
+        expect(turns[1]?.intentLoads).toEqual(['@tanstack/router#routing'])
+        expect(new Set(turns.map((turn) => turn.finalAnswer)).size).toBe(1)
+      },
     )
-    process.env.INTENT_DISCOVERY_COPILOT_COMMAND = `node ${fakeRunnerPath}`
+  })
 
-    try {
-      const mappedCase = liveSessionCases.find(
-        (session) => session.condition === 'mapped-intent',
-      )!
-      const result = await runLiveHarness(mappedCase)
-      const turns = result.artifacts?.turns as Array<{
-        catalogCommands: Array<string>
-        finalAnswer: string
-        intentLoads: Array<string>
-      }>
-
-      expect(result.artifacts?.runnerStatus).toBe('completed')
-      expect(turns).toHaveLength(5)
-      expect(turns[0]?.catalogCommands).toHaveLength(1)
-      expect(turns[1]?.intentLoads).toEqual(['@tanstack/router#routing'])
-      expect(new Set(turns.map((turn) => turn.finalAnswer)).size).toBe(1)
-    } finally {
-      if (previousCommand === undefined) {
-        delete process.env.INTENT_DISCOVERY_COPILOT_COMMAND
-      } else {
-        process.env.INTENT_DISCOVERY_COPILOT_COMMAND = previousCommand
-      }
-      rmSync(tempDir, { recursive: true, force: true })
-    }
+  it('fails a turn when structured event evidence is malformed', async () => {
+    await withFakeRunner(
+      [
+        "import { appendFileSync, mkdirSync } from 'node:fs'",
+        "import { dirname, join } from 'node:path'",
+        "const events = join(process.env.COPILOT_HOME, 'session-state', process.env.INTENT_DISCOVERY_SESSION_ID, 'events.jsonl')",
+        'mkdirSync(dirname(events), { recursive: true })',
+        "appendFileSync(events, '{bad json}' + String.fromCharCode(10))",
+      ].join('\n'),
+      async () => {
+        const result = await runLiveHarness(smokeCase)
+        expect(result.artifacts?.runnerStatus).toBe('failed')
+        expect(result.artifacts?.turns).toEqual([])
+        expect(result.errors).toHaveLength(1)
+      },
+    )
   })
 })
 
@@ -90,7 +97,6 @@ describe('Intent discovery live sessions', () => {
       async ({ task: contextTask, expect }) => {
         const result = await runLiveHarness(sessionCase)
         const turns = result.artifacts?.turns as Array<{
-          hookCatalogInjected: boolean
           hookCatalogInjections: number
           model: string
         }>
@@ -98,17 +104,14 @@ describe('Intent discovery live sessions', () => {
         attachLiveSessionMetadata({ contextTask, result, sessionCase })
 
         expect(result.artifacts?.runnerStatus).toBe('completed')
-        expect(turns).toHaveLength(5)
+        expect(turns).toHaveLength(sessionCase.turns.length)
         expect(
           turns.every((turn) => turn.model === sessionCase.profile.model),
         ).toBe(true)
         if (sessionCase.condition === 'hooked-intent') {
-          expect(
-            turns.every(
-              (turn) =>
-                turn.hookCatalogInjected && turn.hookCatalogInjections === 1,
-            ),
-          ).toBe(true)
+          expect(turns.every((turn) => turn.hookCatalogInjections === 1)).toBe(
+            true,
+          )
         }
         expect(result.errors).toEqual([])
       },
@@ -133,23 +136,30 @@ function attachLiveSessionMetadata({
     model: sessionCase.profile.model,
     profileId: sessionCase.profile.id,
   }
+  const discoveryScores =
+    sessionCase.condition === 'no-intent'
+      ? []
+      : [
+          score('SessionSuccess', session.passed, metadata),
+          score('CatalogBehavior', session.catalogCorrect, metadata),
+          score(
+            'RelatedDiscovery',
+            session.relatedCorrect === session.relatedTotal,
+            metadata,
+          ),
+          score(
+            'UnrelatedAbstention',
+            session.unrelatedCorrect === session.unrelatedTotal,
+            metadata,
+          ),
+          score('NoWrongSkillLoads', session.wrongSkillLoads === 0, metadata),
+        ]
 
   attachEvalMetadata({
     harnessName: liveCopilotHarness.name,
     run: result,
     scores: [
-      score('SessionSuccess', session.passed, metadata),
-      score('CatalogBehavior', session.catalogCorrect, metadata),
-      score(
-        'RelatedDiscovery',
-        session.relatedCorrect === session.relatedTotal,
-        metadata,
-      ),
-      score(
-        'UnrelatedAbstention',
-        session.unrelatedCorrect === session.unrelatedTotal,
-        metadata,
-      ),
+      ...discoveryScores,
       score(
         'TaskCompletion',
         session.taskCompletionCount === sessionCase.turns.length,
@@ -160,15 +170,18 @@ function attachLiveSessionMetadata({
         session.runnerCompletionCount === sessionCase.turns.length,
         metadata,
       ),
-      score('NoWrongSkillLoads', session.wrongSkillLoads === 0, metadata),
     ],
     task: contextTask,
   })
 }
 
-async function withoutCopilotCommand<T>(run: () => Promise<T>): Promise<T> {
+async function withCopilotCommand<T>(
+  command: string | undefined,
+  run: () => Promise<T>,
+): Promise<T> {
   const previousCommand = process.env.INTENT_DISCOVERY_COPILOT_COMMAND
-  delete process.env.INTENT_DISCOVERY_COPILOT_COMMAND
+  if (command) process.env.INTENT_DISCOVERY_COPILOT_COMMAND = command
+  else delete process.env.INTENT_DISCOVERY_COPILOT_COMMAND
 
   try {
     return await run()
@@ -176,6 +189,20 @@ async function withoutCopilotCommand<T>(run: () => Promise<T>): Promise<T> {
     if (previousCommand !== undefined) {
       process.env.INTENT_DISCOVERY_COPILOT_COMMAND = previousCommand
     }
+  }
+}
+
+async function withFakeRunner(
+  source: string,
+  run: () => Promise<void>,
+): Promise<void> {
+  const tempDir = mkdtempSync(join(tmpdir(), 'intent-eval-runner-'))
+  const runnerPath = join(tempDir, 'runner.mjs')
+  writeFileSync(runnerPath, source)
+  try {
+    await withCopilotCommand(`node ${runnerPath}`, run)
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true })
   }
 }
 

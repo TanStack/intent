@@ -15,6 +15,8 @@ export function validateSessionTurn(
   switch (turn.validation) {
     case 'format-display-name':
       return validateFormatDisplayName(workspacePath)
+    case 'format-table-heading':
+      return validateFormatTableHeading(workspacePath)
     case 'router':
       return validateRouter(workspacePath)
     case 'sort-user-ids':
@@ -23,6 +25,23 @@ export function validateSessionTurn(
       return validateStart(workspacePath)
     case 'table-v9':
       return validateTable(workspacePath)
+  }
+}
+
+function validateFormatTableHeading(workspacePath: string): TurnValidation {
+  try {
+    const exports = evaluateTypeScript(
+      join(workspacePath, 'src/format-table-heading.ts'),
+    )
+    const format = exports.formatTableHeading
+    const passed =
+      typeof format === 'function' &&
+      format('  account---status ') === 'Account Status' &&
+      format('role') === 'Role' &&
+      format('---') === ''
+    return result(passed, 'table-heading behavior')
+  } catch (error) {
+    return result(false, errorMessage(error))
   }
 }
 
@@ -63,7 +82,7 @@ function validateSortUserIds(workspacePath: string): TurnValidation {
 }
 
 function validateRouter(workspacePath: string): TurnValidation {
-  const source = read(workspacePath, 'src/routes/users.$userId.tsx')
+  const source = executableSource(workspacePath, 'src/routes/users.$userId.tsx')
   return sourceIncludes(source, [
     ['route loader', /\bloader\s*:/],
     ['parameterized user request', /\/api\/users\/.*userId/],
@@ -74,7 +93,7 @@ function validateRouter(workspacePath: string): TurnValidation {
 }
 
 function validateStart(workspacePath: string): TurnValidation {
-  const source = read(workspacePath, 'src/routes/users.tsx')
+  const source = executableSource(workspacePath, 'src/routes/users.tsx')
   return sourceIncludes(source, [
     ['server function', /createServerFn/],
     ['GET method', /method\s*:\s*['"]GET['"]/],
@@ -85,7 +104,7 @@ function validateStart(workspacePath: string): TurnValidation {
 }
 
 function validateTable(workspacePath: string): TurnValidation {
-  const source = read(workspacePath, 'src/user-table.tsx')
+  const source = executableSource(workspacePath, 'src/user-table.tsx')
   return sourceIncludes(source, [
     ['sorting state', /SortingState/],
     ['sorting state update', /onSortingChange/],
@@ -110,8 +129,31 @@ function evaluateTypeScript(filePath: string): Record<string, unknown> {
   return runtimeModule.exports
 }
 
-function read(workspacePath: string, relativePath: string): string {
-  return readFileSync(join(workspacePath, relativePath), 'utf8')
+function executableSource(workspacePath: string, relativePath: string): string {
+  const source = readFileSync(join(workspacePath, relativePath), 'utf8')
+  const output = source.split('')
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    false,
+    ts.LanguageVariant.JSX,
+    source,
+  )
+
+  for (
+    let token = scanner.scan();
+    token !== ts.SyntaxKind.EndOfFileToken;
+    token = scanner.scan()
+  ) {
+    if (
+      token !== ts.SyntaxKind.SingleLineCommentTrivia &&
+      token !== ts.SyntaxKind.MultiLineCommentTrivia
+    ) {
+      continue
+    }
+    output.fill(' ', scanner.getTokenPos(), scanner.getTextPos())
+  }
+
+  return output.join('')
 }
 
 function sourceIncludes(

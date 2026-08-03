@@ -9,19 +9,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { fixtures } from './corpus/fixtures'
-import { tasks } from './corpus/tasks'
-import { correctSkillLoaded } from './graders/correct-skill-loaded'
-import { referenceOnly } from './graders/reference-only'
-import { discoveryInvocation } from './graders/strict-invocation'
+import { savedTranscriptCases } from './fixtures/saved-transcripts'
+import { gradeDiscovery } from './graders/discovery'
 import {
   intentCommandsFromToolCalls,
-  nativeSkillNamesFromTranscript,
   parseIntentCommand,
 } from './harness/parse-intent-commands'
 import { prepareFixtureWorkspace } from './harness/prepare-fixture'
 import { extractTurnEvidence } from './harness/session-events'
 import { scoreLiveSession } from './graders/session-scoring'
-import type { ToolCallRecord } from 'vitest-evals'
 
 describe('Intent discovery harness capture', () => {
   it('requires every catalog, load, abstention, runner, and task check', () => {
@@ -65,28 +61,45 @@ describe('Intent discovery harness capture', () => {
     })
   })
 
+  it('scores no-intent sessions on task and runner completion', () => {
+    const turns = [
+      sessionTurn('router-loader', 'related', {
+        expectedSkillArea: 'router',
+      }),
+      sessionTurn('unrelated-format', 'unrelated'),
+    ]
+
+    expect(scoreLiveSession('no-intent', turns)).toMatchObject({
+      catalogCorrect: true,
+      passed: true,
+      runnerCompletionCount: 2,
+      taskCompletionCount: 2,
+      wrongSkillLoads: 0,
+    })
+  })
+
   it('requires one hook catalog injection per Copilot process', () => {
     const turns = [
       sessionTurn('unrelated-format', 'unrelated', {
-        hookCatalogInjected: true,
+        hookCatalogInjections: 1,
       }),
       sessionTurn('router-loader', 'related', {
         expectedSkillArea: 'router',
-        hookCatalogInjected: true,
+        hookCatalogInjections: 1,
         intentLoads: ['@tanstack/router#routing'],
       }),
       sessionTurn('start-server-function', 'related', {
         expectedSkillArea: 'start',
-        hookCatalogInjected: true,
+        hookCatalogInjections: 1,
         intentLoads: ['@tanstack/start#server-functions'],
       }),
       sessionTurn('table-sorting', 'related', {
         expectedSkillArea: 'table-v9',
-        hookCatalogInjected: true,
+        hookCatalogInjections: 1,
         intentLoads: ['@tanstack/table#v9-columns'],
       }),
       sessionTurn('unrelated-sort', 'unrelated', {
-        hookCatalogInjected: true,
+        hookCatalogInjections: 1,
       }),
     ]
 
@@ -98,7 +111,6 @@ describe('Intent discovery harness capture', () => {
 
     turns[1] = sessionTurn('router-loader', 'related', {
       expectedSkillArea: 'router',
-      hookCatalogInjected: true,
       hookCatalogInjections: 2,
       intentLoads: ['@tanstack/router#routing'],
     })
@@ -145,159 +157,76 @@ describe('Intent discovery harness capture', () => {
     })
   })
 
-  it('parses accepted Intent command forms from tool calls', () => {
-    const calls: Array<ToolCallRecord> = [
-      { name: 'shell_command', arguments: { command: 'intent list' } },
-      {
-        name: 'shell_command',
-        arguments: {
-          command: 'pnpm exec intent load @tanstack/router#routing',
-        },
-      },
-      {
-        name: 'shell_command',
-        arguments: {
-          command: 'npx @tanstack/intent load @tanstack/start#routing',
-        },
-      },
-      {
-        name: 'shell_command',
-        arguments: {
-          command:
-            'cd /tmp/eval/router-basic && npx @tanstack/intent@latest load @tanstack/router#routing 2>&1',
-        },
-      },
-      {
-        name: 'shell_command',
-        arguments: {
-          command:
-            'pnpm dlx @tanstack/intent@latest load @tanstack/router#routing',
-        },
-      },
-      {
-        name: 'shell_command',
-        arguments: { command: 'pnpm dlx @tanstack/intent@latest list' },
-      },
-      {
-        name: 'shell_command',
-        arguments: { command: 'pnpm dlx @tanstack/intent list' },
-      },
-      {
-        name: 'shell_command',
-        arguments: {
-          command:
-            'yarn dlx @tanstack/intent@latest load @tanstack/router#routing',
-        },
-      },
-      {
-        name: 'shell_command',
-        arguments: { command: 'yarn dlx @tanstack/intent@latest list' },
-      },
-      {
-        name: 'shell_command',
-        arguments: { command: 'yarn dlx @tanstack/intent list' },
-      },
-      {
-        name: 'shell_command',
-        arguments: {
-          command: 'bunx @tanstack/intent@latest load @tanstack/router#routing',
-        },
-      },
-      {
-        name: 'shell_command',
-        arguments: { command: 'bunx @tanstack/intent@latest list' },
-      },
-      {
-        name: 'shell_command',
-        arguments: { command: 'bunx @tanstack/intent list' },
-      },
-    ]
-
-    expect(intentCommandsFromToolCalls(calls)).toEqual([
-      {
-        raw: 'intent list',
-        executable: 'intent',
-        action: 'list',
+  it.each([
+    ['intent list', 'intent list', undefined],
+    [
+      'pnpm exec intent load @tanstack/router#routing',
+      'pnpm exec intent load @tanstack/router#routing',
+      '@tanstack/router#routing',
+    ],
+    [
+      'npx @tanstack/intent load @tanstack/start#routing',
+      'npx @tanstack/intent load @tanstack/start#routing',
+      '@tanstack/start#routing',
+    ],
+    [
+      'cd /tmp/eval/router-basic && npx @tanstack/intent@latest load @tanstack/router#routing 2>&1',
+      'npx @tanstack/intent@latest load @tanstack/router#routing',
+      '@tanstack/router#routing',
+    ],
+    [
+      'pnpm dlx @tanstack/intent@latest load @tanstack/router#routing',
+      'pnpm dlx @tanstack/intent@latest load @tanstack/router#routing',
+      '@tanstack/router#routing',
+    ],
+    [
+      'pnpm dlx @tanstack/intent@latest list',
+      'pnpm dlx @tanstack/intent@latest list',
+      undefined,
+    ],
+    [
+      'pnpm dlx @tanstack/intent list',
+      'pnpm dlx @tanstack/intent list',
+      undefined,
+    ],
+    [
+      'yarn dlx @tanstack/intent@latest load @tanstack/router#routing',
+      'yarn dlx @tanstack/intent@latest load @tanstack/router#routing',
+      '@tanstack/router#routing',
+    ],
+    [
+      'yarn dlx @tanstack/intent@latest list',
+      'yarn dlx @tanstack/intent@latest list',
+      undefined,
+    ],
+    [
+      'yarn dlx @tanstack/intent list',
+      'yarn dlx @tanstack/intent list',
+      undefined,
+    ],
+    [
+      'bunx @tanstack/intent@latest load @tanstack/router#routing',
+      'bunx @tanstack/intent@latest load @tanstack/router#routing',
+      '@tanstack/router#routing',
+    ],
+    [
+      'bunx @tanstack/intent@latest list',
+      'bunx @tanstack/intent@latest list',
+      undefined,
+    ],
+    ['bunx @tanstack/intent list', 'bunx @tanstack/intent list', undefined],
+  ])('parses %s', (command, raw, skillUse) => {
+    expect(
+      intentCommandsFromToolCalls([
+        { name: 'shell_command', arguments: { command } },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        action: skillUse ? 'load' : 'list',
+        raw,
+        skillUse,
         source: 'tool-call',
-      },
-      {
-        raw: 'pnpm exec intent load @tanstack/router#routing',
-        executable: 'pnpm exec intent',
-        action: 'load',
-        skillUse: '@tanstack/router#routing',
-        source: 'tool-call',
-      },
-      {
-        raw: 'npx @tanstack/intent load @tanstack/start#routing',
-        executable: 'npx @tanstack/intent',
-        action: 'load',
-        skillUse: '@tanstack/start#routing',
-        source: 'tool-call',
-      },
-      {
-        raw: 'npx @tanstack/intent@latest load @tanstack/router#routing',
-        executable: 'npx @tanstack/intent@latest',
-        action: 'load',
-        skillUse: '@tanstack/router#routing',
-        source: 'tool-call',
-      },
-      {
-        raw: 'pnpm dlx @tanstack/intent@latest load @tanstack/router#routing',
-        executable: 'pnpm dlx @tanstack/intent@latest',
-        action: 'load',
-        skillUse: '@tanstack/router#routing',
-        source: 'tool-call',
-      },
-      {
-        raw: 'pnpm dlx @tanstack/intent@latest list',
-        executable: 'pnpm dlx @tanstack/intent@latest',
-        action: 'list',
-        source: 'tool-call',
-      },
-      {
-        raw: 'pnpm dlx @tanstack/intent list',
-        executable: 'pnpm dlx @tanstack/intent',
-        action: 'list',
-        source: 'tool-call',
-      },
-      {
-        raw: 'yarn dlx @tanstack/intent@latest load @tanstack/router#routing',
-        executable: 'yarn dlx @tanstack/intent@latest',
-        action: 'load',
-        skillUse: '@tanstack/router#routing',
-        source: 'tool-call',
-      },
-      {
-        raw: 'yarn dlx @tanstack/intent@latest list',
-        executable: 'yarn dlx @tanstack/intent@latest',
-        action: 'list',
-        source: 'tool-call',
-      },
-      {
-        raw: 'yarn dlx @tanstack/intent list',
-        executable: 'yarn dlx @tanstack/intent',
-        action: 'list',
-        source: 'tool-call',
-      },
-      {
-        raw: 'bunx @tanstack/intent@latest load @tanstack/router#routing',
-        executable: 'bunx @tanstack/intent@latest',
-        action: 'load',
-        skillUse: '@tanstack/router#routing',
-        source: 'tool-call',
-      },
-      {
-        raw: 'bunx @tanstack/intent@latest list',
-        executable: 'bunx @tanstack/intent@latest',
-        action: 'list',
-        source: 'tool-call',
-      },
-      {
-        raw: 'bunx @tanstack/intent list',
-        executable: 'bunx @tanstack/intent',
-        action: 'list',
-        source: 'tool-call',
-      },
+      }),
     ])
   })
 
@@ -319,28 +248,6 @@ describe('Intent discovery harness capture', () => {
     })
   })
 
-  it('captures native Copilot skill invocations once', () => {
-    const transcript = [
-      '\u25cf skill(routing)',
-      '',
-      '### `skill`',
-      '',
-      '<details>',
-      '<summary>Arguments</summary>',
-      '',
-      '```json',
-      '{',
-      '  "skill": "routing"',
-      '}',
-      '```',
-      '</details>',
-      'I might mention skill(routing) in prose.',
-      '\u2717 skill(v9-columns)',
-    ].join('\n')
-
-    expect(nativeSkillNamesFromTranscript(transcript)).toEqual(['routing'])
-  })
-
   it('grades native skill loads only for symlink discovery', () => {
     const run = {
       artifacts: { nativeSkillsLoaded: ['@tanstack/router#routing'] },
@@ -350,19 +257,25 @@ describe('Intent discovery harness capture', () => {
       usage: {},
     }
 
-    expect(correctSkillLoaded(run, ['router'], 'symlink-intent')).toEqual({
+    expect(gradeDiscovery(run, ['router'], 'symlink-intent').loaded).toEqual({
       passed: true,
       loadedSkills: ['@tanstack/router#routing'],
     })
-    expect(correctSkillLoaded(run, ['start'], 'symlink-intent').passed).toBe(
+    expect(gradeDiscovery(run, ['start'], 'symlink-intent').loaded.passed).toBe(
       false,
     )
-    expect(correctSkillLoaded(run, ['router'], 'mapped-intent').passed).toBe(
+    expect(gradeDiscovery(run, ['router'], 'mapped-intent').loaded.passed).toBe(
       false,
     )
-    expect(discoveryInvocation(run, 'symlink-intent').passed).toBe(true)
-    expect(discoveryInvocation(run, 'mapped-intent').passed).toBe(false)
-    expect(discoveryInvocation(run, 'hooked-intent').passed).toBe(false)
+    expect(
+      gradeDiscovery(run, ['router'], 'symlink-intent').discovery.passed,
+    ).toBe(true)
+    expect(
+      gradeDiscovery(run, ['router'], 'mapped-intent').discovery.passed,
+    ).toBe(false)
+    expect(
+      gradeDiscovery(run, ['router'], 'hooked-intent').discovery.passed,
+    ).toBe(false)
   })
 
   it('parses version-pinned Intent commands', () => {
@@ -380,7 +293,7 @@ describe('Intent discovery harness capture', () => {
 
   it('does not treat user prompt skill mentions as reference-only evidence', () => {
     expect(
-      referenceOnly(
+      gradeDiscovery(
         {
           errors: [],
           output: { finalAnswer: 'Done.' },
@@ -400,7 +313,7 @@ describe('Intent discovery harness capture', () => {
         },
         ['router'],
         'plain-docs',
-      ),
+      ).reference,
     ).toBe(false)
   })
 
@@ -408,7 +321,7 @@ describe('Intent discovery harness capture', () => {
     const parentDir = mkdtempSync(join(tmpdir(), 'intent-eval-fixtures-'))
 
     try {
-      for (const task of tasks) {
+      for (const task of savedTranscriptCases) {
         const prepared = prepareFixtureWorkspace({
           fixture: task.fixture,
           parentDir,
@@ -457,21 +370,17 @@ function sessionTurn(
   overrides: {
     catalogCommands?: Array<string>
     expectedSkillArea?: 'router' | 'start' | 'table-v9'
-    hookCatalogInjected?: boolean
     hookCatalogInjections?: number
     intentLoads?: Array<string>
   } = {},
 ) {
-  const hookCatalogInjections =
-    overrides.hookCatalogInjections ??
-    (overrides.hookCatalogInjected === true ? 1 : 0)
+  const hookCatalogInjections = overrides.hookCatalogInjections ?? 0
 
   return {
     id,
     kind,
     catalogCommands: overrides.catalogCommands ?? [],
     expectedSkillArea: overrides.expectedSkillArea,
-    hookCatalogInjected: hookCatalogInjections > 0,
     hookCatalogInjections,
     intentLoads: overrides.intentLoads ?? [],
     nativeSkills: [],

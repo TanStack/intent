@@ -81,30 +81,11 @@ export function intentCommandsFromToolCalls(
 }
 
 export function loadedSkillUsesFromRun(run: HarnessRun): Array<string> {
-  const artifactSkills = Array.isArray(run.artifacts?.loadedSkills)
-    ? run.artifacts.loadedSkills.filter(
-        (candidate): candidate is string => typeof candidate === 'string',
-      )
-    : []
   const commandSkills = intentCommandsFromRun(run)
     .filter((command) => command.action === 'load' && Boolean(command.skillUse))
     .map((command) => command.skillUse as string)
 
-  return [...new Set([...artifactSkills, ...commandSkills])]
-}
-
-export function nativeSkillNamesFromTranscript(
-  transcript: string,
-): Array<string> {
-  const names = new Set<string>()
-
-  for (const line of transcript.split('\n')) {
-    const match = line.match(/^\s*\u25cf\s+skill\(([^)\r\n]+)\)\s*$/)
-    const name = match?.[1]?.trim()
-    if (name) names.add(name)
-  }
-
-  return [...names]
+  return [...new Set(commandSkills)]
 }
 
 export function nativeSkillUsesFromRun(run: HarnessRun): Array<string> {

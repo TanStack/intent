@@ -26,23 +26,20 @@ export type CopilotRun = {
   copilotHome: string
   hookCommand?: string
   hookStateFile?: string
-  sessionId: string
 }
 
 export function prepareCopilotRun({
   condition,
   runId,
-  sessionId,
   workspacePath,
 }: {
   condition: IntentDiscoveryCondition
   runId: string
-  sessionId: string
   workspacePath: string
 }): CopilotRun {
   const copilotHome = buildCopilotHome(condition, runId)
 
-  if (condition !== 'hooked-intent') return { copilotHome, sessionId }
+  if (condition !== 'hooked-intent') return { copilotHome }
 
   const hookCommand = installObservedCatalogHook({
     copilotHome,
@@ -52,7 +49,7 @@ export function prepareCopilotRun({
   const hookStateFile = join(hookStateDir, `${runId}.jsonl`)
   rmSync(hookStateFile, { force: true })
 
-  return { copilotHome, hookCommand, hookStateFile, sessionId }
+  return { copilotHome, hookCommand, hookStateFile }
 }
 
 function buildCopilotHome(

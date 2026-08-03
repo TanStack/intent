@@ -20,22 +20,22 @@ export const liveCopilotHarness = createHarness<
   run: async ({ input, setArtifact }) => {
     const runId = `live:${input.id}`
     let prepared: ReturnType<typeof prepareFixtureWorkspace> | undefined
+    setArtifact('runId', runId)
+    setArtifact('taskId', input.id)
+    setArtifact('condition', input.condition)
+    setArtifact('fixture', input.fixture)
+    setArtifact('profile', input.profile)
 
     try {
       prepared = prepareFixtureWorkspace({ fixture: input.fixture })
-      const appliedCondition = applyIntentCondition({
+      const setupFilesWritten = applyIntentCondition({
         condition: input.condition,
         expectedSkillAreas: ['router', 'start', 'table-v9'],
         workspacePath: prepared.workspacePath,
       })
 
-      setCommonArtifacts({
-        input,
-        runId,
-        setupFilesWritten: appliedCondition.filesWritten,
-        workspacePath: prepared.workspacePath,
-        setArtifact,
-      })
+      setArtifact('setupFilesWritten', setupFilesWritten)
+      setArtifact('workspacePath', prepared.workspacePath)
 
       const run = await runCopilotSession({
         input,
@@ -43,12 +43,10 @@ export const liveCopilotHarness = createHarness<
         sourcePath: prepared.sourcePath,
         workspacePath: prepared.workspacePath,
       })
-      setArtifact('profile', input.profile)
       setArtifact('sessionId', run.sessionId)
       setArtifact('sessionScore', run.score)
       setArtifact('turns', run.turns)
       setArtifact('fileDiff', run.fileDiff)
-      setArtifact('agentErrors', run.agentErrors)
 
       return {
         output: {
@@ -82,14 +80,18 @@ export const liveCopilotHarness = createHarness<
         errors: run.agentErrors,
       }
     } catch (error) {
-      const normalizedError = normalizeRunnerError(error)
+      const normalizedError =
+        error instanceof Error
+          ? { message: error.message, type: error.name }
+          : {
+              message: String(error ?? 'Unknown live Copilot runner error'),
+              type: 'Error',
+            }
 
       setArtifact('transcriptPath', '')
-      setArtifact('profile', input.profile)
       setArtifact('sessionScore', {})
       setArtifact('turns', [])
       setArtifact('fileDiff', '')
-      setArtifact('agentErrors', [normalizedError.message])
 
       return {
         output: {
@@ -136,44 +138,3 @@ export const liveCopilotHarness = createHarness<
     }
   },
 })
-
-function setCommonArtifacts({
-  input,
-  runId,
-  setupFilesWritten,
-  workspacePath,
-  setArtifact,
-}: {
-  input: LiveSessionCase
-  runId: string
-  setupFilesWritten: Array<string>
-  workspacePath: string
-  setArtifact: (name: string, value: string | Array<string>) => void
-}): void {
-  setArtifact('runId', runId)
-  setArtifact('taskId', input.id)
-  setArtifact('condition', input.condition)
-  setArtifact('effort', input.profile.effort)
-  setArtifact('fixture', input.fixture)
-  setArtifact('model', input.profile.model)
-  setArtifact('profileId', input.profile.id)
-  setArtifact('setupFilesWritten', setupFilesWritten)
-  setArtifact('workspacePath', workspacePath)
-}
-
-function normalizeRunnerError(error: unknown): {
-  message: string
-  type: string
-} {
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      type: error.name,
-    }
-  }
-
-  return {
-    message: String(error ?? 'Unknown live Copilot runner error'),
-    type: 'Error',
-  }
-}

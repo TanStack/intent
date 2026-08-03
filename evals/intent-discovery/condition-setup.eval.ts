@@ -23,7 +23,7 @@ describe('Intent discovery condition setup', () => {
         workspacePath: prepared.workspacePath,
       })
 
-      expect(result.filesWritten).toEqual([])
+      expect(result).toEqual([])
       expect(existsSync(join(prepared.workspacePath, 'AGENTS.md'))).toBe(false)
       expect(
         readFileSync(join(prepared.workspacePath, 'package.json'), 'utf8'),
@@ -57,11 +57,17 @@ describe('Intent discovery condition setup', () => {
         'routing',
       )
 
-      expect(result.filesWritten).toContain(linkPath)
+      expect(result).toContain(linkPath)
       expect(existsSync(join(prepared.workspacePath, 'AGENTS.md'))).toBe(false)
       expect(existsSync(join(prepared.workspacePath, 'intent.lock'))).toBe(true)
       expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
       expect(realpathSync(linkPath)).toBe(realpathSync(skillPath))
+      const skill = readFileSync(join(skillPath, 'SKILL.md'), 'utf8')
+      expect(skill).toContain('TanStack Router route loaders')
+      expect(skill).toContain(
+        'Read loader data through `Route.useLoaderData()`',
+      )
+      expect(skill).not.toMatch(/\beval\b/i)
     } finally {
       prepared.cleanup()
     }

@@ -39,7 +39,6 @@ export type CopilotSessionTurn = ScoredSessionTurn &
   TurnEvidence & {
     durationMs: number
     exitCode: number | null
-    hookCatalogInjections: number
     prompt: string
     stderr: string
     transcriptPath: string
@@ -75,7 +74,6 @@ export async function runCopilotSession({
   const copilotRun = prepareCopilotRun({
     condition: input.condition,
     runId: sanitizeFileName(runId),
-    sessionId,
     workspacePath,
   })
   const eventPath = join(
@@ -96,6 +94,7 @@ export async function runCopilotSession({
       copilotRun,
       input,
       runId,
+      sessionId,
       turnId: turn.id,
       prompt: turn.prompt,
       workspacePath,
@@ -107,6 +106,9 @@ export async function runCopilotSession({
     eventOffset = eventDelta.nextOffset
     hookOffset = hookDelta.nextOffset
     const evidence = extractTurnEvidence(eventDelta.values)
+    if (!evidence.finalAnswer || !evidence.model) {
+      throw new Error(`${turn.id}: incomplete structured event evidence`)
+    }
     const validation = validateSessionTurn(workspacePath, turn)
     const runnerCompleted = result.exitCode === 0
     const hookCatalogInjections = hookDelta.values.filter(
@@ -128,7 +130,6 @@ export async function runCopilotSession({
         : {}),
       durationMs: Date.now() - startedAt,
       exitCode: result.exitCode,
-      hookCatalogInjected: hookCatalogInjections > 0,
       hookCatalogInjections,
       prompt: turn.prompt,
       runnerCompleted,
@@ -141,7 +142,6 @@ export async function runCopilotSession({
       ),
       validationReason: validation.reason,
     })
-
     if (turnIndex < input.turns.length - 1 && !runnerCompleted) break
   }
 
@@ -178,6 +178,7 @@ async function runCommand({
   input,
   prompt,
   runId,
+  sessionId,
   turnId,
   workspacePath,
 }: {
@@ -186,6 +187,7 @@ async function runCommand({
   input: LiveSessionCase
   prompt: string
   runId: string
+  sessionId: string
   turnId: string
   workspacePath: string
 }): Promise<CommandResult> {
@@ -208,7 +210,7 @@ async function runCommand({
         INTENT_DISCOVERY_PROMPT: prompt,
         INTENT_DISCOVERY_REASONING_EFFORT: input.profile.effort,
         INTENT_DISCOVERY_RUN_ID: runId,
-        INTENT_DISCOVERY_SESSION_ID: copilotRun.sessionId,
+        INTENT_DISCOVERY_SESSION_ID: sessionId,
         INTENT_DISCOVERY_TASK_ID: `${input.id}:${turnId}`,
         INTENT_DISCOVERY_TURN_ID: turnId,
         INTENT_DISCOVERY_WORKSPACE: workspacePath,
@@ -248,18 +250,17 @@ function readJsonLines(
   filePath: string,
   offset: number,
 ): { nextOffset: number; values: Array<Record<string, unknown>> } {
-  if (!existsSync(filePath)) return { nextOffset: offset, values: [] }
+  if (!existsSync(filePath)) {
+    return { nextOffset: offset, values: [] }
+  }
 
   const lines = readFileSync(filePath, 'utf8').split('\n').filter(Boolean)
   return {
     nextOffset: lines.length,
-    values: lines.slice(offset).flatMap((line) => {
-      try {
-        const parsed = JSON.parse(line) as unknown
-        return isRecord(parsed) ? [parsed] : []
-      } catch {
-        return []
-      }
+    values: lines.slice(offset).map((line) => {
+      const parsed = JSON.parse(line) as unknown
+      if (!isRecord(parsed)) throw new Error('Expected a JSON object event')
+      return parsed
     }),
   }
 }

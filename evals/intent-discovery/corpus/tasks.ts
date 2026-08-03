@@ -1,7 +1,4 @@
-import type {
-  IntentDiscoveryCondition,
-  PromptExplicitnessLevel,
-} from './conditions'
+import type { IntentDiscoveryCondition } from './conditions'
 
 const expectedSkillAreas = ['router', 'start', 'table-v9'] as const
 
@@ -14,78 +11,21 @@ export type IntentDiscoveryFixture =
   | 'table-v9-basic'
 
 export type IntentDiscoveryFailureClass =
-  | 'strict-success'
-  | 'no-discovery-attempt'
-  | 'instruction-ignored'
-  | 'wrong-surface'
-  | 'command-unknown'
   | 'command-attempted-but-failed'
-  | 'wrong-skill-selected'
-  | 'late-load'
-  | 'reference-only'
-  | 'final-output-only'
-  | 'context-saturation'
-  | 'prompt-too-vague'
   | 'harness-error'
-
-type IntentDiscoveryExpected = {
-  strictInvocation: boolean
-  correctSkillLoaded: boolean
-  referenceOnly: boolean
-  failureClass: IntentDiscoveryFailureClass
-}
+  | 'no-discovery-attempt'
+  | 'reference-only'
+  | 'strict-success'
+  | 'wrong-skill-selected'
 
 export type IntentDiscoveryTask = {
+  correctSkillLoaded: boolean
+  failureClass: IntentDiscoveryFailureClass
   id: string
   fixture: IntentDiscoveryFixture
   condition: IntentDiscoveryCondition
-  explicitnessLevel: PromptExplicitnessLevel
   prompt: string
   expectedSkillAreas: Array<ExpectedSkillArea>
-  expected: IntentDiscoveryExpected
+  referenceOnly: boolean
+  strictInvocation: boolean
 }
-
-export const tasks: Array<IntentDiscoveryTask> = [
-  {
-    id: 'router-mapped-intent-loads-router',
-    fixture: 'router-basic',
-    condition: 'mapped-intent',
-    explicitnessLevel: 2,
-    prompt: 'Add a route that loads user data before rendering the page.',
-    expectedSkillAreas: ['router'],
-    expected: {
-      strictInvocation: true,
-      correctSkillLoaded: true,
-      referenceOnly: false,
-      failureClass: 'strict-success',
-    },
-  },
-  {
-    id: 'router-plain-docs-reference-only',
-    fixture: 'router-basic',
-    condition: 'plain-docs',
-    explicitnessLevel: 2,
-    prompt: 'Add a route that loads user data before rendering the page.',
-    expectedSkillAreas: ['router'],
-    expected: {
-      strictInvocation: false,
-      correctSkillLoaded: false,
-      referenceOnly: true,
-      failureClass: 'reference-only',
-    },
-  },
-  {
-    id: 'table-v9-mapped-intent-loads-wrong-skill',
-    fixture: 'table-v9-basic',
-    condition: 'mapped-intent',
-    explicitnessLevel: 2,
-    prompt: 'Add a TanStack Table v9 column with sortable user roles.',
-    expectedSkillAreas: ['table-v9'],
-    expected: {
-      strictInvocation: true,
-      correctSkillLoaded: false,
-      referenceOnly: false,
-      failureClass: 'wrong-skill-selected',
-    },
-  },
-]

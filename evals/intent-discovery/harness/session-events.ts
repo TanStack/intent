@@ -1,9 +1,6 @@
 import { basename, dirname } from 'node:path'
 import { createSyncAliases } from '../../../packages/intent/src/commands/sync/targets.js'
-import {
-  expectedSkillUseByArea,
-  packageAllowlistByArea,
-} from '../corpus/skill-uses'
+import { skillByArea } from '../corpus/skill-uses'
 import { parseIntentCommands } from './parse-intent-commands'
 
 type SessionEvent = {
@@ -22,10 +19,10 @@ export type TurnEvidence = {
 
 const useByAlias = new Map(
   createSyncAliases(
-    Object.entries(expectedSkillUseByArea).map(([area, use]) => ({
+    Object.values(skillByArea).map((skill) => ({
       kind: 'npm',
-      id: packageAllowlistByArea[area as keyof typeof packageAllowlistByArea],
-      skill: use.split('#')[1]!,
+      id: skill.packageName,
+      skill: skill.name,
     })),
   ).map(({ alias, id, skill }) => [alias, `${id}#${skill}`]),
 )
@@ -46,7 +43,11 @@ export function extractTurnEvidence(
     if (event.type === 'tool.execution_start') {
       if (data.toolName !== 'bash') continue
       const command = stringValue(recordValue(data.arguments).command)
-      if (!command) continue
+      if (!command) {
+        throw new Error(
+          'bash tool.execution_start is missing arguments.command',
+        )
+      }
 
       shellCommands.push(command)
       for (const parsed of parseIntentCommands(command, 'tool-call')) {
@@ -60,6 +61,7 @@ export function extractTurnEvidence(
 
     if (event.type === 'skill.invoked') {
       const path = stringValue(data.path)
+      if (!path) throw new Error('skill.invoked is missing data.path')
       const use = path ? useByAlias.get(basename(dirname(path))) : undefined
       if (use) nativeSkills.push(use)
       continue

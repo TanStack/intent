@@ -15,14 +15,9 @@ const evalDir = dirname(dirname(fileURLToPath(import.meta.url)))
 const fixturesDir = join(evalDir, 'fixtures')
 
 export type PreparedFixtureWorkspace = {
-  fixture: IntentDiscoveryFixture
   sourcePath: string
   workspacePath: string
   cleanup: () => void
-}
-
-function fixturePath(fixture: IntentDiscoveryFixture): string {
-  return join(fixturesDir, fixture)
 }
 
 export function prepareFixtureWorkspace({
@@ -32,7 +27,7 @@ export function prepareFixtureWorkspace({
   fixture: IntentDiscoveryFixture
   parentDir?: string
 }): PreparedFixtureWorkspace {
-  const sourcePath = fixturePath(fixture)
+  const sourcePath = join(fixturesDir, fixture)
 
   if (!existsSync(sourcePath)) {
     throw new Error(`Fixture does not exist: ${fixture}`)
@@ -51,7 +46,6 @@ export function prepareFixtureWorkspace({
   })
 
   return {
-    fixture,
     sourcePath,
     workspacePath,
     cleanup() {

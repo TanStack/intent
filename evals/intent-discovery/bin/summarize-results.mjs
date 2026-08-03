@@ -17,7 +17,7 @@ writeFileSync(
 writeFileSync(join(outDir, 'summary.md'), `${formatSummaryMarkdown(summary)}\n`)
 console.log(formatSummaryMarkdown(summary))
 
-export function summarizeReport(value) {
+function summarizeReport(value) {
   const cases = reportCases(value)
   const liveSessions = cases.filter(
     (item) =>
@@ -86,7 +86,6 @@ function reportCases(value) {
           runnerStatus: artifacts.runnerStatus,
           scores,
           sessionScore: artifacts.sessionScore,
-          title: test.title,
           turns: artifacts.turns ?? [],
         }
       }),
@@ -95,27 +94,49 @@ function reportCases(value) {
 
 function summarizeSessions(cases) {
   const scores = cases.map((item) => item.sessionScore)
+  const discoveryExpected = cases.every(
+    (item) => item.condition !== 'no-intent',
+  )
+  const observedTurns = cases.reduce(
+    (total, item) => total + item.turns.length,
+    0,
+  )
   return {
     agentCatalogCommands: sum(scores, 'agentCatalogCount'),
-    catalogBehaviorRate: rate(cases, 'CatalogBehavior'),
+    catalogBehaviorRate: discoveryExpected
+      ? rate(cases, 'CatalogBehavior')
+      : null,
+    discoveryExpected,
     hookCatalogInjections: sum(scores, 'hookCatalogInjections'),
-    relatedDiscoveryRate: ratio(scores, 'relatedCorrect', 'relatedTotal'),
-    runnerCompletionRate: ratio(scores, 'runnerCompletionCount', () => 5),
-    sessionSuccessRate: rate(cases, 'SessionSuccess'),
+    relatedDiscoveryRate: discoveryExpected
+      ? ratio(scores, 'relatedCorrect', 'relatedTotal')
+      : null,
+    runnerCompletionRate:
+      observedTurns === 0
+        ? 0
+        : sum(scores, 'runnerCompletionCount') / observedTurns,
+    sessionSuccessRate: discoveryExpected
+      ? rate(cases, 'SessionSuccess')
+      : null,
     sessions: cases.length,
-    strictSuccesses: cases.filter((item) => item.scores.SessionSuccess === 1)
-      .length,
-    taskCompletionRate: ratio(scores, 'taskCompletionCount', () => 5),
-    unrelatedAbstentionRate: ratio(
-      scores,
-      'unrelatedCorrect',
-      'unrelatedTotal',
-    ),
-    wrongSkillLoads: sum(scores, 'wrongSkillLoads'),
+    strictSuccesses: discoveryExpected
+      ? cases.filter((item) => item.scores.SessionSuccess === 1).length
+      : null,
+    taskCompletionRate:
+      observedTurns === 0
+        ? 0
+        : sum(scores, 'taskCompletionCount') / observedTurns,
+    unrelatedAbstentionRate: discoveryExpected
+      ? ratio(scores, 'unrelatedCorrect', 'unrelatedTotal')
+      : null,
+    wrongSkillLoads: discoveryExpected ? sum(scores, 'wrongSkillLoads') : null,
   }
 }
 
 function summarizeTurns(items) {
+  const discoveryExpected = items.every(
+    ({ session }) => session.condition !== 'no-intent',
+  )
   let discoveryCorrect = 0
   let taskCompleted = 0
 
@@ -132,7 +153,11 @@ function summarizeTurns(items) {
       (total, { turn }) => total + turn.catalogCommands.length,
       0,
     ),
-    discoveryRate: items.length === 0 ? 0 : discoveryCorrect / items.length,
+    discoveryExpected,
+    discoveryRate:
+      !discoveryExpected || items.length === 0
+        ? null
+        : discoveryCorrect / items.length,
     hookCatalogInjections: items.reduce(
       (total, { turn }) => total + turn.hookCatalogInjections,
       0,
@@ -156,8 +181,12 @@ function formatSummaryMarkdown(summary) {
   ]
 
   for (const [condition, item] of Object.entries(summary.byCondition)) {
+    const strictSuccess = item.discoveryExpected
+      ? `${item.strictSuccesses}/${item.sessions} (${metric(item.sessionSuccessRate)})`
+      : 'n/a'
+    const wrongLoads = item.discoveryExpected ? item.wrongSkillLoads : 'n/a'
     lines.push(
-      `| ${condition} | ${item.sessions} | ${item.strictSuccesses}/${item.sessions} (${percent(item.sessionSuccessRate)}) | ${percent(item.catalogBehaviorRate)} | ${percent(item.relatedDiscoveryRate)} | ${percent(item.unrelatedAbstentionRate)} | ${percent(item.taskCompletionRate)} | ${item.wrongSkillLoads} | ${item.agentCatalogCommands} | ${item.hookCatalogInjections} |`,
+      `| ${condition} | ${item.sessions} | ${strictSuccess} | ${metric(item.catalogBehaviorRate)} | ${metric(item.relatedDiscoveryRate)} | ${metric(item.unrelatedAbstentionRate)} | ${metric(item.taskCompletionRate)} | ${wrongLoads} | ${item.agentCatalogCommands} | ${item.hookCatalogInjections} |`,
     )
   }
 
@@ -170,7 +199,7 @@ function formatSummaryMarkdown(summary) {
   )
   for (const item of summary.byProfile) {
     lines.push(
-      `| ${item.profileId} | ${item.model} | ${item.effort} | ${item.condition} | ${item.strictSuccesses}/${item.sessions} | ${percent(item.catalogBehaviorRate)} | ${percent(item.relatedDiscoveryRate)} | ${percent(item.unrelatedAbstentionRate)} | ${percent(item.taskCompletionRate)} |`,
+      `| ${item.profileId} | ${item.model} | ${item.effort} | ${item.condition} | ${item.discoveryExpected ? `${item.strictSuccesses}/${item.sessions}` : 'n/a'} | ${metric(item.catalogBehaviorRate)} | ${metric(item.relatedDiscoveryRate)} | ${metric(item.unrelatedAbstentionRate)} | ${metric(item.taskCompletionRate)} |`,
     )
   }
 
@@ -183,7 +212,7 @@ function formatSummaryMarkdown(summary) {
   )
   for (const [key, item] of Object.entries(summary.turnOutcomes)) {
     lines.push(
-      `| ${key} | ${item.sessions} | ${percent(item.discoveryRate)} | ${percent(item.taskCompletionRate)} | ${item.agentCatalogCommands} | ${item.hookCatalogInjections} |`,
+      `| ${key} | ${item.sessions} | ${metric(item.discoveryRate)} | ${metric(item.taskCompletionRate)} | ${item.agentCatalogCommands} | ${item.hookCatalogInjections} |`,
     )
   }
 
@@ -208,11 +237,7 @@ function rate(cases, scoreName) {
 
 function ratio(items, numerator, denominator) {
   const total = items.reduce(
-    (value, item) =>
-      value +
-      (typeof denominator === 'function'
-        ? denominator(item)
-        : Number(item[denominator] ?? 0)),
+    (value, item) => value + Number(item[denominator] ?? 0),
     0,
   )
   if (total === 0) return 0
@@ -225,4 +250,8 @@ function sum(items, key) {
 
 function percent(value) {
   return `${Math.round(value * 100)}%`
+}
+
+function metric(value) {
+  return value === null ? 'n/a' : percent(value)
 }

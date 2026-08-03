@@ -8,10 +8,7 @@ import {
 } from '../../../packages/intent/src/commands/sync/targets.js'
 import { buildCurrentLockfileSources } from '../../../packages/intent/src/core/lockfile/lockfile-state.js'
 import { writeIntentLockfile } from '../../../packages/intent/src/core/lockfile/lockfile.js'
-import {
-  expectedSkillUseByArea,
-  packageAllowlistByArea,
-} from '../corpus/skill-uses'
+import { skillByArea } from '../corpus/skill-uses'
 import type { IntentDiscoveryCondition } from '../corpus/conditions'
 import type { ExpectedSkillArea } from '../corpus/tasks'
 import type { ScanResult } from '../../../packages/intent/src/shared/types.js'
@@ -21,11 +18,6 @@ const intentPackageRoot = resolve(
   '../../../packages/intent',
 )
 
-export type AppliedIntentCondition = {
-  condition: IntentDiscoveryCondition
-  filesWritten: Array<string>
-}
-
 export function applyIntentCondition({
   condition,
   expectedSkillAreas,
@@ -34,9 +26,9 @@ export function applyIntentCondition({
   condition: IntentDiscoveryCondition
   expectedSkillAreas: Array<ExpectedSkillArea>
   workspacePath: string
-}): AppliedIntentCondition {
+}): Array<string> {
   if (condition === 'no-intent' || condition === 'plain-docs') {
-    return { condition, filesWritten: [] }
+    return []
   }
 
   const filesWritten = [
@@ -52,7 +44,7 @@ export function applyIntentCondition({
     filesWritten.push(writeAgentsFile(workspacePath))
   }
 
-  return { condition, filesWritten }
+  return filesWritten
 }
 
 function writeIntentPackageLinks(workspacePath: string): Array<string> {
@@ -81,7 +73,7 @@ function writeLockfile(
   writeIntentLockfile(lockfilePath, {
     lockfileVersion: 1,
     sources: buildCurrentLockfileSources(
-      scanResultForAreas(expectedSkillAreas, workspacePath).packages,
+      skillPackages(expectedSkillAreas, workspacePath),
     ),
   })
 
@@ -98,8 +90,8 @@ function writeSkillLinks(
   const aliases = createSyncAliases(
     expectedSkillAreas.map((area) => ({
       kind: 'npm',
-      id: packageAllowlistByArea[area],
-      skill: expectedSkillUseByArea[area].split('#')[1]!,
+      id: skillByArea[area].packageName,
+      skill: skillByArea[area].name,
     })),
   )
 
@@ -126,13 +118,9 @@ function writeSkillPackages(
   expectedSkillAreas: Array<ExpectedSkillArea>,
 ): Array<string> {
   return expectedSkillAreas.flatMap((area) => {
-    const packageName = packageAllowlistByArea[area]
-    const use = expectedSkillUseByArea[area]
-    const skillName = use.split('#')[1]
-
-    if (!skillName) {
-      throw new Error(`Invalid expected skill use for ${area}: ${use}`)
-    }
+    const skill = skillByArea[area]
+    const packageName = skill.packageName
+    const skillName = skill.name
 
     const packageRoot = join(
       workspacePath,
@@ -162,7 +150,7 @@ function writeSkillPackages(
     )
     writeFileSync(
       skillPath,
-      `---\nname: "${skillName}"\ndescription: "Guidance for ${area} eval tasks"\n---\n\nUse this skill for ${area} eval tasks.\n`,
+      `---\nname: "${skillName}"\ndescription: "${skill.description}"\n---\n\n${skill.guidance}\n`,
     )
 
     return [packageJsonPath, skillPath]
@@ -186,7 +174,7 @@ function writePackageAllowlist(
   packageJson.intent = {
     ...packageJson.intent,
     exclude: [],
-    skills: expectedSkillAreas.map((area) => packageAllowlistByArea[area]),
+    skills: expectedSkillAreas.map((area) => skillByArea[area].packageName),
   }
   writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
 
@@ -196,68 +184,39 @@ function writePackageAllowlist(
 function writeAgentsFile(workspacePath: string): string {
   const agentsPath = join(workspacePath, 'AGENTS.md')
 
-  writeFileSync(agentsPath, `${loadingGuidanceBlock()}\n`)
+  writeFileSync(agentsPath, buildIntentSkillGuidanceBlock('npm', true).block)
 
   return agentsPath
 }
 
-function loadingGuidanceBlock(): string {
-  return buildIntentSkillGuidanceBlock('npm', true).block.trimEnd()
-}
-
-function scanResultForAreas(
+function skillPackages(
   expectedSkillAreas: Array<ExpectedSkillArea>,
   workspacePath: string,
-): ScanResult {
-  return {
-    conflicts: [],
-    nodeModules: {
-      global: { detected: false, exists: false, path: null, scanned: false },
-      local: {
-        detected: true,
-        exists: true,
-        path: 'node_modules',
-        scanned: true,
-      },
-    },
-    notices: [],
-    packageManager: 'npm',
-    packages: expectedSkillAreas.map((area) => {
-      const packageName = packageAllowlistByArea[area]
-      const use = expectedSkillUseByArea[area]
-      const skillName = use.split('#')[1]
+): ScanResult['packages'] {
+  return expectedSkillAreas.map((area) => {
+    const skill = skillByArea[area]
+    const packageName = skill.packageName
+    const skillName = skill.name
+    const packageRoot = join(
+      workspacePath,
+      'node_modules',
+      ...packageName.split('/'),
+    )
 
-      if (!skillName) {
-        throw new Error(`Invalid expected skill use for ${area}: ${use}`)
-      }
-
-      const packageRoot = join(
-        workspacePath,
-        'node_modules',
-        ...packageName.split('/'),
-      )
-
-      return {
-        intent: {
-          docs: 'docs/',
-          repo: `TanStack/${area}`,
-          version: 1,
+    return {
+      intent: { docs: 'docs/', repo: `TanStack/${area}`, version: 1 },
+      kind: 'npm',
+      name: packageName,
+      packageRoot,
+      skills: [
+        {
+          description: skill.description,
+          name: skillName,
+          path: join(packageRoot, 'skills', skillName, 'SKILL.md'),
         },
-        kind: 'npm',
-        name: packageName,
-        packageRoot,
-        skills: [
-          {
-            description: `Guidance for ${area} eval tasks`,
-            name: skillName,
-            path: join(packageRoot, 'skills', skillName, 'SKILL.md'),
-          },
-        ],
-        source: 'local',
-        version: '0.0.0-intent-eval',
-      }
-    }),
-    stats: { packageJsonCacheHits: 0, packageJsonReadCount: 0 },
-    warnings: [],
-  }
+      ],
+      source: 'local',
+      version: '0.0.0-intent-eval',
+    }
+  })
 }

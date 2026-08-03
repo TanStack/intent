@@ -15,57 +15,74 @@ import {
   liveSessionProfiles,
   liveSessionTurns,
 } from './corpus/live-sessions'
-import { tasks } from './corpus/tasks'
+import { savedTranscriptCases } from './fixtures/saved-transcripts'
 import { validateSessionTurn } from './harness/validate-session-turn'
-import type { IntentDiscoveryFixtureDefinition } from './corpus/fixtures'
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 
 describe('Intent discovery fixture corpus', () => {
   it('has source files for every declared fixture', () => {
-    for (const fixture of Object.values(fixtures)) {
+    for (const [fixtureId, fixture] of Object.entries(fixtures)) {
       for (const file of fixture.files) {
         expect(
-          existsSync(join(fixturesDir, fixture.id, file)),
-          `${fixture.id} is missing ${file}`,
+          existsSync(join(fixturesDir, fixtureId, file)),
+          `${fixtureId} is missing ${file}`,
         ).toBe(true)
       }
     }
   })
 
   it('points each task at a fixture that covers its expected skill areas', () => {
-    for (const task of tasks) {
-      const fixture = (
-        fixtures as Partial<Record<string, IntentDiscoveryFixtureDefinition>>
-      )[task.fixture]
-
-      expect(fixture, `${task.id} uses an unknown fixture`).toBeDefined()
-      if (!fixture) {
-        continue
-      }
+    for (const task of savedTranscriptCases) {
+      const fixture = fixtures[task.fixture]
 
       expect(
         task.expectedSkillAreas.every((area) =>
           fixture.skillAreas.includes(area),
         ),
-        `${task.id} expects ${task.expectedSkillAreas.join(', ')} but ${fixture.id} covers ${fixture.skillAreas.join(', ')}`,
+        `${task.id} expects ${task.expectedSkillAreas.join(', ')} but ${task.fixture} covers ${fixture.skillAreas.join(', ')}`,
       ).toBe(true)
     }
   })
 
-  it('defines five paired profiles across three five-turn sessions', () => {
+  it('defines five paired profiles across four six-turn conditions', () => {
     expect(liveSessionProfiles).toHaveLength(5)
-    expect(liveSessionTurns).toHaveLength(5)
-    expect(liveSessionCases).toHaveLength(15)
+    expect(liveSessionTurns).toHaveLength(6)
+    expect(liveSessionCases).toHaveLength(20)
     expect(
       liveSessionCases.every(
         (session) =>
-          session.fixture === 'multi-turn' && session.turns.length === 5,
+          session.fixture === 'multi-turn' && session.turns.length === 6,
       ),
     ).toBe(true)
     expect(
       liveSessionTurns.every(
         (turn) => !/\bintent\b|\bskill\b|\bcatalog\b/i.test(turn.prompt),
+      ),
+    ).toBe(true)
+
+    for (const profile of liveSessionProfiles) {
+      const cases = liveSessionCases.filter(
+        (session) => session.profile.id === profile.id,
+      )
+      expect(cases.map((session) => session.condition).sort()).toEqual([
+        'hooked-intent',
+        'mapped-intent',
+        'no-intent',
+        'symlink-intent',
+      ])
+      expect(
+        new Set(
+          cases.map((session) =>
+            session.turns.map((turn) => turn.id).join(','),
+          ),
+        ).size,
+      ).toBe(1)
+    }
+
+    expect(
+      liveSessionTurns.some(
+        (turn) => turn.id === 'table-heading' && turn.kind === 'unrelated',
       ),
     ).toBe(true)
   })
@@ -161,6 +178,38 @@ describe('Intent discovery fixture corpus', () => {
           liveSessionTurns.find((turn) => turn.validation === 'table-v9')!,
         ),
       ).toEqual({ passed: true, reason: 'passed' })
+    } finally {
+      rmSync(workspacePath, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects framework keywords that are not wired into executable code', () => {
+    const workspacePath = mkdtempSync(join(tmpdir(), 'intent-ast-validation-'))
+    const routesPath = join(workspacePath, 'src/routes')
+    mkdirSync(routesPath, { recursive: true })
+    writeFileSync(
+      join(routesPath, 'users.$userId.tsx'),
+      '/* loader: /api/users/userId response.ok Unable to load user useLoaderData( */',
+    )
+    writeFileSync(
+      join(routesPath, 'users.tsx'),
+      "/* createServerFn method: 'GET' .handler( loader: Route.useLoaderData() */",
+    )
+    writeFileSync(
+      join(workspacePath, 'src/user-table.tsx'),
+      '/* SortingState onSortingChange state: { sorting } getSortedRowModel getToggleSortingHandler */',
+    )
+
+    try {
+      for (const validation of ['router', 'start', 'table-v9'] as const) {
+        expect(
+          validateSessionTurn(
+            workspacePath,
+            liveSessionTurns.find((turn) => turn.validation === validation)!,
+          ).passed,
+          `${validation} should require executable structure`,
+        ).toBe(false)
+      }
     } finally {
       rmSync(workspacePath, { recursive: true, force: true })
     }

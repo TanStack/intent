@@ -44,22 +44,22 @@ function reportCases(report) {
       .map((test) => {
         const run = test.meta.harness?.run ?? {}
         const artifacts = run.artifacts ?? {}
+        const scoreEntries = test.meta.eval.scores ?? []
         const scores = Object.fromEntries(
-          (test.meta.eval.scores ?? []).map((score) => [
-            score.name,
-            score.score ?? 0,
-          ]),
+          scoreEntries.map((score) => [score.name, score.score ?? 0]),
+        )
+        const loaded = scoreEntries.find(
+          (score) => score.name === 'CorrectSkillLoaded',
         )
 
         return {
-          artifacts: pick(artifacts, [
-            'condition',
-            'expectedSkillAreas',
-            'intentCommandsInvoked',
-            'loadedSkills',
-            'runnerStatus',
-            'taskId',
-          ]),
+          artifacts: {
+            condition: artifacts.condition,
+            expectedSkillAreas: artifacts.expectedSkillAreas,
+            loadedSkills: loaded?.metadata?.loadedSkills ?? [],
+            runnerStatus: artifacts.runnerStatus,
+            taskId: artifacts.taskId,
+          },
           finalAnswer: test.meta.eval.output?.finalAnswer ?? '',
           scores,
           title: test.title,
@@ -138,12 +138,4 @@ async function judgeCase({ apiKey, item, model }) {
     judgment,
     title: item.title,
   }
-}
-
-function pick(value, keys) {
-  return Object.fromEntries(
-    keys
-      .filter((key) => Object.prototype.hasOwnProperty.call(value, key))
-      .map((key) => [key, value[key]]),
-  )
 }
