@@ -7,7 +7,7 @@ trustPolicy: 'no-downgrade'
 
 overrides:
   pino: 10.3.1
-  undici-types: 8.4.1
+  undici-types: 8.5.0
 
 packageExtensions:
   '@codspeed/vitest-plugin@*':
