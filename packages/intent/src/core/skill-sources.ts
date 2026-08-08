@@ -1,12 +1,6 @@
 // Static-discovery invariant: this module only inspects strings. It never
 // resolves, requires, or executes any discovered package.
 
-/**
- * Exact entries keep the `kind` + `id` identity M2's lockfile reuses. Patterns
- * select multiple discovered identities and remain distinct from exact entries.
- * The `git` variant is never constructed in M1 (git entries are rejected at
- * parse time) but is defined here so M2 builds on this shape.
- */
 type SkillSource =
   | ({ raw: string; kind: 'npm' | 'workspace' } & (
       { id: string } | { pattern: string }
@@ -172,7 +166,7 @@ function parseEntry(
     case 'git':
       return {
         raw,
-        message: `Git source "${trimmed}" is not supported until the lockfile lands (M2).`,
+        message: `Git source "${trimmed}" is not supported.`,
       }
     default:
       return {

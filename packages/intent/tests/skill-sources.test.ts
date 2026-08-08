@@ -103,8 +103,9 @@ describe('parseSkillSources — malformed entries (fail-whole-list)', () => {
     expect(error.issues).toHaveLength(1)
     expect(error.issues[0]).toMatchObject({
       raw: 'git:github.com/me/skills#main',
+      message:
+        'Git source "git:github.com/me/skills#main" is not supported.',
     })
-    expect(error.issues[0]?.message).toContain('not supported until')
   })
 
   it('rejects an unknown prefix', () => {
@@ -279,7 +280,9 @@ describe('parseSkillSources — error reporting', () => {
       'git:github.com/me/skills#main',
     ])
     expect(error.issues).toHaveLength(2)
-    expect(error.issues[0]?.message).toContain('not supported until')
+    expect(error.issues[0]?.message).toBe(
+      'Git source "git:github.com/me/skills#main" is not supported.',
+    )
     expect(error.issues[1]?.message).toBe('Duplicate entry.')
   })
 
