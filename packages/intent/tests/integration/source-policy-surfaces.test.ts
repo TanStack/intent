@@ -73,7 +73,7 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
   it('list surfaces only the listed package', () => {
     writeStandaloneFixture()
 
-    const result = listIntentSkills({ cwd: root })
+    const result = listIntentSkills({ audience: 'human', cwd: root })
 
     expect(result.packages.map((pkg) => pkg.name)).toEqual([LISTED])
     expect(result.notices.some((notice) => notice.includes(UNLISTED))).toBe(

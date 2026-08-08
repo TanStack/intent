@@ -56,7 +56,7 @@ npx @tanstack/intent@latest hooks install --scope user --agents copilot
 
 Cursor and generic `AGENTS.md` agents use the guidance block only.
 
-Hooks add the available Intent skill catalog to supported agent sessions and keep the edit gate active until the agent loads matching full guidance. To tailor what appears in the session catalog, configure `intent.skills` and `intent.exclude` in `package.json`.
+Hooks return the available Intent skill catalog as context for supported agent sessions and keep the edit gate active until they observe a supported `intent load` command. They do not verify that the command succeeded, that the skill matched the task, or that the agent applied its guidance. To tailor what appears in the session catalog, configure `intent.skills` and `intent.exclude` in `package.json`.
 
 ## 2. Choose which packages' skills to use
 
@@ -74,7 +74,7 @@ List the packages or `*` package patterns you trust. Intent then surfaces skills
 
 ## 3. Use skills in your workflow
 
-When your agent works on a task that matches an available skill, it loads the matching `SKILL.md` into context.
+The installed guidance tells your agent to select and load a skill when it matches the task. Intent can return the selected `SKILL.md`, but it cannot guarantee that an agent selected the correct skill or followed its guidance. See [Lifecycle boundaries](../concepts/trust-model#lifecycle-boundaries).
 
 Load a skill manually:
 

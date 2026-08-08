@@ -22,13 +22,15 @@ npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [
 - Validates `<package>#<skill>` before scanning
 - Scans project-local packages by default
 - Includes global packages only when `--global` or `--global-only` is passed
-- Refuses before scanning when the target package is not permitted by `package.json#intent.skills`
+- Checks the target package name against `package.json#intent.skills` before resolution, then enforces its source kind after resolution
 - Refuses before scanning when the target package or skill matches `intent.exclude`
 - Prefers local packages when `--global` is used and the same package exists locally and globally
 - Accepts an unambiguous short skill name when a package-prefixed skill exists
 - Prints raw `SKILL.md` content by default
 - Prints the scanner-reported path when `--path` is passed
 - Prints debug details to stderr when `--debug` is passed
+
+A successful load proves that Intent resolved the selected skill under current policy and returned its content. It does not prove that the skill was relevant to the task, reached an agent's active context, or was followed correctly. See [Lifecycle boundaries](../concepts/trust-model#lifecycle-boundaries).
 
 The package can be scoped or unscoped. The skill can include slash-separated sub-skill names.
 
