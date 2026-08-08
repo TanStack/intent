@@ -103,8 +103,7 @@ describe('parseSkillSources — malformed entries (fail-whole-list)', () => {
     expect(error.issues).toHaveLength(1)
     expect(error.issues[0]).toMatchObject({
       raw: 'git:github.com/me/skills#main',
-      message:
-        'Git source "git:github.com/me/skills#main" is not supported.',
+      message: 'Git source "git:github.com/me/skills#main" is not supported.',
     })
   })
 
