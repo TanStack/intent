@@ -3,7 +3,7 @@ title: intent hooks
 id: intent-hooks
 ---
 
-`intent hooks install` installs lifecycle hooks that surface available Intent skills and enforce loading matching guidance before edits in supported agents.
+`intent hooks install` installs lifecycle hooks that surface available Intent skills and gate supported edit tools until they observe an Intent load command.
 
 ```bash
 npx @tanstack/intent@latest hooks install [--scope project|user] [--agents copilot,claude,codex|all]
@@ -16,14 +16,30 @@ npx @tanstack/intent@latest hooks install [--scope project|user] [--agents copil
 
 ## Behavior
 
+### Session behavior
+
 - Installs hook behavior without writing an `intent-skills` guidance block.
-- Adds a session-start skill catalog for supported agents so the agent sees available `skill-id: description` entries before it starts work.
-- Keeps edit enforcement in place: supported edit tools are blocked until the agent runs `intent load <skill-id>` for matching guidance.
+- Returns a session-start skill catalog as agent context with available `skill-id: description` entries.
+- Blocks supported edit tools until the hook observes a recognized `intent load <skill-id>` command.
+- Uses `package.json#intent.skills` and `package.json#intent.exclude` to control which skills appear in the session catalog.
+
+### Installation behavior
+
 - `--scope project` writes project-local hook config for agents that support it.
 - `--scope user` writes user-level agent config and stores runner scripts under `~/.tanstack/intent/hooks`.
 - `--agents all` is the default. In project scope, Copilot is skipped because the supported Copilot CLI hook location is user-scoped.
 - Run `intent install` separately when you also want to write project guidance.
-- Use `package.json#intent.skills` and `package.json#intent.exclude` to control which skills are surfaced in the session catalog.
+
+The hook records a recognized load command before that command completes.
+
+Hooks do not verify that:
+
+- The command succeeded.
+- The selected skill matched the task.
+- The agent received the returned content.
+- The model applied the guidance.
+
+Hook output is an edit gate and observation signal, not proof of activation or correct agent behavior. See [Lifecycle boundaries](../concepts/trust-model#lifecycle-boundaries).
 
 ## Hook support
 

@@ -52,7 +52,7 @@ This prints a comprehensive prompt that walks you and your agent through three p
 - Validates against the Intent specification
 
 > [!NOTE]
-> This is a context-heavy process that involves domain discovery, GitHub issues analysis, and interactive maintainer interviews. The agent will scan your documentation, recent issues and discussions, and ask targeted questions to surface implicit knowledge and common failure modes. The more information you provide about your library's patterns, pitfalls, and real-world usage problems, the better the generated skills will be. Expect multiple rounds of refinement and regular context compaction before completion.
+> Plan for multiple review rounds and regular context compaction. The agent scans documentation, recent issues, and discussions, then asks targeted questions about implicit knowledge and common failure modes. Provide concrete patterns, pitfalls, and real-world usage problems to improve the generated skills.
 
 ### 2. Validate skills
 
@@ -62,17 +62,19 @@ After scaffolding, validate that all SKILL.md files are well-formed:
 npx @tanstack/intent@latest validate
 ```
 
-This checks:
+This checks skill structure:
+
 - Valid YAML frontmatter in every SKILL.md
 - Required fields (`name`, `description`) are present
 - Skill `name` is a leaf segment matching its parent directory
-- Intent-specific scalars (`type`, `library`, `library_version`, `framework`) live under `metadata`, not at the top level
 - Description length <= 1024 characters
 - Line count limits (500 lines max per skill)
-- Framework skills have a `requires` array
-- Artifact files exist and are non-empty
 
-If any artifacts are present (domain_map.yaml, skill_spec.md, skill_tree.yaml), they must parse as valid YAML.
+It also checks Intent metadata and artifacts:
+
+- Intent-specific scalars (`type`, `library`, `library_version`, `framework`) live under `metadata`, not at the top level
+- Framework skills have a `requires` array
+- Required artifact files exist and are non-empty; YAML artifacts parse successfully
 
 ### 3. Commit skills and artifacts
 
@@ -131,8 +133,8 @@ Consumers who install your library automatically get the skills. They discover l
 
 **Version alignment:**
 - Skills version with your library releases
-- Agents always load the skill matching the installed library version
-- No drift between code and guidance
+- `intent load` returns skill content from the installed package version
+- Packaging code and skills together keeps their versions aligned
 
 ---
 
@@ -143,9 +145,15 @@ Consumers who install your library automatically get the skills. They discover l
 After running `setup`, you'll have `check-skills.yml` in `.github/workflows/`:
 
 **check-skills.yml** (runs on PRs touching skills/artifacts, release, or manual trigger)
+
+Validation:
+
 - Validates SKILL.md frontmatter and structure
 - Ensures files stay under 500 lines
 - Automatically detects stale skills and coverage gaps after you publish a new release
+
+Review handoff:
+
 - Opens one grouped review PR with an agent-friendly prompt
 - Includes the reason each skill or package was flagged
 - Requires you to copy the prompt into Claude Code, Cursor, or your agent to update skills
@@ -180,11 +188,15 @@ coverage:
 
 Private workspace packages are skipped automatically.
 
-**To update stale skills:**
+**Prepare the update:**
+
 1. Review the PR opened by `check-skills.yml`
 2. Copy the agent prompt from the PR description
 3. Paste it into Claude Code, Cursor, or your coding agent
 4. The agent reads the stale skills and updates them based on library changes
+
+**Finish the update:**
+
 5. Run `npx @tanstack/intent@latest validate` locally to verify
 6. Commit and merge the PR
 
