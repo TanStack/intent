@@ -11,30 +11,38 @@ npx @tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] [
 
 ## Options
 
+### Output
+
 - `--json`: print JSON instead of text output
 - `--debug`: print discovery debug details to stderr
+- `--no-notices`: suppress non-critical notices on stderr; the acknowledged-risk notice for `intent.skills: ["*"]` remains visible
+
+### Scan scope
+
 - `--global`: include global packages after project packages
 - `--global-only`: list global packages only
 - `--show-hidden`: show unlisted hidden skill sources when run outside an agent session
-- `--no-notices`: suppress non-critical notices on stderr; the acknowledged-risk notice for `intent.skills: ["*"]` remains visible
 
 ## What you get
+
+### Selection
 
 - Scans project and workspace dependencies for intent-enabled packages and skills
 - Surfaces packages permitted by `package.json#intent.skills` (see [Allowlist](#allowlist))
 - Includes global packages only when `--global` or `--global-only` is passed
-- Includes warnings from discovery
 - Excludes packages and skills matched by package.json `intent.exclude`
-- Prints debug details to stderr when `--debug` is passed
-- If no packages are discovered, prints `No intent-enabled packages found.`
+
+When both local and global packages are scanned, local packages take precedence. `SOURCE` shows whether the selected package came from local discovery or explicit global scanning.
+
+### Text output
+
 - Summary line with package count and skill count
 - Package table columns: `PACKAGE`, `SOURCE`, `VERSION`, `SKILLS`
 - Skill tree grouped by package
-- Optional warnings section (`⚠ ...` per warning)
-- Optional notices section on stderr (`ℹ ...` per notice), suppressed by `--no-notices`
+- Discovery warnings (`⚠ ...`) on stdout
+- `No intent-enabled packages found.` when no packages are discovered
 
-`SOURCE` is a lightweight indicator showing whether the selected package came from local discovery or explicit global scanning.
-When both local and global packages are scanned, local packages take precedence.
+Policy notices (`ℹ ...`) are written to stderr.
 
 ## JSON output
 
@@ -141,5 +149,4 @@ An excluded package never triggers the unlisted-source notice, because an exclud
 ## Common errors
 
 - Scanner failures are printed as errors
-- Unsupported environments:
-  - Deno projects without `node_modules`
+- Deno projects without `node_modules` are unsupported

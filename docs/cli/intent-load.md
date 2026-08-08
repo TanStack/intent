@@ -19,13 +19,21 @@ npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [
 
 ## What you get
 
+### Resolution
+
 - Validates `<package>#<skill>` before scanning
 - Scans project-local packages by default
 - Includes global packages only when `--global` or `--global-only` is passed
 - Checks the target package name against `package.json#intent.skills` before resolution, then enforces its source kind after resolution
 - Refuses before scanning when the target package or skill matches `intent.exclude`
+
+### Selection
+
 - Prefers local packages when `--global` is used and the same package exists locally and globally
 - Accepts an unambiguous short skill name when a package-prefixed skill exists
+
+### Output
+
 - Prints raw `SKILL.md` content by default
 - Prints the scanner-reported path when `--path` is passed
 - Prints debug details to stderr when `--debug` is passed
@@ -62,12 +70,20 @@ npx @tanstack/intent@latest load some-lib#core --path
 
 ## Common errors
 
+### Invalid skill identity
+
 - Missing separator: `Invalid skill use "@tanstack/query": expected <package>#<skill>.`
 - Empty package: `Invalid skill use "#core": package is required.`
 - Empty skill: `Invalid skill use "@tanstack/query#": skill is required.`
+
+### Resolution failures
+
 - Missing package: `Cannot resolve skill use "...": package "..." was not found.`
 - Missing skill: `Cannot resolve skill use "...": skill "..." was not found in package "...".`
 - Skill suggestion: `Did you mean @tanstack/router-core#router-core/auth-and-guards?`
+
+### Policy refusals
+
 - Unlisted package: `Cannot load skill use "...": package "..." is not listed in intent.skills.`
 - Excluded package: `Cannot load skill use "...": package "..." is excluded by Intent configuration.`
 - Excluded skill: `Cannot load skill use "...": skill "..." is excluded by Intent configuration.`

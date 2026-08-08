@@ -18,16 +18,19 @@ npx @tanstack/intent@latest setup
 
 ## What each command changes
 
-- `edit-package-json`
-  - Requires a valid `package.json` in current directory
-  - Ensures `keywords` includes `tanstack-intent`
-  - Ensures `files` includes required publish entries
-  - Preserves existing indentation
-- `setup`
-  - Copies the `check-skills.yml` workflow template from `@tanstack/intent/meta/templates/workflows` to `.github/workflows`
-  - Applies variable substitution (`PACKAGE_NAME`, `PACKAGE_LABEL`, `PAYLOAD_PACKAGE`, `REPO`, `DOCS_PATH`, `SRC_PATH`, `WATCH_PATHS`)
-  - Detects the workspace root in monorepos and writes repo-level workflows there
-  - Skips files that already exist at destination
+### `edit-package-json`
+
+- Requires a valid `package.json` in the current directory
+- Ensures `keywords` includes `tanstack-intent`
+- Ensures `files` includes required publish entries
+- Preserves existing indentation
+
+### `setup`
+
+- Copies the `check-skills.yml` workflow template from `@tanstack/intent/meta/templates/workflows` to `.github/workflows`
+- Applies variable substitution (`PACKAGE_NAME`, `PACKAGE_LABEL`, `PAYLOAD_PACKAGE`, `REPO`, `DOCS_PATH`, `SRC_PATH`, `WATCH_PATHS`)
+- Detects the workspace root in monorepos and writes repo-level workflows there
+- Skips files that already exist at the destination
 
 ## Required `files` entries
 

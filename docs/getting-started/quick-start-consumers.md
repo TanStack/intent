@@ -3,19 +3,17 @@ title: Quick Start for Consumers
 id: quick-start-consumers
 ---
 
-Get started using Intent to help your agent discover and load package skills.
-
 ## 1. Run install
-
-The install command guides your agent through the setup process:
 
 ```bash
 npx @tanstack/intent@latest install
 ```
 
+This command creates or updates skill-loading guidance for your agent.
+
 Examples use `npx` for npm projects. In pnpm, Yarn, or Bun projects, use the matching runner: `pnpm dlx`, `yarn dlx`, or `bunx`.
 
-This creates or updates an `intent-skills` guidance block. It:
+The command:
 
 1. Checks for existing `intent-skills` guidance in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.)
 2. Writes lightweight instructions for skill discovery and loading
@@ -56,7 +54,15 @@ npx @tanstack/intent@latest hooks install --scope user --agents copilot
 
 Cursor and generic `AGENTS.md` agents use the guidance block only.
 
-Hooks return the available Intent skill catalog as context for supported agent sessions and keep the edit gate active until they observe a supported `intent load` command. They do not verify that the command succeeded, that the skill matched the task, or that the agent applied its guidance. To tailor what appears in the session catalog, configure `intent.skills` and `intent.exclude` in `package.json`.
+Hooks return the available Intent skill catalog as context for supported agent sessions and keep the edit gate active until they observe a supported `intent load` command.
+
+Hooks do not verify that:
+
+- The command succeeded.
+- The skill matched the task.
+- The agent applied the guidance.
+
+To control what appears in the session catalog, configure `intent.skills` and `intent.exclude` in `package.json`.
 
 ## 2. Choose which packages' skills to use
 
@@ -74,15 +80,15 @@ List the packages or `*` package patterns you trust. Intent then surfaces skills
 
 ## 3. Use skills in your workflow
 
-The installed guidance tells your agent to select and load a skill when it matches the task. Intent can return the selected `SKILL.md`, but it cannot guarantee that an agent selected the correct skill or followed its guidance. See [Lifecycle boundaries](../concepts/trust-model#lifecycle-boundaries).
-
-Load a skill manually:
+Load a skill when it matches the task:
 
 ```bash
 npx @tanstack/intent@latest load @tanstack/react-query#core
 ```
 
 This prints the skill content for the installed package version.
+
+Intent cannot guarantee that an agent selected the correct skill or followed its guidance. See [Lifecycle boundaries](../concepts/trust-model#lifecycle-boundaries).
 
 If you want explicit task-to-skill mappings in your agent config, opt in:
 
@@ -92,15 +98,13 @@ npx @tanstack/intent@latest install --map
 
 ## 4. Keep skills up-to-date
 
-Skills version with library releases. When you update a library:
-
 ```bash
 npm update @tanstack/react-query
 ```
 
-The new version brings updated skills automatically. The skills are shipped with the library, so you get the version that matches your installed code. If a package is installed both locally and globally and global scanning is enabled, Intent prefers the local version.
+Skills version with library releases. Updating a library also updates its packaged skills, so the skill version matches the installed code. If a package is installed both locally and globally and global scanning is enabled, Intent prefers the local version.
 
-If you need to see what skills have changed, run:
+List the installed skills:
 
 ```bash
 npx @tanstack/intent@latest list

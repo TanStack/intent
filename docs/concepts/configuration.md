@@ -14,11 +14,20 @@ Intent reads consumer configuration from the `intent` object in `package.json`. 
 }
 ```
 
-Intent resolves `skills` from the nearest `package.json` between the current working directory and the workspace or project root that declares a non-null value. A nearer declaration replaces a parent declaration; an omitted or null value inherits the nearest parent declaration. Intent combines `exclude` arrays from the root through the current working directory, then adds excludes passed by the caller.
+## Configuration inheritance
+
+- **`intent.skills`:** Intent uses the nearest non-null declaration between the current working directory and the workspace or project root. A nearer declaration replaces its parent. An omitted or null value inherits the nearest parent declaration.
+- **`intent.exclude`:** Intent combines arrays from the root through the current working directory, then adds excludes passed by the caller.
 
 ## `intent.skills`
 
-`intent.skills` is a package-source allowlist. Permitted packages surface in `list` and `stale`, can resolve through `load`, and contribute mappings to `install --map`. The default `install` command writes generic loading guidance without scanning packages. See [Trust model](./trust-model) for the reasoning and lifecycle boundaries.
+`intent.skills` is a package-source allowlist. A permitted package can:
+
+- Appear in `list` and `stale`.
+- Resolve through `load`.
+- Contribute mappings to `install --map`.
+
+The default `install` command writes generic loading guidance without scanning packages. See [Trust model](./trust-model) for the reasoning and lifecycle boundaries.
 
 The allowlist permits packages, not individual skills. An entry containing `#` is invalid; use `intent.exclude` for skill-specific filtering.
 
@@ -38,17 +47,19 @@ A malformed entry fails the whole command, and every bad entry is reported at on
 
 ### Special forms
 
-The list as a whole has three special forms:
-
-- **Absent.** No `intent.skills` key. Every discovered package is surfaced, and Intent prints a deprecation notice to stderr on each run until you set `intent.skills`. This is the upgrade path for existing projects. A future version will require an explicit allowlist.
-- **Empty.** `"skills": []`. No package is surfaced. Intent prints an info notice to stderr.
-- **Wildcard.** `"skills": ["*"]`. Every discovered package is surfaced. Unlike a package pattern such as `@tanstack/*`, this exact entry crosses package scopes and source kinds. Intent prints an acknowledged-risk notice to stderr, since unvetted skills may reach your agent.
+| Form | Result | Notice |
+| --- | --- | --- |
+| **Absent:** no `intent.skills` key | Surfaces every discovered package as an upgrade path for existing projects. A future version will require an explicit allowlist. | Deprecation notice on stderr on each run until you set `intent.skills`. |
+| **Empty:** `"skills": []` | Surfaces no packages. | Info notice on stderr. |
+| **Wildcard:** `"skills": ["*"]` | Surfaces every discovered package across package scopes and source kinds. This is broader than a pattern such as `@tanstack/*`. | Acknowledged-risk notice on stderr because unvetted skills may reach your agent. |
 
 A package that ships skills but is not listed is dropped. In human output, Intent adds one policy notice naming packages dropped this way so you can opt in. Agent sessions receive only the hidden package and skill counts. A listed package that was not discovered is reported as a notice as well.
 
 ### Existing projects
 
-A project that has not set `intent.skills` keeps working. Intent surfaces every discovered package and prints the deprecation notice described under the absent form. Nothing breaks. Add an allowlist when you are ready, before a future version requires one. Run `intent list` to confirm which packages are surfaced.
+Run `intent list` to see which packages the current policy surfaces.
+
+A project without `intent.skills` uses the absent form: Intent surfaces every discovered package and prints its deprecation notice. Add an allowlist to permit specific sources before a future version requires one.
 
 ### Suppressing notices temporarily
 

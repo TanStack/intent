@@ -25,15 +25,20 @@ npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--glob
 
 ## Behavior
 
+### Default guidance
+
 - Writes lightweight skill loading guidance by default.
 - Creates `AGENTS.md` when no managed block exists.
 - Updates an existing managed block in a supported config file.
 - Preserves all content outside the managed block.
+- Verifies the managed block before reporting success.
+
+### Mapping mode
+
 - Scans packages and writes compact `id`, `run`, and `for` mappings only when `--map` is passed.
 - Surfaces packages permitted by `package.json#intent.skills` in `--map` mode. See [Configuration](../concepts/configuration).
 - Skips reference, meta, maintainer, and maintainer-only skills in `--map` mode.
 - Writes compact skill identities and runnable guidance commands instead of local file paths in `--map` mode.
-- Verifies the managed block before reporting success.
 - Prints `No intent-enabled skills found.` and does not create a config file when `--map` finds no actionable skills.
 
 Supported config files: `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`.
@@ -76,13 +81,15 @@ tanstackIntent:
 
 ## Status messages
 
-- Created: `Created AGENTS.md with 1 mapping.`
-- Updated: `Updated AGENTS.md with 2 mappings.`
-- Unchanged: `No changes to AGENTS.md; 2 mappings already current.`
-- Guidance created: `Created AGENTS.md with skill loading guidance.`
-- Guidance unchanged: `No changes to AGENTS.md; skill loading guidance already current.`
-- Placement tip: `Tip: Keep the intent-skills block near the top of AGENTS.md so agents read it before task-specific instructions.`
-- No actionable skills in `--map` mode: `No intent-enabled skills found.`
+| Result | Message |
+| --- | --- |
+| Mapping created | `Created AGENTS.md with 1 mapping.` |
+| Mappings updated | `Updated AGENTS.md with 2 mappings.` |
+| Mappings unchanged | `No changes to AGENTS.md; 2 mappings already current.` |
+| Guidance created | `Created AGENTS.md with skill loading guidance.` |
+| Guidance unchanged | `No changes to AGENTS.md; skill loading guidance already current.` |
+| Placement tip | `Tip: Keep the intent-skills block near the top of AGENTS.md so agents read it before task-specific instructions.` |
+| No actionable skills in `--map` mode | `No intent-enabled skills found.` |
 
 To suppress trust and migration notices in automation, pass `--no-notices`.
 

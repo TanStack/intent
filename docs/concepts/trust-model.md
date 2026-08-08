@@ -23,16 +23,18 @@ One exception is sanctioned: in Yarn Plug'n'Play projects, Intent loads Yarn's P
 
 ## Lifecycle boundaries
 
-Intent uses these states as separate boundaries:
+Intent uses six lifecycle stages in order. It can observe the first three and its side of delivery. Activation and application depend on agent behavior.
 
-1. **Available.** Intent discovered the skill from an installed or workspace package.
-2. **Permitted.** Project policy allows the package and skill to surface. `intent.exclude` can remove a package or skill after `intent.skills` permits its source.
-3. **Loaded.** A supported load path resolved the skill and returned its content.
-4. **Delivered.** Intent placed guidance where an agent integration can access it, such as a managed guidance block or session hook context.
-5. **Activated.** The agent selected or received the skill for a particular task.
-6. **Applied.** The model followed the skill correctly.
+| State | Meaning | Observable by Intent |
+| --- | --- | --- |
+| **1. Available** | Intent discovered the skill from an installed or workspace package. | Yes. |
+| **2. Permitted** | Project policy allows the package and skill to surface. `intent.exclude` can remove a package or skill after `intent.skills` permits its source. | Yes. |
+| **3. Loaded** | A supported load path resolved the skill and returned its content. | Yes. |
+| **4. Delivered** | Intent placed guidance where an agent integration can access it, such as a managed guidance block or session hook context. | Intent can confirm its output, not agent receipt. |
+| **5. Activated** | The agent selected or received the skill for a particular task. | No. |
+| **6. Applied** | The model followed the skill correctly. | No. |
 
-Intent can report discovery and policy results, confirm a successful `intent load`, verify a managed block it writes, and emit hook context. Those observations cover Available, Permitted, Loaded, and Intent's side of Delivered. Activated and Applied depend on agent behavior and are not states Intent can prove. A hook observing an `intent load` command does not prove that the command succeeded, that the skill was relevant, or that the model used its guidance.
+A hook observing an `intent load` command does not prove that the command succeeded, that the skill was relevant, or that the model used its guidance.
 
 ## Unsupported sources
 

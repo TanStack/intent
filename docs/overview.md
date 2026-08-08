@@ -5,7 +5,7 @@ id: overview
 
 `@tanstack/intent` is a CLI for shipping and consuming Agent Skills as package artifacts.
 
-Skills are markdown documents that teach AI coding agents how to use your library correctly. Intent versions them with your releases and ships them inside npm packages. It discovers skills from your project and workspace dependencies, then helps agents load them when working on matching tasks.
+Skills are markdown documents that teach AI coding agents how to use your library correctly. Intent versions them with your releases and ships them inside npm packages. It discovers skills from project and workspace dependencies, then provides commands and guidance for loading them.
 
 ## What Intent does
 
@@ -16,21 +16,21 @@ Intent provides tooling for two workflows:
 - Discover skills from your project and workspace dependencies
 - Control which packages' skills are surfaced with an allowlist
 - Add lightweight skill loading guidance to your agent config
-- Add hook enforcement for agents that support blocking lifecycle hooks
-- Keep skills synchronized with library versions
+- Add session catalogs and edit gates for supported agents
+- Use skills packaged with installed library versions
 
 **For maintainers (library teams):**
 
 - Scaffold skills through AI-assisted domain discovery
 - Validate SKILL.md format and packaging
 - Ship skills in the same release pipeline as code
-- Track staleness when source docs change
+- Review version, source, artifact, and package coverage signals
 
 ## How it works
 
 ### Discovery and installation
 
-Examples use `npx` for npm projects. In pnpm, Yarn, or Bun projects, use the matching runner:
+Use the runner for your package manager:
 
 | Tool | Pattern                                      |
 | ---- | -------------------------------------------- |
@@ -57,7 +57,7 @@ Creates or updates lightweight `intent-skills` guidance in your config files (`A
 npx @tanstack/intent@latest hooks install
 ```
 
-Installs hook enforcement for supported agents. Project-scoped hooks are available for Claude Code and Codex. GitHub Copilot CLI project guidance can live in `.github/copilot-instructions.md`, while blocking hooks are user-scoped. Cursor and generic `AGENTS.md` agents use guidance only.
+Installs session catalogs and edit gates for supported agents. Project-scoped hooks are available for Claude Code and Codex. GitHub Copilot CLI project guidance can live in `.github/copilot-instructions.md`, while blocking hooks are user-scoped. Cursor and generic `AGENTS.md` agents use guidance only. See [intent hooks](./cli/intent-hooks) for what hooks can observe.
 
 ```bash
 npx @tanstack/intent@latest load @tanstack/query#fetching
@@ -85,4 +85,4 @@ Enforces SKILL.md format rules and packaging requirements before publish.
 npx @tanstack/intent@latest stale
 ```
 
-Detects when skills reference outdated source documentation or library versions.
+Reports version drift and source, artifact, or package coverage signals that may require skill review.

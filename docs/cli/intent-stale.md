@@ -15,14 +15,22 @@ npx @tanstack/intent@latest stale [--json]
 
 ## Behavior
 
+### Scope
+
 - Checks the current package by default
 - From a monorepo root, checks workspace packages that ship skills and also reports public workspace packages with no skill or artifact coverage
 - Applies the `package.json#intent.skills` allowlist when falling back to installed dependencies; workspace packages are first-party and checked regardless. See [Configuration](../concepts/configuration).
 - When `dir` is provided, scopes the check to the targeted package or skills directory
 - Computes one staleness report per package
+
+### Coverage
+
 - Reads repo-root `_artifacts/*domain_map.yaml` and `_artifacts/*skill_tree.yaml` when present
 - Flags public workspace packages that are not represented by generated skills or artifact coverage
 - Skips workspace packages with `"private": true`
+
+### Output and workflow state
+
 - Prints text output by default or JSON with `--json`
 - Prints a non-failing workflow update reminder when `.github/workflows/check-skills.yml` is missing the current `intent-workflow-version` stamp
 - If no packages are found, prints `No intent-enabled packages found.`
@@ -74,12 +82,14 @@ Ignored packages are excluded from missing coverage signals. Private workspace p
 
 Report fields:
 
-- `library`: package name
-- `currentVersion`: latest version from npm registry (or `null` if unavailable)
-- `skillVersion`: `library_version` from skills (or `null`)
-- `versionDrift`: `major | minor | patch | null`
-- `skills`: array of per-skill checks
-- `signals`: array of artifact and workspace coverage checks
+| Field | Meaning |
+| --- | --- |
+| `library` | Package name |
+| `currentVersion` | Latest version from npm registry, or `null` if unavailable |
+| `skillVersion` | `library_version` from skills, or `null` |
+| `versionDrift` | `major`, `minor`, `patch`, or `null` |
+| `skills` | Per-skill checks |
+| `signals` | Artifact and workspace coverage checks |
 
 Skill fields:
 
