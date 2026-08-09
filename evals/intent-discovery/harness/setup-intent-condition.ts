@@ -1,13 +1,19 @@
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildIntentSkillGuidanceBlock } from '../../../packages/intent/src/commands/install/guidance.js'
 import {
   createSyncAliases,
   resolveSyncTargetDirectories,
 } from '../../../packages/intent/src/commands/sync/targets.js'
 import { buildCurrentLockfileSources } from '../../../packages/intent/src/core/lockfile/lockfile-state.js'
 import { writeIntentLockfile } from '../../../packages/intent/src/core/lockfile/lockfile.js'
+import {
+  SESSION_CATALOGUE_MAX_BYTES,
+  SESSION_CATALOGUE_MAX_DESCRIPTION_LENGTH,
+  SESSION_CATALOGUE_MAX_SKILLS,
+  normalizeWhitespace,
+  truncateText,
+} from '../../../packages/intent/src/skills/catalogue-contract.js'
 import { skillByArea } from '../corpus/skill-uses'
 import type { IntentDiscoveryCondition } from '../corpus/conditions'
 import type { ExpectedSkillArea } from '../corpus/tasks'
@@ -41,7 +47,11 @@ export function applyIntentCondition({
   if (condition === 'symlink-intent') {
     filesWritten.push(...writeSkillLinks(workspacePath, expectedSkillAreas))
   } else if (condition === 'mapped-intent') {
-    filesWritten.push(writeAgentsFile(workspacePath))
+    filesWritten.push(...writeMappedGuidance(workspacePath, expectedSkillAreas))
+  } else if (condition === 'mapped-exact-intent') {
+    filesWritten.push(
+      writeVisibleMappedGuidance(workspacePath, expectedSkillAreas),
+    )
   }
 
   return filesWritten
@@ -181,12 +191,164 @@ function writePackageAllowlist(
   return packageJsonPath
 }
 
-function writeAgentsFile(workspacePath: string): string {
+function writeMappedGuidance(
+  workspacePath: string,
+  expectedSkillAreas: Array<ExpectedSkillArea>,
+): Array<string> {
   const agentsPath = join(workspacePath, 'AGENTS.md')
+  const skillsByPackage = new Map<
+    string,
+    Array<(typeof skillByArea)[ExpectedSkillArea]>
+  >()
 
-  writeFileSync(agentsPath, buildIntentSkillGuidanceBlock('npm', true).block)
+  for (const area of expectedSkillAreas) {
+    const skill = skillByArea[area]
+    const skills = skillsByPackage.get(skill.packageName) ?? []
+    skills.push(skill)
+    skillsByPackage.set(skill.packageName, skills)
+  }
 
+  const packages = [...skillsByPackage.entries()].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )
+  const mapPaths = packages.map(([packageName, skills]) => {
+    const relativeMapPath = `.intent/maps/${packageName}.md`
+    const mapPath = join(workspacePath, relativeMapPath)
+    const entries = skills
+      .map((skill) => ({
+        description: skill.description,
+        id: `${skill.packageName}#${skill.name}`,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id))
+
+    mkdirSync(dirname(mapPath), { recursive: true })
+    writeFileSync(
+      mapPath,
+      `${[
+        `# ${packageName}`,
+        '',
+        ...entries.map(({ description, id }) => `- \`${id}\`: ${description}`),
+      ].join('\n')}\n`,
+    )
+
+    return { mapPath, packageName, relativeMapPath }
+  })
+
+  writeFileSync(
+    agentsPath,
+    `${[
+      '<!-- intent-skills:start -->',
+      '## Intent Skills',
+      '',
+      'At the start of every task, inspect the package list below.',
+      'If the task names a listed package or changes code that imports, configures, or calls it, you MUST complete these steps before editing:',
+      '1. Read that package\'s skill map.',
+      '2. Match the task to the skill descriptions in the map.',
+      '3. Copy each matching skill ID exactly. Never infer, shorten, or guess an ID.',
+      '4. Run `npx @tanstack/intent load <id>` for each matching skill.',
+      'Do not run an Intent load command until you have read the map. Do not edit until every matching skill is loaded.',
+      'If no skill matches after reading the map, continue without loading a skill.',
+      '',
+      ...mapPaths.map(
+        ({ packageName, relativeMapPath }) =>
+          `- \`${packageName}\`: \`${relativeMapPath}\``,
+      ),
+      '<!-- intent-skills:end -->',
+    ].join('\n')}\n`,
+  )
+
+  return [agentsPath, ...mapPaths.map(({ mapPath }) => mapPath)]
+}
+
+function writeVisibleMappedGuidance(
+  workspacePath: string,
+  expectedSkillAreas: Array<ExpectedSkillArea>,
+): string {
+  const agentsPath = join(workspacePath, 'AGENTS.md')
+  const skills = expectedSkillAreas
+    .map((area) => skillByArea[area])
+  writeFileSync(agentsPath, buildVisibleMappedGuidance(skills))
   return agentsPath
+}
+
+export function buildVisibleMappedGuidance(
+  input: ReadonlyArray<{
+    description: string
+    name: string
+    packageName: string
+  }>,
+): string {
+  const skills = input
+    .map((skill) => ({
+      ...skill,
+      description: truncateText(
+        normalizeWhitespace(skill.description),
+        SESSION_CATALOGUE_MAX_DESCRIPTION_LENGTH,
+      ),
+    }))
+    .sort((left, right) =>
+      `${left.packageName}#${left.name}`.localeCompare(
+        `${right.packageName}#${right.name}`,
+      ),
+    )
+    .slice(0, SESSION_CATALOGUE_MAX_SKILLS)
+  const selected = [...skills]
+  let guidance = renderVisibleMappedGuidance(
+    selected,
+    input.length - selected.length,
+  )
+  while (
+    Buffer.byteLength(guidance) > SESSION_CATALOGUE_MAX_BYTES &&
+    selected.length > 0
+  ) {
+    selected.pop()
+    guidance = renderVisibleMappedGuidance(
+      selected,
+      input.length - selected.length,
+    )
+  }
+  if (Buffer.byteLength(guidance) > SESSION_CATALOGUE_MAX_BYTES) {
+    throw new RangeError('Mapped Intent guidance exceeds the catalogue limit.')
+  }
+  return guidance
+}
+
+function renderVisibleMappedGuidance(
+  skills: ReadonlyArray<{
+    description: string
+    name: string
+    packageName: string
+  }>,
+  omittedSkillCount: number,
+): string {
+  const lines = [
+    '<!-- intent-skills:start -->',
+    '## Intent Skills',
+    '',
+    'Before implementation work on each new user request:',
+    '1. Compare the request with every `for` description below.',
+    '2. Run the exact `run` command for every clearly matching entry.',
+    '3. Follow the returned guidance before editing.',
+    '4. Load nothing when no entry matches.',
+    '5. Repeat this check for later requests in the same conversation.',
+    '',
+  ]
+
+  for (const skill of skills) {
+    const use = `${skill.packageName}#${skill.name}`
+    lines.push(`- id: ${JSON.stringify(use)}`)
+    lines.push(`  for: ${JSON.stringify(skill.description)}`)
+    lines.push(`  run: ${JSON.stringify(`npx @tanstack/intent load ${use}`)}`)
+  }
+
+  if (omittedSkillCount > 0) {
+    lines.push(
+      `- ${omittedSkillCount} additional ${omittedSkillCount === 1 ? 'skill' : 'skills'} omitted; run \`npx @tanstack/intent catalog <package>\` for the relevant package.`,
+    )
+  }
+
+  lines.push('<!-- intent-skills:end -->')
+  return `${lines.join('\n')}\n`
 }
 
 function skillPackages(

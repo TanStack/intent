@@ -13,6 +13,7 @@ import { fixtures } from './corpus/fixtures'
 import {
   liveSessionCases,
   liveSessionProfiles,
+  liveSessionRepetitionCount,
   liveSessionTurns,
 } from './corpus/live-sessions'
 import { savedTranscriptCases } from './fixtures/saved-transcripts'
@@ -45,10 +46,10 @@ describe('Intent discovery fixture corpus', () => {
     }
   })
 
-  it('defines five paired profiles across four six-turn conditions', () => {
-    expect(liveSessionProfiles).toHaveLength(5)
+  it('defines eight paired profiles across six six-turn conditions', () => {
+    expect(liveSessionProfiles).toHaveLength(8)
     expect(liveSessionTurns).toHaveLength(6)
-    expect(liveSessionCases).toHaveLength(20)
+    expect(liveSessionCases).toHaveLength(48)
     expect(
       liveSessionCases.every(
         (session) =>
@@ -66,7 +67,9 @@ describe('Intent discovery fixture corpus', () => {
         (session) => session.profile.id === profile.id,
       )
       expect(cases.map((session) => session.condition).sort()).toEqual([
+        'hooked-exact-intent',
         'hooked-intent',
+        'mapped-exact-intent',
         'mapped-intent',
         'no-intent',
         'symlink-intent',
@@ -85,6 +88,16 @@ describe('Intent discovery fixture corpus', () => {
         (turn) => turn.id === 'table-heading' && turn.kind === 'unrelated',
       ),
     ).toBe(true)
+  })
+
+  it.each([
+    ['3', 3],
+    ['0', 1],
+    ['-1', 1],
+    ['Infinity', 1],
+    ['invalid', 1],
+  ])('uses %s as %i live repetitions', (value, expected) => {
+    expect(liveSessionRepetitionCount(value)).toBe(expected)
   })
 
   it('starts every multi-turn task incomplete', () => {

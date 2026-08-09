@@ -1,4 +1,5 @@
 import { createHarness } from 'vitest-evals'
+import { measureStaticDeliveryContext } from './delivery-context'
 import { prepareFixtureWorkspace } from './prepare-fixture'
 import {
   LiveCopilotRunnerUnavailableError,
@@ -33,7 +34,13 @@ export const liveCopilotHarness = createHarness<
         expectedSkillAreas: ['router', 'start', 'table-v9'],
         workspacePath: prepared.workspacePath,
       })
+      const deliveryContext = measureStaticDeliveryContext({
+        condition: input.condition,
+        expectedSkillCount: 3,
+        workspacePath: prepared.workspacePath,
+      })
 
+      setArtifact('deliveryContext', deliveryContext)
       setArtifact('setupFilesWritten', setupFilesWritten)
       setArtifact('workspacePath', prepared.workspacePath)
 
@@ -43,10 +50,14 @@ export const liveCopilotHarness = createHarness<
         sourcePath: prepared.sourcePath,
         workspacePath: prepared.workspacePath,
       })
+      setArtifact('cacheStatus', run.cacheStatus)
+      setArtifact('copilotVersion', run.copilotVersion)
+      setArtifact('modelCacheState', run.modelCacheState)
       setArtifact('sessionId', run.sessionId)
       setArtifact('sessionScore', run.score)
       setArtifact('turns', run.turns)
       setArtifact('fileDiff', run.fileDiff)
+      setArtifact('hookContexts', run.hookContexts)
 
       return {
         output: {

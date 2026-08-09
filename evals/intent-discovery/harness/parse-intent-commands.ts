@@ -10,8 +10,21 @@ export type ParsedIntentCommand = {
   source: 'tool-call' | 'tool-message'
 }
 
-const commandPattern =
-  /^\s*\$?\s*(?:(?:cd\s+.+?\s+&&\s+))?((?:bunx\s+@tanstack\/intent(?:@[^\s]+)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@[^\s]+)?)|(?:npx\s+@tanstack\/intent(?:@[^\s]+)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@[^\s]+)?)|(?:intent))\s+(catalog|list|load)(?:\s+([^\s|;&]+))?/i
+const commandPattern = new RegExp(
+  [
+    '^\\s*\\$?\\s*(?:(?:cd\\s+.+?\\s+&&\\s+))?(',
+    '(?:bunx\\s+@tanstack/intent(?:@[^\\s]+)?)',
+    '|(?:pnpm\\s+exec\\s+intent)',
+    '|(?:pnpm\\s+dlx\\s+@tanstack/intent(?:@[^\\s]+)?)',
+    '|(?:npm\\s+exec(?:\\s+--)?\\s+intent)',
+    '|(?:npx\\s+(?:@tanstack/intent(?:@[^\\s]+)?|intent))',
+    '|(?:yarn\\s+dlx\\s+@tanstack/intent(?:@[^\\s]+)?)',
+    '|(?:\\./node_modules/\\.bin/intent)',
+    '|(?:intent)',
+    ')\\s+(catalog|list|load)(?:\\s+([^\\s|;&]+))?',
+  ].join(''),
+  'i',
+)
 
 export function parseIntentCommand(
   raw: string,

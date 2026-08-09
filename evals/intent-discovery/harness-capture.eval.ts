@@ -20,11 +20,9 @@ import { extractTurnEvidence } from './harness/session-events'
 import { scoreLiveSession } from './graders/session-scoring'
 
 describe('Intent discovery harness capture', () => {
-  it('requires every catalog, load, abstention, runner, and task check', () => {
+  it('requires every load, abstention, runner, and task check', () => {
     const turns = [
-      sessionTurn('unrelated-format', 'unrelated', {
-        catalogCommands: ['npx @tanstack/intent catalog'],
-      }),
+      sessionTurn('unrelated-format', 'unrelated'),
       sessionTurn('router-loader', 'related', {
         expectedSkillArea: 'router',
         intentLoads: ['@tanstack/router#routing'],
@@ -41,7 +39,7 @@ describe('Intent discovery harness capture', () => {
     ]
 
     expect(scoreLiveSession('mapped-intent', turns)).toMatchObject({
-      agentCatalogCount: 1,
+      agentCatalogCount: 0,
       catalogCorrect: true,
       passed: true,
       relatedCorrect: 3,
@@ -50,6 +48,16 @@ describe('Intent discovery harness capture', () => {
       wrongSkillLoads: 0,
     })
 
+    turns[0] = sessionTurn('unrelated-format', 'unrelated', {
+      catalogCommands: ['npx @tanstack/intent catalog'],
+    })
+    expect(scoreLiveSession('mapped-intent', turns)).toMatchObject({
+      agentCatalogCount: 1,
+      catalogCorrect: false,
+      passed: false,
+    })
+
+    turns[0] = sessionTurn('unrelated-format', 'unrelated')
     turns[2] = sessionTurn('start-server-function', 'related', {
       expectedSkillArea: 'start',
       intentLoads: ['@tanstack/router#routing'],
@@ -133,10 +141,21 @@ describe('Intent discovery harness capture', () => {
         {
           type: 'tool.execution_start',
           data: {
+            toolCallId: 'load-start',
             toolName: 'bash',
             arguments: {
               command:
                 'npx @tanstack/intent catalog && npx @tanstack/intent load @tanstack/start#server-functions',
+            },
+          },
+        },
+        {
+          type: 'tool.execution_complete',
+          data: {
+            toolCallId: 'load-start',
+            result: {
+              content:
+                '---\nname: "server-functions"\ndescription: "TanStack Start server functions, handlers, validation, and route loader integration."\n---',
             },
           },
         },
@@ -147,13 +166,203 @@ describe('Intent discovery harness capture', () => {
       ]),
     ).toEqual({
       catalogCommands: ['npx @tanstack/intent catalog'],
+      copilotVersion: '',
       finalAnswer: 'Completed the turn.',
+      hookContextBytes: 0,
+      hookContextReceipts: 0,
+      intentLoadAttempts: [
+        {
+          command:
+            'npx @tanstack/intent load @tanstack/start#server-functions',
+          skillUse: '@tanstack/start#server-functions',
+          status: 'successful',
+          toolCallId: 'load-start',
+        },
+      ],
       intentLoads: ['@tanstack/start#server-functions'],
       model: 'test-model',
+      modelCacheState: [],
       nativeSkills: ['@tanstack/router#routing'],
       shellCommands: [
         'npx @tanstack/intent catalog && npx @tanstack/intent load @tanstack/start#server-functions',
       ],
+    })
+  })
+
+  it('records valid hook context that reached Copilot', () => {
+    const context =
+      'Available Intent skills:\n\n- @tanstack/router#routing: Router guidance.'
+
+    expect(
+      extractTurnEvidence([
+        {
+          type: 'hook.end',
+          data: {
+            success: true,
+            output: { additionalContext: context },
+          },
+        },
+      ]),
+    ).toMatchObject({
+      hookContextBytes: Buffer.byteLength(context),
+      hookContextReceipts: 1,
+    })
+  })
+
+  it('records Copilot version and model cache state', () => {
+    expect(
+      extractTurnEvidence([
+        {
+          type: 'session.start',
+          data: { copilotVersion: '1.0.79-2' },
+        },
+        {
+          type: 'session.usage_checkpoint',
+          data: {
+            modelCacheState: [
+              {
+                cacheExpiresAt: '2026-08-05T04:00:00.000Z',
+                cacheTtlSeconds: 300,
+                modelId: 'claude-sonnet-5',
+              },
+            ],
+          },
+        },
+      ]),
+    ).toMatchObject({
+      copilotVersion: '1.0.79-2',
+      modelCacheState: [
+        {
+          cacheExpiresAt: '2026-08-05T04:00:00.000Z',
+          cacheTtlSeconds: 300,
+          modelId: 'claude-sonnet-5',
+        },
+      ],
+    })
+  })
+
+  it('does not count a failed load execution as delivered guidance', () => {
+    expect(
+      extractTurnEvidence([
+        {
+          type: 'tool.execution_start',
+          data: {
+            toolCallId: 'load-router',
+            toolName: 'bash',
+            arguments: {
+              command: 'intent load @tanstack/router#routing',
+            },
+          },
+        },
+        {
+          type: 'tool.execution_complete',
+          data: {
+            toolCallId: 'load-router',
+            result: {
+              content:
+                '/bin/bash: intent: command not found\n<shellId: 0 completed with exit code 127>',
+            },
+          },
+        },
+      ]),
+    ).toMatchObject({
+      intentLoadAttempts: [
+        {
+          command: 'intent load @tanstack/router#routing',
+          skillUse: '@tanstack/router#routing',
+          status: 'failed',
+          toolCallId: 'load-router',
+        },
+      ],
+      intentLoads: [],
+    })
+  })
+
+  it('records denied load executions separately from successful loads', () => {
+    expect(
+      extractTurnEvidence([
+        {
+          type: 'tool.execution_start',
+          data: {
+            toolCallId: 'load-router',
+            toolName: 'bash',
+            arguments: {
+              command:
+                './node_modules/.bin/intent load @tanstack/router#routing',
+            },
+          },
+        },
+        {
+          type: 'tool.execution_complete',
+          data: {
+            toolCallId: 'load-router',
+            error: { code: 'denied' },
+          },
+        },
+      ]),
+    ).toMatchObject({
+      intentLoadAttempts: [
+        {
+          skillUse: '@tanstack/router#routing',
+          status: 'denied',
+        },
+      ],
+      intentLoads: [],
+    })
+  })
+
+  it('records direct intent_load tool events', () => {
+    expect(
+      extractTurnEvidence([
+        {
+          type: 'tool.execution_start',
+          data: {
+            arguments: { use: '@tanstack/router#routing' },
+            toolCallId: 'native-load-router',
+            toolName: 'intent_load',
+          },
+        },
+        {
+          type: 'tool.execution_complete',
+          data: {
+            result: {
+              content:
+                '---\nname: "routing"\ndescription: "TanStack Router route loaders, route params, pending states, and loader data consumption."\n---',
+            },
+            toolCallId: 'native-load-router',
+          },
+        },
+      ]),
+    ).toMatchObject({
+      intentLoadAttempts: [
+        {
+          command: 'intent_load @tanstack/router#routing',
+          skillUse: '@tanstack/router#routing',
+          status: 'successful',
+          toolCallId: 'native-load-router',
+        },
+      ],
+      intentLoads: ['@tanstack/router#routing'],
+      shellCommands: [],
+    })
+  })
+
+  it('fails strict discovery when the correct skill is loaded twice', () => {
+    const score = scoreLiveSession('mapped-intent', [
+      sessionTurn('router-loader', 'related', {
+        expectedSkillArea: 'router',
+        intentLoadAttempts: [
+          successfulLoad('@tanstack/router#routing', 'load-router-1'),
+          successfulLoad('@tanstack/router#routing', 'load-router-2'),
+        ],
+        intentLoads: ['@tanstack/router#routing'],
+      }),
+    ])
+
+    expect(score).toMatchObject({
+      duplicateSkillLoads: 1,
+      passed: false,
+      relatedCorrect: 0,
     })
   })
 
@@ -162,6 +371,21 @@ describe('Intent discovery harness capture', () => {
     [
       'pnpm exec intent load @tanstack/router#routing',
       'pnpm exec intent load @tanstack/router#routing',
+      '@tanstack/router#routing',
+    ],
+    [
+      'npm exec -- intent load @tanstack/router#routing',
+      'npm exec -- intent load @tanstack/router#routing',
+      '@tanstack/router#routing',
+    ],
+    [
+      'npx intent load @tanstack/router#routing',
+      'npx intent load @tanstack/router#routing',
+      '@tanstack/router#routing',
+    ],
+    [
+      './node_modules/.bin/intent load @tanstack/router#routing',
+      './node_modules/.bin/intent load @tanstack/router#routing',
       '@tanstack/router#routing',
     ],
     [
@@ -371,6 +595,12 @@ function sessionTurn(
     catalogCommands?: Array<string>
     expectedSkillArea?: 'router' | 'start' | 'table-v9'
     hookCatalogInjections?: number
+    intentLoadAttempts?: Array<{
+      command: string
+      skillUse: string
+      status: 'denied' | 'failed' | 'successful'
+      toolCallId: string
+    }>
     intentLoads?: Array<string>
   } = {},
 ) {
@@ -382,9 +612,19 @@ function sessionTurn(
     catalogCommands: overrides.catalogCommands ?? [],
     expectedSkillArea: overrides.expectedSkillArea,
     hookCatalogInjections,
+    intentLoadAttempts: overrides.intentLoadAttempts ?? [],
     intentLoads: overrides.intentLoads ?? [],
     nativeSkills: [],
     runnerCompleted: true,
     taskPassed: true,
+  }
+}
+
+function successfulLoad(skillUse: string, toolCallId: string) {
+  return {
+    command: `intent load ${skillUse}`,
+    skillUse,
+    status: 'successful' as const,
+    toolCallId,
   }
 }

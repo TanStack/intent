@@ -1,31 +1,24 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { scoreLiveSession } from '../graders/session-scoring'
 import { extractTurnEvidence } from './session-events'
 import { prepareCopilotRun } from './prepare-copilot-home'
+import { resolveRunsDir } from './run-paths'
 import { validateSessionTurn } from './validate-session-turn'
 import type { LiveSessionCase } from '../corpus/live-sessions'
 import type {
   ScoredSessionTurn,
   SessionScore,
 } from '../graders/session-scoring'
-import type { TurnEvidence } from './session-events'
+import type { ModelCacheState, TurnEvidence } from './session-events'
 import type { CopilotRun } from './prepare-copilot-home'
 import type { NormalizedMessage, ToolCallRecord } from 'vitest-evals'
 
 const commandTimeoutMs = Number(
   process.env.INTENT_DISCOVERY_COMMAND_TIMEOUT_MS ?? '300000',
 )
-const sessionResultDir = join(
-  dirname(dirname(fileURLToPath(import.meta.url))),
-  'runs',
-  'latest',
-  'sessions',
-)
-
 export class LiveCopilotRunnerUnavailableError extends Error {
   constructor() {
     super(
@@ -39,6 +32,15 @@ export type CopilotSessionTurn = ScoredSessionTurn &
   TurnEvidence & {
     durationMs: number
     exitCode: number | null
+    hookCommandDurationMs: number
+    hookExactCommandOutputs: number
+    hookExitedSuccessfully: number
+    hookInjectedBytes: number
+    hookInvocations: number
+    hookOmittedSkillCount: number
+    hookRepresentedSkillCount: number
+    hookSubagentCatalogInjections: number
+    hookValidOutputs: number
     prompt: string
     stderr: string
     transcriptPath: string
@@ -47,8 +49,12 @@ export type CopilotSessionTurn = ScoredSessionTurn &
 
 export type CopilotSessionRun = {
   agentErrors: Array<string>
+  cacheStatus: 'not-observable' | 'observed'
+  copilotVersion: string
   fileDiff: string
+  hookContexts: Array<string>
   messages: Array<NormalizedMessage>
+  modelCacheState: Array<ModelCacheState>
   runId: string
   score: SessionScore
   sessionId: string
@@ -84,6 +90,9 @@ export async function runCopilotSession({
   )
   const turns: Array<CopilotSessionTurn> = []
   const agentErrors: Array<string> = []
+  const hookContexts = new Set<string>()
+  const modelCacheStateByModel = new Map<string, ModelCacheState>()
+  let copilotVersion = ''
   let eventOffset = 0
   let hookOffset = 0
 
@@ -99,23 +108,52 @@ export async function runCopilotSession({
       prompt: turn.prompt,
       workspacePath,
     })
-    const eventDelta = readJsonLines(eventPath, eventOffset)
-    const hookDelta = copilotRun.hookStateFile
-      ? readJsonLines(copilotRun.hookStateFile, hookOffset)
-      : { nextOffset: 0, values: [] }
-    eventOffset = eventDelta.nextOffset
-    hookOffset = hookDelta.nextOffset
-    const evidence = extractTurnEvidence(eventDelta.values)
-    if (!evidence.finalAnswer || !evidence.model) {
-      throw new Error(`${turn.id}: incomplete structured event evidence`)
+    let evidence = emptyTurnEvidence()
+    let evidenceError = ''
+    let hookDelta: {
+      nextOffset: number
+      values: Array<Record<string, unknown>>
+    } = { nextOffset: hookOffset, values: [] }
+    try {
+      const eventDelta = readJsonLines(eventPath, eventOffset)
+      hookDelta = copilotRun.hookStateFile
+        ? readJsonLines(copilotRun.hookStateFile, hookOffset)
+        : { nextOffset: 0, values: [] }
+      eventOffset = eventDelta.nextOffset
+      hookOffset = hookDelta.nextOffset
+      evidence = extractTurnEvidence(eventDelta.values)
+      if (!evidence.finalAnswer || !evidence.model) {
+        throw new Error('incomplete structured event evidence')
+      }
+    } catch (error) {
+      evidenceError = `${turn.id}: ${error instanceof Error ? error.message : String(error)}`
     }
-    const validation = validateSessionTurn(workspacePath, turn)
-    const runnerCompleted = result.exitCode === 0
-    const hookCatalogInjections = hookDelta.values.filter(
-      isSuccessfulCatalogInjection,
-    ).length
+    if (evidence.copilotVersion) copilotVersion = evidence.copilotVersion
+    for (const cacheState of evidence.modelCacheState) {
+      modelCacheStateByModel.set(cacheState.modelId, cacheState)
+    }
+    const validation = evidenceError
+      ? { passed: false, reason: evidenceError }
+      : validateSessionTurn(workspacePath, turn)
+    const runnerCompleted = result.exitCode === 0 && !evidenceError
+    const hookInjections = hookDelta.values.flatMap((value) => {
+      const injection = readCatalogInjection(value)
+      return injection ? [injection] : []
+    })
+    for (const injection of hookInjections) {
+      hookContexts.add(injection.context)
+    }
+    const sessionHookInjections = hookInjections.filter(
+      (injection) => injection.lifecycleEventName === 'SessionStart',
+    )
+    const subagentHookInjections = hookInjections.filter(
+      (injection) => injection.lifecycleEventName === 'SubagentStart',
+    )
+    const hookCatalogInjections = sessionHookInjections.length
 
-    if (!runnerCompleted) {
+    if (evidenceError) {
+      agentErrors.push(evidenceError)
+    } else if (!runnerCompleted) {
       agentErrors.push(
         `${turn.id}: ${result.stderr || result.stdout || `exit ${result.exitCode}`}`,
       )
@@ -131,6 +169,31 @@ export async function runCopilotSession({
       durationMs: Date.now() - startedAt,
       exitCode: result.exitCode,
       hookCatalogInjections,
+      hookCommandDurationMs: hookDelta.values.reduce(
+        (total, value) => total + numberValue(value.commandDurationMs),
+        0,
+      ),
+      hookExactCommandOutputs: hookInjections.filter(
+        (injection) => injection.exactLoadCommands,
+      ).length,
+      hookExitedSuccessfully: hookDelta.values.filter(
+        (value) => value.exitCode === 0,
+      ).length,
+      hookInjectedBytes: hookInjections.reduce(
+        (total, injection) => total + injection.contextBytes,
+        0,
+      ),
+      hookInvocations: hookDelta.values.length,
+      hookOmittedSkillCount: sessionHookInjections.reduce(
+        (total, injection) => total + injection.omittedSkillCount,
+        0,
+      ),
+      hookRepresentedSkillCount: sessionHookInjections.reduce(
+        (total, injection) => total + injection.representedSkillCount,
+        0,
+      ),
+      hookSubagentCatalogInjections: subagentHookInjections.length,
+      hookValidOutputs: hookInjections.length,
       prompt: turn.prompt,
       runnerCompleted,
       stderr: result.stderr,
@@ -146,14 +209,21 @@ export async function runCopilotSession({
   }
 
   const score = scoreLiveSession(input.condition, turns)
+  const modelCacheState = [...modelCacheStateByModel.values()].sort(
+    (left, right) => left.modelId.localeCompare(right.modelId),
+  )
 
   const run = {
     agentErrors,
+    cacheStatus: modelCacheState.length > 0 ? ('observed' as const) : ('not-observable' as const),
+    copilotVersion: copilotVersion || 'not-observable',
     fileDiff: await collectFileDiff(sourcePath, workspacePath),
+    hookContexts: [...hookContexts],
     messages: turns.flatMap((turn) => [
       { role: 'user' as const, content: turn.prompt },
       { role: 'assistant' as const, content: turn.finalAnswer },
     ]),
+    modelCacheState,
     runId,
     score,
     sessionId,
@@ -164,6 +234,22 @@ export async function runCopilotSession({
   writeSessionResult(run, input)
 
   return run
+}
+
+function emptyTurnEvidence(): TurnEvidence {
+  return {
+    catalogCommands: [],
+    copilotVersion: '',
+    finalAnswer: '',
+    hookContextBytes: 0,
+    hookContextReceipts: 0,
+    intentLoadAttempts: [],
+    intentLoads: [],
+    model: '',
+    modelCacheState: [],
+    nativeSkills: [],
+    shellCommands: [],
+  }
 }
 
 type CommandResult = {
@@ -201,6 +287,19 @@ async function runCommand({
         COPILOT_HOME: copilotRun.copilotHome,
         ...(copilotRun.hookCommand
           ? { INTENT_DISCOVERY_HOOK_COMMAND: copilotRun.hookCommand }
+          : {}),
+        ...(copilotRun.hookContextFormat
+          ? {
+              INTENT_DISCOVERY_HOOK_CONTEXT_FORMAT:
+                copilotRun.hookContextFormat,
+            }
+          : {}),
+        ...(copilotRun.hookMaxContextBytes
+          ? {
+              INTENT_DISCOVERY_HOOK_MAX_BYTES: String(
+                copilotRun.hookMaxContextBytes,
+              ),
+            }
           : {}),
         ...(copilotRun.hookStateFile
           ? { INTENT_DISCOVERY_HOOK_STATE: copilotRun.hookStateFile }
@@ -269,17 +368,44 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function isSuccessfulCatalogInjection(value: Record<string, unknown>): boolean {
-  if (value.exitCode !== 0 || typeof value.stdout !== 'string') return false
+function readCatalogInjection(
+  value: Record<string, unknown>,
+): {
+  context: string
+  contextBytes: number
+  exactLoadCommands: boolean
+  lifecycleEventName: 'SessionStart' | 'SubagentStart' | 'unknown'
+  omittedSkillCount: number
+  representedSkillCount: number
+} | null {
+  if (value.exitCode !== 0 || typeof value.stdout !== 'string') return null
   try {
     const output = JSON.parse(value.stdout) as { additionalContext?: unknown }
-    return (
-      typeof output.additionalContext === 'string' &&
-      output.additionalContext.includes('Available Intent skills:')
-    )
+    if (
+      typeof output.additionalContext !== 'string' ||
+      !output.additionalContext.includes('Available Intent skills:')
+    ) {
+      return null
+    }
+    return {
+      context: output.additionalContext,
+      contextBytes: Buffer.byteLength(output.additionalContext),
+      exactLoadCommands: value.exactLoadCommands === true,
+      lifecycleEventName:
+        value.lifecycleEventName === 'SessionStart' ||
+        value.lifecycleEventName === 'SubagentStart'
+          ? value.lifecycleEventName
+          : 'unknown',
+      omittedSkillCount: numberValue(value.omittedSkillCount),
+      representedSkillCount: numberValue(value.representedSkillCount),
+    }
   } catch {
-    return false
+    return null
   }
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
 function turnToolCalls(turn: CopilotSessionTurn): Array<ToolCallRecord> {
@@ -299,14 +425,20 @@ function writeSessionResult(
   run: CopilotSessionRun,
   input: LiveSessionCase,
 ): void {
+  const sessionResultDir = join(resolveRunsDir(), 'latest', 'sessions')
   mkdirSync(sessionResultDir, { recursive: true })
   writeFileSync(
     join(sessionResultDir, `${sanitizeFileName(run.runId)}.json`),
     `${JSON.stringify(
       {
         agentErrors: run.agentErrors,
+        cacheStatus: run.cacheStatus,
         condition: input.condition,
+        copilotVersion: run.copilotVersion,
+        hookContexts: run.hookContexts,
+        modelCacheState: run.modelCacheState,
         profile: input.profile,
+        repetition: input.repetition,
         runId: run.runId,
         score: run.score,
         sessionId: run.sessionId,

@@ -24,9 +24,9 @@ pnpm eval:intent-discovery:report
 
 Only the live `copilot -p` subprocess runs are slow; the saved-transcript suite (`pnpm eval:intent-discovery`) is unaffected.
 
-- The default matrix contains 20 isolated sessions: five model/reasoning profiles paired across unaided, symlink, map, and hook delivery.
+- The default matrix contains 32 isolated sessions: eight model/reasoning profiles paired across unaided, symlink, map, and hook delivery.
 - Every session preserves one Copilot session and workspace across six turns: three related tasks, two clearly unrelated tasks, and one table-named distractor that must not load the TanStack Table skill.
-- Profiles are `claude-haiku-4.5/default`, `claude-sonnet-4.6/medium`, `claude-opus-4.8/high`, `gpt-5.4-mini/low`, and `gpt-5.6-sol/high`. `default` means the model rejects configurable reasoning effort; no silent fallback is allowed.
+- Profiles are `claude-haiku-4.5/default`, `claude-sonnet-5/medium`, `claude-opus-4.8/high`, `gpt-5.4-mini/low`, `gpt-5.6-sol/high`, `gpt-5.6-luna/high`, `grok-4.5/medium`, and `mai-code-1-flash-picker/medium`. `default` means the model rejects configurable reasoning effort; no silent fallback is allowed.
 - Sessions run serially by default. `INTENT_DISCOVERY_LIVE_CONCURRENCY` can raise concurrency, but concurrent `copilot -p` calls on one account previously measured slower.
 
 The optional LLM judge is secondary. It never changes deterministic session, catalog, discovery, abstention, or task-completion scores.

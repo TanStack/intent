@@ -4,7 +4,12 @@ import type { ExpectedSkillArea } from '../corpus/tasks'
 
 type DeliveryCondition = Extract<
   IntentDiscoveryCondition,
-  'hooked-intent' | 'mapped-intent' | 'no-intent' | 'symlink-intent'
+  | 'hooked-exact-intent'
+  | 'hooked-intent'
+  | 'mapped-exact-intent'
+  | 'mapped-intent'
+  | 'no-intent'
+  | 'symlink-intent'
 >
 
 export type ScoredSessionTurn = {
@@ -13,6 +18,10 @@ export type ScoredSessionTurn = {
   catalogCommands: Array<string>
   expectedSkillArea?: ExpectedSkillArea
   hookCatalogInjections: number
+  intentLoadAttempts: Array<{
+    skillUse: string
+    status: 'denied' | 'failed' | 'successful'
+  }>
   intentLoads: Array<string>
   nativeSkills: Array<string>
   runnerCompleted: boolean
@@ -22,7 +31,11 @@ export type ScoredSessionTurn = {
 export type SessionScore = {
   agentCatalogCount: number
   catalogCorrect: boolean
+  deniedSkillLoads: number
+  duplicateSkillLoads: number
+  failedSkillLoads: number
   hookCatalogInjections: number
+  missedSkillLoads: number
   passed: boolean
   relatedCorrect: number
   relatedTotal: number
@@ -35,6 +48,7 @@ export type SessionScore = {
   }>
   unrelatedCorrect: number
   unrelatedTotal: number
+  unnecessarySkillLoads: number
   wrongSkillLoads: number
 }
 
@@ -51,8 +65,13 @@ export function scoreLiveSession(
     0,
   )
   const catalogCorrect = catalogBehaviorIsCorrect(condition, turns)
+  let deniedSkillLoads = 0
+  let duplicateSkillLoads = 0
+  let failedSkillLoads = 0
+  let missedSkillLoads = 0
   let relatedCorrect = 0
   let unrelatedCorrect = 0
+  let unnecessarySkillLoads = 0
   let wrongSkillLoads = 0
 
   const turnResults = turns.map((turn) => {
@@ -63,18 +82,38 @@ export function scoreLiveSession(
       condition === 'symlink-intent' ? turn.nativeSkills : turn.intentLoads
     const inactive =
       condition === 'symlink-intent' ? turn.intentLoads : turn.nativeSkills
+    const successfulAttempts = turn.intentLoadAttempts.filter(
+      (attempt) => attempt.status === 'successful',
+    )
+    const duplicateLoads = Math.max(
+      0,
+      successfulAttempts.length - turn.intentLoads.length,
+    )
+    deniedSkillLoads += turn.intentLoadAttempts.filter(
+      (attempt) => attempt.status === 'denied',
+    ).length
+    failedSkillLoads += turn.intentLoadAttempts.filter(
+      (attempt) => attempt.status === 'failed',
+    ).length
+    duplicateSkillLoads += duplicateLoads
+    if (expectedUse && !active.includes(expectedUse)) missedSkillLoads++
+    if (expectedUse) {
+      wrongSkillLoads += [...active, ...inactive].filter(
+        (use) => use !== expectedUse,
+      ).length
+    } else {
+      unnecessarySkillLoads += active.length + inactive.length
+    }
     const discoveryCorrect =
       condition === 'no-intent'
         ? active.length === 0 && inactive.length === 0
         : expectedUse
           ? active.length === 1 &&
             active[0] === expectedUse &&
-            inactive.length === 0
+            inactive.length === 0 &&
+            duplicateLoads === 0
           : active.length === 0 && inactive.length === 0
 
-    wrongSkillLoads += [...active, ...inactive].filter(
-      (use) => !expectedUse || use !== expectedUse,
-    ).length
     if (discoveryCorrect) {
       if (turn.kind === 'related') relatedCorrect++
       else unrelatedCorrect++
@@ -93,7 +132,11 @@ export function scoreLiveSession(
   return {
     agentCatalogCount,
     catalogCorrect,
+    deniedSkillLoads,
+    duplicateSkillLoads,
+    failedSkillLoads,
     hookCatalogInjections,
+    missedSkillLoads,
     passed: catalogCorrect && turnResults.every((turn) => turn.passed),
     relatedCorrect,
     relatedTotal: turns.filter((turn) => turn.kind === 'related').length,
@@ -102,6 +145,7 @@ export function scoreLiveSession(
     turnResults,
     unrelatedCorrect,
     unrelatedTotal: turns.filter((turn) => turn.kind === 'unrelated').length,
+    unnecessarySkillLoads,
     wrongSkillLoads,
   }
 }
@@ -110,14 +154,11 @@ function catalogBehaviorIsCorrect(
   condition: DeliveryCondition,
   turns: Array<ScoredSessionTurn>,
 ): boolean {
-  if (condition === 'mapped-intent') {
-    return (
-      turns[0]?.catalogCommands.length === 1 &&
-      turns.slice(1).every((turn) => turn.catalogCommands.length === 0)
-    )
+  if (condition === 'mapped-intent' || condition === 'mapped-exact-intent') {
+    return turns.every((turn) => turn.catalogCommands.length === 0)
   }
 
-  if (condition === 'hooked-intent') {
+  if (condition === 'hooked-intent' || condition === 'hooked-exact-intent') {
     return (
       turns.length > 0 &&
       turns.every((turn) => turn.hookCatalogInjections === 1) &&

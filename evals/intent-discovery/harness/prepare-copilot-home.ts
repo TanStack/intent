@@ -10,12 +10,11 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runInstallHooks } from '../../../packages/intent/src/hooks/install.js'
+import { SESSION_CATALOGUE_MAX_BYTES } from '../../../packages/intent/src/skills/catalogue-contract.js'
+import { resolveRunsDir } from './run-paths'
 import type { IntentDiscoveryCondition } from '../corpus/conditions'
 
 const harnessDir = dirname(fileURLToPath(import.meta.url))
-const runsDir = join(dirname(harnessDir), 'runs')
-const copilotHomesDir = join(runsDir, '.copilot-homes')
-const hookStateDir = join(runsDir, 'latest', 'hook-state')
 const hookObserverPath = join(
   harnessDir,
   'intent-hooks',
@@ -25,6 +24,8 @@ const hookObserverPath = join(
 export type CopilotRun = {
   copilotHome: string
   hookCommand?: string
+  hookContextFormat?: 'exact-commands'
+  hookMaxContextBytes?: number
   hookStateFile?: string
 }
 
@@ -39,17 +40,30 @@ export function prepareCopilotRun({
 }): CopilotRun {
   const copilotHome = buildCopilotHome(condition, runId)
 
-  if (condition !== 'hooked-intent') return { copilotHome }
+  if (condition !== 'hooked-intent' && condition !== 'hooked-exact-intent') {
+    return { copilotHome }
+  }
 
   const hookCommand = installObservedCatalogHook({
     copilotHome,
     workspacePath,
   })
+  const hookStateDir = join(resolveRunsDir(), 'latest', 'hook-state')
   mkdirSync(hookStateDir, { recursive: true })
   const hookStateFile = join(hookStateDir, `${runId}.jsonl`)
   rmSync(hookStateFile, { force: true })
 
-  return { copilotHome, hookCommand, hookStateFile }
+  return {
+    copilotHome,
+    hookCommand,
+    ...(condition === 'hooked-exact-intent'
+      ? {
+          hookContextFormat: 'exact-commands' as const,
+          hookMaxContextBytes: SESSION_CATALOGUE_MAX_BYTES,
+        }
+      : {}),
+    hookStateFile,
+  }
 }
 
 function buildCopilotHome(
@@ -57,7 +71,7 @@ function buildCopilotHome(
   runId: string,
 ): string {
   const realHome = join(homedir(), '.copilot')
-  const copilotHome = join(copilotHomesDir, condition, runId)
+  const copilotHome = join(resolveRunsDir(), '.copilot-homes', condition, runId)
 
   rmSync(copilotHome, { recursive: true, force: true })
   mkdirSync(join(copilotHome, 'hooks'), { recursive: true })
