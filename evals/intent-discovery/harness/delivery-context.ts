@@ -56,10 +56,7 @@ export function measureStaticDeliveryContext({
         representedSkillCount,
     injectedBytes,
     injectionFrequency: 'repository-instruction',
-    omittedSkillCount: Math.max(
-      0,
-      expectedSkillCount - representedSkillCount,
-    ),
+    omittedSkillCount: Math.max(0, expectedSkillCount - representedSkillCount),
     representedSkillCount,
     supplementalBytes,
   }

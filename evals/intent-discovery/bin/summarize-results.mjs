@@ -21,9 +21,7 @@ function summarizeReport(value) {
   const cases = reportCases(value)
   const liveCases = cases.filter((item) => item.runKind === 'live-copilot')
   const liveSessions = liveCases.filter(
-    (item) =>
-      item.runnerStatus === 'completed' &&
-      item.sessionScore,
+    (item) => item.runnerStatus === 'completed' && item.sessionScore,
   )
   const byCondition = Object.fromEntries(
     [...groupBy(liveCases, (item) => item.condition).entries()].map(
@@ -133,9 +131,7 @@ function summarizeCondition(cases) {
 
 function summarizeSessions(cases) {
   const scores = cases.map((item) => item.sessionScore)
-  const discoveryExpected = cases.some(
-    (item) => item.condition !== 'no-intent',
-  )
+  const discoveryExpected = cases.some((item) => item.condition !== 'no-intent')
   const turns = cases.flatMap((item) => item.turns)
   const observedTurns = cases.reduce(
     (total, item) => total + item.turns.length,
@@ -155,10 +151,7 @@ function summarizeSessions(cases) {
     hookExactCommandOutputs: sum(turns, 'hookExactCommandOutputs'),
     hookExitedSuccessfully: sum(turns, 'hookExitedSuccessfully'),
     hookInvocations: sum(turns, 'hookInvocations'),
-    hookSubagentCatalogInjections: sum(
-      turns,
-      'hookSubagentCatalogInjections',
-    ),
+    hookSubagentCatalogInjections: sum(turns, 'hookSubagentCatalogInjections'),
     hookValidOutputs: sum(turns, 'hookValidOutputs'),
     medianHookCommandDurationMs: median(
       turns
@@ -175,9 +168,7 @@ function summarizeSessions(cases) {
         .filter((turn) => Number(turn.hookCatalogInjections ?? 0) > 0)
         .map((turn) => Number(turn.hookRepresentedSkillCount ?? 0)),
     ),
-    medianInjectedBytes: median(
-      contextByteValues(cases, turns),
-    ),
+    medianInjectedBytes: median(contextByteValues(cases, turns)),
     medianTurnDurationMs: median(
       turns
         .map((turn) => Number(turn.durationMs ?? 0))

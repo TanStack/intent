@@ -91,12 +91,7 @@ describe('Intent discovery live Copilot harness', () => {
         expect(runsDir).toBeDefined()
         expect(
           existsSync(
-            join(
-              runsDir!,
-              'latest',
-              'sessions',
-              `live-${mappedCase.id}.json`,
-            ),
+            join(runsDir!, 'latest', 'sessions', `live-${mappedCase.id}.json`),
           ),
         ).toBe(true)
         expect(
@@ -138,7 +133,8 @@ describe('Intent discovery live Copilot harness', () => {
           { id: 'router-loader', runnerCompleted: false },
         ])
         expect(
-          (result.artifacts?.sessionScore as SessionScore).runnerCompletionCount,
+          (result.artifacts?.sessionScore as SessionScore)
+            .runnerCompletionCount,
         ).toBe(1)
         expect(result.errors).toHaveLength(1)
       },

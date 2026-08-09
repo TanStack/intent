@@ -172,8 +172,7 @@ describe('Intent discovery harness capture', () => {
       hookContextReceipts: 0,
       intentLoadAttempts: [
         {
-          command:
-            'npx @tanstack/intent load @tanstack/start#server-functions',
+          command: 'npx @tanstack/intent load @tanstack/start#server-functions',
           skillUse: '@tanstack/start#server-functions',
           status: 'successful',
           toolCallId: 'load-start',

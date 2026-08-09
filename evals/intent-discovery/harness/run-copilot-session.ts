@@ -215,7 +215,10 @@ export async function runCopilotSession({
 
   const run = {
     agentErrors,
-    cacheStatus: modelCacheState.length > 0 ? ('observed' as const) : ('not-observable' as const),
+    cacheStatus:
+      modelCacheState.length > 0
+        ? ('observed' as const)
+        : ('not-observable' as const),
     copilotVersion: copilotVersion || 'not-observable',
     fileDiff: await collectFileDiff(sourcePath, workspacePath),
     hookContexts: [...hookContexts],
@@ -368,9 +371,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function readCatalogInjection(
-  value: Record<string, unknown>,
-): {
+function readCatalogInjection(value: Record<string, unknown>): {
   context: string
   contextBytes: number
   exactLoadCommands: boolean

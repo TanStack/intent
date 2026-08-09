@@ -110,9 +110,7 @@ describe('Intent discovery condition setup', () => {
       expect(agents).toContain(
         'At the start of every task, inspect the package list below.',
       )
-      expect(agents).toContain(
-        'Never infer, shorten, or guess an ID.',
-      )
+      expect(agents).toContain('Never infer, shorten, or guess an ID.')
       expect(agents).toContain(
         'Do not run an Intent load command until you have read the map.',
       )

@@ -98,11 +98,7 @@ function renderExactCommands(value, maxBytes) {
             footerStart === -1 ? lines.length : footerStart,
           )
     const selected = [...entries]
-    let context = renderExactContext(
-      selected,
-      previousOmitted,
-      warningLines,
-    )
+    let context = renderExactContext(selected, previousOmitted, warningLines)
     while (Buffer.byteLength(context) > maxBytes && selected.length > 0) {
       selected.pop()
       context = renderExactContext(
@@ -145,9 +141,7 @@ function measureContext(value) {
     if (typeof output.additionalContext !== 'string') return {}
     const contextBytes = Buffer.byteLength(output.additionalContext)
     const representedSkillCount = [
-      ...output.additionalContext.matchAll(
-        /^- (@[^\s:]+#[^\s:]+)(?::|\s*$)/gm,
-      ),
+      ...output.additionalContext.matchAll(/^- (@[^\s:]+#[^\s:]+)(?::|\s*$)/gm),
     ].length
     const omitted = output.additionalContext.match(
       /- (\d+) additional skills? omitted/,

@@ -242,7 +242,7 @@ function writeMappedGuidance(
       '',
       'At the start of every task, inspect the package list below.',
       'If the task names a listed package or changes code that imports, configures, or calls it, you MUST complete these steps before editing:',
-      '1. Read that package\'s skill map.',
+      "1. Read that package's skill map.",
       '2. Match the task to the skill descriptions in the map.',
       '3. Copy each matching skill ID exactly. Never infer, shorten, or guess an ID.',
       '4. Run `npx @tanstack/intent load <id>` for each matching skill.',
@@ -265,8 +265,7 @@ function writeVisibleMappedGuidance(
   expectedSkillAreas: Array<ExpectedSkillArea>,
 ): string {
   const agentsPath = join(workspacePath, 'AGENTS.md')
-  const skills = expectedSkillAreas
-    .map((area) => skillByArea[area])
+  const skills = expectedSkillAreas.map((area) => skillByArea[area])
   writeFileSync(agentsPath, buildVisibleMappedGuidance(skills))
   return agentsPath
 }

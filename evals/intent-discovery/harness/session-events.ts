@@ -172,7 +172,10 @@ export function extractTurnEvidence(
 
   const intentLoadAttempts = pendingLoads.map((attempt) => ({
     ...attempt,
-    status: loadAttemptStatus(attempt.skillUse, completions.get(attempt.toolCallId)),
+    status: loadAttemptStatus(
+      attempt.skillUse,
+      completions.get(attempt.toolCallId),
+    ),
   }))
   const intentLoads = intentLoadAttempts
     .filter((attempt) => attempt.status === 'successful')
@@ -243,7 +246,5 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function numberValue(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? value
-    : undefined
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
