@@ -11,10 +11,13 @@ import { createRequire } from 'node:module'
 import { join, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { createIntentFsCache } from '../src/discovery/fs-cache.js'
 import {
+  scanForIntentSources,
   scanForIntents,
   scanIntentPackageAtRoot,
 } from '../src/discovery/scanner.js'
+import { nodeReadFs } from '../src/shared/utils.js'
 
 // ── Helpers ──
 
@@ -65,11 +68,359 @@ afterEach(() => {
 // ── Tests ──
 
 describe('scanForIntents', () => {
+  it('captures workspace and npm sources with the same package name', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      workspaces: ['packages/*'],
+      dependencies: { consumer: '1.0.0' },
+    })
+
+    const workspaceSharedDir = createDir(root, 'packages', 'shared')
+    writeJson(join(workspaceSharedDir, 'package.json'), {
+      name: 'shared',
+      version: '2.0.0',
+      intent: { version: 1, repo: 'test/workspace-shared', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(workspaceSharedDir, 'skills', 'workspace-skill'), {
+      name: 'workspace-skill',
+      description: 'Workspace shared skill',
+    })
+
+    const consumerDir = createDir(root, 'node_modules', 'consumer')
+    writeJson(join(consumerDir, 'package.json'), {
+      name: 'consumer',
+      version: '1.0.0',
+      dependencies: { shared: '1.0.0' },
+    })
+    const npmSharedDir = createDir(consumerDir, 'node_modules', 'shared')
+    writeJson(join(npmSharedDir, 'package.json'), {
+      name: 'shared',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'test/npm-shared', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(npmSharedDir, 'skills', 'npm-skill'), {
+      name: 'npm-skill',
+      description: 'Npm shared skill',
+    })
+
+    createDir(root, 'node_modules')
+    symlinkSync(workspaceSharedDir, join(root, 'node_modules', 'shared'), 'dir')
+
+    const result = scanForIntentSources(root)
+
+    expect(result.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'shared',
+          kind: 'workspace',
+          packageRoot: join(root, 'node_modules', 'shared'),
+          skills: [expect.objectContaining({ name: 'workspace-skill' })],
+        }),
+        expect.objectContaining({
+          name: 'shared',
+          kind: 'npm',
+          packageRoot: npmSharedDir,
+          skills: [expect.objectContaining({ name: 'npm-skill' })],
+        }),
+      ]),
+    )
+    expect(result.sources.filter((pkg) => pkg.name === 'shared')).toHaveLength(
+      2,
+    )
+    expect(result.scan.packages).toEqual([
+      expect.objectContaining({
+        name: 'shared',
+        kind: 'workspace',
+        packageRoot: join(root, 'node_modules', 'shared'),
+      }),
+    ])
+    expect(result.scan.conflicts[0]?.variants).toEqual(
+      expect.arrayContaining([
+        { version: '2.0.0', packageRoot: join(root, 'node_modules', 'shared') },
+        { version: '1.0.0', packageRoot: npmSharedDir },
+      ]),
+    )
+    expect(result.scan.warnings).toEqual([
+      expect.stringContaining('Found 2 installed variants of shared'),
+    ])
+  })
+
+  it('selects one winner for same-kind sources', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      workspaces: ['packages/*'],
+      dependencies: {
+        'consumer-a': '1.0.0',
+        'consumer-b': '1.0.0',
+      },
+    })
+
+    const workspaceSharedDir = createDir(root, 'packages', 'shared')
+    writeJson(join(workspaceSharedDir, 'package.json'), {
+      name: 'shared',
+      version: '3.0.0',
+      intent: { version: 1, repo: 'test/workspace-shared', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(workspaceSharedDir, 'skills', 'workspace-skill'), {
+      name: 'workspace-skill',
+      description: 'Workspace shared skill',
+    })
+
+    const consumerADir = createDir(root, 'node_modules', 'consumer-a')
+    const consumerBDir = createDir(root, 'node_modules', 'consumer-b')
+    for (const consumerDir of [consumerADir, consumerBDir]) {
+      writeJson(join(consumerDir, 'package.json'), {
+        name: consumerDir === consumerADir ? 'consumer-a' : 'consumer-b',
+        version: '1.0.0',
+        dependencies: { shared: '1.0.0' },
+      })
+    }
+
+    const npmSharedV1Dir = createDir(consumerADir, 'node_modules', 'shared')
+    writeJson(join(npmSharedV1Dir, 'package.json'), {
+      name: 'shared',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'test/npm-shared', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(npmSharedV1Dir, 'skills', 'npm-v1'), {
+      name: 'npm-v1',
+      description: 'Npm shared v1 skill',
+    })
+
+    const npmSharedV2Dir = createDir(consumerBDir, 'node_modules', 'shared')
+    writeJson(join(npmSharedV2Dir, 'package.json'), {
+      name: 'shared',
+      version: '2.0.0',
+      intent: { version: 1, repo: 'test/npm-shared', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(npmSharedV2Dir, 'skills', 'npm-v2'), {
+      name: 'npm-v2',
+      description: 'Npm shared v2 skill',
+    })
+
+    symlinkSync(workspaceSharedDir, join(root, 'node_modules', 'shared'), 'dir')
+
+    const sources = scanForIntentSources(root).sources.filter(
+      (pkg) => pkg.name === 'shared',
+    )
+
+    expect(sources).toHaveLength(2)
+    expect(sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'workspace',
+          packageRoot: join(root, 'node_modules', 'shared'),
+          version: '3.0.0',
+        }),
+        expect.objectContaining({
+          kind: 'npm',
+          packageRoot: npmSharedV2Dir,
+          version: '2.0.0',
+        }),
+      ]),
+    )
+  })
+
+  it('orders every exact required source before dependents and terminates cycles', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      workspaces: ['packages/*'],
+      dependencies: {
+        carrier: '1.0.0',
+        dependent: '1.0.0',
+      },
+    })
+
+    const workspaceSharedDir = createDir(root, 'packages', 'shared')
+    writeJson(join(workspaceSharedDir, 'package.json'), {
+      name: 'shared',
+      version: '2.0.0',
+      intent: { version: 1, repo: 'test/workspace-shared', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(workspaceSharedDir, 'skills', 'workspace-skill'), {
+      name: 'workspace-skill',
+      description: 'Workspace shared skill',
+    })
+
+    const carrierDir = createDir(root, 'node_modules', 'carrier')
+    writeJson(join(carrierDir, 'package.json'), {
+      name: 'carrier',
+      version: '1.0.0',
+      dependencies: { shared: '1.0.0' },
+    })
+    const npmSharedDir = createDir(carrierDir, 'node_modules', 'shared')
+    writeJson(join(npmSharedDir, 'package.json'), {
+      name: 'shared',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'test/npm-shared', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(npmSharedDir, 'skills', 'npm-skill'), {
+      name: 'npm-skill',
+      description: 'Npm shared skill',
+    })
+
+    const dependentDir = createDir(root, 'node_modules', 'dependent')
+    writeJson(join(dependentDir, 'package.json'), {
+      name: 'dependent',
+      version: '1.0.0',
+      intent: {
+        version: 1,
+        repo: 'test/dependent',
+        docs: 'docs/',
+        requires: ['shared', 'dependent'],
+      },
+    })
+    writeSkillMd(createDir(dependentDir, 'skills', 'dependent-skill'), {
+      name: 'dependent-skill',
+      description: 'Dependent skill',
+    })
+
+    symlinkSync(workspaceSharedDir, join(root, 'node_modules', 'shared'), 'dir')
+
+    const identities = scanForIntentSources(root).sources.map(
+      (pkg) => `${pkg.kind}:${pkg.name}`,
+    )
+    const dependentIndex = identities.indexOf('npm:dependent')
+
+    expect(identities.indexOf('workspace:shared')).toBeLessThan(dependentIndex)
+    expect(identities.indexOf('npm:shared')).toBeLessThan(dependentIndex)
+    expect(new Set(identities).size).toBe(identities.length)
+  })
+
+  it('walks transitive dependencies from valid flat-scan losers', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'monorepo',
+      private: true,
+      workspaces: ['packages/*'],
+    })
+
+    const appDir = createDir(root, 'packages', 'app')
+    writeJson(join(appDir, 'package.json'), {
+      name: 'app',
+      version: '1.0.0',
+      dependencies: { carrier: '1.0.0' },
+    })
+
+    const carrierDir = createDir(appDir, 'node_modules', 'carrier')
+    writeJson(join(carrierDir, 'package.json'), {
+      name: 'carrier',
+      version: '1.0.0',
+      dependencies: { nested: '1.0.0' },
+    })
+    const nestedV1Dir = createDir(carrierDir, 'node_modules', 'nested')
+    writeJson(join(nestedV1Dir, 'package.json'), {
+      name: 'nested',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'test/nested', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(nestedV1Dir, 'skills', 'nested-v1'), {
+      name: 'nested-v1',
+      description: 'Nested v1 skill',
+    })
+
+    const duplicateLoserDir = createDir(appDir, 'node_modules', 'duplicate')
+    writeJson(join(duplicateLoserDir, 'package.json'), {
+      name: 'duplicate',
+      version: '1.0.0',
+      dependencies: { nested: '2.0.0' },
+      intent: { version: 1, repo: 'test/duplicate', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(duplicateLoserDir, 'skills', 'duplicate-v1'), {
+      name: 'duplicate-v1',
+      description: 'Duplicate v1 skill',
+    })
+    const nestedV2Dir = createDir(duplicateLoserDir, 'node_modules', 'nested')
+    writeJson(join(nestedV2Dir, 'package.json'), {
+      name: 'nested',
+      version: '2.0.0',
+      intent: { version: 1, repo: 'test/nested', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(nestedV2Dir, 'skills', 'nested-v2'), {
+      name: 'nested-v2',
+      description: 'Nested v2 skill',
+    })
+
+    const duplicateWinnerDir = createDir(root, 'node_modules', 'duplicate')
+    writeJson(join(duplicateWinnerDir, 'package.json'), {
+      name: 'duplicate',
+      version: '3.0.0',
+      intent: { version: 1, repo: 'test/duplicate', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(duplicateWinnerDir, 'skills', 'duplicate-v3'), {
+      name: 'duplicate-v3',
+      description: 'Duplicate v3 skill',
+    })
+
+    const result = scanForIntentSources(root)
+    const publicNested = result.scan.packages.find(
+      (pkg) => pkg.name === 'nested',
+    )
+    const sourceNested = result.sources.find((pkg) => pkg.name === 'nested')
+    const nestedConflict = result.scan.conflicts.find(
+      (conflict) => conflict.packageName === 'nested',
+    )
+
+    expect(
+      result.scan.packages.find((pkg) => pkg.name === 'duplicate')?.packageRoot,
+    ).toBe(duplicateWinnerDir)
+    expect(publicNested).toEqual(
+      expect.objectContaining({ version: '2.0.0', packageRoot: nestedV2Dir }),
+    )
+    expect(sourceNested).toEqual(
+      expect.objectContaining({ version: '2.0.0', packageRoot: nestedV2Dir }),
+    )
+    expect(nestedConflict).toEqual(
+      expect.objectContaining({
+        chosen: { version: '2.0.0', packageRoot: nestedV2Dir },
+        variants: expect.arrayContaining([
+          { version: '1.0.0', packageRoot: nestedV1Dir },
+          { version: '2.0.0', packageRoot: nestedV2Dir },
+        ]),
+      }),
+    )
+    expect(result.scan.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Found 2 installed variants of nested'),
+      ]),
+    )
+  })
+
+  it('delegates the public scan to the source scanner', () => {
+    const packageDir = createDir(root, 'node_modules', 'stable-package')
+    writeJson(join(packageDir, 'package.json'), {
+      name: 'stable-package',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'test/stable', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(packageDir, 'skills', 'stable-skill'), {
+      name: 'stable-skill',
+      description: 'Stable skill',
+    })
+
+    const sourceScan = scanForIntentSources(root).scan
+
+    expect(sourceScan).toEqual(scanForIntents(root))
+  })
+
   it('returns empty packages when no node_modules exists', () => {
     const result = scanForIntents(root)
     expect(result.packages).toEqual([])
     expect(result.warnings).toEqual([])
     expect(result.nodeModules.local.exists).toBe(false)
+  })
+
+  it('returns the active filesystem from the source scan', () => {
+    const fsCache = createIntentFsCache()
+    const wrapper = { ...nodeReadFs }
+    fsCache.useFs(wrapper)
+    const options = { scope: 'local' as const, fsCache }
+
+    const result = scanForIntentSources(root, options)
+
+    expect(result.readFs).toBe(wrapper)
   })
 
   it('returns empty packages when node_modules has no intent packages', () => {

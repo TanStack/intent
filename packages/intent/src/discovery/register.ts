@@ -11,6 +11,12 @@ import type {
 
 type PackageJson = Record<string, unknown>
 
+export function packageIdentityKey(
+  pkg: Pick<IntentPackage, 'kind' | 'name'>,
+): string {
+  return `${pkg.kind}\0${pkg.name}`
+}
+
 function isLocalToProject(dirPath: string, projectRoot: string): boolean {
   return (
     dirPath.startsWith(projectRoot + sep) ||
@@ -26,6 +32,9 @@ export interface CreatePackageRegistrarOptions {
   getPackageKind: (packageRoot: string) => IntentPackage['kind']
   packageIndexes: Map<string, number>
   packages: Array<IntentPackage>
+  registeredPackages: Array<IntentPackage>
+  sourcePackageIndexes: Map<string, number>
+  sourcePackages: Array<IntentPackage>
   projectRoot: string
   readPkgJson: (dirPath: string) => PackageJson | null
   getFsIdentity: (path: string) => string
@@ -38,6 +47,30 @@ export interface CreatePackageRegistrarOptions {
   rememberVariant: (pkg: IntentPackage) => void
   validateIntentField: (pkgName: string, intent: unknown) => IntentConfig | null
   warnings: Array<string>
+}
+
+function shouldReplacePackage(
+  existing: IntentPackage,
+  candidate: IntentPackage,
+  opts: Pick<
+    CreatePackageRegistrarOptions,
+    'comparePackageVersions' | 'getPackageDepth' | 'projectRoot'
+  >,
+): boolean {
+  const existingDepth = opts.getPackageDepth(
+    existing.packageRoot,
+    opts.projectRoot,
+  )
+  const candidateDepth = opts.getPackageDepth(
+    candidate.packageRoot,
+    opts.projectRoot,
+  )
+
+  return (
+    candidateDepth < existingDepth ||
+    (candidateDepth === existingDepth &&
+      opts.comparePackageVersions(candidate.version, existing.version) > 0)
+  )
 }
 
 export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
@@ -124,6 +157,22 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
       kind: opts.getPackageKind(dirPath),
       source,
     }
+    opts.registeredPackages.push(candidate)
+
+    const sourceIdentity = packageIdentityKey(candidate)
+    const existingSourceIndex = opts.sourcePackageIndexes.get(sourceIdentity)
+    if (existingSourceIndex === undefined) {
+      opts.sourcePackageIndexes.set(
+        sourceIdentity,
+        opts.sourcePackages.push(candidate) - 1,
+      )
+    } else {
+      const existingSource = opts.sourcePackages[existingSourceIndex]!
+      if (shouldReplacePackage(existingSource, candidate, opts)) {
+        opts.sourcePackages[existingSourceIndex] = candidate
+      }
+    }
+
     const existingIndex = opts.packageIndexes.get(name)
     if (existingIndex === undefined) {
       opts.rememberVariant(candidate)
@@ -139,20 +188,7 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     opts.rememberVariant(existing)
     opts.rememberVariant(candidate)
 
-    const existingDepth = opts.getPackageDepth(
-      existing.packageRoot,
-      opts.projectRoot,
-    )
-    const candidateDepth = opts.getPackageDepth(
-      candidate.packageRoot,
-      opts.projectRoot,
-    )
-    const shouldReplace =
-      candidateDepth < existingDepth ||
-      (candidateDepth === existingDepth &&
-        opts.comparePackageVersions(candidate.version, existing.version) > 0)
-
-    if (shouldReplace) {
+    if (shouldReplacePackage(existing, candidate, opts)) {
       opts.packages[existingIndex] = candidate
     }
 

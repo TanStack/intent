@@ -19,7 +19,8 @@ import {
 } from '../setup/workspace-patterns.js'
 import { createIntentFsCache } from './fs-cache.js'
 import { detectPackageManager } from './package-manager.js'
-import { createDependencyWalker, createPackageRegistrar } from './index.js'
+import { createPackageRegistrar, packageIdentityKey } from './register.js'
+import { createDependencyWalker } from './walk.js'
 import type { IntentFsCache } from './fs-cache.js'
 import type { ReadFs } from '../shared/utils.js'
 import type {
@@ -35,6 +36,12 @@ import type {
 
 type ScanOptionsWithFsCache = ScanOptions & {
   fsCache?: IntentFsCache
+}
+
+export interface ScanForIntentSourcesResult {
+  scan: ScanResult
+  sources: Array<IntentPackage>
+  readFs: ReadFs
 }
 
 interface PnpPackageLocator {
@@ -396,6 +403,41 @@ function topoSort(packages: Array<IntentPackage>): Array<IntentPackage> {
   return sorted
 }
 
+function topoSortSources(
+  sourcePackages: Array<IntentPackage>,
+): Array<IntentPackage> {
+  const byName = new Map<string, Array<IntentPackage>>()
+  for (const pkg of sourcePackages) {
+    const matches = byName.get(pkg.name)
+    if (matches) {
+      matches.push(pkg)
+    } else {
+      byName.set(pkg.name, [pkg])
+    }
+  }
+
+  const visited = new Set<string>()
+  const sorted: Array<IntentPackage> = []
+
+  function visit(pkg: IntentPackage): void {
+    const identity = packageIdentityKey(pkg)
+    if (visited.has(identity)) return
+    visited.add(identity)
+
+    for (const dependencyName of pkg.intent.requires ?? []) {
+      for (const dependency of byName.get(dependencyName) ?? []) {
+        visit(dependency)
+      }
+    }
+    sorted.push(pkg)
+  }
+
+  for (const pkg of sourcePackages) {
+    visit(pkg)
+  }
+  return sorted
+}
+
 function getPackageDepth(packageRoot: string, projectRoot: string): number {
   return relative(projectRoot, packageRoot).split(sep).length
 }
@@ -487,6 +529,13 @@ export function scanForIntents(
   root?: string,
   options: ScanOptions = {},
 ): ScanResult {
+  return scanForIntentSources(root, options).scan
+}
+
+export function scanForIntentSources(
+  root?: string,
+  options: ScanOptions = {},
+): ScanForIntentSourcesResult {
   const projectRoot = root ?? process.cwd()
   const scanScope = getScanScope(options)
   const fsCache =
@@ -498,6 +547,8 @@ export function scanForIntents(
     process.env.INTENT_GLOBAL_NODE_MODULES?.trim() || null
 
   const packages: Array<IntentPackage> = []
+  const registeredPackages: Array<IntentPackage> = []
+  const sourcePackages: Array<IntentPackage> = []
   const warnings: Array<string> = []
   const conflicts: Array<VersionConflict> = []
   const nodeModules: ScanResult['nodeModules'] = {
@@ -521,6 +572,7 @@ export function scanForIntents(
   }
   // Track registered package names to avoid duplicates across phases
   const packageIndexes = new Map<string, number>()
+  const sourcePackageIndexes = new Map<string, number>()
   const packageVariants = new Map<
     string,
     Map<string, { version: string; packageRoot: string }>
@@ -587,6 +639,9 @@ export function scanForIntents(
       exists: fsCache.exists,
       packageIndexes,
       packages,
+      registeredPackages,
+      sourcePackageIndexes,
+      sourcePackages,
       projectRoot,
       readPkgJson,
       rememberVariant,
@@ -602,7 +657,7 @@ export function scanForIntents(
   } = createDependencyWalker({
     fsCache,
     getFsIdentity: fsCache.getFsIdentity,
-    packages,
+    packages: registeredPackages,
     projectRoot,
     readPkgJson,
     scanNodeModulesDir,
@@ -702,7 +757,7 @@ export function scanForIntents(
   }
 
   if (!nodeModules.local.exists && !nodeModules.global.exists) {
-    return {
+    const scan: ScanResult = {
       packageManager,
       packages,
       warnings,
@@ -710,6 +765,11 @@ export function scanForIntents(
       conflicts,
       nodeModules,
       stats: getStats(),
+    }
+    return {
+      scan,
+      sources: topoSortSources(sourcePackages),
+      readFs: fsCache.getReadFs(),
     }
   }
 
@@ -731,7 +791,7 @@ export function scanForIntents(
   // Sort by dependency order
   const sorted = topoSort(packages)
 
-  return {
+  const scan: ScanResult = {
     packageManager,
     packages: sorted,
     warnings,
@@ -739,6 +799,11 @@ export function scanForIntents(
     conflicts,
     nodeModules,
     stats: getStats(),
+  }
+  return {
+    scan,
+    sources: topoSortSources(sourcePackages),
+    readFs: fsCache.getReadFs(),
   }
 }
 
@@ -761,8 +826,11 @@ export function scanIntentPackageAtRoot(
 ): ScanIntentPackageAtRootResult {
   const projectRoot = options.projectRoot ?? packageRoot
   const packages: Array<IntentPackage> = []
+  const registeredPackages: Array<IntentPackage> = []
+  const sourcePackages: Array<IntentPackage> = []
   const warnings: Array<string> = []
   const packageIndexes = new Map<string, number>()
+  const sourcePackageIndexes = new Map<string, number>()
   const fsCache = options.fsCache ?? createIntentFsCache()
   const getPackageKind = createPackageKindResolver(
     createWorkspacePackageKeySet(
@@ -794,6 +862,9 @@ export function scanIntentPackageAtRoot(
     exists: fsCache.exists,
     packageIndexes,
     packages,
+    registeredPackages,
+    sourcePackageIndexes,
+    sourcePackages,
     projectRoot,
     readPkgJson,
     rememberVariant() {},
