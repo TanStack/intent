@@ -2,8 +2,10 @@ import { execFileSync } from 'node:child_process'
 import {
   closeSync,
   existsSync,
+  fstatSync,
   lstatSync,
   openSync,
+  opendirSync,
   readFileSync,
   readSync,
   readdirSync,
@@ -28,24 +30,28 @@ export interface ReadFs {
   readdirSync: typeof readdirSync
   realpathSync: typeof realpathSync
   /**
-   * Optional low-level read primitives. When present (always on `node:fs` and
-   * Yarn's libzip-patched module) `parseFrontmatter` reads only the leading
+   * Optional bounded filesystem primitives. Skill hashing requires all five.
+   * When open/read/close are present, `parseFrontmatter` reads only the leading
    * region of a file instead of its whole body.
    */
+  opendirSync?: typeof opendirSync
   openSync?: typeof openSync
   readSync?: typeof readSync
   closeSync?: typeof closeSync
+  fstatSync?: typeof fstatSync
 }
 
 export const nodeReadFs: ReadFs = {
   existsSync,
   lstatSync,
+  opendirSync,
   readFileSync,
   readdirSync,
   realpathSync,
   openSync,
   readSync,
   closeSync,
+  fstatSync,
 }
 
 /**
