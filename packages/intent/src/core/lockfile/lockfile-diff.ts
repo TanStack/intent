@@ -5,7 +5,7 @@ import type {
   ReadIntentLockfileResult,
 } from './lockfile.js'
 
-export type LockfileSkillDiff =
+type LockfileSkillDiff =
   | { status: 'accepted'; path: string; contentHash: string }
   | { status: 'new'; path: string; currentContentHash: string }
   | {
@@ -24,7 +24,7 @@ type UnavailableSkillDiff = Extract<
 >
 type AvailableSkillDiff = Exclude<LockfileSkillDiff, UnavailableSkillDiff>
 
-export type LockfileSourceDiff =
+type LockfileSourceDiff =
   | {
       status: 'available'
       kind: 'npm' | 'workspace'

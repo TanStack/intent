@@ -8,7 +8,11 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { listIntentSkills, loadIntentSkill } from '../../src/core/index.js'
+import {
+  IntentCoreError,
+  listIntentSkills,
+  loadIntentSkill,
+} from '../../src/core/index.js'
 import { main } from '../../src/cli.js'
 
 const realTmpdir = realpathSync(tmpdir())
@@ -68,6 +72,19 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     writeIntentPackage(root, LISTED, 'core')
     writeIntentPackage(root, UNLISTED, 'core')
     writeIntentPackage(root, EXCLUDED, 'core')
+  }
+
+  function writeExactSkillFixture(excludeSelected = false): void {
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: {
+        skills: [`${LISTED}#selected`],
+        ...(excludeSelected ? { exclude: [`${LISTED}#selected`] } : {}),
+      },
+    })
+    writeIntentPackage(root, LISTED, 'selected')
+    writeIntentPackage(root, LISTED, 'sibling')
   }
 
   it('list surfaces only the listed package', () => {
@@ -166,5 +183,79 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     expect(reports.map((report) => report.library)).toEqual([LISTED])
 
     fetchSpy.mockRestore()
+  })
+
+  it('list returns only the exact selected skill', () => {
+    writeExactSkillFixture()
+
+    const result = listIntentSkills({ audience: 'human', cwd: root })
+
+    expect(result.packages.map((pkg) => pkg.name)).toEqual([LISTED])
+    expect(result.skills.map((skill) => skill.use)).toEqual([
+      `${LISTED}#selected`,
+    ])
+  })
+
+  it('install --map --dry-run includes only the exact selected skill', async () => {
+    writeExactSkillFixture()
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-exact-global-'),
+    )
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.chdir(root)
+
+    const exitCode = await main(['install', '--map', '--dry-run'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain(`id: "${LISTED}#selected"`)
+    expect(output).not.toContain(`id: "${LISTED}#sibling"`)
+
+    rmSync(isolatedGlobalRoot, { recursive: true, force: true })
+  })
+
+  it('load permits the exact selected skill and refuses its sibling', () => {
+    writeExactSkillFixture()
+
+    expect(loadIntentSkill(`${LISTED}#selected`, { cwd: root }).skillName).toBe(
+      'selected',
+    )
+
+    let thrown: unknown
+    try {
+      loadIntentSkill(`${LISTED}#sibling`, { cwd: root })
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('skill-not-listed')
+  })
+
+  it('a matching exclude wins and omits the selected skill from list and map', async () => {
+    writeExactSkillFixture(true)
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-excluded-skill-global-'),
+    )
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+    process.chdir(root)
+
+    const listed = listIntentSkills({ cwd: root })
+    let thrown: unknown
+    try {
+      loadIntentSkill(`${LISTED}#selected`, { cwd: root })
+    } catch (error) {
+      thrown = error
+    }
+    const exitCode = await main(['install', '--map', '--dry-run'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(listed.skills).toEqual([])
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('skill-excluded')
+    expect(exitCode).toBe(0)
+    expect(output).not.toContain(`id: "${LISTED}#selected"`)
+
+    rmSync(isolatedGlobalRoot, { recursive: true, force: true })
   })
 })

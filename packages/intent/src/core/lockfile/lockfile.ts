@@ -12,7 +12,7 @@ const CONTROL_OR_BIDI_PATTERN =
 const CONTENT_HASH_PATTERN = /^sha256-[0-9a-f]{64}$/
 const MAX_LOCKFILE_BYTES = 1024 * 1024
 
-export interface IntentLockfileSkill {
+interface IntentLockfileSkill {
   path: string
   contentHash: string
 }

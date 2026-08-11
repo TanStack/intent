@@ -11,7 +11,7 @@ import { resolveSkillUseFastPath } from './load-resolution.js'
 import { resolveProjectContext } from './project-context.js'
 import {
   checkLoadAllowed,
-  isSourcePermitted,
+  compileSkillSourcePolicy,
   packageNotListedRefusal,
   readSkillSourcesConfig,
   scanForPolicedIntents,
@@ -19,7 +19,7 @@ import {
 import type { ResolveSkillResult } from '../skills/resolver.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { ReadFs } from '../shared/utils.js'
-import type { ScanOptions, ScanScope } from '../shared/types.js'
+import type { ScanOptions, ScanResult, ScanScope } from '../shared/types.js'
 import type {
   IntentCoreErrorCode,
   IntentCoreOptions,
@@ -286,8 +286,12 @@ function resolveIntentSkillInCwd(
   const excludePatterns = getEffectiveExcludePatterns(options, projectContext)
   const excludeMatchers = compileExcludePatterns(excludePatterns)
   const config = readSkillSourcesConfig(cwd, projectContext)
+  const policy = compileSkillSourcePolicy(config)
 
-  const refusal = checkLoadAllowed(use, parsedUse, { config, excludeMatchers })
+  const refusal = checkLoadAllowed(use, parsedUse, {
+    policy,
+    excludeMatchers,
+  })
   if (refusal) {
     throw new IntentCoreError(refusal.code, refusal.message)
   }
@@ -302,10 +306,20 @@ function resolveIntentSkillInCwd(
     fsCache,
   )
   if (fastPathResolved) {
-    if (
-      !isSourcePermitted(config, parsedUse.packageName, fastPathResolved.kind)
-    ) {
-      const lateRefusal = packageNotListedRefusal(use, parsedUse.packageName)
+    const lateRefusal = checkLoadAllowed(
+      use,
+      {
+        packageName: fastPathResolved.packageName,
+        skillName: fastPathResolved.skillName,
+      },
+      {
+        policy,
+        excludeMatchers,
+        packageKind: fastPathResolved.kind,
+        availableSkills: fastPathResolved.availableSkills,
+      },
+    )
+    if (lateRefusal) {
       throw new IntentCoreError(lateRefusal.code, lateRefusal.message)
     }
     return toResolvedIntentSkill(
@@ -326,7 +340,11 @@ function resolveIntentSkillInCwd(
     )
   }
 
-  const { scan: scanResult, droppedNames } = scanForPolicedIntents({
+  const {
+    scan: scanResult,
+    resolutionPackages,
+    droppedNames,
+  } = scanForPolicedIntents({
     cwd,
     scanOptions: withFsCache(scanOptions, fsCache),
     coreOptions: options,
@@ -336,9 +354,13 @@ function resolveIntentSkillInCwd(
     const lateRefusal = packageNotListedRefusal(use, parsedUse.packageName)
     throw new IntentCoreError(lateRefusal.code, lateRefusal.message)
   }
+  const resolutionScanResult: ScanResult = {
+    ...scanResult,
+    packages: resolutionPackages,
+  }
   let resolved: ReturnType<typeof resolveSkillUse>
   try {
-    resolved = resolveSkillUse(use, scanResult)
+    resolved = resolveSkillUse(use, resolutionScanResult)
   } catch (err) {
     if (err instanceof ResolveSkillUseError) {
       throw new IntentCoreError(err.code, err.message, {
@@ -346,6 +368,29 @@ function resolveIntentSkillInCwd(
       })
     }
     throw err
+  }
+
+  const resolvedPackage = resolutionPackages.find(
+    (pkg) => pkg.packageRoot === resolved.packageRoot,
+  )
+  if (!resolvedPackage) {
+    throw new Error('Resolved package is missing from the scan inventory.')
+  }
+  const lateRefusal = checkLoadAllowed(
+    use,
+    {
+      packageName: resolved.packageName,
+      skillName: resolved.skillName,
+    },
+    {
+      policy,
+      excludeMatchers,
+      packageKind: resolvedPackage.kind,
+      availableSkills: resolvedPackage.skills,
+    },
+  )
+  if (lateRefusal) {
+    throw new IntentCoreError(lateRefusal.code, lateRefusal.message)
   }
 
   return toResolvedIntentSkill(

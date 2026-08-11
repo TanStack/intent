@@ -9,6 +9,7 @@ import { warningMentionsPackage } from './excludes.js'
 import { resolveProjectContext } from './project-context.js'
 import type { ResolveSkillResult } from '../skills/resolver.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
+import type { SkillEntry } from '../shared/types.js'
 import type { ProjectContext } from './project-context.js'
 import type { SkillUse } from '../skills/use.js'
 import type { IntentCoreOptions } from './types.js'
@@ -182,6 +183,7 @@ function getWorkspaceLoadFastPathCandidateDirs(
 }
 
 export interface FastPathResolveResult extends ResolveSkillResult {
+  availableSkills: Array<SkillEntry>
   kind: 'npm' | 'workspace'
 }
 
@@ -206,6 +208,7 @@ function resolveScannedPackageSkill(
     source: pkg.source,
     version: pkg.version,
     packageRoot: pkg.packageRoot,
+    availableSkills: pkg.skills,
     kind: pkg.kind,
     warnings: scanned.warnings.filter((warning) =>
       warningMentionsPackage(warning, pkg.name),
@@ -227,10 +230,9 @@ function resolveFromPackageRoots(
       projectRoot: cwd,
       skillNameHint: parsedUse.skillName,
     })
-    const directResolved = resolveScannedPackageSkill(scanned, parsedUse)
-    if (directResolved) return directResolved
+    const hintedResolved = resolveScannedPackageSkill(scanned, parsedUse)
 
-    if (scanned.package?.name === parsedUse.packageName) {
+    if (hintedResolved || scanned.package?.name === parsedUse.packageName) {
       const fallbackScanned = scanIntentPackageAtRoot(packageRoot, {
         fallbackName: parsedUse.packageName,
         fsCache,

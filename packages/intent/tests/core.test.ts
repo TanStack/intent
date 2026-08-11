@@ -900,9 +900,346 @@ describe('loadIntentSkill', () => {
     expect(loaded.packageName).toBe('@tanstack/query')
     expect(loaded.skillName).toBe('fetching')
   })
+
+  it('loads an exact selected skill', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['@tanstack/query#fetching'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    const loaded = loadIntentSkill('@tanstack/query#fetching', { cwd: root })
+
+    expect(loaded.packageName).toBe('@tanstack/query')
+    expect(loaded.skillName).toBe('fetching')
+  })
+
+  it('refuses an unselected sibling with skill-not-listed', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['@tanstack/query#fetching'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    writeSkillMd({
+      dir: join(
+        root,
+        'node_modules',
+        '@tanstack',
+        'query',
+        'skills',
+        'mutations',
+      ),
+      frontmatter: { name: 'mutations', description: 'Query mutations' },
+    })
+
+    let thrown: unknown
+    try {
+      loadIntentSkill('@tanstack/query#mutations', { cwd: root })
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('skill-not-listed')
+    expect((thrown as Error).message).toBe(
+      'Cannot load skill use "@tanstack/query#mutations": skill "@tanstack/query#mutations" is not listed in intent.skills.',
+    )
+  })
+
+  it('loads a canonical selected skill through its short request alias', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: {
+        skills: ['@tanstack/router-core#router-core/auth-and-guards'],
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/router-core',
+      version: '1.0.0',
+      skillName: 'router-core/auth-and-guards',
+      description: 'Router auth and guards',
+    })
+
+    const loaded = loadIntentSkill('@tanstack/router-core#auth-and-guards', {
+      cwd: root,
+    })
+
+    expect(loaded.skillName).toBe('router-core/auth-and-guards')
+  })
+
+  it('loads a short selected skill through its canonical request alias', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['@tanstack/router-core#auth-and-guards'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/router-core',
+      version: '1.0.0',
+      skillName: 'router-core/auth-and-guards',
+      description: 'Router auth and guards',
+    })
+
+    const loaded = loadIntentSkill(
+      '@tanstack/router-core#router-core/auth-and-guards',
+      { cwd: root },
+    )
+
+    expect(loaded.skillName).toBe('router-core/auth-and-guards')
+  })
+
+  it('loads only the exact short skill when its canonical alias collides', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['pkg#foo'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'pkg',
+      version: '1.0.0',
+      skillName: 'foo',
+      description: 'Short foo',
+    })
+    writeSkillMd({
+      dir: join(root, 'node_modules', 'pkg', 'skills', 'pkg', 'foo'),
+      frontmatter: { name: 'pkg/foo', description: 'Canonical foo' },
+    })
+
+    expect(loadIntentSkill('pkg#foo', { cwd: root }).skillName).toBe('foo')
+
+    let thrown: unknown
+    try {
+      loadIntentSkill('pkg#pkg/foo', { cwd: root })
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('skill-not-listed')
+  })
+
+  it('loads only the exact canonical skill when its short name collides', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['pkg#pkg/foo'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'pkg',
+      version: '1.0.0',
+      skillName: 'foo',
+      description: 'Short foo',
+    })
+    writeSkillMd({
+      dir: join(root, 'node_modules', 'pkg', 'skills', 'pkg', 'foo'),
+      frontmatter: { name: 'pkg/foo', description: 'Canonical foo' },
+    })
+
+    expect(loadIntentSkill('pkg#pkg/foo', { cwd: root }).skillName).toBe(
+      'pkg/foo',
+    )
+
+    let thrown: unknown
+    try {
+      loadIntentSkill('pkg#foo', { cwd: root })
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('skill-not-listed')
+  })
+
+  it('refuses a full-scan short alias when only the colliding canonical skill is selected', () => {
+    writeFileSync(join(root, '.pnp.cjs'), 'module.exports = {}\n')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['pkg#pkg/foo'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'pkg',
+      version: '1.0.0',
+      skillName: 'foo',
+      description: 'Short foo',
+    })
+    writeSkillMd({
+      dir: join(root, 'node_modules', 'pkg', 'skills', 'pkg', 'foo'),
+      frontmatter: { name: 'pkg/foo', description: 'Canonical foo' },
+    })
+
+    let thrown: unknown
+    let loaded = false
+    try {
+      loadIntentSkill('pkg#foo', { cwd: root })
+      loaded = true
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(loaded).toBe(false)
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('skill-not-listed')
+  })
+
+  it('refuses a full-scan canonical skill when only the colliding short skill is selected', () => {
+    writeFileSync(join(root, '.pnp.cjs'), 'module.exports = {}\n')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['pkg#foo'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'pkg',
+      version: '1.0.0',
+      skillName: 'foo',
+      description: 'Short foo',
+    })
+    writeSkillMd({
+      dir: join(root, 'node_modules', 'pkg', 'skills', 'pkg', 'foo'),
+      frontmatter: { name: 'pkg/foo', description: 'Canonical foo' },
+    })
+
+    let thrown: unknown
+    let loaded = false
+    try {
+      loadIntentSkill('pkg#pkg/foo', { cwd: root })
+      loaded = true
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(loaded).toBe(false)
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('skill-not-listed')
+  })
+
+  it('loads an exact short skill through the full scan when its canonical alias collides', () => {
+    writeFileSync(join(root, '.pnp.cjs'), 'module.exports = {}\n')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['pkg#foo'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'pkg',
+      version: '1.0.0',
+      skillName: 'foo',
+      description: 'Short foo',
+    })
+    writeSkillMd({
+      dir: join(root, 'node_modules', 'pkg', 'skills', 'pkg', 'foo'),
+      frontmatter: { name: 'pkg/foo', description: 'Canonical foo' },
+    })
+
+    const loaded = loadIntentSkill('pkg#foo', { cwd: root, debug: true })
+
+    expect(loaded.skillName).toBe('foo')
+    expect(loaded.debug?.resolution).toBe('full-scan')
+  })
+
+  it('loads an exact canonical skill through the full scan when its short name collides', () => {
+    writeFileSync(join(root, '.pnp.cjs'), 'module.exports = {}\n')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['pkg#pkg/foo'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: 'pkg',
+      version: '1.0.0',
+      skillName: 'foo',
+      description: 'Short foo',
+    })
+    writeSkillMd({
+      dir: join(root, 'node_modules', 'pkg', 'skills', 'pkg', 'foo'),
+      frontmatter: { name: 'pkg/foo', description: 'Canonical foo' },
+    })
+
+    const loaded = loadIntentSkill('pkg#pkg/foo', {
+      cwd: root,
+      debug: true,
+    })
+
+    expect(loaded.skillName).toBe('pkg/foo')
+    expect(loaded.debug?.resolution).toBe('full-scan')
+  })
 })
 
 describe('loadIntentSkill — kind-mismatch late gate', () => {
+  it('refuses a mixed-kind exact skill that only the other kind permits', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: {
+        skills: ['@tanstack/query#billing', 'workspace:@tanstack/query#auth'],
+      },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'billing',
+      description: 'Billing',
+    })
+    writeSkillMd({
+      dir: join(root, 'node_modules', '@tanstack', 'query', 'skills', 'auth'),
+      frontmatter: { name: 'auth', description: 'Auth' },
+    })
+
+    let thrown: unknown
+    try {
+      loadIntentSkill('@tanstack/query#auth', { cwd: root })
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('skill-not-listed')
+    expect((thrown as Error).message).toBe(
+      'Cannot load skill use "@tanstack/query#auth": skill "@tanstack/query#auth" is not listed in intent.skills.',
+    )
+  })
+
+  it('keeps an exact-selector kind mismatch as package-not-listed', () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'test-app',
+      private: true,
+      intent: { skills: ['workspace:@tanstack/query#auth'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'auth',
+      description: 'Auth',
+    })
+
+    let thrown: unknown
+    try {
+      loadIntentSkill('@tanstack/query#auth', { cwd: root })
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBeInstanceOf(IntentCoreError)
+    expect((thrown as IntentCoreError).code).toBe('package-not-listed')
+    expect((thrown as Error).message).toBe(
+      'Cannot load skill use "@tanstack/query#auth": package "@tanstack/query" is not listed in intent.skills.',
+    )
+  })
+
   it('refuses an npm-installed package listed only as workspace:<name>, via the fast path', () => {
     writeJson(join(root, 'package.json'), {
       name: 'test-app',

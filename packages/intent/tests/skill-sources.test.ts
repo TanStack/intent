@@ -95,6 +95,48 @@ describe('parseSkillSources — grammar', () => {
       ],
     })
   })
+
+  it('parses an unscoped exact npm skill selector', () => {
+    expect(parseSkillSources(['pkg#skill'])).toEqual({
+      mode: 'explicit',
+      sources: [{ raw: 'pkg#skill', id: 'pkg', skill: 'skill', kind: 'npm' }],
+    })
+  })
+
+  it('trims leading and trailing whitespace from an exact skill segment', () => {
+    expect(parseSkillSources(['pkg# skill '])).toEqual({
+      mode: 'explicit',
+      sources: [{ raw: 'pkg# skill ', id: 'pkg', skill: 'skill', kind: 'npm' }],
+    })
+  })
+
+  it('parses an unscoped exact workspace skill selector', () => {
+    expect(parseSkillSources(['workspace:pkg#skill'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        {
+          raw: 'workspace:pkg#skill',
+          id: 'pkg',
+          skill: 'skill',
+          kind: 'workspace',
+        },
+      ],
+    })
+  })
+
+  it('parses a scoped nested exact workspace skill selector', () => {
+    expect(parseSkillSources(['workspace:@scope/pkg#nested/skill'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        {
+          raw: 'workspace:@scope/pkg#nested/skill',
+          id: '@scope/pkg',
+          skill: 'nested/skill',
+          kind: 'workspace',
+        },
+      ],
+    })
+  })
 })
 
 describe('parseSkillSources — malformed entries (fail-whole-list)', () => {
@@ -183,6 +225,38 @@ describe('parseSkillSources — normalization and dedup', () => {
     })
   })
 
+  it('keeps a package selector and exact skill selector for the same package', () => {
+    expect(parseSkillSources(['pkg', 'pkg#skill'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        { raw: 'pkg', id: 'pkg', kind: 'npm' },
+        { raw: 'pkg#skill', id: 'pkg', skill: 'skill', kind: 'npm' },
+      ],
+    })
+  })
+
+  it('dedups the same exact selector from differently-formatted raw entries', () => {
+    expect(parseSkillSources(['pkg#skill', '  pkg#skill  '])).toEqual({
+      mode: 'explicit',
+      sources: [{ raw: 'pkg#skill', id: 'pkg', skill: 'skill', kind: 'npm' }],
+    })
+  })
+
+  it('keeps the same exact skill under different kinds as distinct sources', () => {
+    expect(parseSkillSources(['pkg#skill', 'workspace:pkg#skill'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        { raw: 'pkg#skill', id: 'pkg', skill: 'skill', kind: 'npm' },
+        {
+          raw: 'workspace:pkg#skill',
+          id: 'pkg',
+          skill: 'skill',
+          kind: 'workspace',
+        },
+      ],
+    })
+  })
+
   it('treats id case variance as distinct (case-sensitive)', () => {
     expect(parseSkillSources(['@scope/foo', '@scope/FOO'])).toEqual({
       mode: 'explicit',
@@ -256,9 +330,18 @@ describe('parseSkillSources — wildcard composition', () => {
 })
 
 describe('parseSkillSources — id validation', () => {
-  it('rejects skill-level granularity (#) in an npm entry', () => {
-    const error = expectParseError(['@scope/pkg#skill'])
-    expect(error.issues[0]?.message).toContain('skill-level granularity')
+  it('parses a scoped nested skill as an exact npm skill selector', () => {
+    expect(parseSkillSources(['@scope/pkg#nested/skill'])).toEqual({
+      mode: 'explicit',
+      sources: [
+        {
+          raw: '@scope/pkg#nested/skill',
+          id: '@scope/pkg',
+          skill: 'nested/skill',
+          kind: 'npm',
+        },
+      ],
+    })
   })
 
   it('rejects internal whitespace in a package name', () => {
@@ -269,6 +352,60 @@ describe('parseSkillSources — id validation', () => {
   it('rejects a stray separator in a workspace name', () => {
     const error = expectParseError(['workspace:a:b'])
     expect(error.issues[0]?.message).toContain('cannot contain ":"')
+  })
+
+  it.each([
+    '*#skill',
+    '@scope/*#skill',
+    'workspace:*#skill',
+    'workspace:@scope/*#skill',
+  ])('rejects a package pattern combined with a skill in %s', (selector) => {
+    const error = expectParseError([selector])
+    expect(error.issues[0]?.message).toContain(
+      'package patterns cannot select a skill',
+    )
+  })
+
+  it.each(['pkg#*', 'pkg#foo*'])('rejects a skill glob in %s', (selector) => {
+    const error = expectParseError([selector])
+    expect(error.issues[0]?.message).toContain('skill names cannot contain')
+  })
+
+  it('rejects multiple skill separators', () => {
+    const error = expectParseError(['pkg#a#b'])
+    expect(error.issues[0]?.message).toContain(
+      'must contain at most one "#" separator',
+    )
+  })
+
+  it.each(['#skill', 'pkg#'])(
+    'rejects an empty package or skill in %s',
+    (selector) => {
+      expect(() => parseSkillSources([selector])).toThrow(
+        SkillSourcesParseError,
+      )
+    },
+  )
+
+  it('rejects a whitespace-only exact skill segment', () => {
+    const error = expectParseError(['pkg#   '])
+
+    expect(error.issues[0]?.raw).toBe('pkg#   ')
+  })
+
+  it.each([
+    'pkg#.',
+    'pkg#..',
+    'pkg#foo/../bar',
+    'pkg#/skill',
+    'pkg#skill/',
+    'pkg#foo//bar',
+    'pkg#foo\\bar',
+    'pkg#foo\u0000bar',
+    'pkg#foo\u0001bar',
+    'pkg#foo\u202ebar',
+  ])('rejects an invalid exact skill path in %s', (selector) => {
+    expect(() => parseSkillSources([selector])).toThrow(SkillSourcesParseError)
   })
 })
 

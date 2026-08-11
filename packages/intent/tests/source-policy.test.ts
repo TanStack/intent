@@ -17,6 +17,8 @@ import {
   EMPTY_NOTE,
   MIGRATION_NOTICE,
   applySourcePolicy,
+  checkLoadAllowed,
+  compileSkillSourcePolicy,
   readSkillSourcesConfig,
 } from '../src/core/source-policy.js'
 import { parseSkillSources } from '../src/core/skill-sources.js'
@@ -60,6 +62,108 @@ function config(value: unknown) {
 function names(packages: Array<IntentPackage>): Array<string> {
   return packages.map((p) => p.name)
 }
+
+describe('compileSkillSourcePolicy', () => {
+  it('lets a package selector permit every skill in that package', () => {
+    const policy = compileSkillSourcePolicy(config(['pkg']))
+    const availableSkills = [skill('one'), skill('two')]
+
+    expect(policy.permitsPackage('pkg', 'npm')).toBe(true)
+    expect(policy.permitsSkill('pkg', 'one', 'npm', availableSkills)).toBe(true)
+    expect(policy.permitsSkill('pkg', 'two', 'npm', availableSkills)).toBe(true)
+  })
+
+  it('matches a canonical selector to an unambiguous short skill request', () => {
+    const policy = compileSkillSourcePolicy(
+      config(['@scope/router-core#router-core/auth']),
+    )
+    const availableSkills = [skill('router-core/auth')]
+
+    expect(
+      policy.permitsSkill(
+        '@scope/router-core',
+        'router-core/auth',
+        'npm',
+        availableSkills,
+      ),
+    ).toBe(true)
+    expect(
+      policy.permitsSkill(
+        '@scope/router-core',
+        'other',
+        'npm',
+        availableSkills,
+      ),
+    ).toBe(false)
+  })
+
+  it('matches a short selector to an unambiguous canonical skill', () => {
+    const policy = compileSkillSourcePolicy(config(['@scope/router-core#auth']))
+    const availableSkills = [skill('router-core/auth')]
+
+    expect(
+      policy.permitsSkill(
+        '@scope/router-core',
+        'router-core/auth',
+        'npm',
+        availableSkills,
+      ),
+    ).toBe(true)
+  })
+
+  it('uses exact-first resolution when short and canonical skills collide', () => {
+    const shortPolicy = compileSkillSourcePolicy(config(['pkg#foo']))
+    const canonicalPolicy = compileSkillSourcePolicy(config(['pkg#pkg/foo']))
+    const availableSkills = [skill('foo'), skill('pkg/foo')]
+
+    expect(shortPolicy.permitsSkill('pkg', 'foo', 'npm', availableSkills)).toBe(
+      true,
+    )
+    expect(
+      shortPolicy.permitsSkill('pkg', 'pkg/foo', 'npm', availableSkills),
+    ).toBe(false)
+    expect(
+      canonicalPolicy.permitsSkill('pkg', 'pkg/foo', 'npm', availableSkills),
+    ).toBe(true)
+    expect(
+      canonicalPolicy.permitsSkill('pkg', 'foo', 'npm', availableSkills),
+    ).toBe(false)
+  })
+
+  it('keeps exact skill selectors kind-aware', () => {
+    const npmPolicy = compileSkillSourcePolicy(config(['pkg#auth']))
+    const workspacePolicy = compileSkillSourcePolicy(
+      config(['workspace:pkg#auth']),
+    )
+    const availableSkills = [skill('auth')]
+
+    expect(npmPolicy.permitsPackage('pkg', 'workspace')).toBe(false)
+    expect(
+      npmPolicy.permitsSkill('pkg', 'auth', 'workspace', availableSkills),
+    ).toBe(false)
+    expect(workspacePolicy.permitsPackage('pkg', 'npm')).toBe(false)
+    expect(
+      workspacePolicy.permitsSkill('pkg', 'auth', 'npm', availableSkills),
+    ).toBe(false)
+  })
+})
+
+describe('checkLoadAllowed', () => {
+  it('defers exact skill permission until the complete inventory is available', () => {
+    const policy = compileSkillSourcePolicy(config(['pkg#selected']))
+    const parsed = { packageName: 'pkg', skillName: 'arbitrary' }
+    const params = { policy, excludeMatchers: [] }
+
+    expect(checkLoadAllowed('pkg#arbitrary', parsed, params)).toBeNull()
+    expect(
+      checkLoadAllowed('pkg#arbitrary', parsed, {
+        ...params,
+        packageKind: 'npm',
+        availableSkills: [skill('selected'), skill('arbitrary')],
+      }),
+    ).toMatchObject({ code: 'skill-not-listed' })
+  })
+})
 
 describe('applySourcePolicy — allowlist matrix', () => {
   it('includes a listed and discovered package', () => {
@@ -234,6 +338,138 @@ describe('applySourcePolicy — allowlist matrix', () => {
     )
     expect(input.skills.map((s) => s.name)).toEqual(['keep', 'drop'])
   })
+
+  it('keeps only an exact selected skill and withholds its sibling', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('pkg', ['billing', 'auth'])] },
+      { config: config(['pkg#billing']), excludeMatchers: [] },
+    )
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]?.skills.map((entry) => entry.name)).toEqual([
+      'billing',
+    ])
+    expect(result.hiddenSources).toEqual([{ name: 'pkg', skillCount: 1 }])
+  })
+
+  it('does not match a canonical selector to a distinct short skill', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/router-core', ['auth'])] },
+      {
+        config: config(['@scope/router-core#router-core/auth']),
+        excludeMatchers: [],
+      },
+    )
+
+    expect(result.packages[0]?.skills).toEqual([])
+    expect(result.notices).toEqual([
+      '1 discovered skill source has 1 skill not listed in intent.skills: @scope/router-core. Add to opt in.',
+      '"@scope/router-core#router-core/auth" is declared in intent.skills but was not discovered.',
+    ])
+  })
+
+  it('matches a short exact selector to a discovered canonical skill', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/router-core', ['router-core/auth'])] },
+      {
+        config: config(['@scope/router-core#auth']),
+        excludeMatchers: [],
+      },
+    )
+
+    expect(result.packages[0]?.skills.map((entry) => entry.name)).toEqual([
+      'router-core/auth',
+    ])
+    expect(result.notices).toEqual([])
+  })
+
+  it('prefers an exact short skill over its canonical alias collision', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('pkg', ['foo', 'pkg/foo'])] },
+      { config: config(['pkg#foo']), excludeMatchers: [] },
+    )
+
+    expect(result.packages[0]?.skills.map((entry) => entry.name)).toEqual([
+      'foo',
+    ])
+  })
+
+  it('permits only the exact canonical skill when its short name collides', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('pkg', ['foo', 'pkg/foo'])] },
+      { config: config(['pkg#pkg/foo']), excludeMatchers: [] },
+    )
+
+    expect(result.packages[0]?.skills.map((entry) => entry.name)).toEqual([
+      'pkg/foo',
+    ])
+  })
+
+  it('permits a canonical skill through an unambiguous short alias', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('pkg', ['pkg/foo'])] },
+      { config: config(['pkg#foo']), excludeMatchers: [] },
+    )
+
+    expect(result.packages[0]?.skills.map((entry) => entry.name)).toEqual([
+      'pkg/foo',
+    ])
+  })
+
+  it('reports an exact selector whose skill was not discovered', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('pkg', ['other'])] },
+      { config: config(['pkg#missing']), excludeMatchers: [] },
+    )
+
+    expect(result.notices).toEqual([
+      '1 discovered skill source has 1 skill not listed in intent.skills: pkg. Add to opt in.',
+      '"pkg#missing" is declared in intent.skills but was not discovered.',
+    ])
+  })
+
+  it('does not report a present but excluded exact selector as undiscovered', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('pkg', ['selected'])] },
+      {
+        config: config(['pkg#selected']),
+        excludeMatchers: compileExcludePatterns(['pkg#selected']),
+      },
+    )
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]?.skills).toEqual([])
+    expect(result.notices).toEqual([])
+  })
+
+  it('uses a truthful partial-withholding notice for human output', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('pkg', ['selected', 'sibling'])] },
+      { config: config(['pkg#selected']), excludeMatchers: [] },
+    )
+
+    expect(result.notices).toEqual([
+      '1 discovered skill source has 1 skill not listed in intent.skills: pkg. Add to opt in.',
+    ])
+  })
+
+  it('keeps a partial-withholding agent notice count-only', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('secret-pkg', ['selected', 'secret-sibling'])] },
+      {
+        audience: 'agent',
+        config: config(['secret-pkg#selected']),
+        excludeMatchers: [],
+      },
+    )
+
+    expect(result.notices).toEqual([
+      '1 discovered skill source has 1 skill that is not listed in intent.skills. Ask the user to run `intent list --show-hidden` outside the agent session to review candidates.',
+    ])
+    expect(result.notices[0]).not.toContain('secret-pkg')
+    expect(result.notices[0]).not.toContain('selected')
+    expect(result.notices[0]).not.toContain('secret-sibling')
+  })
 })
 
 describe('applySourcePolicy — permit-all and empty modes', () => {
@@ -344,6 +580,48 @@ describe('applySourcePolicy — exclude interaction', () => {
     )
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]?.skills.map((s) => s.name)).toEqual(['keep'])
+  })
+
+  it('lets a skill exclude override a matching exact selector', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('pkg', ['selected'])] },
+      {
+        config: config(['pkg#selected']),
+        excludeMatchers: compileExcludePatterns(['pkg#selected']),
+      },
+    )
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]?.skills).toEqual([])
+  })
+
+  it('withholds an unselected sibling without excluding its package', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('pkg', ['selected', 'sibling'])] },
+      {
+        config: config(['pkg#selected']),
+        excludeMatchers: compileExcludePatterns(['pkg#unrelated']),
+      },
+    )
+
+    expect(names(result.packages)).toEqual(['pkg'])
+    expect(result.packages[0]?.skills.map((entry) => entry.name)).toEqual([
+      'selected',
+    ])
+    expect(result.hiddenSources).toEqual([{ name: 'pkg', skillCount: 1 }])
+  })
+
+  it('keeps an allowed package row when all of its skills are excluded', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('pkg', ['one', 'two'])] },
+      {
+        config: config(['pkg']),
+        excludeMatchers: compileExcludePatterns(['pkg#one', 'pkg#two']),
+      },
+    )
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]?.skills).toEqual([])
   })
 })
 

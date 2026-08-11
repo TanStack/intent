@@ -12,7 +12,8 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { spawnSync } from 'node:child_process'
+import { once } from 'node:events'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -378,15 +379,26 @@ describe('computeSkillContentHash', () => {
     )
   })
 
-  it('rejects special files when mkfifo is available', () => {
+  it.skipIf(process.platform === 'win32')('rejects special files', async () => {
     const skillDir = createSkill('special-file', [['SKILL.md', 'Root\n']])
-    const fifoPath = join(skillDir, 'pipe')
-    const result = spawnSync('mkfifo', [fifoPath])
-    if (result.status !== 0) return
+    const server = createServer()
 
-    expect(() => hashSkill(skillDir)).toThrow(
-      'Skill content contains a special file',
-    )
+    try {
+      const listening = once(server, 'listening')
+      server.listen(join(skillDir, 'socket'))
+      await listening
+
+      expect(() => hashSkill(skillDir)).toThrow(
+        'Skill content contains a special file',
+      )
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) reject(error)
+          else resolve()
+        })
+      })
+    }
   })
 
   it('follows an in-package file symlink under its logical alias', () => {
