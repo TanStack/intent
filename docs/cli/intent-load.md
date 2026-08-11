@@ -24,7 +24,8 @@ npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [
 - Validates `<package>#<skill>` before scanning
 - Scans project-local packages by default
 - Includes global packages only when `--global` or `--global-only` is passed
-- Checks the target package name against `package.json#intent.skills` before resolution, then enforces its source kind after resolution
+- Checks the requested package and skill against `package.json#intent.skills` before resolution
+- Rechecks the actual source kind and canonical skill name after fast-path resolution
 - Refuses before scanning when the target package or skill matches `intent.exclude`
 
 ### Selection
@@ -41,6 +42,8 @@ npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [
 A successful load proves that Intent resolved the selected skill under current policy and returned its content. It does not prove that the skill was relevant to the task, reached an agent's active context, or was followed correctly. See [Lifecycle boundaries](../concepts/trust-model#lifecycle-boundaries).
 
 The package can be scoped or unscoped. The skill can include slash-separated sub-skill names.
+
+`package.json#intent.skills` can permit the whole package or one exact skill. For example, `@tanstack/query` permits every skill in that npm package, while `@tanstack/query#fetching` permits only `fetching`. Exact selectors match canonical package-prefixed skill names and their short aliases. They do not support skill globs.
 
 Examples:
 
@@ -85,6 +88,7 @@ npx @tanstack/intent@latest load some-lib#core --path
 ### Policy refusals
 
 - Unlisted package: `Cannot load skill use "...": package "..." is not listed in intent.skills.`
+- Unlisted skill: `Cannot load skill use "...": skill "..." is not listed in intent.skills.`
 - Excluded package: `Cannot load skill use "...": package "..." is excluded by Intent configuration.`
 - Excluded skill: `Cannot load skill use "...": skill "..." is excluded by Intent configuration.`
 

@@ -3,17 +3,19 @@ title: Trust model
 id: trust-model
 ---
 
-Intent discovers skills from your dependencies and can surface permitted skills through its CLI and agent integrations. A skill is instructions an agent follows, so the set of packages allowed to contribute skills is a trust decision. Intent makes that decision explicit through the `intent.skills` allowlist.
+Intent discovers skills from your dependencies and can surface permitted skills through its CLI and agent integrations. A skill is instructions an agent follows, so permission to surface a package or exact skill is a trust decision. Intent makes that decision explicit through the `intent.skills` allowlist.
 
 ## Explicit sources
 
 A package ships skills in a `skills/` directory. Discovery finds every installed package that has one, including transitive dependencies. Discovery does not grant trust.
 
-`package.json#intent.skills` is the gate. A discovered package contributes skills only when an exact entry or `*` pattern in the allowlist matches its package name and source kind. An unlisted package is dropped, and Intent reports it so you can opt in or ignore it.
+`package.json#intent.skills` is the gate. Discovery is not permission. A package selector permits every skill in a matching package and source kind. An exact skill selector such as `foo#auth` permits only that canonical or short-alias skill. It does not permit sibling skills. Intent drops an unlisted package and withholds an unlisted sibling, then reports the hidden entries so you can opt in or ignore them.
 
 The gate is opt-in today. A project with no `intent.skills` key still surfaces every discovered package, and Intent prints a deprecation notice to stderr on each run until you set `intent.skills`. A future version will require an explicit allowlist. See the [special forms](./configuration#special-forms) in Configuration.
 
 Trust does not propagate. A listed package may depend on another package that ships skills, but that dependency stays unlisted unless another entry matches it. A bare entry such as `foo` permits an npm source, while `workspace:foo` permits a workspace source. Their wildcard forms remain kind-specific. The exact `*` entry permits every discovered npm and workspace source.
+
+Permission and content acceptance are separate. Package permission makes a future sibling eligible to surface, but it does not accept that sibling's content when lock acceptance exists. An exact skill selector does not make future siblings eligible. A future lock check can require separate acceptance for the content that policy permits.
 
 ## Static discovery
 

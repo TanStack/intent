@@ -8,7 +8,7 @@ Intent reads consumer configuration from the `intent` object in `package.json`. 
 ```json
 {
   "intent": {
-    "skills": ["@tanstack/query", "workspace:@scope/internal"],
+    "skills": ["@tanstack/query#fetching", "workspace:@scope/internal"],
     "exclude": ["@tanstack/router#experimental-*"]
   }
 }
@@ -21,7 +21,7 @@ Intent reads consumer configuration from the `intent` object in `package.json`. 
 
 ## `intent.skills`
 
-`intent.skills` is a package-source allowlist. A permitted package can:
+`intent.skills` is a source permission allowlist. It can permit a package or one exact skill in a package. A permitted source can:
 
 - Appear in `list` and `stale`.
 - Resolve through `load`.
@@ -29,7 +29,11 @@ Intent reads consumer configuration from the `intent` object in `package.json`. 
 
 The default `install` command writes generic loading guidance without scanning packages. See [Trust model](./trust-model) for the reasoning and lifecycle boundaries.
 
-The allowlist permits packages, not individual skills. An entry containing `#` is invalid; use `intent.exclude` for skill-specific filtering.
+A package selector permits every discovered skill in that package. An exact skill selector such as `@scope/pkg#skill` permits only that skill. Canonical package-prefixed skill names and their short aliases match each other. Skill selectors are exact: package patterns cannot include a skill segment, and skill globs are invalid.
+
+`intent.exclude` is an explicit denial after permission is evaluated. A matching package or skill exclude always wins, including when `intent.skills` contains the same exact skill.
+
+Source permission is not content acceptance. `intent.skills` does not pin or accept skill content. Package permission and future lock acceptance are separate policy boundaries.
 
 ### Source entries
 
@@ -39,11 +43,13 @@ Each array entry names one source:
 | ----- | ---- | ------- |
 | `@scope/pkg` or `pkg` | npm | An npm package reachable through the dependency tree, direct or transitive. |
 | `workspace:@scope/pkg` | workspace | A package in the current workspace. |
+| `@scope/pkg#skill` or `pkg#nested/skill` | npm | One exact skill from an npm package. |
+| `workspace:@scope/pkg#skill` | workspace | One exact skill from a workspace package. |
 | `@scope/*` | npm | Every discovered npm package whose name matches the pattern. |
 | `workspace:@scope/*` | workspace | Every discovered workspace package whose name matches the pattern. |
 | `git:<host>/<repo>#<ref>` | git | Reserved. Not yet supported, and rejected until a future version adds it. |
 
-A malformed entry fails the whole command, and every bad entry is reported at once. Package patterns support `*` wildcards, including scoped patterns such as `@tanstack/*`. Intent matches both the package name and source kind: a bare entry permits only an npm source, and a `workspace:` entry permits only a workspace source.
+A malformed entry fails the whole command, and every bad entry is reported at once. Package patterns support `*` wildcards, including scoped patterns such as `@tanstack/*`. Exact skill selectors do not support wildcards. Intent matches both the package name and source kind: a bare entry permits only an npm source, and a `workspace:` entry permits only a workspace source.
 
 ### Special forms
 
@@ -53,7 +59,7 @@ A malformed entry fails the whole command, and every bad entry is reported at on
 | **Empty:** `"skills": []` | Surfaces no packages. | Info notice on stderr. |
 | **Wildcard:** `"skills": ["*"]` | Surfaces every discovered package across package scopes and source kinds. This is broader than a pattern such as `@tanstack/*`. | Acknowledged-risk notice on stderr because unvetted skills may reach your agent. |
 
-A package that ships skills but is not listed is dropped. In human output, Intent adds one policy notice naming packages dropped this way so you can opt in. Agent sessions receive only the hidden package and skill counts. A listed package that was not discovered is reported as a notice as well.
+A package that is not permitted is dropped. Skills outside an exact selector are withheld while the permitted package row remains visible. In human output, Intent adds one policy notice naming sources with unlisted skills so you can opt in. Agent sessions receive only hidden source and skill counts. A package selector or exact skill selector that was not discovered is reported as a notice as well.
 
 ### Existing projects
 
