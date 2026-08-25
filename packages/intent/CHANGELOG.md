@@ -1,5 +1,13 @@
 # @tanstack/intent
 
+## 0.3.7
+
+### Patch Changes
+
+- [#214](https://github.com/TanStack/intent/pull/214) [`5af1c80`](https://github.com/TanStack/intent/commit/5af1c809b8ec281cd15a9a0427380b81f2e8fa5a) - Allow agent hooks to continue after checking Intent guidance when no matching skill applies.
+
+- [#210](https://github.com/TanStack/intent/pull/210) [`bb18ee0`](https://github.com/TanStack/intent/commit/bb18ee0ad58b8706827f062b2e23d66f26496af0) - Remove internal milestone wording from unsupported `git:` source errors.
+
 ## 0.3.6
 
 ### Patch Changes
