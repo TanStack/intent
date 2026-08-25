@@ -3,7 +3,7 @@ title: intent hooks
 id: intent-hooks
 ---
 
-`intent hooks install` installs lifecycle hooks that surface available Intent skills and gate supported edit tools until they observe an Intent load command.
+`intent hooks install` installs lifecycle hooks that surface available Intent skills and gate supported edit tools until they observe an Intent guidance check.
 
 ```bash
 npx @tanstack/intent@latest hooks install [--scope project|user] [--agents copilot,claude,codex|all]
@@ -20,7 +20,7 @@ npx @tanstack/intent@latest hooks install [--scope project|user] [--agents copil
 
 - Installs hook behavior without writing an `intent-skills` guidance block.
 - Returns a session-start skill catalog as agent context with available `skill-id: description` entries.
-- Blocks supported edit tools until the hook observes a recognized `intent load <skill-id>` command.
+- Blocks supported edit tools until the hook observes a recognized `intent list` or `intent load <skill-id>` command. If no listed skill matches the task, the agent can continue without loading one.
 - Uses `package.json#intent.skills` and `package.json#intent.exclude` to control which skills appear in the session catalog.
 
 ### Installation behavior
@@ -30,7 +30,7 @@ npx @tanstack/intent@latest hooks install [--scope project|user] [--agents copil
 - `--agents all` is the default. In project scope, Copilot is skipped because the supported Copilot CLI hook location is user-scoped.
 - Run `intent install` separately when you also want to write project guidance.
 
-The hook records a recognized load command before that command completes.
+The hook records a recognized list or load command before that command completes.
 
 Hooks do not verify that:
 

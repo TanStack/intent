@@ -93,7 +93,9 @@ async function main() {
   const event = readEventFromStdin()
 
   if (isSessionStartEvent(event)) {
+    const stateFile = stateFileForEvent(event)
     const additionalContext = await createSessionCatalogContext(rootForEvent(event))
+    appendObservation(stateFile, { action: 'list', raw: CATALOG_COMMAND })
     if (additionalContext) {
       process.stdout.write(JSON.stringify(sessionStartOutput(additionalContext)))
     }
@@ -108,7 +110,7 @@ async function main() {
   }
 
   const toolName = event?.tool_name ?? event?.toolName
-  if (typeof toolName === 'string' && EDIT_TOOLS.has(toolName) && !hasLoad(stateFile)) {
+  if (typeof toolName === 'string' && EDIT_TOOLS.has(toolName) && !hasIntentCheck(stateFile)) {
     process.stdout.write(JSON.stringify(denyOutput()))
   }
 }
@@ -266,7 +268,7 @@ function appendObservation(stateFile, observation) {
   }
 }
 
-function hasLoad(stateFile) {
+function hasIntentCheck(stateFile) {
   if (!existsSync(stateFile)) return false
   try {
     return readFileSync(stateFile, 'utf8')
@@ -274,7 +276,8 @@ function hasLoad(stateFile) {
       .filter(Boolean)
       .some((line) => {
         try {
-          return JSON.parse(line).action === 'load'
+          const action = JSON.parse(line).action
+          return action === 'list' || action === 'load'
         } catch {
           return false
         }
