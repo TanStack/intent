@@ -10,7 +10,7 @@ import {
   realpathSync,
 } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join, resolve, sep } from 'node:path'
+import { delimiter, dirname, join, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import type { Dirent } from 'node:fs'
 
@@ -258,14 +258,86 @@ export function listNestedNodeModulesPackageDirs(
 
 const GLOBAL_NODE_MODULES_COMMAND_TIMEOUT_MS = 5_000
 
+/**
+ * Split the INTENT_GLOBAL_NODE_MODULES override into paths. Accepts a
+ * `path.delimiter`-separated list so several global roots can be supplied
+ * (pnpm 11 installs each global package into its own isolated directory, so
+ * there is no single global node_modules to point at).
+ */
+export function splitGlobalNodeModulesEnvPaths(
+  value: string | undefined,
+): Array<string> {
+  if (!value) return []
+  return value
+    .split(delimiter)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+/**
+ * Derive the set of global node_modules roots from `pnpm ls -g --json --depth 0`
+ * output. pnpm 11 installs each global package into its own isolated directory
+ * (`<global>/<dir>/node_modules/<pkg>`), so there can be several roots. On
+ * pnpm 10 and earlier every dependency resolves under the one global
+ * node_modules, so the set collapses to a single root.
+ */
+export function parsePnpmGlobalLsRoots(output: string): Array<string> {
+  let importers: unknown
+  try {
+    importers = JSON.parse(output)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(importers)) return []
+
+  const marker = `${sep}node_modules`
+  const roots = new Set<string>()
+  for (const importer of importers) {
+    if (!importer || typeof importer !== 'object') continue
+    const dependencies = (importer as Record<string, unknown>).dependencies
+    if (!dependencies || typeof dependencies !== 'object') continue
+    for (const info of Object.values(dependencies)) {
+      if (!info || typeof info !== 'object') continue
+      const depPath = (info as Record<string, unknown>).path
+      if (typeof depPath !== 'string') continue
+      const index = depPath.lastIndexOf(marker)
+      if (index === -1) continue
+      const end = index + marker.length
+      // Guard against directory names that merely start with "node_modules"
+      if (end !== depPath.length && depPath[end] !== sep) continue
+      roots.add(depPath.slice(0, end))
+    }
+  }
+  return [...roots]
+}
+
+function detectPnpmGlobalNodeModulesRoots(): Array<string> {
+  try {
+    const output = execFileSync(
+      'pnpm',
+      ['ls', '-g', '--json', '--depth', '0'],
+      {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: GLOBAL_NODE_MODULES_COMMAND_TIMEOUT_MS,
+      },
+    )
+    return parsePnpmGlobalLsRoots(output)
+  } catch {
+    return []
+  }
+}
+
 export function detectGlobalNodeModules(packageManager: string): {
-  path: string | null
+  paths: Array<string>
   source?: string
 } {
-  const envPath = process.env.INTENT_GLOBAL_NODE_MODULES?.trim()
-  if (envPath) {
+  const envPaths = splitGlobalNodeModulesEnvPaths(
+    process.env.INTENT_GLOBAL_NODE_MODULES,
+  )
+  if (envPaths.length > 0) {
     return {
-      path: envPath,
+      paths: envPaths,
       source: 'INTENT_GLOBAL_NODE_MODULES',
     }
   }
@@ -277,6 +349,16 @@ export function detectGlobalNodeModules(packageManager: string): {
   }> = []
 
   if (packageManager === 'pnpm') {
+    // pnpm 11 installs each global package into its own isolated directory,
+    // so ask pnpm for the resolved package paths instead of guessing the
+    // layout. `pnpm root -g` remains below as a fallback.
+    const roots = detectPnpmGlobalNodeModulesRoots()
+    if (roots.length > 0) {
+      return {
+        paths: roots,
+        source: 'pnpm ls -g --json --depth 0',
+      }
+    }
     commands.push({ command: 'pnpm', args: ['root', '-g'] })
   }
   if (packageManager === 'yarn') {
@@ -298,7 +380,7 @@ export function detectGlobalNodeModules(packageManager: string): {
       if (!output) continue
 
       return {
-        path: candidate.transform ? candidate.transform(output) : output,
+        paths: [candidate.transform ? candidate.transform(output) : output],
         source: `${candidate.command} ${candidate.args.join(' ')}`,
       }
     } catch {
@@ -306,7 +388,7 @@ export function detectGlobalNodeModules(packageManager: string): {
     }
   }
 
-  return { path: null }
+  return { paths: [] }
 }
 
 /**

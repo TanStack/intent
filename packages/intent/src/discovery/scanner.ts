@@ -11,6 +11,7 @@ import {
   nodeReadFs,
   parseFrontmatter,
   readScalarField,
+  splitGlobalNodeModulesEnvPaths,
   toPosixPath,
 } from '../shared/utils.js'
 import {
@@ -494,8 +495,9 @@ export function scanForIntents(
   const workspaceRoot = findWorkspaceRoot(projectRoot)
   const packageManager = detectPackageManager(projectRoot, [workspaceRoot])
   const nodeModulesDir = join(projectRoot, 'node_modules')
-  const explicitGlobalNodeModules =
-    process.env.INTENT_GLOBAL_NODE_MODULES?.trim() || null
+  const explicitGlobalNodeModules = splitGlobalNodeModulesEnvPaths(
+    process.env.INTENT_GLOBAL_NODE_MODULES,
+  )
 
   const packages: Array<IntentPackage> = []
   const warnings: Array<string> = []
@@ -508,15 +510,15 @@ export function scanForIntents(
       scanned: false,
     },
     global: {
-      path: explicitGlobalNodeModules,
-      detected: Boolean(explicitGlobalNodeModules),
-      exists: explicitGlobalNodeModules
-        ? existsSync(explicitGlobalNodeModules)
-        : false,
+      path: explicitGlobalNodeModules[0] ?? null,
+      paths: explicitGlobalNodeModules,
+      detected: explicitGlobalNodeModules.length > 0,
+      exists: explicitGlobalNodeModules.some((path) => existsSync(path)),
       scanned: false,
-      source: explicitGlobalNodeModules
-        ? 'INTENT_GLOBAL_NODE_MODULES'
-        : undefined,
+      source:
+        explicitGlobalNodeModules.length > 0
+          ? 'INTENT_GLOBAL_NODE_MODULES'
+          : undefined,
     },
   }
   // Track registered package names to avoid duplicates across phases
@@ -561,14 +563,18 @@ export function scanForIntents(
   }
 
   function ensureGlobalNodeModules(): void {
-    if (!nodeModules.global.path && !explicitGlobalNodeModules) {
+    if (
+      (nodeModules.global.paths?.length ?? 0) === 0 &&
+      explicitGlobalNodeModules.length === 0
+    ) {
       const detected = detectGlobalNodeModules(packageManager)
-      nodeModules.global.path = detected.path
+      nodeModules.global.path = detected.paths[0] ?? null
+      nodeModules.global.paths = detected.paths
       nodeModules.global.source = detected.source
-      nodeModules.global.detected = Boolean(detected.path)
-      nodeModules.global.exists = detected.path
-        ? existsSync(detected.path)
-        : false
+      nodeModules.global.detected = detected.paths.length > 0
+      nodeModules.global.exists = detected.paths.some((path) =>
+        existsSync(path),
+      )
     }
   }
 

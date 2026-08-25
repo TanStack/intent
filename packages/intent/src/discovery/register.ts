@@ -70,9 +70,13 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     target: NodeModulesScanTarget,
     source: IntentPackage['source'] = 'local',
   ): void {
-    if (!target.path || !target.exists || target.scanned) return
+    if (target.scanned || !target.exists) return
+    const paths = target.paths ?? (target.path ? [target.path] : [])
+    if (paths.length === 0) return
     target.scanned = true
-    scanNodeModulesDir(target.path, source)
+    for (const path of paths) {
+      scanNodeModulesDir(path, source)
+    }
   }
 
   function tryRegister(
