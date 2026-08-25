@@ -16,7 +16,7 @@ export const EDIT_TOOLS_BY_AGENT: Record<HookAgent, ReadonlySet<string>> = {
 }
 
 export const GATE_DENY_REASON =
-  "Blocked: load matching TanStack guidance before editing. Follow this repo's TanStack guidance setup, then retry the edit."
+  "Blocked: check TanStack guidance before editing. If a listed skill matches, load it, then retry the edit."
 
 export function parseIntentInvocation(
   command: unknown,
@@ -90,10 +90,12 @@ export function gateDecision({
   return { decision: 'allow' }
 }
 
-export function hasLoadFromObservations(
+export function hasIntentCheckFromObservations(
   observations: Array<Pick<IntentObservation, 'action'> | undefined>,
 ): boolean {
-  return observations.some((entry) => entry?.action === 'load')
+  return observations.some(
+    (entry) => entry?.action === 'list' || entry?.action === 'load',
+  )
 }
 
 function commandFromObject(value: unknown): unknown {

@@ -357,6 +357,32 @@ describe('hook installer', () => {
     expect(afterLoad.stdout).toBe('')
   })
 
+  it('unlocks edits after the agent checks the catalog without a matching skill', () => {
+    const root = tempRoot('intent-hooks-runner-list-')
+    const scriptPath = join(root, 'intent-claude-gate.mjs')
+    writeFileSync(scriptPath, buildHookRunnerScript('claude'))
+
+    const list = runHookScript(scriptPath, {
+      cwd: root,
+      hook_event_name: 'PreToolUse',
+      session_id: 'session-a',
+      tool_name: 'Bash',
+      tool_input: { command: 'intent list' },
+    })
+    const edit = runHookScript(scriptPath, {
+      cwd: root,
+      hook_event_name: 'PreToolUse',
+      session_id: 'session-a',
+      tool_name: 'Edit',
+      tool_input: { file_path: join(root, 'src.ts') },
+    })
+
+    expect(list.status).toBe(0)
+    expect(list.stdout).toBe('')
+    expect(edit.status).toBe(0)
+    expect(edit.stdout).toBe('')
+  })
+
   it.each(['claude', 'codex', 'copilot'] as const)(
     'emits session catalog context for %s',
     (agent) => {
@@ -396,7 +422,7 @@ describe('hook installer', () => {
     },
   )
 
-  it('does not unlock edits after session catalog context', () => {
+  it('unlocks edits after session catalog context', () => {
     const root = tempRoot('intent-hooks-session-catalog-gate-')
     const catalogCommand = writeFakeIntentListCommand(root)
     const scriptPath = join(root, '.intent', 'hooks', 'intent-claude-gate.mjs')
@@ -422,9 +448,7 @@ describe('hook installer', () => {
       hookSpecificOutput: { hookEventName: 'SessionStart' },
     })
     expect(edit.status).toBe(0)
-    expect(JSON.parse(edit.stdout)).toMatchObject({
-      hookSpecificOutput: { permissionDecision: 'deny' },
-    })
+    expect(edit.stdout).toBe('')
   })
 
   it('continues silently when session catalog loading fails', () => {
@@ -448,6 +472,17 @@ describe('hook installer', () => {
 
     expect(result.status).toBe(0)
     expect(result.stdout).toBe('')
+
+    const edit = runHookScript(scriptPath, {
+      cwd: root,
+      hook_event_name: 'PreToolUse',
+      session_id: 'session-a',
+      tool_name: 'Edit',
+      tool_input: { file_path: join(root, 'src.ts') },
+    })
+
+    expect(edit.status).toBe(0)
+    expect(edit.stdout).toBe('')
   })
 
   it('does not unlock edits after non-executed load text', () => {

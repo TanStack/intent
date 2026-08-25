@@ -6,7 +6,7 @@ import {
   EDIT_TOOLS_BY_AGENT,
   GATE_DENY_REASON,
   gateDecision,
-  hasLoadFromObservations,
+  hasIntentCheckFromObservations,
   observationFromEvent,
   parseIntentInvocation,
 } from '../src/hooks/policy.js'
@@ -64,7 +64,7 @@ describe('intent hook policy', () => {
     ).toBeUndefined()
   })
 
-  it('denies edit tools until a load is observed', () => {
+  it('denies edit tools until guidance is checked', () => {
     expect(
       gateDecision({ agent: 'copilot', toolName: 'Edit', hasLoaded: false }),
     ).toEqual({ decision: 'deny', reason: GATE_DENY_REASON })
@@ -89,10 +89,10 @@ describe('intent hook policy', () => {
     expect(EDIT_TOOLS_BY_AGENT.codex.has('apply_patch')).toBe(true)
   })
 
-  it('detects a prior load from observation records', () => {
-    expect(hasLoadFromObservations([{ action: 'list' }])).toBe(false)
+  it('detects a prior guidance check from observation records', () => {
+    expect(hasIntentCheckFromObservations([{ action: 'list' }])).toBe(true)
     expect(
-      hasLoadFromObservations([{ action: 'list' }, { action: 'load' }]),
+      hasIntentCheckFromObservations([{ action: 'list' }, { action: 'load' }]),
     ).toBe(true)
   })
 
