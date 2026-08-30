@@ -423,7 +423,9 @@ describe('hook installer', () => {
       expect(context).toContain(
         'These are Intent skills, not native agent skills.',
       )
-      expect(context).toContain(`Load a matching skill with: \`${loadCommand}\`.`)
+      expect(context).toContain(
+        `Load a matching skill with: \`${loadCommand}\`.`,
+      )
       if (agent !== 'copilot') {
         expect(output.hookSpecificOutput.hookEventName).toBe('SessionStart')
       }
