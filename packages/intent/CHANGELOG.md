@@ -1,5 +1,11 @@
 # @tanstack/intent
 
+## 0.3.8
+
+### Patch Changes
+
+- [#217](https://github.com/TanStack/intent/pull/217) [`481cfbb`](https://github.com/TanStack/intent/commit/481cfbb9be7268cf06103c2ede34b188df63cfd9) - Include package-manager-specific load commands in SessionStart skill catalogs and clarify that Intent skills are not native agent skills.
+
 ## 0.3.7
 
 ### Patch Changes
