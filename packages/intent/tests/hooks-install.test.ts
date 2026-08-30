@@ -388,6 +388,8 @@ describe('hook installer', () => {
     (agent) => {
       const root = tempRoot(`intent-hooks-session-catalog-${agent}-`)
       const catalogCommand = writeFakeIntentListCommand(root)
+      const loadCommand =
+        'pnpm dlx @tanstack/intent@latest load <package>#<skill>'
       const scriptPath = join(
         root,
         '.intent',
@@ -395,7 +397,10 @@ describe('hook installer', () => {
         `intent-${agent}-gate.mjs`,
       )
       mkdirSync(join(root, '.intent', 'hooks'), { recursive: true })
-      writeFileSync(scriptPath, buildHookRunnerScript(agent, catalogCommand))
+      writeFileSync(
+        scriptPath,
+        buildHookRunnerScript(agent, catalogCommand, loadCommand),
+      )
 
       const result = runHookScript(scriptPath, {
         cwd: root,
@@ -415,7 +420,10 @@ describe('hook installer', () => {
         '- @tanstack/router#routing: Router routing guidance',
       )
       expect(context).toContain('load that full skill guidance')
-      expect(context).not.toContain('intent load <skill-id>')
+      expect(context).toContain(
+        'These are Intent skills, not native agent skills.',
+      )
+      expect(context).toContain(`Load a matching skill with: \`${loadCommand}\`.`)
       if (agent !== 'copilot') {
         expect(output.hookSpecificOutput.hookEventName).toBe('SessionStart')
       }

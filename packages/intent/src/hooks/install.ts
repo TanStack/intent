@@ -65,6 +65,10 @@ export function buildHookRunnerScript(
     detectPackageManager(),
     'list --json --no-notices',
   ),
+  loadCommand = formatIntentCommand(
+    detectPackageManager(),
+    'load <package>#<skill>',
+  ),
 ): string {
   const editTools = [...EDIT_TOOLS_BY_AGENT[agent]].sort()
 
@@ -78,6 +82,7 @@ import { performance } from 'node:perf_hooks'
 
 const AGENT = ${JSON.stringify(agent)}
 const CATALOG_COMMAND = ${JSON.stringify(catalogCommand)}
+const LOAD_COMMAND = ${JSON.stringify(loadCommand)}
 const EDIT_TOOLS = new Set(${JSON.stringify(editTools)})
 const GATE_DENY_REASON = ${JSON.stringify(GATE_DENY_REASON)}
 const INTENT_COMMAND_PATTERN = /(?:^|&&|\\|\\||;|\\|)\\s*((?:bunx\\s+@tanstack\\/intent(?:@latest)?)|(?:pnpm\\s+exec\\s+intent)|(?:pnpm\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:npx\\s+@tanstack\\/intent(?:@latest)?)|(?:yarn\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:intent))\\s+(list|load)(?:\\s+([^\\s|;&]+))?/i
@@ -167,6 +172,9 @@ function formatSessionCatalog(result) {
 
   return [
     'TanStack Intent skills are available in this repository.',
+    '',
+    'These are Intent skills, not native agent skills.',
+    'Load a matching skill with: \`' + LOAD_COMMAND + '\`.',
     '',
     'Before substantial work, check whether one listed skill clearly matches the user task. If one clearly matches, load that full skill guidance with the Intent CLI before proceeding.',
     '',
@@ -352,13 +360,18 @@ function installAgentHook({
     homeDir,
     root,
   })
+  const packageManager = detectPackageManager(root)
   const catalogCommand = formatIntentCommand(
-    detectPackageManager(root),
+    packageManager,
     'list --json --no-notices',
+  )
+  const loadCommand = formatIntentCommand(
+    packageManager,
+    'load <package>#<skill>',
   )
   const scriptStatus = writeIfChanged(
     scriptPath,
-    buildHookRunnerScript(agent, catalogCommand),
+    buildHookRunnerScript(agent, catalogCommand, loadCommand),
   )
   const configStatus = updateJsonConfig(configPath, (config) =>
     upsertAdapterHooks({
