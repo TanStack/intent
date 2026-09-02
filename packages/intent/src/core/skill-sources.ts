@@ -184,8 +184,6 @@ function packageSource(
 ): SkillSource | SkillSourceIssue {
   const hashIndex = selector.indexOf('#')
   if (hashIndex === -1) {
-    const invalid = validateId(selector)
-    if (invalid) return { raw, message: invalid }
     return selector.includes('*')
       ? { raw, pattern: selector, kind }
       : { raw, id: selector, kind }
