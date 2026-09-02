@@ -256,9 +256,56 @@ describe('parseSkillSources — wildcard composition', () => {
 })
 
 describe('parseSkillSources — id validation', () => {
-  it('rejects skill-level granularity (#) in an npm entry', () => {
-    const error = expectParseError(['@scope/pkg#skill'])
-    expect(error.issues[0]?.message).toContain('skill-level granularity')
+  it('parses exact npm and workspace skill selectors', () => {
+    expect(
+      parseSkillSources([
+        '@tanstack/query#fetching',
+        'workspace:@scope/pkg#routing',
+      ]),
+    ).toEqual({
+      mode: 'explicit',
+      sources: [
+        {
+          raw: '@tanstack/query#fetching',
+          id: '@tanstack/query',
+          kind: 'npm',
+          skill: 'fetching',
+        },
+        {
+          raw: 'workspace:@scope/pkg#routing',
+          id: '@scope/pkg',
+          kind: 'workspace',
+          skill: 'routing',
+        },
+      ],
+    })
+  })
+
+  it('rejects malformed exact selectors and reports every entry', () => {
+    const error = expectParseError([
+      '#fetching',
+      '@tanstack/query#',
+      '@tanstack/query#fetching#extra',
+      '@tanstack/*#fetching',
+      'workspace:@scope/pkg#*',
+    ])
+
+    expect(error.issues).toEqual([
+      { raw: '#fetching', message: 'package name is empty.' },
+      { raw: '@tanstack/query#', message: 'skill name is empty.' },
+      {
+        raw: '@tanstack/query#fetching#extra',
+        message: 'skill names cannot contain "#".',
+      },
+      {
+        raw: '@tanstack/*#fetching',
+        message: 'exact package selectors cannot contain "*".',
+      },
+      {
+        raw: 'workspace:@scope/pkg#*',
+        message: 'exact skill selectors cannot contain "*".',
+      },
+    ])
   })
 
   it('rejects internal whitespace in a package name', () => {

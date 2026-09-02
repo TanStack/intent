@@ -81,7 +81,11 @@ function compileSkillSourceMatcher(
 
 function compileSkillSourcePolicy(config: SkillSourcesConfig): {
   matchers: Array<SkillSourceMatcher>
-  permits: (packageName: string, packageKind?: 'npm' | 'workspace') => boolean
+  permits: (
+    packageName: string,
+    packageKind?: 'npm' | 'workspace',
+    skillName?: string,
+  ) => boolean
 } {
   switch (config.mode) {
     case 'absent':
@@ -93,9 +97,14 @@ function compileSkillSourcePolicy(config: SkillSourcesConfig): {
       const matchers = config.sources.map(compileSkillSourceMatcher)
       return {
         matchers,
-        permits: (packageName, packageKind) =>
-          matchers.some((matcher) =>
-            matcher.matchesPackage(packageName, packageKind),
+        permits: (packageName, packageKind, skillName) =>
+          matchers.some(
+            (matcher) =>
+              matcher.matchesPackage(packageName, packageKind) &&
+              (!('skill' in matcher.source) ||
+                matcher.source.skill === undefined ||
+                skillName === undefined ||
+                matcher.source.skill === skillName),
           ),
       }
     }
@@ -106,8 +115,13 @@ export function isSourcePermitted(
   config: SkillSourcesConfig,
   packageName: string,
   packageKind?: 'npm' | 'workspace',
+  skillName?: string,
 ): boolean {
-  return compileSkillSourcePolicy(config).permits(packageName, packageKind)
+  return compileSkillSourcePolicy(config).permits(
+    packageName,
+    packageKind,
+    skillName,
+  )
 }
 
 export function packageNotListedRefusal(
@@ -141,7 +155,7 @@ export function checkLoadAllowed(
   // Name-only pre-check: kind isn't known yet at this point in the load path.
   // A late, kind-aware isSourcePermitted call happens once resolution reveals
   // the actual kind (see intent-core.ts).
-  if (!isSourcePermitted(config, packageName)) {
+  if (!isSourcePermitted(config, packageName, undefined, skillName)) {
     return packageNotListedRefusal(use, packageName)
   }
 
@@ -212,7 +226,9 @@ export function applySourcePolicy(
     }
 
     const skills = pkg.skills.filter(
-      (skill) => !isSkillExcluded(pkg.name, skill.name, excludeMatchers),
+      (skill) =>
+        sourcePolicy.permits(pkg.name, pkg.kind, skill.name) &&
+        !isSkillExcluded(pkg.name, skill.name, excludeMatchers),
     )
     packages.push(
       skills.length === pkg.skills.length ? pkg : { ...pkg, skills },

@@ -5,11 +5,13 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { listIntentSkills, loadIntentSkill } from '../../src/core/index.js'
 import { main } from '../../src/cli.js'
+import { buildHookRunnerScript } from '../../src/hooks/install.js'
 
 const realTmpdir = realpathSync(tmpdir())
 
@@ -21,7 +23,7 @@ function writeJson(filePath: string, data: unknown): void {
 function writeIntentPackage(
   baseDir: string,
   name: string,
-  skillName: string,
+  skillNames: string | Array<string>,
 ): void {
   const pkgDir = join(baseDir, 'node_modules', ...name.split('/'))
   writeJson(join(pkgDir, 'package.json'), {
@@ -29,11 +31,15 @@ function writeIntentPackage(
     version: '1.0.0',
     intent: { version: 1, repo: 'owner/repo', docs: 'docs/' },
   })
-  mkdirSync(join(pkgDir, 'skills', skillName), { recursive: true })
-  writeFileSync(
-    join(pkgDir, 'skills', skillName, 'SKILL.md'),
-    `---\nname: "${skillName}"\ndescription: "${name} ${skillName}"\n---\n\nContent.\n`,
-  )
+  for (const skillName of Array.isArray(skillNames)
+    ? skillNames
+    : [skillNames]) {
+    mkdirSync(join(pkgDir, 'skills', skillName), { recursive: true })
+    writeFileSync(
+      join(pkgDir, 'skills', skillName, 'SKILL.md'),
+      `---\nname: "${skillName}"\ndescription: "${name} ${skillName}"\nlibrary_version: "1.0.0"\n---\n\nContent.\n`,
+    )
+  }
 }
 
 const LISTED = '@scope/listed'
@@ -166,5 +172,78 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     expect(reports.map((report) => report.library)).toEqual([LISTED])
 
     fetchSpy.mockRestore()
+  })
+
+  it('applies an exact selector across list, load, install map, stale, and hook catalogs', async () => {
+    writeJson(join(root, 'package.json'), {
+      name: 'monorepo',
+      private: true,
+      workspaces: ['packages/*'],
+      intent: { skills: [`${LISTED}#allowed`] },
+    })
+    writeJson(join(root, 'packages', 'app', 'package.json'), {
+      name: '@scope/app',
+    })
+    writeIntentPackage(root, LISTED, ['allowed', 'hidden'])
+    const isolatedGlobalRoot = mkdtempSync(
+      join(realTmpdir, 'intent-g4-global-'),
+    )
+    process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
+
+    const listed = listIntentSkills({ cwd: root })
+    expect(listed.skills.map((entry) => entry.use)).toEqual([
+      `${LISTED}#allowed`,
+    ])
+    expect(loadIntentSkill(`${LISTED}#allowed`, { cwd: root }).skillName).toBe(
+      'allowed',
+    )
+    expect(() => loadIntentSkill(`${LISTED}#hidden`, { cwd: root })).toThrow(
+      'is not listed in intent.skills',
+    )
+
+    process.chdir(root)
+    expect(await main(['install', '--map', '--dry-run'])).toBe(0)
+    const installOutput = logSpy.mock.calls.flat().join('\n')
+    expect(installOutput).toContain(`id: "${LISTED}#allowed"`)
+    expect(installOutput).not.toContain(`id: "${LISTED}#hidden"`)
+
+    const catalogPath = join(root, 'catalog.mjs')
+    const hookPath = join(root, 'intent-hook.mjs')
+    writeFileSync(
+      catalogPath,
+      `console.log(${JSON.stringify(JSON.stringify(listed))})\n`,
+    )
+    writeFileSync(
+      hookPath,
+      buildHookRunnerScript(
+        'claude',
+        `${JSON.stringify(process.execPath)} ${JSON.stringify(catalogPath)}`,
+      ),
+    )
+    const hookResult = spawnSync(process.execPath, [hookPath], {
+      encoding: 'utf8',
+      input: JSON.stringify({
+        cwd: root,
+        hook_event_name: 'SessionStart',
+        session_id: 'exact-selector',
+      }),
+    })
+    const hookContext = JSON.parse(hookResult.stdout).hookSpecificOutput
+      .additionalContext as string
+    expect(hookContext).toContain(`${LISTED}#allowed`)
+    expect(hookContext).not.toContain(`${LISTED}#hidden`)
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ version: '2.0.0' }),
+    } as Response)
+    expect(await main(['stale', '--json'])).toBe(0)
+    const staleOutput = String(logSpy.mock.calls.at(-1)?.[0])
+    const reports = JSON.parse(staleOutput) as Array<{ library: string }>
+    expect(reports.map((report) => report.library)).toEqual([LISTED])
+    expect(staleOutput).not.toContain('hidden')
+
+    fetchSpy.mockRestore()
+    rmSync(isolatedGlobalRoot, { recursive: true, force: true })
   })
 })

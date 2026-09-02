@@ -3,7 +3,7 @@
 
 type SkillSource =
   | ({ raw: string; kind: 'npm' | 'workspace' } & (
-      { id: string } | { pattern: string }
+      { id: string; skill?: string } | { pattern: string }
     ))
   | { raw: string; id: string; kind: 'git'; ref: string }
 
@@ -112,7 +112,8 @@ export function parseSkillSources(value: unknown): SkillSourcesConfig {
     }
 
     const selector = 'pattern' in parsed ? parsed.pattern : parsed.id
-    const identity = `${parsed.kind}\u0000${selector}`
+    const skill = 'skill' in parsed ? parsed.skill : undefined
+    const identity = `${parsed.kind}\u0000${selector}\u0000${skill ?? ''}`
     if (seenIdentity.has(identity)) continue
     seenIdentity.add(identity)
     sources.push(parsed)
@@ -178,22 +179,49 @@ function parseEntry(
 
 function packageSource(
   raw: string,
-  id: string,
+  selector: string,
   kind: 'npm' | 'workspace',
-): SkillSource {
-  return id.includes('*') ? { raw, pattern: id, kind } : { raw, id, kind }
+): SkillSource | SkillSourceIssue {
+  const hashIndex = selector.indexOf('#')
+  if (hashIndex === -1) {
+    const invalid = validateId(selector)
+    if (invalid) return { raw, message: invalid }
+    return selector.includes('*')
+      ? { raw, pattern: selector, kind }
+      : { raw, id: selector, kind }
+  }
+
+  const id = selector.slice(0, hashIndex)
+  const skill = selector.slice(hashIndex + 1)
+  const invalidId = validateId(id)
+  if (invalidId) return { raw, message: invalidId }
+  if (id.includes('*')) {
+    return {
+      raw,
+      message: 'exact package selectors cannot contain "*".',
+    }
+  }
+  const invalidSkill = validateSkill(skill)
+  if (invalidSkill) return { raw, message: invalidSkill }
+  return { raw, id, kind, skill }
 }
 
 function validateId(id: string): string | null {
-  if (id.includes('#')) {
-    return 'skill-level granularity (#) is not supported in intent.skills (it is package-level); use intent.exclude for skill-level control.'
-  }
+  if (id === '') return 'package name is empty.'
   if (/\s/.test(id)) {
     return 'package names cannot contain whitespace.'
   }
   if (id.includes(':')) {
     return 'package names cannot contain ":".'
   }
+  return null
+}
+
+function validateSkill(skill: string): string | null {
+  if (skill === '') return 'skill name is empty.'
+  if (/\s/.test(skill)) return 'skill names cannot contain whitespace.'
+  if (skill.includes('#')) return 'skill names cannot contain "#".'
+  if (skill.includes('*')) return 'exact skill selectors cannot contain "*".'
   return null
 }
 

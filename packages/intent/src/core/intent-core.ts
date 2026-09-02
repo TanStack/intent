@@ -303,7 +303,12 @@ function resolveIntentSkillInCwd(
   )
   if (fastPathResolved) {
     if (
-      !isSourcePermitted(config, parsedUse.packageName, fastPathResolved.kind)
+      !isSourcePermitted(
+        config,
+        parsedUse.packageName,
+        fastPathResolved.kind,
+        parsedUse.skillName,
+      )
     ) {
       const lateRefusal = packageNotListedRefusal(use, parsedUse.packageName)
       throw new IntentCoreError(lateRefusal.code, lateRefusal.message)

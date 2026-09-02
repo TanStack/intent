@@ -8,7 +8,7 @@ Intent reads consumer configuration from the `intent` object in `package.json`. 
 ```json
 {
   "intent": {
-    "skills": ["@tanstack/query", "workspace:@scope/internal"],
+    "skills": ["@tanstack/query", "@acme/*", "@tanstack/start#routing", "workspace:@scope/internal"],
     "exclude": ["@tanstack/router#experimental-*"]
   }
 }
@@ -21,7 +21,7 @@ Intent reads consumer configuration from the `intent` object in `package.json`. 
 
 ## `intent.skills`
 
-`intent.skills` is a package-source allowlist. A permitted package can:
+`intent.skills` is a package-source and skill allowlist. A permitted package or skill can:
 
 - Appear in `list` and `stale`.
 - Resolve through `load`.
@@ -29,7 +29,7 @@ Intent reads consumer configuration from the `intent` object in `package.json`. 
 
 The default `install` command writes generic loading guidance without scanning packages. See [Trust model](./trust-model) for the reasoning and lifecycle boundaries.
 
-The allowlist permits packages, not individual skills. An entry containing `#` is invalid; use `intent.exclude` for skill-specific filtering.
+Package selectors permit every skill in the package. Exact selectors use `<package>#<skill>` and permit only the named skill. If the same package matches both forms, the package selector takes precedence and permits every skill. `intent.exclude` is applied afterward and can still remove a permitted package or skill.
 
 ### Source entries
 
@@ -38,12 +38,16 @@ Each array entry names one source:
 | Entry | Kind | Meaning |
 | ----- | ---- | ------- |
 | `@scope/pkg` or `pkg` | npm | An npm package reachable through the dependency tree, direct or transitive. |
+| `@scope/pkg#skill` | npm | One exact skill in an npm package. |
 | `workspace:@scope/pkg` | workspace | A package in the current workspace. |
+| `workspace:@scope/pkg#skill` | workspace | One exact skill in a workspace package. |
 | `@scope/*` | npm | Every discovered npm package whose name matches the pattern. |
 | `workspace:@scope/*` | workspace | Every discovered workspace package whose name matches the pattern. |
 | `git:<host>/<repo>#<ref>` | git | Reserved. Not yet supported, and rejected until a future version adds it. |
 
-A malformed entry fails the whole command, and every bad entry is reported at once. Package patterns support `*` wildcards, including scoped patterns such as `@tanstack/*`. Intent matches both the package name and source kind: a bare entry permits only an npm source, and a `workspace:` entry permits only a workspace source.
+A malformed entry fails the whole command, and every bad entry is reported at once. Exact selectors require one non-empty package name and one non-empty, non-wildcard skill name. Package patterns support `*` wildcards, including scoped patterns such as `@tanstack/*`, but cannot be combined with an exact skill selector.
+
+Intent matches both the package name and source kind: a bare package or exact selector permits only an npm source, and a `workspace:` selector permits only a workspace source. `git:` entries remain unsupported and are rejected, including entries that contain `#` for a Git ref.
 
 ### Special forms
 

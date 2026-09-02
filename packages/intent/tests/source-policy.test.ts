@@ -234,6 +234,55 @@ describe('applySourcePolicy — allowlist matrix', () => {
     )
     expect(input.skills.map((s) => s.name)).toEqual(['keep', 'drop'])
   })
+
+  it('permits only the named skill for an exact selector', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@tanstack/query', ['fetching', 'mutations'])] },
+      {
+        config: config(['@tanstack/query#fetching']),
+        excludeMatchers: [],
+      },
+    )
+
+    expect(result.packages[0]?.skills.map((entry) => entry.name)).toEqual([
+      'fetching',
+    ])
+    expect(result.hiddenSourceCount).toBe(0)
+    expect(result.notices).toEqual([])
+  })
+
+  it('lets a package selector take precedence over exact selectors', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@tanstack/query', ['fetching', 'mutations'])] },
+      {
+        config: config(['@tanstack/query#fetching', '@tanstack/query']),
+        excludeMatchers: [],
+      },
+    )
+
+    expect(result.packages[0]?.skills.map((entry) => entry.name)).toEqual([
+      'fetching',
+      'mutations',
+    ])
+  })
+
+  it('keeps exact workspace selectors kind-specific', () => {
+    const result = applySourcePolicy(
+      {
+        packages: [
+          pkg('@scope/pkg', ['routing'], 'npm'),
+          pkg('@scope/pkg', ['routing'], 'workspace'),
+        ],
+      },
+      {
+        config: config(['workspace:@scope/pkg#routing']),
+        excludeMatchers: [],
+      },
+    )
+
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]?.kind).toBe('workspace')
+  })
 })
 
 describe('applySourcePolicy — permit-all and empty modes', () => {
@@ -344,6 +393,20 @@ describe('applySourcePolicy — exclude interaction', () => {
     )
     expect(result.packages).toHaveLength(1)
     expect(result.packages[0]?.skills.map((s) => s.name)).toEqual(['keep'])
+  })
+
+  it('applies skill excludes after exact selector permission', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/a', ['keep', 'drop'])] },
+      {
+        config: config(['@scope/a#keep', '@scope/a#drop']),
+        excludeMatchers: compileExcludePatterns(['@scope/a#drop']),
+      },
+    )
+
+    expect(result.packages[0]?.skills.map((entry) => entry.name)).toEqual([
+      'keep',
+    ])
   })
 })
 
