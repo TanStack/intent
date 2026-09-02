@@ -3,8 +3,7 @@
 
 type SkillSource =
   | ({ raw: string; kind: 'npm' | 'workspace' } & (
-      | { id: string; skill?: string }
-      | { pattern: string }
+      { id: string; skill?: string } | { pattern: string }
     ))
   | { raw: string; id: string; kind: 'git'; ref: string }
 
