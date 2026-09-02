@@ -1,3 +1,14 @@
+import { resolve } from 'node:path'
+import {
+  compileExcludePatterns,
+  getEffectiveExcludePatterns,
+  isSkillExcluded,
+} from '../core/excludes.js'
+import { resolveProjectContext } from '../core/project-context.js'
+import {
+  isSourcePermitted,
+  readSkillSourcesConfig,
+} from '../core/source-policy.js'
 import { isCliFailure } from '../shared/cli-error.js'
 import type { StalenessReport } from '../shared/types.js'
 
@@ -20,8 +31,9 @@ export async function runStaleCommand(
     return
   }
 
-  const { reports, workflowAdvisories = [] } =
+  const { reports: unfilteredReports, workflowAdvisories = [] } =
     await resolveStaleTargets(targetDir)
+  const reports = filterStaleReportSkills(unfilteredReports, targetDir)
 
   if (options.json) {
     console.log(JSON.stringify(reports, null, 2))
@@ -91,8 +103,9 @@ async function runGithubReview(
   const packageLabel = options.packageLabel ?? 'workspace'
 
   try {
-    const { reports, workflowAdvisories = [] } =
+    const { reports: unfilteredReports, workflowAdvisories = [] } =
       await resolveStaleTargets(targetDir)
+    const reports = filterStaleReportSkills(unfilteredReports, targetDir)
     const items = [
       ...collectStaleReviewItems(reports),
       ...createWorkflowAdvisoryReviewItems(packageLabel, workflowAdvisories),
@@ -114,4 +127,25 @@ async function runGithubReview(
     console.log(`Intent stale check failed: ${message}`)
     console.log('Wrote a review PR body so maintainers can inspect the logs.')
   }
+}
+
+function filterStaleReportSkills(
+  reports: Array<StalenessReport>,
+  targetDir: string | undefined,
+): Array<StalenessReport> {
+  const cwd = resolve(process.cwd(), targetDir ?? process.cwd())
+  const context = resolveProjectContext({ cwd })
+  const config = readSkillSourcesConfig(cwd, context)
+  const excludeMatchers = compileExcludePatterns(
+    getEffectiveExcludePatterns({}, context),
+  )
+
+  return reports.map((report) => ({
+    ...report,
+    skills: report.skills.filter(
+      (skill) =>
+        isSourcePermitted(config, report.library, undefined, skill.name) &&
+        !isSkillExcluded(report.library, skill.name, excludeMatchers),
+    ),
+  }))
 }
