@@ -8,7 +8,7 @@ Intent reads consumer configuration from the `intent` object in `package.json`. 
 ```json
 {
   "intent": {
-    "skills": ["@tanstack/query#fetching", "workspace:@scope/internal"],
+    "skills": ["@tanstack/query", "@acme/*", "@tanstack/start#routing", "workspace:@scope/internal"],
     "exclude": ["@tanstack/router#experimental-*"]
   }
 }
