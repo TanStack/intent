@@ -255,10 +255,7 @@ describe('applySourcePolicy — allowlist matrix', () => {
     const result = applySourcePolicy(
       { packages: [pkg('@tanstack/query', ['fetching', 'mutations'])] },
       {
-        config: config([
-          '@tanstack/query#fetching',
-          '@tanstack/query',
-        ]),
+        config: config(['@tanstack/query#fetching', '@tanstack/query']),
         excludeMatchers: [],
       },
     )

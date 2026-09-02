@@ -98,12 +98,13 @@ function compileSkillSourcePolicy(config: SkillSourcesConfig): {
       return {
         matchers,
         permits: (packageName, packageKind, skillName) =>
-          matchers.some((matcher) =>
-            matcher.matchesPackage(packageName, packageKind) &&
-            (!('skill' in matcher.source) ||
-              matcher.source.skill === undefined ||
-              skillName === undefined ||
-              matcher.source.skill === skillName),
+          matchers.some(
+            (matcher) =>
+              matcher.matchesPackage(packageName, packageKind) &&
+              (!('skill' in matcher.source) ||
+                matcher.source.skill === undefined ||
+                skillName === undefined ||
+                matcher.source.skill === skillName),
           ),
       }
     }
