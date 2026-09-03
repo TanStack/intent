@@ -226,11 +226,10 @@ function createCli(): CAC {
     )
     .usage('setup')
     .action(async () => {
-      const [{ getMetaDir }, { runSetupGithubActions }] =
-        await Promise.all([
-          import('./commands/support.js'),
-          import('./setup/index.js'),
-        ])
+      const [{ getMetaDir }, { runSetupGithubActions }] = await Promise.all([
+        import('./commands/support.js'),
+        import('./setup/index.js'),
+      ])
       runSetupGithubActions(process.cwd(), getMetaDir())
     })
 
@@ -241,11 +240,10 @@ function createCli(): CAC {
     )
     .usage('setup-github-actions')
     .action(async () => {
-      const [{ getMetaDir }, { runSetupGithubActions }] =
-        await Promise.all([
-          import('./commands/support.js'),
-          import('./setup/index.js'),
-        ])
+      const [{ getMetaDir }, { runSetupGithubActions }] = await Promise.all([
+        import('./commands/support.js'),
+        import('./setup/index.js'),
+      ])
       runSetupGithubActions(process.cwd(), getMetaDir())
     })
 
