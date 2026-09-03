@@ -13,13 +13,6 @@ import {
   readWorkspacePatterns,
 } from './workspace-patterns.js'
 
-export {
-  findPackagesWithSkills,
-  findWorkspaceRoot,
-  readWorkspacePatterns,
-  resolveWorkspacePackages,
-} from './workspace-patterns.js'
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
