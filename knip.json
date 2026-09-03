@@ -15,7 +15,6 @@
       ]
     },
     "packages/intent": {
-      "entry": ["src/index.ts", "src/cli.ts", "src/core.ts", "src/setup.ts"],
       "ignoreDependencies": ["verdaccio"]
     }
   }

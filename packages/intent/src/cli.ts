@@ -215,9 +215,8 @@ function createCli(): CAC {
     )
     .usage('edit-package-json')
     .action(async () => {
-      const { runEditPackageJsonCommand } =
-        await import('./commands/setup/edit-package-json.js')
-      await runEditPackageJsonCommand(process.cwd())
+      const { runEditPackageJsonAll } = await import('./setup/index.js')
+      runEditPackageJsonAll(process.cwd())
     })
 
   cli
@@ -227,12 +226,11 @@ function createCli(): CAC {
     )
     .usage('setup')
     .action(async () => {
-      const [{ getMetaDir }, { runSetupGithubActionsCommand }] =
-        await Promise.all([
-          import('./commands/support.js'),
-          import('./commands/setup/github-actions.js'),
-        ])
-      await runSetupGithubActionsCommand(process.cwd(), getMetaDir())
+      const [{ getMetaDir }, { runSetupGithubActions }] = await Promise.all([
+        import('./commands/support.js'),
+        import('./setup/index.js'),
+      ])
+      runSetupGithubActions(process.cwd(), getMetaDir())
     })
 
   cli
@@ -242,12 +240,11 @@ function createCli(): CAC {
     )
     .usage('setup-github-actions')
     .action(async () => {
-      const [{ getMetaDir }, { runSetupGithubActionsCommand }] =
-        await Promise.all([
-          import('./commands/support.js'),
-          import('./commands/setup/github-actions.js'),
-        ])
-      await runSetupGithubActionsCommand(process.cwd(), getMetaDir())
+      const [{ getMetaDir }, { runSetupGithubActions }] = await Promise.all([
+        import('./commands/support.js'),
+        import('./setup/index.js'),
+      ])
+      runSetupGithubActions(process.cwd(), getMetaDir())
     })
 
   cli
