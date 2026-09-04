@@ -6,6 +6,7 @@ import {
   createPermissionPrompts,
   setupInitialPermissions,
 } from '../src/commands/install/permissions.js'
+import { ALLOW_ALL_NOTICE } from '../src/shared/cli-output.js'
 import type {
   ClackPermissionRuntime,
   PermissionPromptGroup,
@@ -161,6 +162,47 @@ describe('interactive permission selection', () => {
 
     expect(configuredSkills(packageJsonPath)).toEqual(['*'])
     expect(permissionPrompts.selectPermissions).not.toHaveBeenCalled()
+  })
+
+  it('prints the allow-all notice before final confirmation', async () => {
+    const events: Array<string> = []
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation((message) => {
+      events.push(String(message))
+    })
+    const permissionPrompts = prompts({ allowAll: true })
+    vi.mocked(permissionPrompts.confirmWrite).mockImplementation(() => {
+      events.push('confirm-write')
+      return Promise.resolve(false)
+    })
+
+    try {
+      await configure({ permissionPrompts })
+    } finally {
+      errorSpy.mockRestore()
+    }
+
+    expect(events).toContain(`  ℹ ${ALLOW_ALL_NOTICE}`)
+    expect(events.indexOf(`  ℹ ${ALLOW_ALL_NOTICE}`)).toBeLessThan(
+      events.indexOf('confirm-write'),
+    )
+  })
+
+  it('prints the allow-all notice during dry-run', async () => {
+    const errors: Array<string> = []
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation((message) => {
+      errors.push(String(message))
+    })
+
+    try {
+      await configure({
+        dryRun: true,
+        permissionPrompts: prompts({ allowAll: true }),
+      })
+    } finally {
+      errorSpy.mockRestore()
+    }
+
+    expect(errors).toContain(`  ℹ ${ALLOW_ALL_NOTICE}`)
   })
 
   it('constructs package groups with package-wide, exact, and disabled exclusion options', async () => {

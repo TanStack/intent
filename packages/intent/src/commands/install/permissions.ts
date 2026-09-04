@@ -10,6 +10,7 @@ import { resolveProjectContext } from '../../core/project-context.js'
 // First-run permission setup must show unpoliced candidates for explicit review.
 // eslint-disable-next-line no-restricted-imports
 import { scanForIntents } from '../../discovery/scanner.js'
+import { ALLOW_ALL_NOTICE, printNotices } from '../../shared/cli-output.js'
 import {
   preparePackageSkillsUpdate,
   writePreparedPackageSkillsUpdate,
@@ -203,6 +204,9 @@ export async function setupInitialPermissions({
       ? 'Trust change: all current and future npm and workspace skill sources will be permitted.'
       : 'Trust change: selected packages and skills can provide instructions to AI agents.',
   )
+  if (skills.length === 1 && skills[0] === '*') {
+    printNotices([ALLOW_ALL_NOTICE])
+  }
 
   if (dryRun) {
     return {
