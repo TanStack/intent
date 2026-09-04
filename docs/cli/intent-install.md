@@ -3,7 +3,7 @@ title: intent install
 id: intent-install
 ---
 
-`intent install` creates or updates an `intent-skills` guidance block in a project guidance file.
+`intent install` confirms skill-source permissions on first use, then creates or updates an `intent-skills` guidance block in a project guidance file.
 
 ```bash
 npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
@@ -25,13 +25,27 @@ npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--glob
 
 ## Behavior
 
-### Default guidance
+### Default install
 
-- Writes lightweight skill loading guidance by default.
+- When effective `intent.skills` is already configured, keeps the existing guidance-only behavior without prompting or changing `package.json`.
+- When effective `intent.skills` is absent, requires an interactive terminal and discovers raw npm and workspace permission candidates.
+- Groups choices by package. Press Space to select or deselect package-wide and exact-skill permissions, then press Enter to confirm the group selection. An empty selection is deny-all (`[]`).
+- Shows excluded packages and skills as disabled with an `intent.exclude` hint. The setup does not change `intent.exclude`.
+- Asks about allow-all separately. Accepting it writes only `["*"]` and skips narrower selection.
+- Previews the exact `intent.skills` value, destination, and trust change before confirmation.
+- Uses a final confirmation that defaults to no. Decline or cancellation at any stage does not write permission or guidance files.
+- Fails before discovery and writes when effective `intent.skills` is absent and stdin is not a TTY.
+- Updates the nearest `package.json` that owns the current working directory. In a workspace package, this is the package's own `package.json`; inherited policy still bypasses setup.
+- Uses a formatting-preserving sibling temporary file and atomic rename. If `package.json` changes after preview, the command fails and asks you to run it again.
+- Runs guidance only after permission configuration succeeds or is unchanged.
 - Creates `AGENTS.md` when no managed block exists.
 - Updates an existing managed block in a supported config file.
 - Preserves all content outside the managed block.
 - Verifies the managed block before reporting success.
+
+`--dry-run` performs discovery and selection, prints the permission and guidance previews, and writes neither file.
+
+`@tanstack/intent` requires Node.js 20.12.0 or newer.
 
 ### Mapping mode
 
@@ -88,6 +102,10 @@ tanstackIntent:
 | Mappings unchanged | `No changes to AGENTS.md; 2 mappings already current.` |
 | Guidance created | `Created AGENTS.md with skill loading guidance.` |
 | Guidance unchanged | `No changes to AGENTS.md; skill loading guidance already current.` |
+| Permissions updated | `Permissions: updated package.json.` |
+| Permissions canceled | `Permissions: canceled.` |
+| Guidance result after setup | `Guidance: created AGENTS.md.` |
+| Guidance failure after setup | `Guidance: failed: <error>` |
 | Placement tip | `Tip: Keep the intent-skills block near the top of AGENTS.md so agents read it before task-specific instructions.` |
 | No actionable skills in `--map` mode | `No intent-enabled skills found.` |
 

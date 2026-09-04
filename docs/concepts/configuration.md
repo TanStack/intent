@@ -27,7 +27,7 @@ Intent reads consumer configuration from the `intent` object in `package.json`. 
 - Resolve through `load`.
 - Contribute mappings to `install --map`.
 
-The default `install` command writes generic loading guidance without scanning packages. See [Trust model](./trust-model) for the reasoning and lifecycle boundaries.
+The default `install` command keeps guidance-only behavior when effective `intent.skills` is non-null. When no effective declaration exists, an interactive first run discovers raw npm and workspace candidates, previews the exact allowlist and nearest owning `package.json`, and requires confirmation before it writes permissions and guidance. Non-TTY first runs fail without writes. See [Trust model](./trust-model) for the reasoning and lifecycle boundaries.
 
 Package selectors permit every skill in the package. Exact selectors use `<package>#<skill>` and permit only the named skill. If the same package matches both forms, the package selector takes precedence and permits every skill. `intent.exclude` is applied afterward and can still remove a permitted package or skill.
 
@@ -53,7 +53,7 @@ Intent matches both the package name and source kind: a bare package or exact se
 
 | Form | Result | Notice |
 | --- | --- | --- |
-| **Absent:** no `intent.skills` key | Surfaces every discovered package as an upgrade path for existing projects. A future version will require an explicit allowlist. | Deprecation notice on stderr on each run until you set `intent.skills`. |
+| **Absent:** no effective `intent.skills` key | `list`, `load`, and other discovery surfaces retain the existing upgrade path. Default `install` starts reviewed permission setup in a TTY and fails without writes outside a TTY. | Deprecation notice on stderr on discovery runs until you set `intent.skills`. |
 | **Empty:** `"skills": []` | Surfaces no packages. | Info notice on stderr. |
 | **Wildcard:** `"skills": ["*"]` | Surfaces every discovered package across package scopes and source kinds. This is broader than a pattern such as `@tanstack/*`. | Acknowledged-risk notice on stderr because unvetted skills may reach your agent. |
 
@@ -63,7 +63,9 @@ A package that ships skills but is not listed is dropped. In human output, Inten
 
 Run `intent list` to see which packages the current policy surfaces.
 
-A project without `intent.skills` uses the absent form: Intent surfaces every discovered package and prints its deprecation notice. Add an allowlist to permit specific sources before a future version requires one.
+A project without effective `intent.skills` uses the absent form: Intent surfaces every discovered package on existing discovery surfaces and prints its deprecation notice. Run `intent install` in an interactive terminal to choose package or exact-skill permissions and write them to the nearest `package.json` that owns the current working directory.
+
+The first-run selector uses raw discovery before policy filtering. Existing `intent.exclude` entries remain unchanged and make matching candidates unavailable. Press Space to toggle package-wide or exact-skill entries and Enter to confirm. Selecting no entries writes `[]`. Allow-all is a separate choice and writes `["*"]` alone. A package-wide selection trusts every skill in that package and removes redundant selected children; an exact-only selection trusts only that skill. npm and `workspace:` source kinds remain distinct.
 
 ### Suppressing notices temporarily
 

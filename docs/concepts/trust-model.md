@@ -13,6 +13,8 @@ A package ships skills in a `skills/` directory. Discovery finds every installed
 
 The gate is opt-in today. A project with no `intent.skills` key still surfaces every discovered package, and Intent prints a deprecation notice to stderr on each run until you set `intent.skills`. A future version will require an explicit allowlist. See the [special forms](./configuration#special-forms) in Configuration.
 
+For default `intent install`, an absent effective policy is a first-run boundary. In an interactive terminal, Intent takes one raw npm and workspace discovery snapshot and groups choices by package. A package-wide choice trusts every skill from that package; an exact choice trusts only the named skill. Space toggles choices and Enter confirms the selection. Excluded candidates stay visible but disabled. Intent then shows the exact destination and `intent.skills` value. Only an affirmative final confirmation permits the atomic `package.json` replacement. Cancellation at any prompt and non-TTY execution write neither permissions nor guidance. After a successful permission update, guidance installation is a separate phase; a later guidance failure does not roll back the confirmed policy.
+
 Trust does not propagate. A listed package may depend on another package that ships skills, but that dependency stays unlisted unless another entry matches it. A bare entry such as `foo` permits an npm source, while `workspace:foo` permits a workspace source. Their wildcard forms remain kind-specific. The exact `*` entry permits every discovered npm and workspace source.
 
 ## Static discovery
