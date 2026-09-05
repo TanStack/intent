@@ -1,5 +1,27 @@
 # @tanstack/intent
 
+## 0.4.0
+
+### Minor Changes
+
+- [#224](https://github.com/TanStack/intent/pull/224) [`78b77b1`](https://github.com/TanStack/intent/commit/78b77b1e8b985cc14bdbf8b25a3481eff86394c7) - Add exact npm and workspace skill selectors to `intent.skills`.
+
+- [#241](https://github.com/TanStack/intent/pull/241) [`b0f9726`](https://github.com/TanStack/intent/commit/b0f9726cd533b7b5256aec9d4512b4fb16ca8cda) - Add interactive first-run skill permission setup to `intent install`. Enable all sources, choose packages or scopes, or select individual skills in compact searchable lists. Save package and scope rules without expanding them into individual names. Optional skill review shows only selected packages and opens individual skill lists only for packages chosen for review. Keep all other selections and exclusions, with one confirmation before saving. Inspect descriptions and existing exclusions on demand; excluded skills cannot be enabled, empty discovery leaves setup available for retry, and completion reports available skills and the next command.
+
+- [#255](https://github.com/TanStack/intent/pull/255) [`0b67487`](https://github.com/TanStack/intent/commit/0b674874944b19d2499a4ae3f9d6dbcf879577af) - Add `intent install --review` to revisit existing skill permissions, inspect current access, and confirm additions, removals, and individual exclusions. Preserve undiscovered rules and inherited permissions unless explicitly changed. Keep default configured installs guidance-only, reuse one discovery scan throughout review, and compile permission rules once per selection pass.
+
+### Patch Changes
+
+- [#257](https://github.com/TanStack/intent/pull/257) [`25f64ad`](https://github.com/TanStack/intent/commit/25f64adc380c1c995c2856e7742976d996c960bf) - Reduce repeated filesystem reads and path calculations in list, load, validate, and stale commands. Reuse command-scoped manifests, skill discovery, and shared workspace artifacts; index artifact matches once per package and batch workspace identity checks.
+
+- [#242](https://github.com/TanStack/intent/pull/242) [`4e59119`](https://github.com/TanStack/intent/commit/4e5911932396e74404a6a57b84fddd823ccea3d4) - Stop policy-controlled skill listing and loading when a project policy manifest is unreadable, malformed, or not a JSON object. Report the manifest path instead of treating failed reads as missing policy and exposing skills. Preserve migration behavior for genuinely missing manifests.
+
+- [#244](https://github.com/TanStack/intent/pull/244) [`b069294`](https://github.com/TanStack/intent/commit/b06929407f2f458b6db98b6d2271a47f58daca5b) - Reject unsafe dynamic identifiers before normalization in runnable list commands, install mappings, and runtime lookup hints. Skip skill metadata that resolves outside its package root, verify the opened file's identity before reading, and keep large-frontmatter reads on the same descriptor. Preserve valid package-manager symlinks and direct-load containment errors.
+
+- [#256](https://github.com/TanStack/intent/pull/256) [`223be7d`](https://github.com/TanStack/intent/commit/223be7df7b2c281106469faf86a35d1732264b8d) - Make the shipped meta-skills pass Intent validation. Match names to their existing directories, use string metadata, and move detailed procedures and templates into packaged references without changing the meta command names. Resolve relative Markdown links in `intent meta <name>` output so reference paths work from the caller's directory.
+
+- [#256](https://github.com/TanStack/intent/pull/256) [`223be7d`](https://github.com/TanStack/intent/commit/223be7df7b2c281106469faf86a35d1732264b8d) - Reject unreadable and malformed ancestor package manifests while discovering workspace policy, so a nested application's allowlist cannot bypass inherited restrictions when the workspace root is unreadable. Stop ancestor discovery at the first workspace declaration or Git repository boundary, checking that directory's manifest before stopping. Without an independent boundary, malformed ancestors fail closed and identify the file to repair.
+
 ## 0.3.8
 
 ### Patch Changes
