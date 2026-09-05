@@ -171,6 +171,10 @@ describe('intent meta', () => {
         `(${join(metaDir, 'domain-discovery', 'references', 'deep-read.md')})`,
       )
       .replaceAll(
+        '(references/deep-read.md#reading-order)',
+        `(${join(metaDir, 'domain-discovery', 'references', 'deep-read.md')}#reading-order)`,
+      )
+      .replaceAll(
         '(references/artifacts.md)',
         `(${join(metaDir, 'domain-discovery', 'references', 'artifacts.md')})`,
       )
