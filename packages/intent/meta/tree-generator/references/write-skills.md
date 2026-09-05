@@ -110,7 +110,6 @@ Wrong:
 ```[lang]
 // code that looks correct but isn't
 ```
-````
 
 Correct:
 
@@ -121,10 +120,10 @@ Correct:
 [One sentence: the specific mechanism by which the wrong version fails.]
 
 Source: [doc page or source file:line]
-
 ````
 
 Priority levels:
+
 - **CRITICAL** — Breaks in production. Security risk or data loss.
 - **HIGH** — Incorrect behavior under common conditions.
 - **MEDIUM** — Incorrect under specific conditions or edge cases.
@@ -134,6 +133,7 @@ Every mistake must be plausible (an agent would generate it), silent
 
 **Failure mode status from domain map:** The domain map may include a
 `status` field on failure modes. Handle as follows:
+
 - `active` — Include as a normal Common Mistake entry
 - `fixed-but-legacy-risk` — Include with a note: "Fixed in v[X] but
   agents trained on older code may still generate this pattern"
@@ -146,7 +146,7 @@ Every mistake must be plausible (an agent would generate it), silent
 ## References
 
 - [Complete option reference](references/options.md)
-````
+```
 
 Create reference files when any of these apply — not just length overflow:
 
@@ -353,7 +353,6 @@ Expected:
 ```[lang]
 // correct configuration or code
 ```
-````
 
 Fail condition: [what indicates this check failed]
 Fix: [one-line remediation]
@@ -376,13 +375,12 @@ Common Mistakes in standard skills]
 - [ ] [Verification 1]
 - [ ] [Verification 2]
 - [ ] [Verification 3]
-
-```
+````
 
 The key differences from the standard body:
+
 - No "Setup" section — the agent already has the app running
 - Checks replace "Core Patterns" — each check is a verification, not a
   teaching pattern
 - The summary checklist at the end gives agents a quick pass/fail list
 - Common Mistakes section is still present for wrong/correct pairs
-```
