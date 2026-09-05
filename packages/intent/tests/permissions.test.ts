@@ -88,6 +88,7 @@ function prompts({
     reviewPermissions: vi.fn((_groups, selection) =>
       Promise.resolve(selection),
     ),
+    editPermissions: vi.fn((_groups, selection) => Promise.resolve(selection)),
     confirmWrite: vi.fn(async () => confirmWrite),
   }
   return result
@@ -547,5 +548,159 @@ describe('interactive permission selection', () => {
     expect(result).toEqual({ packageJsonPath, status: 'unchanged' })
     expect(permissionPrompts.confirmWrite).not.toHaveBeenCalled()
     expect(configuredSkills(packageJsonPath)).toBeUndefined()
+  })
+})
+
+describe('existing permission setup', () => {
+  it.each(
+    [[], ['*', 'missing'], ['missing#old', '@scope/*', 'workspace:pkg']].map(
+      (skills) => ({ skills }),
+    ),
+  )('preserves unchanged rules and formatting for %j', async ({ skills }) => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-review-policy-'))
+    tempDirs.push(root)
+    const packageJsonPath = join(root, 'package.json')
+    const source = JSON.stringify({ name: 'app', intent: { skills } }) + '\n'
+    writeFileSync(packageJsonPath, source)
+    const discover = vi.fn(() => scan([]))
+    const result = await setupInitialPermissions({
+      root,
+      review: true,
+      runtime: { prompts: prompts(), scan: discover },
+    })
+    expect(result).toEqual({
+      packageJsonPath,
+      status: 'unchanged',
+      available: { skills: 0, packages: 0 },
+    })
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(source)
+    expect(discover).toHaveBeenCalledOnce()
+  })
+
+  it('retains inherited permissions until an explicitly confirmed local override', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-review-workspace-'))
+    tempDirs.push(root)
+    const child = join(root, 'packages', 'app')
+    mkdirSync(child, { recursive: true })
+    const parentPath = join(root, 'package.json')
+    const parent = JSON.stringify({
+      name: 'repo',
+      workspaces: ['packages/*'],
+      intent: { skills: ['pkg'], exclude: ['pkg#private'] },
+    })
+    writeFileSync(parentPath, parent)
+    const childPath = join(child, 'package.json')
+    const childSource = '{"name":"app"}\n'
+    writeFileSync(childPath, childSource)
+    const permissionPrompts = prompts()
+    const runtime = {
+      prompts: permissionPrompts,
+      scan: () => scan([packageCandidate('pkg', 'npm', ['core', 'private'])]),
+    }
+    const unchanged = await setupInitialPermissions({
+      root: child,
+      review: true,
+      runtime,
+    })
+    expect(unchanged.status).toBe('unchanged')
+    expect(readFileSync(childPath, 'utf8')).toBe(childSource)
+    expect(permissionPrompts.editPermissions).toHaveBeenCalledWith(
+      expect.any(Array),
+      { skills: ['pkg'], exclude: [] },
+    )
+    vi.mocked(permissionPrompts.editPermissions).mockResolvedValue({
+      skills: ['*'],
+      exclude: [],
+    })
+    const changed = await setupInitialPermissions({
+      root: child,
+      review: true,
+      runtime,
+    })
+    expect(changed).toMatchObject({
+      status: 'updated',
+      available: { skills: 1, packages: 1 },
+    })
+    expect(JSON.parse(readFileSync(childPath, 'utf8')).intent.skills).toEqual([
+      '*',
+    ])
+    expect(readFileSync(parentPath, 'utf8')).toBe(parent)
+  })
+
+  it.each(['edit', 'confirm'])(
+    'rejects local policy changed during %s without overwriting it',
+    async (stage) => {
+      const root = mkdtempSync(join(tmpdir(), 'intent-review-race-'))
+      tempDirs.push(root)
+      const packageJsonPath = join(root, 'package.json')
+      writeFileSync(
+        packageJsonPath,
+        '{"name":"app","intent":{"skills":["pkg"]}}',
+      )
+      const replacement =
+        '{"name":"app","intent":{"skills":[],"exclude":["pkg"]}}'
+      const permissionPrompts = prompts()
+      vi.mocked(permissionPrompts.editPermissions).mockImplementation(
+        async () => {
+          if (stage === 'edit') writeFileSync(packageJsonPath, replacement)
+          return { skills: ['*'], exclude: [] }
+        },
+      )
+      vi.mocked(permissionPrompts.confirmWrite).mockImplementation(async () => {
+        if (stage === 'confirm') writeFileSync(packageJsonPath, replacement)
+        return true
+      })
+      await expect(
+        setupInitialPermissions({
+          root,
+          review: true,
+          runtime: { prompts: permissionPrompts, scan: () => scan([]) },
+        }),
+      ).rejects.toThrow('policy changed during permission review')
+      expect(readFileSync(packageJsonPath, 'utf8')).toBe(replacement)
+    },
+  )
+
+  it('rejects an inherited exclusion change during confirmation', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-review-exclusion-race-'))
+    tempDirs.push(root)
+    const child = join(root, 'packages', 'app')
+    mkdirSync(child, { recursive: true })
+    const parentPath = join(root, 'package.json')
+    writeFileSync(
+      parentPath,
+      JSON.stringify({
+        name: 'repo',
+        workspaces: ['packages/*'],
+        intent: { exclude: [] },
+      }),
+    )
+    const childPath = join(child, 'package.json')
+    const source = '{"name":"app","intent":{"skills":["pkg"]}}'
+    writeFileSync(childPath, source)
+    const permissionPrompts = prompts()
+    vi.mocked(permissionPrompts.editPermissions).mockResolvedValue({
+      skills: ['*'],
+      exclude: [],
+    })
+    vi.mocked(permissionPrompts.confirmWrite).mockImplementation(async () => {
+      writeFileSync(
+        parentPath,
+        JSON.stringify({
+          name: 'repo',
+          workspaces: ['packages/*'],
+          intent: { exclude: ['pkg'] },
+        }),
+      )
+      return true
+    })
+    await expect(
+      setupInitialPermissions({
+        root: child,
+        review: true,
+        runtime: { prompts: permissionPrompts, scan: () => scan([]) },
+      }),
+    ).rejects.toThrow('policy changed during permission review')
+    expect(readFileSync(childPath, 'utf8')).toBe(source)
   })
 })
