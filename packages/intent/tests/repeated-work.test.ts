@@ -256,6 +256,48 @@ describe('command work budgets', () => {
     },
   )
 
+  it('reuses discovered manifests and skill files in the fallback stale path', async () => {
+    write(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: 'consumer',
+        private: true,
+        dependencies: { example: '1.0.0' },
+      }),
+    )
+    write(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n')
+    write(join(root, 'packages', 'app', 'package.json'), '{"name":"app"}')
+    const packageDir = join(root, 'node_modules', 'example')
+    writePackage(packageDir, 'example')
+
+    expect(await main(['stale', '--json'])).toBe(0)
+    const reports = JSON.parse(
+      vi.mocked(console.log).mock.calls.at(-1)![0] as string,
+    )
+    expect(reports).toHaveLength(1)
+    expect(reports[0]).toMatchObject({
+      library: 'example',
+      currentVersion: '1.0.0',
+      signals: [],
+    })
+    expect(reports[0].skills).toHaveLength(1)
+    expect(
+      vi
+        .mocked(readFileSync)
+        .mock.calls.filter(
+          ([path]) => path === join(packageDir, 'package.json'),
+        ),
+    ).toHaveLength(1)
+    for (const dir of [
+      join(packageDir, 'skills'),
+      join(packageDir, 'skills', 'core'),
+    ]) {
+      expect(
+        vi.mocked(readdirSync).mock.calls.filter(([path]) => path === dir),
+      ).toHaveLength(1)
+    }
+  })
+
   it('reads workspace artifacts, manifests, and skill trees once per stale invocation', async () => {
     write(
       join(root, 'package.json'),

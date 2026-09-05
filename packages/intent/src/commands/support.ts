@@ -5,6 +5,7 @@ import { fail } from '../shared/cli-error.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import type { IntentCoreOptions } from '../core/index.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type {
   ScanOptions,
   ScanResult,
@@ -83,13 +84,15 @@ export function getCheckSkillsWorkflowAdvisories(root: string): Array<string> {
 
 export async function scanIntentsOrFail(
   coreOptions: IntentCoreOptions = {},
+  fsCache?: IntentFsCache,
 ): Promise<ScanResult> {
   const { scanForPolicedIntents } = await import('../core/source-policy.js')
 
   try {
+    const scanOptions = { ...scanOptionsFromGlobalFlags(coreOptions), fsCache }
     const { scan } = scanForPolicedIntents({
       cwd: process.cwd(),
-      scanOptions: scanOptionsFromGlobalFlags(coreOptions),
+      scanOptions,
       coreOptions,
     })
     return scan
@@ -246,7 +249,7 @@ export async function resolveStaleTargets(
     }
   }
 
-  const staleResult = await scanIntentsOrFail()
+  const staleResult = await scanIntentsOrFail({}, fsCache)
   return {
     reports: await Promise.all(
       staleResult.packages.map((pkg) =>
