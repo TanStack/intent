@@ -79,7 +79,7 @@ function compileSkillSourceMatcher(
   }
 }
 
-function compileSkillSourcePolicy(config: SkillSourcesConfig): {
+export function compileSkillSourcePolicy(config: SkillSourcesConfig): {
   matchers: Array<SkillSourceMatcher>
   permits: (
     packageName: string,

@@ -11,6 +11,10 @@ npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--glob
 
 ## Options
 
+### Permission review
+
+- `--review`: review current skill permissions interactively, then update guidance
+
 ### Guidance output
 
 - `--map`: write explicit task-to-skill mappings instead of lightweight loading guidance
@@ -27,7 +31,7 @@ npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--glob
 
 ### Default install
 
-If `intent.skills` is already configured, including through workspace inheritance, `install` only updates guidance. It does not prompt or change `package.json`.
+If `intent.skills` is already configured, including through workspace inheritance, `install` only updates guidance. It does not prompt or change `package.json`. Run `intent install --review` to change permissions.
 
 Otherwise, first-run setup requires an interactive terminal. Non-TTY execution fails before discovery or writes. Node.js 20.12.0 or newer is required.
 
@@ -65,6 +69,27 @@ After permissions are saved, Intent updates an existing managed guidance block i
 - **No skills found, or all excluded:** explains how to retry and writes nothing. Empty discovery does not create a deny-all policy.
 - **Decline or cancel a prompt:** writes neither permissions nor guidance.
 - **`--dry-run`:** performs discovery and selection, previews permissions and guidance, and writes neither file.
+
+
+### Review existing permissions
+
+```bash
+npx @tanstack/intent@latest install --review
+```
+
+Review starts from the current `intent.skills` rules. Continue with them, add packages/scopes/individual skills, remove explicit rules, or review individual skills within enabled packages. Existing rules stay intact unless you change them, including rules for packages or skills that are **not discovered**. Removing a rule requires unchecking it; Intent never removes it automatically.
+
+**Inspect access and descriptions** shows whether each current candidate is permitted by a matching rule or blocked by the allowlist or `intent.exclude`. Searchable lists show at most six options at a time; descriptions appear on request. Package and scope rules continue to cover future matching skills. Adding a skill already covered by an existing rule does not add a redundant permission.
+
+Unchecking a skill covered by a broader rule adds an exclusion. Existing exclusions stay in effect and cannot be removed through this picker; use [`intent exclude`](./intent-exclude) from the directory containing the exclusion to remove one.
+
+The confirmation previews the destination, additions, removals, and new exclusions. Choose **Show exact proposed configuration** in the review menu for complete arrays. Canceling writes neither permissions nor guidance. `--review --dry-run` walks through review and prints the preview without saving either file.
+
+In a workspace, inherited permissions are the starting selection. If you change them, confirmation creates an override in the nearest owning `package.json`; it does not edit the ancestor. Continuing unchanged preserves inheritance. Inherited exclusions still apply. If a policy manifest changes during review, the command stops and asks you to retry.
+
+Review requires a terminal and cannot be combined with `--map`, `--print-prompt`, `--global`, or `--global-only`. With no effective policy, `--review` opens first-run setup. Plain `install` retains its guidance-only behavior for configured projects.
+
+Review scans local candidates once and reuses that result throughout the prompts and completion counts. It compares current permissions with proposed edits. It does **not** detect newly discovered skills relative to an earlier run, content changes, hashes, or delivery drift. Permissions and guidance results are reported separately; a guidance failure after saving does not undo confirmed permissions.
 
 ### Mapping mode
 
