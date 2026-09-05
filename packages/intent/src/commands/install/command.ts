@@ -131,6 +131,7 @@ tanstackIntent:
 export interface InstallCommandOptions extends GlobalScanFlags {
   dryRun?: boolean
   map?: boolean
+  review?: boolean
   printPrompt?: boolean
 }
 
@@ -211,6 +212,19 @@ export async function runInstallCommand(
   scanIntentsOrFail: (coreOptions?: IntentCoreOptions) => Promise<ScanResult>,
   runtime: InstallCommandRuntime = {},
 ): Promise<void> {
+  if (
+    options.review &&
+    (options.map || options.printPrompt || options.global || options.globalOnly)
+  ) {
+    fail(
+      '--review cannot be combined with --map, --print-prompt, --global, or --global-only.',
+    )
+  }
+  if (options.review && !(runtime.isTTY ?? process.stdin.isTTY === true)) {
+    fail(
+      'Permission review requires an interactive terminal. Run `intent install --review` in a terminal.',
+    )
+  }
   if (options.printPrompt) {
     console.log(INSTALL_PROMPT)
     return
@@ -225,7 +239,7 @@ export async function runInstallCommand(
       ReturnType<typeof setupInitialPermissions>
     > | null = null
 
-    if (policy.mode === 'absent') {
+    if (policy.mode === 'absent' || options.review) {
       const isTTY = runtime.isTTY ?? process.stdin.isTTY === true
       if (!isTTY) {
         fail(
@@ -236,6 +250,7 @@ export async function runInstallCommand(
       try {
         permissions = await setupInitialPermissions({
           dryRun: options.dryRun,
+          review: options.review,
           root: process.cwd(),
           runtime: {
             prompts: runtime.permissionPrompts ?? createPermissionPrompts(),
@@ -273,7 +288,8 @@ export async function runInstallCommand(
       return
     }
 
-    const available = permissions ? await scanIntentsOrFail() : null
+    const available =
+      permissions && !permissions.available ? await scanIntentsOrFail() : null
     try {
       const result = writeIntentSkillsBlock({
         ...generated,
@@ -305,26 +321,25 @@ export async function runInstallCommand(
       } else {
         printWriteResult(result)
       }
+      if (!permissions)
+        console.log('To change permissions, run intent install --review.')
       printPlacementTip(result.targetPath)
-      if (available && permissions) {
-        const packages = available.packages.filter(
-          (pkg) => pkg.skills.length > 0,
-        )
-        const skillCount = packages.reduce(
-          (count, pkg) => count + pkg.skills.length,
-          0,
-        )
+      if (permissions && (available || permissions.available)) {
+        const packages =
+          available?.packages.filter((pkg) => pkg.skills.length > 0) ?? []
+        const packageCount = permissions.available?.packages ?? packages.length
+        const skillCount =
+          permissions.available?.skills ??
+          packages.reduce((count, pkg) => count + pkg.skills.length, 0)
         console.log(
-          `Available: ${skillCount} ${skillCount === 1 ? 'skill' : 'skills'} from ${packages.length} ${packages.length === 1 ? 'package' : 'packages'}.`,
+          `Available: ${skillCount} ${skillCount === 1 ? 'skill' : 'skills'} from ${packageCount} ${packageCount === 1 ? 'package' : 'packages'}.`,
         )
         if (skillCount > 0) {
           console.log(
             `Next: ${formatIntentCommand(detectIntentCommandPackageManager(), 'list')}`,
           )
         } else {
-          console.log(
-            `To enable skills, edit intent.skills in ${formatTargetPath(permissions.packageJsonPath)} and run intent install again.`,
-          )
+          console.log('To change permissions, run intent install --review.')
         }
       }
       return

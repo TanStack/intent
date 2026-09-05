@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as discovery from '../src/discovery/scanner.js'
 import { INSTALL_PROMPT } from '../src/commands/install/command.js'
 import { isMainModule, main } from '../src/cli.js'
 import type { PermissionPrompts } from '../src/commands/install/permissions.js'
@@ -78,6 +79,7 @@ function permissionPrompts({
     reviewPermissions: vi.fn((_groups, selection) =>
       Promise.resolve(selection),
     ),
+    editPermissions: vi.fn((_groups, selection) => Promise.resolve(selection)),
     confirmWrite: vi.fn(async () => confirmWrite),
   }
 }
@@ -430,6 +432,111 @@ describe('cli commands', () => {
     expect(readFileSync(agentsPath, 'utf8')).toBe(content)
   })
 
+  it('reviews existing permissions without replaying first-run selection', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-repeat-review-'))
+    tempDirs.push(root)
+    const packageJsonPath = join(root, 'package.json')
+    writeJson(packageJsonPath, {
+      name: 'app',
+      intent: { skills: ['missing#keep', '@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    process.chdir(root)
+    const scanSpy = vi.spyOn(discovery, 'scanForIntents')
+    const prompts: PermissionPrompts = {
+      ...permissionPrompts(),
+      editPermissions: vi.fn(async (_packages, current) => ({
+        ...current,
+        skills: [...current.skills, 'other'],
+      })),
+    }
+    expect(
+      await main(['install', '--review'], {
+        isTTY: true,
+        permissionPrompts: prompts,
+      }),
+    ).toBe(0)
+    expect(scanSpy).toHaveBeenCalledOnce()
+    scanSpy.mockRestore()
+    expect(prompts.selectPermissions).not.toHaveBeenCalled()
+    expect(prompts.editPermissions).toHaveBeenCalledOnce()
+    expect(
+      JSON.parse(readFileSync(packageJsonPath, 'utf8')).intent.skills,
+    ).toEqual(['missing#keep', '@tanstack/query', 'other'])
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'Permissions: updated',
+    )
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+      '## Skill Loading',
+    )
+  })
+
+  it.each(['--map', '--print-prompt', '--global', '--global-only'])(
+    'rejects --review with %s before prompts or writes',
+    async (flag) => {
+      const prompts = permissionPrompts()
+      expect(
+        await main(['install', '--review', flag], {
+          isTTY: true,
+          permissionPrompts: prompts,
+        }),
+      ).toBe(1)
+      expect(prompts.editPermissions).not.toHaveBeenCalled()
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+        '--review cannot be combined',
+      )
+    },
+  )
+
+  it('rejects non-TTY review without discovery or writes', async () => {
+    const scanSpy = vi.spyOn(discovery, 'scanForIntents')
+    try {
+      expect(await main(['install', '--review'], { isTTY: false })).toBe(1)
+      expect(scanSpy).not.toHaveBeenCalled()
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+        'Permission review requires an interactive terminal',
+      )
+    } finally {
+      scanSpy.mockRestore()
+    }
+  })
+
+  it.each(['cancel', 'decline', 'dry-run'])(
+    'leaves repeat-install policy and guidance untouched on %s',
+    async (action) => {
+      const root = mkdtempSync(join(realTmpdir, 'intent-repeat-unchanged-'))
+      tempDirs.push(root)
+      const policyPath = join(root, 'package.json')
+      const source = '{"name":"app","intent":{"skills":["missing"]}}\n'
+      writeFileSync(policyPath, source)
+      writeFileSync(join(root, 'AGENTS.md'), 'Existing guidance\n')
+      process.chdir(root)
+      const prompts = permissionPrompts({ confirmWrite: action !== 'decline' })
+      vi.mocked(prompts.editPermissions).mockResolvedValue(
+        action === 'cancel' ? null : { skills: [], exclude: [] },
+      )
+      const args = [
+        'install',
+        '--review',
+        ...(action === 'dry-run' ? ['--dry-run'] : []),
+      ]
+      expect(
+        await main(args, { isTTY: true, permissionPrompts: prompts }),
+      ).toBe(0)
+      expect(readFileSync(policyPath, 'utf8')).toBe(source)
+      expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toBe(
+        'Existing guidance\n',
+      )
+      if (action !== 'decline')
+        expect(prompts.confirmWrite).not.toHaveBeenCalled()
+    },
+  )
+
   it('fails without writes when intent.skills is absent in non-TTY use', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-non-tty-'))
     tempDirs.push(root)
@@ -580,7 +687,9 @@ describe('cli commands', () => {
     expect(prompts.confirmWrite).toHaveBeenCalledWith(true)
     const output = logSpy.mock.calls.flat().join('\n')
     expect(output).toContain('Available: 0 skills from 0 packages.')
-    expect(output).toContain('To enable skills, edit intent.skills in')
+    expect(output).toContain(
+      'To change permissions, run intent install --review.',
+    )
     expect(output).not.toContain('Next:')
   })
 

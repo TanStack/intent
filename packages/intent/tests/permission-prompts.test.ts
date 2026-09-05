@@ -508,3 +508,201 @@ describe('skill enablement', () => {
     }
   })
 })
+
+describe('repeat permission review', () => {
+  it('keeps all existing rules verbatim when continuing', async () => {
+    const api = runtime()
+    api.select.mockResolvedValue('continue')
+    const selection = { skills: ['missing#old', '*', 'pkg#core'], exclude: [] }
+    await expect(
+      createPermissionPrompts(api).editPermissions([pkg], selection),
+    ).resolves.toEqual(selection)
+    expect(api.autocompleteMultiselect).not.toHaveBeenCalled()
+  })
+
+  it('adds only uncovered permissions and retains rules not discovered', async () => {
+    const api = runtime()
+    api.select
+      .mockResolvedValueOnce('add')
+      .mockResolvedValueOnce('skills')
+      .mockResolvedValueOnce('continue')
+    api.autocompleteMultiselect.mockResolvedValueOnce([
+      'pkg#core',
+      'workspace:pkg#local',
+    ])
+    await expect(
+      createPermissionPrompts(api).editPermissions([pkg, workspace], {
+        skills: ['missing#old', 'pkg'],
+        exclude: [],
+      }),
+    ).resolves.toEqual({
+      skills: ['missing#old', 'pkg', 'workspace:pkg#local'],
+      exclude: [],
+    })
+  })
+
+  it('does not mistake exact permissions for permission to future package skills', async () => {
+    const api = runtime()
+    api.select
+      .mockResolvedValueOnce('add')
+      .mockResolvedValueOnce('packages')
+      .mockResolvedValueOnce('continue')
+    api.autocompleteMultiselect.mockResolvedValueOnce(['pkg'])
+    await expect(
+      createPermissionPrompts(api).editPermissions([pkg], {
+        skills: ['pkg#core'],
+        exclude: [],
+      }),
+    ).resolves.toEqual({ skills: ['pkg#core', 'pkg'], exclude: [] })
+  })
+
+  it('shows missing exact skills as not discovered and removes only unchecked rules', async () => {
+    const api = runtime()
+    api.select.mockResolvedValueOnce('remove').mockResolvedValueOnce('continue')
+    api.autocompleteMultiselect.mockResolvedValueOnce([
+      'pkg#missing',
+      'workspace:pkg',
+    ])
+    await expect(
+      createPermissionPrompts(api).editPermissions([pkg, workspace], {
+        skills: ['pkg#missing', '*', 'workspace:pkg'],
+        exclude: [],
+      }),
+    ).resolves.toEqual({
+      skills: ['pkg#missing', 'workspace:pkg'],
+      exclude: [],
+    })
+    const options = api.autocompleteMultiselect.mock.calls[0]![0]
+    expect(options.initialValues).toEqual(['pkg#missing', '*', 'workspace:pkg'])
+    expect(options.options[0].hint).toBe(
+      'Not discovered; kept unless you remove it',
+    )
+    expect(options.options[2].hint).toBeUndefined()
+  })
+
+  it('preserves undiscovered, excluded, and unreviewed exact rules during skill review', async () => {
+    const api = runtime()
+    api.select.mockResolvedValueOnce('skills').mockResolvedValueOnce('continue')
+    api.autocompleteMultiselect
+      .mockResolvedValueOnce(['pkg'])
+      .mockResolvedValueOnce(['pkg#core'])
+    await expect(
+      createPermissionPrompts(api).editPermissions([pkg, workspace], {
+        skills: ['pkg#missing', 'pkg#private', 'workspace:pkg#local', 'pkg'],
+        exclude: [],
+      }),
+    ).resolves.toEqual({
+      skills: ['pkg#missing', 'pkg#private', 'workspace:pkg#local', 'pkg'],
+      exclude: ['pkg#other'],
+    })
+  })
+
+  it('keeps raw exact entries and order when skill review makes no changes', async () => {
+    const api = runtime()
+    api.autocompleteMultiselect
+      .mockResolvedValueOnce(['pkg'])
+      .mockResolvedValueOnce(['pkg#core'])
+    const initial = {
+      skills: [' pkg#core ', 'missing#old', 'workspace:pkg#local'],
+      exclude: ['gone#keep'],
+    }
+    await expect(
+      createPermissionPrompts(api).reviewPermissions([pkg, workspace], initial),
+    ).resolves.toEqual(initial)
+  })
+
+  it('explains exclusions, package rules, source kinds, and deny-all on demand', async () => {
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      for (const [skills, expected] of [
+        [
+          ['pkg'],
+          [
+            'Permitted by pkg',
+            'Blocked by intent.exclude',
+            'Blocked: no matching intent.skills rule',
+          ],
+        ],
+        [
+          ['*'],
+          [
+            'Permitted by * (all sources)',
+            'Blocked by intent.exclude',
+            'Permitted by * (all sources)',
+          ],
+        ],
+        [
+          [],
+          [
+            'Blocked by intent.skills: []',
+            'Blocked by intent.exclude',
+            'Blocked by intent.skills: []',
+          ],
+        ],
+      ] as const) {
+        const api = runtime()
+        api.select
+          .mockResolvedValueOnce('inspect')
+          .mockResolvedValueOnce('continue')
+        api.autocomplete.mockResolvedValueOnce('back')
+        await createPermissionPrompts(api).editPermissions([pkg, workspace], {
+          skills: [...skills],
+          exclude: [],
+        })
+        const options = api.autocomplete.mock.calls[0]![0].options
+        expect(options[1].hint).toBe(expected[0])
+        expect(options[3].hint).toBe(expected[1])
+        expect(options[4].hint).toBe(expected[2])
+        expect(api.autocomplete.mock.calls[0]![0].maxItems).toBe(6)
+      }
+      expect(output).not.toHaveBeenCalled()
+    } finally {
+      output.mockRestore()
+    }
+  })
+
+  it('cancels pending edits without mutating the initial selection', async () => {
+    const api = runtime()
+    api.select
+      .mockResolvedValueOnce('remove')
+      .mockResolvedValueOnce(Symbol('cancel'))
+    api.autocompleteMultiselect.mockResolvedValueOnce([])
+    const initial = { skills: ['pkg'], exclude: ['gone#keep'] }
+    await expect(
+      createPermissionPrompts(api).editPermissions([pkg], initial),
+    ).resolves.toBeNull()
+    expect(initial).toEqual({ skills: ['pkg'], exclude: ['gone#keep'] })
+  })
+
+  it('supports keyboard review without replaying the package picker', async () => {
+    vi.stubEnv('TERM', 'xterm-256color')
+    const input = new PassThrough()
+    const output = Object.assign(new PassThrough(), { columns: 90, rows: 24 })
+    let rendered = ''
+    output.on('data', (data) => {
+      rendered += data.toString()
+    })
+    const api: ClackPermissionRuntime = {
+      ...clack,
+      select: (options) => {
+        const result = clack.select({ ...options, input, output })
+        process.nextTick(() => input.write('\r'))
+        return result
+      },
+    }
+    try {
+      const initial = { skills: ['pkg', 'missing#keep'], exclude: [] }
+      await expect(
+        createPermissionPrompts(api).editPermissions([pkg], initial),
+      ).resolves.toEqual(initial)
+      expect(stripVTControlCharacters(rendered)).toContain(
+        'Review current skill permissions',
+      )
+      expect(stripVTControlCharacters(rendered)).not.toContain('Core guidance')
+    } finally {
+      vi.unstubAllEnvs()
+      input.destroy()
+      output.destroy()
+    }
+  })
+})
