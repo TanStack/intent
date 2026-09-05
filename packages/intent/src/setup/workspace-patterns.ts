@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { parse as parseJsonc } from 'jsonc-parser'
 import { parse as parseYaml } from 'yaml'
 import { hasAnySkillFile } from '../shared/utils.js'
+import { readPackageJson } from '../core/package-json.js'
 import type { ParseError } from 'jsonc-parser'
 
 function normalizeWorkspacePattern(pattern: string): string {
@@ -75,10 +76,6 @@ function readYamlFile(path: string): unknown {
   return parseYaml(readFileSync(path, 'utf8'))
 }
 
-function readJsonFile(path: string): unknown {
-  return JSON.parse(readFileSync(path, 'utf8'))
-}
-
 function readJsoncFile(path: string): unknown {
   const errors: Array<ParseError> = []
   const value = parseJsonc(readFileSync(path, 'utf8'), errors, {
@@ -131,7 +128,7 @@ const workspacePatternSources: Array<WorkspacePatternSource> = [
   },
   {
     fileName: 'package.json',
-    read: readJsonFile,
+    read: (path) => readPackageJson(dirname(path)),
     getPatterns: (config) =>
       parseWorkspacePatternField(
         isRecord(config) ? config.workspaces : undefined,
@@ -180,12 +177,18 @@ function readWorkspacePatternsUncached(root: string): Array<string> | null {
   for (const source of workspacePatternSources) {
     const path = join(root, source.fileName)
 
-    if (!existsSync(path)) {
+    if (source.fileName !== 'package.json' && !existsSync(path)) {
       continue
     }
 
+    // An unreadable ancestor may own inherited policy. Never turn it into
+    // a cached "no workspace" result, even when a child has its own allowlist.
+    const packageJson =
+      source.fileName === 'package.json' ? source.read(path) : undefined
     try {
-      const patterns = source.getPatterns(source.read(path))
+      const patterns = source.getPatterns(
+        source.fileName === 'package.json' ? packageJson : source.read(path),
+      )
       if (patterns) {
         return patterns
       }
@@ -344,6 +347,10 @@ export function findWorkspaceRoot(start: string): string | null {
       }
       return dir
     }
+
+    // Both a checkout directory and a worktree .git file bound ancestry.
+    // Check this directory's manifest first so root policy still applies.
+    if (existsSync(join(dir, '.git'))) break
 
     prev = dir
     dir = dirname(dir)

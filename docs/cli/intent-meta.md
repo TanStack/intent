@@ -22,7 +22,9 @@ npx @tanstack/intent@latest meta <name>
   - `name` + description from frontmatter
   - description is normalized and truncated to 60 characters
 - With `<name>`:
-  - raw markdown from `meta/<name>/SKILL.md`
+  - Markdown from `meta/<name>/SKILL.md`
+  - relative links within the package resolve from the caller's directory, using absolute paths when needed
+  - reference files remain separate and are read only when their linked procedure is needed
 
 ## Common errors
 

@@ -158,11 +158,26 @@ describe('intent meta', () => {
     expect(output).toContain('skill-staleness-check')
   })
 
-  it('prints the requested meta-skill content', async () => {
+  it('prints meta-skill content with reference paths usable from the caller', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-meta-reference-'))
+    tempDirs.push(root)
+    process.chdir(root)
     const expected = readFileSync(
       join(metaDir, 'domain-discovery', 'SKILL.md'),
       'utf8',
     )
+      .replaceAll(
+        '(references/deep-read.md)',
+        `(${join(metaDir, 'domain-discovery', 'references', 'deep-read.md')})`,
+      )
+      .replaceAll(
+        '(references/deep-read.md#reading-order)',
+        `(${join(metaDir, 'domain-discovery', 'references', 'deep-read.md')}#reading-order)`,
+      )
+      .replaceAll(
+        '(references/artifacts.md)',
+        `(${join(metaDir, 'domain-discovery', 'references', 'artifacts.md')})`,
+      )
 
     const exitCode = await main(['meta', 'domain-discovery'])
 

@@ -29,7 +29,9 @@ Default `intent install` handles this state through interactive permission setup
 
 Intent stops policy-controlled listing, loading, and installation when a policy `package.json` cannot be read, contains invalid JSON, or is not a JSON object. The error names the file. Repair or restore that file, then retry the command.
 
-This also applies to inherited policy within a resolved workspace. Malformed JSON that prevents discovery from identifying the workspace root itself remains a [known limitation](https://github.com/TanStack/intent/issues/240).
+This also applies while finding the workspace root: an unreadable or malformed ancestor `package.json` cannot be skipped, because it may contain inherited restrictions. Repair or restore the named manifest before retrying.
+
+Workspace discovery checks ancestors up to the first workspace declaration or Git repository boundary (`.git` directory or worktree file), including that directory's manifest. It does not inspect manifests above that boundary. Without either boundary, an invalid ancestor stops discovery even if the nearest package is intended to be standalone; Intent cannot determine from an unreadable manifest whether it owns workspace policy. A nested Git repository is treated as a separate project.
 
 ## First-run permission review
 
