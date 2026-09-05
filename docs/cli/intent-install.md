@@ -27,29 +27,37 @@ npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--glob
 
 ### Default install
 
-- When effective `intent.skills` is already configured, keeps the existing guidance-only behavior without prompting or changing `package.json`.
-- When effective `intent.skills` is absent, requires an interactive terminal and discovers raw npm and workspace permission candidates.
-- Shows package versions, skill descriptions, and excluded candidates before asking about permissions.
-- Groups selectable choices by package. Press Space to select or deselect package-wide and exact-skill permissions, then press Enter to review. Package-wide choices include current and future skills; exact choices permit only the named skill.
-- Lists excluded packages and skills in the discovery overview and omits them from the picker. The setup does not change `intent.exclude`.
-- Asks about allow-all separately, after the discovery overview. Accepting it writes only `["*"]` and skips narrower selection.
-- An empty selection previews deny-all (`[]`) and explicitly asks whether to disable all skills. The preview explains that this also blocks future sources until `intent.skills` is edited.
-- When no skills are discovered, or all discovered skills are excluded, explains how to retry and writes neither permissions nor guidance. It does not create a deny-all policy from empty discovery.
-- Previews the exact `intent.skills` value, destination, and trust change before confirmation.
-- Uses a final confirmation that defaults to no. Decline or cancellation at any stage does not write permission or guidance files.
-- Fails before discovery and writes when effective `intent.skills` is absent and stdin is not a TTY.
-- Updates the nearest `package.json` that owns the current working directory. In a workspace package, this is the package's own `package.json`; inherited policy still bypasses setup.
-- Uses a formatting-preserving sibling temporary file and atomic rename. If `package.json` changes after preview, the command fails and asks you to run it again.
-- Runs guidance only after permission configuration succeeds or is unchanged.
-- Creates `AGENTS.md` when no managed block exists.
-- Updates an existing managed block in a supported config file.
-- Preserves all content outside the managed block.
-- Verifies the managed block before reporting success.
-- After confirmed setup, scans with the saved policy and reports the available skill and package counts. Prints a package-manager-aware `list` command when skills are available, or instructions to edit `intent.skills` when none are enabled.
+If `intent.skills` is already configured, including through workspace inheritance, `install` only updates guidance. It does not prompt or change `package.json`.
 
-`--dry-run` performs discovery and selection, prints the permission and guidance previews, and writes neither file.
+Otherwise, first-run setup requires an interactive terminal. Non-TTY execution fails before discovery or writes. Node.js 20.12.0 or newer is required.
 
-`@tanstack/intent` requires Node.js 20.12.0 or newer.
+#### First-run flow
+
+1. **Review** discovered npm and workspace packages, versions, and skill descriptions. Excluded candidates appear in the overview but cannot be selected.
+2. **Choose** permissions. After the overview, Intent asks about allow-all; choose No to select individual packages or skills. Press Space to toggle grouped choices and Enter to review.
+3. **Confirm** the exact `intent.skills` value, destination file, and trust change. Confirmation defaults to No.
+4. **Finish** with verified guidance, available skill and package counts, and a package-manager-aware `list` command. If no skills are enabled, Intent explains how to edit `intent.skills`.
+
+#### Permission choices
+
+| Choice | Effect |
+| --- | --- |
+| All skills in a package | Permits its current and future skills. |
+| Individual skill | Permits only the named skill. |
+| Allow all sources | Writes `["*"]` and skips narrower selection. |
+| Select nothing | Explicitly confirms writing `[]`, disabling current and future sources until `intent.skills` is edited. |
+
+Existing `intent.exclude` rules always apply and remain unchanged.
+
+#### Files and retry behavior
+
+Permissions go in the nearest owning `package.json`. Inside a workspace package, this is that package's file. The update preserves formatting and uses an atomic replacement; if the file changes after preview, Intent stops and asks you to retry.
+
+After permissions are saved, Intent updates an existing managed guidance block in a supported config file, or creates one in `AGENTS.md`. Content outside the block is preserved, and the block is verified before success is reported.
+
+- **No skills found, or all excluded:** explains how to retry and writes nothing. Empty discovery does not create a deny-all policy.
+- **Decline or cancel a prompt:** writes neither permissions nor guidance.
+- **`--dry-run`:** performs discovery and selection, previews permissions and guidance, and writes neither file.
 
 ### Mapping mode
 
