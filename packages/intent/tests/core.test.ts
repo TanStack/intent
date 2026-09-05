@@ -92,6 +92,102 @@ afterEach(() => {
 })
 
 describe('listIntentSkills', () => {
+  it('preserves migration mode when the project manifest is missing', () => {
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    expect(
+      listIntentSkills({ cwd: root }).skills.map((skill) => skill.use),
+    ).toEqual(['@tanstack/query#fetching'])
+    expect(
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }).content,
+    ).toContain('Skill content here.')
+  })
+
+  it('rejects malformed project policy instead of enabling migration mode', () => {
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    const packageJsonPath = join(root, 'package.json')
+    writeFileSync(packageJsonPath, '{"intent":{"skills":[]},')
+
+    expect(() => listIntentSkills({ cwd: root })).toThrow(packageJsonPath)
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow(packageJsonPath)
+  })
+
+  it.each([null, [], 'invalid', 42, false])(
+    'rejects a non-object policy manifest: %j',
+    (manifest) => {
+      writeJson(join(root, 'package.json'), manifest)
+
+      expect(() => listIntentSkills({ cwd: root })).toThrow(
+        'expected a JSON object',
+      )
+      expect(() =>
+        loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+      ).toThrow('expected a JSON object')
+    },
+  )
+
+  it('rejects an unreadable policy manifest', () => {
+    const packageJsonPath = join(root, 'package.json')
+    mkdirSync(packageJsonPath)
+
+    expect(() => listIntentSkills({ cwd: root })).toThrow(
+      `Failed to read Intent policy from ${packageJsonPath}`,
+    )
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow(`Failed to read Intent policy from ${packageJsonPath}`)
+  })
+
+  it('rejects a dangling policy symlink instead of treating it as missing', () => {
+    const packageJsonPath = join(root, 'package.json')
+    symlinkSync(join(root, 'missing.json'), packageJsonPath)
+
+    expect(() => listIntentSkills({ cwd: root })).toThrow(packageJsonPath)
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root }),
+    ).toThrow(packageJsonPath)
+  })
+
+  it('rejects malformed inherited policy even when the child permits the skill', () => {
+    const appDir = join(root, 'packages', 'app')
+    const packageJsonPath = join(root, 'package.json')
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - packages/*\n',
+    )
+    writeFileSync(
+      packageJsonPath,
+      '{"workspaces":["packages/*"],"intent":{"exclude":["@tanstack/query"]},',
+    )
+    writeJson(join(appDir, 'package.json'), {
+      name: 'app',
+      intent: { skills: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(appDir, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    expect(() => listIntentSkills({ cwd: appDir })).toThrow(packageJsonPath)
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: appDir }),
+    ).toThrow(packageJsonPath)
+  })
+
   it('returns a flat skill list and package summaries', () => {
     writeJson(join(root, 'package.json'), {
       name: 'test-app',

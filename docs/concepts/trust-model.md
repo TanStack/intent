@@ -13,6 +13,8 @@ A package ships skills in a `skills/` directory. Discovery finds every installed
 
 The gate is opt-in today. A project with no `intent.skills` key still surfaces every discovered package, and Intent prints a deprecation notice to stderr on each run until you set `intent.skills`. A future version will require an explicit allowlist. See the [special forms](./configuration#special-forms) in Configuration.
 
+A missing policy manifest is distinct from an invalid one. If a `package.json` used for project policy cannot be read, contains invalid JSON, or is not a JSON object, Intent stops policy-controlled listing and loading with an error naming the file. This includes inherited policy within a resolved workspace. If malformed JSON prevents workspace discovery from identifying the root itself, that remains a [known limitation](https://github.com/TanStack/intent/issues/240).
+
 Trust does not propagate. A listed package may depend on another package that ships skills, but that dependency stays unlisted unless another entry matches it. A bare entry such as `foo` permits an npm source, while `workspace:foo` permits a workspace source. Their wildcard forms remain kind-specific. The exact `*` entry permits every discovered npm and workspace source.
 
 ## Static discovery
