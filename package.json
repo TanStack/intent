@@ -65,7 +65,7 @@
     "prettier": "^3.8.4",
     "sherif": "^1.11.1",
     "tinyglobby": "^0.2.17",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "vitest": "4.1.8",
     "vitest-evals": "^0.13.1"
   }
