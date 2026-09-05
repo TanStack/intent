@@ -3,6 +3,7 @@ import { resolveProjectContext } from './project-context.js'
 import { readPackageJson } from './package-json.js'
 import type { ProjectContext } from './project-context.js'
 import type { IntentCoreOptions } from './types.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 
 const MAX_EXCLUDE_PATTERN_LENGTH = 200
 const PACKAGE_NAME_BOUNDARY = /[^a-zA-Z0-9_.-]/
@@ -27,8 +28,11 @@ function isWithinOrEqual(path: string, parentDir: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
-function readPackageExcludes(dir: string): Array<string> {
-  const pkg = readPackageJson(dir)
+function readPackageExcludes(
+  dir: string,
+  fsCache?: IntentFsCache,
+): Array<string> {
+  const pkg = readPackageJson(dir, fsCache)
   const intent = pkg?.intent
   if (!intent || typeof intent !== 'object') return []
 
@@ -58,18 +62,22 @@ export function getConfigDirs(
 function getConfigExcludePatterns(
   cwd: string,
   context = resolveProjectContext({ cwd }),
+  fsCache?: IntentFsCache,
 ): Array<string> {
-  return [...getConfigDirs(cwd, context)].reverse().flatMap(readPackageExcludes)
+  return [...getConfigDirs(cwd, context)]
+    .reverse()
+    .flatMap((dir) => readPackageExcludes(dir, fsCache))
 }
 
 export function getEffectiveExcludePatterns(
   options: IntentCoreOptions = {},
   context?: ProjectContext,
+  fsCache?: IntentFsCache,
 ): Array<string> {
   const cwd =
     context?.cwd ?? resolve(process.cwd(), options.cwd ?? process.cwd())
   return [
-    ...getConfigExcludePatterns(cwd, context),
+    ...getConfigExcludePatterns(cwd, context, fsCache),
     ...normalizeExcludePatterns(options.exclude),
   ]
 }

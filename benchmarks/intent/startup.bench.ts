@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { bench, describe } from 'vitest'
+import { describe, test } from 'vitest'
 
 const cliPath = fileURLToPath(
   new URL('../../packages/intent/dist/cli.mjs', import.meta.url),
@@ -24,19 +24,19 @@ function runNode(args: Array<string>): void {
 }
 
 describe('cold start', () => {
-  bench(
+  test(
     'empty node process (baseline)',
-    () => {
-      runNode(['-e', ''])
+    { timeout: 30_000 },
+    async ({ bench }) => {
+      await bench('empty node process (baseline)', () => {
+        runNode(['-e', ''])
+      }).run(coldStartBenchOptions)
     },
-    coldStartBenchOptions,
   )
 
-  bench(
-    'intent --help',
-    () => {
+  test('intent --help', { timeout: 30_000 }, async ({ bench }) => {
+    await bench('intent --help', () => {
       runNode([cliPath, '--help'])
-    },
-    coldStartBenchOptions,
-  )
+    }).run(coldStartBenchOptions)
+  })
 })

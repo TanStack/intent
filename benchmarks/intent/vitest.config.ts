@@ -10,5 +10,7 @@ export default defineConfig({
     name: '@benchmarks/intent',
     watch: false,
     environment: 'node',
+    // Measure the built CLI without module-export getter wrappers.
+    experimental: { viteModuleRunner: false },
   },
 })

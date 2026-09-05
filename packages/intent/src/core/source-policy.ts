@@ -1,4 +1,5 @@
 import { scanForIntents } from '../discovery/scanner.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { detectIntentAudience } from '../shared/environment.js'
 import { ALLOW_ALL_NOTICE } from '../shared/cli-output.js'
 import {
@@ -13,6 +14,7 @@ import {
 import { readPackageJson } from './package-json.js'
 import { parseSkillSources } from './skill-sources.js'
 import { resolveProjectContext } from './project-context.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { SkillUse } from '../skills/use.js'
 import type { IntentPackage, ScanOptions, ScanResult } from '../shared/types.js'
 import type { ExcludeMatcher } from './excludes.js'
@@ -269,9 +271,10 @@ export function applySourcePolicy(
 export function readSkillSourcesConfig(
   cwd: string,
   context: ProjectContext = resolveProjectContext({ cwd }),
+  fsCache?: IntentFsCache,
 ): SkillSourcesConfig {
   for (const dir of getConfigDirs(cwd, context)) {
-    const intent = readPackageJson(dir)?.intent
+    const intent = readPackageJson(dir, fsCache)?.intent
     if (!intent || typeof intent !== 'object') continue
 
     if ('skills' in intent) {
@@ -302,9 +305,17 @@ export function scanForPolicedIntents(params: {
   const context = params.context ?? resolveProjectContext({ cwd })
   const audience = detectIntentAudience(coreOptions.audience)
 
-  const scanResult = scanForIntents(cwd, scanOptions)
-  const config = readSkillSourcesConfig(cwd, context)
-  const excludePatterns = getEffectiveExcludePatterns(coreOptions, context)
+  const fsCache =
+    (scanOptions as ScanOptions & { fsCache?: IntentFsCache }).fsCache ??
+    createIntentFsCache()
+  const cachedScanOptions = { ...scanOptions, fsCache }
+  const scanResult = scanForIntents(cwd, cachedScanOptions)
+  const config = readSkillSourcesConfig(cwd, context, fsCache)
+  const excludePatterns = getEffectiveExcludePatterns(
+    coreOptions,
+    context,
+    fsCache,
+  )
   const excludeMatchers = compileExcludePatterns(excludePatterns)
 
   const policy = applySourcePolicy(scanResult, {

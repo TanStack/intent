@@ -5,6 +5,7 @@ import {
   isSkillExcluded,
 } from '../core/excludes.js'
 import { resolveProjectContext } from '../core/project-context.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
   isSourcePermitted,
   readSkillSourcesConfig,
@@ -135,9 +136,10 @@ function filterStaleReportSkills(
 ): Array<StalenessReport> {
   const cwd = resolve(process.cwd(), targetDir ?? process.cwd())
   const context = resolveProjectContext({ cwd })
-  const config = readSkillSourcesConfig(cwd, context)
+  const fsCache = createIntentFsCache()
+  const config = readSkillSourcesConfig(cwd, context, fsCache)
   const excludeMatchers = compileExcludePatterns(
-    getEffectiveExcludePatterns({}, context),
+    getEffectiveExcludePatterns({}, context, fsCache),
   )
 
   return reports.map((report) => ({

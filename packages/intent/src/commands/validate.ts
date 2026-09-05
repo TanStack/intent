@@ -8,6 +8,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fail, isCliFailure } from '../shared/cli-error.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { printWarnings } from './support.js'
 import type { ProjectContext } from '../core/project-context.js'
 
@@ -388,8 +389,11 @@ async function runValidateCommandInternal(
   dir?: string,
   options: ValidateCommandOptions = {},
 ): Promise<void> {
-  const [{ parse: parseYaml }, { findSkillFiles, readScalarField }] =
-    await Promise.all([import('yaml'), import('../shared/utils.js')])
+  const [{ parse: parseYaml }, { readScalarField }] = await Promise.all([
+    import('yaml'),
+    import('../shared/utils.js'),
+  ])
+  const { findSkillFiles } = createIntentFsCache()
   const context = resolveProjectContext({
     cwd: process.cwd(),
     targetPath: dir,

@@ -1,6 +1,6 @@
-import { rmSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterAll, beforeAll, bench, describe } from 'vitest'
+import { afterAll, beforeAll, describe, test } from 'vitest'
 import {
   createBenchOptions,
   createCliRunner,
@@ -9,7 +9,7 @@ import {
   writeFile,
   writeJson,
   writeSkill,
-} from './helpers.js'
+} from './helpers.ts'
 
 type StaleFixture = {
   root: string
@@ -125,6 +125,25 @@ async function setup(): Promise<void> {
   await getFixture().runner.setup()
 }
 
+async function setupWithArtifacts(): Promise<void> {
+  await setup()
+  const { root } = getFixture()
+  const skills = ['alpha', 'beta', 'gamma', 'delta'].flatMap((name) => {
+    const state = JSON.parse(
+      readFileSync(
+        join(root, 'packages', name, 'skills', 'sync-state.json'),
+        'utf8',
+      ),
+    ) as { skills: Record<string, unknown> }
+    return Object.keys(state.skills).map((skill) => ({
+      package: `packages/${name}`,
+      slug: skill,
+      path: `packages/${name}/skills/${skill}/SKILL.md`,
+    }))
+  })
+  writeJson(join(root, '_artifacts', 'skill_tree.yaml'), { skills })
+}
+
 function teardown(): void {
   if (fixture) {
     fixture.runner.teardown()
@@ -139,14 +158,25 @@ describe('intent stale', () => {
   beforeAll(setup)
   afterAll(teardown)
 
-  bench(
-    'reports workspace drift',
-    async () => {
+  test('reports workspace drift', { timeout: 30_000 }, async ({ bench }) => {
+    await bench('reports workspace drift', async () => {
       const state = getFixture()
       for (let index = 0; index < 3; index++) {
         await state.runner.run(['stale', '--json'])
       }
+    }).run(createBenchOptions(setup, teardown))
+  })
+
+  test(
+    'reports workspace drift with shared artifacts',
+    { timeout: 30_000 },
+    async ({ bench }) => {
+      await bench('reports workspace drift with shared artifacts', async () => {
+        const state = getFixture()
+        for (let index = 0; index < 3; index++) {
+          await state.runner.run(['stale', '--json'])
+        }
+      }).run(createBenchOptions(setupWithArtifacts, teardown))
     },
-    createBenchOptions(setup, teardown),
   )
 })

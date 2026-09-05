@@ -283,9 +283,13 @@ function resolveIntentSkillInCwd(
 
   const fsCache = createIntentFsCache()
   const projectContext = resolveProjectContext({ cwd })
-  const excludePatterns = getEffectiveExcludePatterns(options, projectContext)
+  const excludePatterns = getEffectiveExcludePatterns(
+    options,
+    projectContext,
+    fsCache,
+  )
   const excludeMatchers = compileExcludePatterns(excludePatterns)
-  const config = readSkillSourcesConfig(cwd, projectContext)
+  const config = readSkillSourcesConfig(cwd, projectContext, fsCache)
 
   const refusal = checkLoadAllowed(use, parsedUse, { config, excludeMatchers })
   if (refusal) {
