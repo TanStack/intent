@@ -30,239 +30,296 @@ const pkg: PermissionPackage = {
     },
   ],
 }
-
+const workspace: PermissionPackage = {
+  id: 'workspace:pkg',
+  version: '1.0.0',
+  skills: [
+    {
+      id: 'workspace:pkg#local',
+      name: 'local',
+      description: 'Workspace guidance',
+      excluded: false,
+    },
+  ],
+}
 function runtime() {
   return {
     ...clack,
-    autocomplete: vi.fn().mockResolvedValue('continue'),
+    select: vi.fn().mockResolvedValue('all'),
+    autocomplete: vi.fn().mockResolvedValue('back'),
     autocompleteMultiselect: vi.fn().mockResolvedValue([]),
-    select: vi.fn().mockResolvedValue('back'),
-    confirm: vi.fn().mockResolvedValue(false),
     cancel: vi.fn(),
     isCancel: (value: unknown): value is symbol => typeof value === 'symbol',
   }
 }
 
-function prompts(api: ReturnType<typeof runtime>) {
-  return createPermissionPrompts(api)
-}
-
-describe('package permission picker', () => {
-  it('starts with no permissions selected and excludes unavailable packages', async () => {
+describe('skill enablement', () => {
+  it('enables all sources with a compact wildcard without another selection screen', async () => {
     const api = runtime()
+    await expect(
+      createPermissionPrompts(api).selectPermissions([pkg, workspace]),
+    ).resolves.toEqual(['*'])
+    expect(api.select).toHaveBeenCalledOnce()
+    expect(api.autocompleteMultiselect).not.toHaveBeenCalled()
+    expect(api.autocomplete).not.toHaveBeenCalled()
+  })
+
+  it('keeps selected packages compact without a permission review screen', async () => {
+    const api = runtime()
+    api.select.mockResolvedValueOnce('packages')
+    api.autocompleteMultiselect.mockResolvedValueOnce(['pkg'])
     const blocked = {
-      ...pkg,
       id: 'blocked',
-      skills: pkg.skills.filter((skill) => skill.excluded),
+      version: '1.0.0',
+      skills: [{ ...pkg.skills[2]!, id: 'blocked#private' }],
     }
     await expect(
-      prompts(api).selectPermissions([pkg, blocked], '/package.json'),
-    ).resolves.toEqual([])
-    const options = api.autocompleteMultiselect.mock.calls[0]?.[0]
-    expect(options).toMatchObject({
+      createPermissionPrompts(api).selectPermissions([pkg, workspace, blocked]),
+    ).resolves.toEqual(['pkg'])
+    expect(api.select).toHaveBeenCalledOnce()
+    expect(api.autocompleteMultiselect).toHaveBeenCalledOnce()
+    expect(api.autocompleteMultiselect.mock.calls[0]?.[0]).toMatchObject({
       initialValues: [],
       required: false,
       maxItems: 6,
     })
     expect(
-      options.options.map((option: { value: string }) => option.value),
-    ).toEqual(['pkg'])
-    expect(api.confirm).not.toHaveBeenCalled()
+      api.autocompleteMultiselect.mock.calls[0]?.[0].options.map(
+        (option: { value: string }) => option.value,
+      ),
+    ).toEqual(['pkg', 'workspace:pkg'])
+    expect(api.autocomplete).not.toHaveBeenCalled()
   })
 
-  it('narrows package-wide permissions to exact skills and never offers excluded skills', async () => {
+  it('allows individual selections across packages with bounded descriptions', async () => {
     const api = runtime()
-    api.autocompleteMultiselect
-      .mockResolvedValueOnce(['pkg'])
-      .mockResolvedValueOnce(['pkg#core'])
-    api.autocomplete
-      .mockResolvedValueOnce(pkg)
-      .mockResolvedValueOnce('continue')
     api.select.mockResolvedValueOnce('skills')
+    api.autocompleteMultiselect.mockResolvedValueOnce([
+      'pkg#core',
+      'workspace:pkg#local',
+    ])
     await expect(
-      prompts(api).selectPermissions([pkg], '/package.json'),
-    ).resolves.toEqual(['pkg#core'])
-    const options = api.autocompleteMultiselect.mock.calls[1]?.[0]
-    expect(options.initialValues).toEqual(['pkg#core', 'pkg#other'])
+      createPermissionPrompts(api).selectPermissions([pkg, workspace]),
+    ).resolves.toEqual(['pkg#core', 'workspace:pkg#local'])
+    const options = api.autocompleteMultiselect.mock.calls[0]?.[0]
+    expect(options.initialValues).toEqual([])
     expect(
       options.options.map((option: { value: string }) => option.value),
-    ).toEqual(['pkg#core', 'pkg#other'])
+    ).toEqual(['pkg#core', 'pkg#other', 'workspace:pkg#local'])
     expect(options.options[0].hint.length).toBeLessThanOrEqual(120)
-    expect(api.autocomplete.mock.calls[2]?.[0]).toBeUndefined()
-    expect(api.autocomplete.mock.calls[1]?.[0].options[1].label).toContain(
-      '1 individual skill selected',
-    )
+    expect(api.select).toHaveBeenCalledOnce()
   })
 
-  it('preserves exact choices when revisiting the package picker', async () => {
-    const api = runtime()
-    api.autocomplete
-      .mockResolvedValueOnce(pkg)
-      .mockResolvedValueOnce('packages')
-      .mockResolvedValueOnce('continue')
-    api.select.mockResolvedValueOnce('skills')
-    api.autocompleteMultiselect
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce(['pkg#core'])
-      .mockResolvedValueOnce([])
-    await expect(
-      prompts(api).selectPermissions([pkg], '/package.json'),
-    ).resolves.toEqual(['pkg#core'])
-  })
-
-  it.each(['all', 'none'])(
-    'can change exact choices to %s from package review',
+  it.each(['packages', 'skills'])(
+    'keeps an empty %s selection empty for deny-all confirmation',
     async (action) => {
       const api = runtime()
-      api.autocompleteMultiselect
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce(['pkg#core'])
-      api.autocomplete
-        .mockResolvedValueOnce(pkg)
-        .mockResolvedValueOnce(pkg)
-        .mockResolvedValueOnce('continue')
-      api.select.mockResolvedValueOnce('skills').mockResolvedValueOnce(action)
+      api.select.mockResolvedValueOnce(action)
       await expect(
-        prompts(api).selectPermissions([pkg], '/package.json'),
-      ).resolves.toEqual(action === 'all' ? ['pkg'] : [])
+        createPermissionPrompts(api).selectPermissions([pkg]),
+      ).resolves.toEqual([])
     },
   )
 
-  it('shows full descriptions only on request without changing permissions', async () => {
+  it('only shows requested descriptions and can inspect exclusions without enabling anything', async () => {
     const api = runtime()
-    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
+    api.select.mockResolvedValueOnce('inspect').mockResolvedValueOnce('skills')
     api.autocomplete
-      .mockResolvedValueOnce(pkg)
       .mockResolvedValueOnce(pkg.skills[2])
       .mockResolvedValueOnce('back')
-      .mockResolvedValueOnce('continue')
-    api.select.mockResolvedValueOnce('details').mockResolvedValueOnce('back')
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
     try {
       await expect(
-        prompts(api).selectPermissions([pkg], '/package.json'),
+        createPermissionPrompts(api).selectPermissions([pkg]),
       ).resolves.toEqual([])
       expect(output.mock.calls.flat().join('\n')).toContain(
         'pkg#private — excluded by intent.exclude\nPrivate guidance',
       )
       expect(output.mock.calls.flat().join('\n')).not.toContain('Core guidance')
-      expect(api.autocomplete.mock.calls[1]?.[0].options[3].label).toBe(
-        'private (excluded)',
+      expect(api.autocomplete.mock.calls[0]?.[0].options[3].label).toBe(
+        'pkg#private (excluded)',
       )
     } finally {
       output.mockRestore()
     }
   })
 
-  it('shows exact configuration and destination only on request', async () => {
+  it('keeps update limitations optional without adding an approval prompt', async () => {
     const api = runtime()
-    api.autocompleteMultiselect.mockResolvedValueOnce(['pkg'])
-    api.autocomplete
-      .mockResolvedValueOnce('config')
-      .mockResolvedValueOnce('continue')
+    api.select.mockResolvedValueOnce('access').mockResolvedValueOnce('packages')
     const output = vi.spyOn(console, 'log').mockImplementation(() => {})
     try {
       await expect(
-        prompts(api).selectPermissions([pkg], '/app/package.json'),
-      ).resolves.toEqual(['pkg'])
-      expect(output.mock.calls.flat().join('\n')).toBe(
-        'Permission destination: /app/package.json\nintent.skills: [\n  "pkg"\n]',
+        createPermissionPrompts(api).selectPermissions([pkg]),
+      ).resolves.toEqual([])
+      expect(output.mock.calls.flat().join('\n')).toContain(
+        'Intent does not yet track or notify you about those changes.',
       )
     } finally {
       output.mockRestore()
     }
   })
 
-  it.each([false, true])(
-    'requires an explicit advanced allow-all decision: %s',
-    async (confirmed) => {
-      const api = runtime()
-      api.autocompleteMultiselect.mockResolvedValueOnce(['pkg'])
-      api.autocomplete
-        .mockResolvedValueOnce('all')
-        .mockResolvedValueOnce('continue')
-      api.confirm.mockResolvedValueOnce(confirmed)
-      await expect(
-        prompts(api).selectPermissions([pkg], '/package.json'),
-      ).resolves.toEqual(confirmed ? ['*'] : ['pkg'])
-      expect(api.confirm).toHaveBeenCalledWith(
-        expect.objectContaining({
-          initialValue: false,
-          message:
-            'Allow all current and future npm and workspace skill sources?',
-        }),
-      )
-    },
-  )
-
-  it.each(['packages', 'review', 'package', 'skills', 'details', 'advanced'])(
-    'cancels once from %s',
+  it.each(['start', 'packages', 'skills', 'inspect'])(
+    'cancels once at %s',
     async (stage) => {
       const api = runtime()
       const canceled = Symbol('cancel')
-      if (stage === 'packages')
+      if (stage === 'start') api.select.mockResolvedValueOnce(canceled)
+      else api.select.mockResolvedValueOnce(stage)
+      if (stage === 'packages' || stage === 'skills')
         api.autocompleteMultiselect.mockResolvedValueOnce(canceled)
-      if (stage === 'review') api.autocomplete.mockResolvedValueOnce(canceled)
-      if (stage === 'package') {
-        api.autocomplete.mockResolvedValueOnce(pkg)
-        api.select.mockResolvedValueOnce(canceled)
-      }
-      if (stage === 'skills') {
-        api.autocomplete.mockResolvedValueOnce(pkg)
-        api.select.mockResolvedValueOnce('skills')
-        api.autocompleteMultiselect
-          .mockResolvedValueOnce([])
-          .mockResolvedValueOnce(canceled)
-      }
-      if (stage === 'details') {
-        api.autocomplete
-          .mockResolvedValueOnce(pkg)
-          .mockResolvedValueOnce(canceled)
-        api.select.mockResolvedValueOnce('details')
-      }
-      if (stage === 'advanced') {
-        api.autocomplete.mockResolvedValueOnce('all')
-        api.confirm.mockResolvedValueOnce(canceled)
-      }
+      if (stage === 'inspect') api.autocomplete.mockResolvedValueOnce(canceled)
       await expect(
-        prompts(api).selectPermissions([pkg], '/package.json'),
+        createPermissionPrompts(api).selectPermissions([pkg]),
       ).resolves.toBeNull()
       expect(api.cancel).toHaveBeenCalledOnce()
     },
   )
 
-  it('defaults final confirmation to No, including explicit deny-all', async () => {
+  it('offers optional review in the single final confirmation and defaults to cancel', async () => {
     const api = runtime()
-    await expect(prompts(api).confirmWrite(false)).resolves.toBe(false)
-    await expect(prompts(api).confirmWrite(true)).resolves.toBe(false)
-    expect(api.confirm.mock.calls[0]?.[0]).toMatchObject({
-      initialValue: false,
-      message: 'Write this permission configuration?',
+    api.select
+      .mockResolvedValueOnce('cancel')
+      .mockResolvedValueOnce('save')
+      .mockResolvedValueOnce('review')
+    const prompts = createPermissionPrompts(api)
+    await expect(prompts.confirmWrite(false)).resolves.toBe(false)
+    await expect(prompts.confirmWrite(true)).resolves.toBe(true)
+    await expect(prompts.confirmWrite(false)).resolves.toBe('review')
+    expect(api.select.mock.calls[0]?.[0]).toMatchObject({
+      initialValue: 'cancel',
+      message: 'Save these permissions?',
     })
-    expect(api.confirm.mock.calls[1]?.[0]).toMatchObject({
-      initialValue: false,
-      message: 'Disable all skills by writing intent.skills: []?',
-    })
-    api.confirm.mockResolvedValueOnce(Symbol('cancel'))
-    await expect(prompts(api).confirmWrite(false)).resolves.toBeNull()
+    expect(api.select.mock.calls[1]?.[0].message).toBe(
+      'Disable all skills by writing intent.skills: []?',
+    )
+    api.select.mockResolvedValueOnce(Symbol('cancel'))
+    await expect(prompts.confirmWrite(false)).resolves.toBeNull()
     expect(api.cancel).toHaveBeenCalledOnce()
   })
 
-  it('searches package choices and review through real Clack with a large catalog', async () => {
+  it('offers explicit npm and workspace scope choices', async () => {
+    const api = runtime()
+    api.select.mockResolvedValueOnce('packages')
+    api.autocompleteMultiselect.mockResolvedValueOnce(['@tanstack/*'])
+    await expect(
+      createPermissionPrompts(api).selectPermissions([
+        { ...pkg, id: '@tanstack/ai' },
+        { ...workspace, id: 'workspace:@tanstack/local' },
+      ]),
+    ).resolves.toEqual(['@tanstack/*'])
+    expect(
+      api.autocompleteMultiselect.mock.calls[0]?.[0].options.map(
+        (option: { value: string }) => option.value,
+      ),
+    ).toEqual([
+      '@tanstack/*',
+      'workspace:@tanstack/*',
+      '@tanstack/ai',
+      'workspace:@tanstack/local',
+    ])
+  })
+
+  it('keeps broad rules, excludes unchecked skills, and adds outside skills exactly', async () => {
+    const api = runtime()
+    api.autocompleteMultiselect.mockResolvedValueOnce([
+      'pkg#core',
+      'workspace:pkg#local',
+    ])
+    const prompts = createPermissionPrompts(api)
+    await expect(
+      prompts.reviewPermissions([pkg, workspace], {
+        skills: ['pkg'],
+        exclude: [],
+      }),
+    ).resolves.toEqual({
+      skills: ['pkg', 'workspace:pkg#local'],
+      exclude: ['pkg#other'],
+    })
+    expect(
+      api.autocompleteMultiselect.mock.calls[0]?.[0].initialValues,
+    ).toEqual(['pkg#core', 'pkg#other'])
+    expect(
+      api.autocompleteMultiselect.mock.calls[0]?.[0].options.map(
+        (option: { value: string }) => option.value,
+      ),
+    ).not.toContain('pkg#private')
+  })
+
+  it('can restore a skill excluded during review before saving', async () => {
+    const api = runtime()
+    api.autocompleteMultiselect.mockResolvedValueOnce(['pkg#core', 'pkg#other'])
+    await expect(
+      createPermissionPrompts(api).reviewPermissions([pkg], {
+        skills: ['pkg'],
+        exclude: ['pkg#other'],
+      }),
+    ).resolves.toEqual({ skills: ['pkg'], exclude: [] })
+    expect(
+      api.autocompleteMultiselect.mock.calls[0]?.[0].initialValues,
+    ).toEqual(['pkg#core'])
+  })
+
+  it('writes workspace exclusions using the kind-agnostic package name', async () => {
+    const api = runtime()
+    await expect(
+      createPermissionPrompts(api).reviewPermissions([workspace], {
+        skills: ['workspace:pkg'],
+        exclude: [],
+      }),
+    ).resolves.toEqual({ skills: ['workspace:pkg'], exclude: ['pkg#local'] })
+  })
+
+  it('does not broaden exact selections during review', async () => {
+    const api = runtime()
+    api.autocompleteMultiselect.mockResolvedValueOnce(['pkg#core', 'pkg#other'])
+    await expect(
+      createPermissionPrompts(api).reviewPermissions([pkg], {
+        skills: ['pkg#core'],
+        exclude: [],
+      }),
+    ).resolves.toEqual({ skills: ['pkg#core', 'pkg#other'], exclude: [] })
+  })
+
+  it('cancels skill review without returning changes', async () => {
+    const api = runtime()
+    api.autocompleteMultiselect.mockResolvedValueOnce(Symbol('cancel'))
+    await expect(
+      createPermissionPrompts(api).reviewPermissions([pkg], {
+        skills: ['*'],
+        exclude: [],
+      }),
+    ).resolves.toBeNull()
+    expect(api.cancel).toHaveBeenCalledOnce()
+  })
+
+  it('uses real search and keyboard selection for a bounded large package catalog', async () => {
     vi.stubEnv('TERM', 'xterm-256color')
     const input = new PassThrough()
     const output = Object.assign(new PassThrough(), { columns: 80, rows: 24 })
     let rendered = ''
+    let firstFrame = ''
     output.on('data', (data) => {
       rendered += data.toString()
     })
     const packages = Array.from({ length: 14 }, (_, index) => ({
-      ...pkg,
       id: `package-${index}`,
+      version: '1.0.0',
+      skills: pkg.skills.map((skill) => ({
+        ...skill,
+        id: `package-${index}#${skill.name}`,
+      })),
     }))
-    let firstFrame = ''
     const api: ClackPermissionRuntime = {
       ...clack,
+      select: (options) => {
+        const result = clack.select({ ...options, input, output })
+        process.nextTick(() => input.write('\x1b[B\r'))
+        return result
+      },
       autocompleteMultiselect: (options) => {
+        rendered = ''
         const result = clack.autocompleteMultiselect({
           ...options,
           input,
@@ -274,35 +331,53 @@ describe('package permission picker', () => {
         })
         return result
       },
-      autocomplete: (options) => {
-        const result = clack.autocomplete({ ...options, input, output })
-        process.nextTick(() => {
-          input.write('no-such-package\r')
-          expect(stripVTControlCharacters(rendered)).toContain(
-            'Choose a listed option or change your search.',
-          )
-          process.nextTick(() => {
-            input.write('\x15')
-            process.nextTick(() => input.write('Continue\r'))
-          })
-        })
-        return result
-      },
     }
     try {
       await expect(
-        createPermissionPrompts(api).selectPermissions(
-          packages,
-          '/package.json',
-        ),
+        createPermissionPrompts(api).selectPermissions(packages),
       ).resolves.toEqual(['package-13'])
       expect(firstFrame.match(/[◻◼]/g)?.length).toBeLessThanOrEqual(6)
       expect(firstFrame).not.toContain('package-13')
       expect(firstFrame).not.toContain('Core guidance')
       expect(firstFrame.split('\n').length).toBeLessThan(20)
-      expect(stripVTControlCharacters(rendered)).toContain(
-        'package-13 — all current and future skills',
+      expect(stripVTControlCharacters(rendered)).not.toContain(
+        'Review selection',
       )
+    } finally {
+      vi.unstubAllEnvs()
+      input.destroy()
+      output.destroy()
+    }
+  })
+
+  it('keeps inspection open when a search has no matches', async () => {
+    vi.stubEnv('TERM', 'xterm-256color')
+    const input = new PassThrough()
+    const output = new PassThrough()
+    let rendered = ''
+    output.on('data', (data) => {
+      rendered += data.toString()
+    })
+    const api = runtime()
+    api.select.mockResolvedValueOnce('inspect')
+    const prompts = createPermissionPrompts({
+      ...api,
+      autocomplete: (options) => {
+        const result = clack.autocomplete({ ...options, input, output })
+        process.nextTick(() => {
+          input.write('no-such-skill\r')
+          expect(stripVTControlCharacters(rendered)).toContain(
+            'Choose a listed option or change your search.',
+          )
+          process.nextTick(() => input.write('\x03'))
+        })
+        return result
+      },
+      isCancel: clack.isCancel,
+    })
+    try {
+      await expect(prompts.selectPermissions([pkg])).resolves.toBeNull()
+      expect(api.cancel).toHaveBeenCalledOnce()
     } finally {
       vi.unstubAllEnvs()
       input.destroy()

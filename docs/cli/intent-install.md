@@ -33,21 +33,28 @@ Otherwise, first-run setup requires an interactive terminal. Non-TTY execution f
 
 #### First-run flow
 
-1. **Choose packages** from a searchable list. Type to filter, use arrow keys to move, Tab to toggle, and Enter to review. Nothing is selected by default.
-2. **Review** your choices, with selected packages first. Type to find a package, then press Enter to choose individual skills, remove it, or inspect descriptions and exclusions. Full descriptions appear only when requested.
-3. **Confirm** the permission summary and destination file. **Show exact configuration** previews `intent.skills`; **Continue to confirmation** asks before saving and defaults to No.
-4. **Finish** with verified guidance, available skill and package counts, and a command to list those skills.
+1. **Choose what to enable.** Pick **Enable all**, **Choose packages or scopes**, or **Choose individual skills**. Package and skill lists support search.
+2. **Confirm once.** Check the current skill count, saved rules, and destination file. Choose **Enable selected skills** to save, **Review individual skills** to adjust the selection, or **Cancel**. Cancel is selected by default.
+3. **Finish** with verified guidance, available skill and package counts, and a command to list those skills.
 
-#### Permission choices
+Descriptions, exclusions, and information about skill updates are optional choices on the setup screen.
 
-| Choice | Effect |
-| --- | --- |
-| All skills in a package | Permits its current and future skills. |
-| Individual skill | Permits only the named skill. |
-| Advanced: allow all current and future sources | Separately confirms writing `["*"]`, replacing narrower choices. |
-| Select nothing | Explicitly confirms writing `[]`, disabling current and future sources until `intent.skills` is edited. |
+#### What gets enabled
 
-Existing `intent.exclude` rules always apply and remain unchanged.
+| Choice | Saved rule | Includes future additions? |
+| --- | --- | --- |
+| Enable all | `"*"` | All npm and workspace sources. |
+| A package | `"@tanstack/ai"` | New skills in that package. |
+| A whole scope | `"@tanstack/*"` | New npm packages and skills in that scope. |
+| An individual skill | `"@tanstack/ai#skill"` | Only that skill name. |
+
+Workspace choices use the `workspace:` prefix. Scope rules are saved only when explicitly selected; choosing several packages does not grant access to the whole scope.
+
+**Review individual skills** lets you uncheck skills covered by a package, scope, or all-sources rule. Intent keeps the broad rule and adds those skills to `intent.exclude`. Existing exclusions always win and cannot be enabled through the picker.
+
+Skill instructions can change when dependencies update. Enabling access does not freeze content or record approval of specific instructions. Update notifications are not available yet.
+
+Selecting nothing requires explicit confirmation before writing `[]` to disable all skills. Unchecking every current skill under a broad rule excludes those skills; the rule still covers future additions.
 
 #### Files and retry behavior
 

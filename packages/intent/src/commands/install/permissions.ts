@@ -4,6 +4,8 @@ import {
   isPackageExcluded,
   isSkillExcluded,
 } from '../../core/excludes.js'
+import { parseSkillSources } from '../../core/skill-sources.js'
+import { isSourcePermitted } from '../../core/source-policy.js'
 import { resolveProjectContext } from '../../core/project-context.js'
 // First-run permission setup must show unpoliced candidates for explicit review.
 // eslint-disable-next-line no-restricted-imports
@@ -30,12 +32,20 @@ export interface PermissionPackage {
   }>
 }
 
+export interface PermissionSelection {
+  skills: Array<string>
+  exclude: Array<string>
+}
+
 export interface PermissionPrompts {
   selectPermissions: (
     packages: Array<PermissionPackage>,
-    packageJsonPath: string,
   ) => Promise<Array<string> | null>
-  confirmWrite: (denyAll: boolean) => Promise<boolean | null>
+  reviewPermissions: (
+    packages: Array<PermissionPackage>,
+    selection: PermissionSelection,
+  ) => Promise<PermissionSelection | null>
+  confirmWrite: (denyAll: boolean) => Promise<boolean | 'review' | null>
 }
 
 export interface PermissionSetupRuntime {
@@ -75,14 +85,44 @@ function permissionPackages(
   })
 }
 
+export function selectedPermissionSkills(
+  packages: Array<PermissionPackage>,
+  selection: PermissionSelection,
+): Array<PermissionPackage['skills'][number]> {
+  const config = parseSkillSources(selection.skills)
+  const excludes = compileExcludePatterns(selection.exclude)
+  return packages.flatMap((pkg) => {
+    const kind = pkg.id.startsWith('workspace:') ? 'workspace' : 'npm'
+    const name =
+      kind === 'workspace' ? pkg.id.slice('workspace:'.length) : pkg.id
+    return pkg.skills.filter(
+      (skill) =>
+        !skill.excluded &&
+        isSourcePermitted(config, name, kind, skill.name) &&
+        !isSkillExcluded(name, skill.name, excludes),
+    )
+  })
+}
+
 function normalizePermissions(selected: Array<string>): Array<string> {
-  const values = new Set(selected)
-  for (const value of selected) {
-    if (!value.includes('#')) continue
-    const packageSelector = value.slice(0, value.indexOf('#'))
-    if (values.has(packageSelector)) values.delete(value)
-  }
-  return [...values].sort((left, right) => left.localeCompare(right))
+  const values = [...new Set(selected)]
+  if (values.includes('*')) return ['*']
+  return values
+    .filter((value) => {
+      const config = parseSkillSources([value])
+      if (config.mode !== 'explicit') return true
+      const source = config.sources[0]!
+      if (source.kind === 'git' || 'pattern' in source) return true
+      const others = parseSkillSources(
+        values.filter(
+          (other) =>
+            other !== value &&
+            (source.skill !== undefined || !other.includes('#')),
+        ),
+      )
+      return !isSourcePermitted(others, source.id, source.kind, source.skill)
+    })
+    .sort((left, right) => left.localeCompare(right))
 }
 
 export async function setupInitialPermissions({
@@ -131,51 +171,74 @@ export async function setupInitialPermissions({
   const excludedCount = discoveredSkills.length - availableSkillCount
   if (excludedCount > 0) {
     console.log(
-      `${excludedCount} excluded skills are unavailable. Inspect a package to view them.`,
+      `${excludedCount} skill${excludedCount === 1 ? '' : 's'} excluded by intent.exclude.`,
     )
   }
-  const selected = await runtime.prompts.selectPermissions(
-    candidates,
-    context.targetPackageJsonPath,
-  )
+  console.log('Skills can change when dependencies update.')
+  const selected = await runtime.prompts.selectPermissions(candidates)
   if (selected === null) return { status: 'canceled' }
-  const skills = normalizePermissions(selected)
-  const update = preparePackageSkillsUpdate(
-    context.targetPackageJsonPath,
-    skills,
-  )
-
-  console.log(`Permission destination: ${context.targetPackageJsonPath}`)
-  if (skills.length === 0) {
-    console.log(
-      'No skills selected. This disables all skill sources, including future sources, until you edit intent.skills.',
+  let selection: PermissionSelection = { skills: selected, exclude: [] }
+  for (;;) {
+    const skills = normalizePermissions(selection.skills)
+    const update = preparePackageSkillsUpdate(
+      context.targetPackageJsonPath,
+      skills,
+      selection.exclude,
     )
-  } else {
-    console.log(
-      skills.length === 1 && skills[0] === '*'
-        ? 'Trust change: all current and future npm and workspace skill sources will be permitted.'
-        : `Trust change: package-wide permissions: ${skills.filter((skill) => !skill.includes('#')).length}; individual skills: ${skills.filter((skill) => skill.includes('#')).length}. These sources can provide instructions to AI agents.`,
-    )
-  }
-  if (skills.length === 1 && skills[0] === '*') {
-    printNotices([ALLOW_ALL_NOTICE])
-  }
+    const enabled = selectedPermissionSkills(candidates, selection)
+    const packageCount = new Set(enabled.map((skill) => skill.id.split('#')[0]))
+      .size
 
-  if (dryRun) {
+    console.log(`Permission destination: ${context.targetPackageJsonPath}`)
+    if (skills.length === 0) {
+      console.log(
+        'No skills selected. This disables all skill sources, including future sources, until you edit intent.skills.',
+      )
+    } else {
+      console.log(
+        `Selected: ${enabled.length} skill${enabled.length === 1 ? '' : 's'} from ${packageCount} package${packageCount === 1 ? '' : 's'} currently available.`,
+      )
+      if (skills.some((skill) => !skill.includes('#'))) {
+        console.log(
+          'Package and scope rules also enable future skills in matching sources. Exclusions still apply.',
+        )
+      }
+    }
+    for (const [label, values] of [
+      ['intent.skills', skills],
+      ['Add to intent.exclude', selection.exclude],
+    ] as const) {
+      if (values.length === 0) continue
+      console.log(
+        `${label}: ${JSON.stringify(values.slice(0, 6))}${values.length > 6 ? ` (+${values.length - 6} more)` : ''}`,
+      )
+    }
+    if (skills.length === 1 && skills[0] === '*')
+      printNotices([ALLOW_ALL_NOTICE])
+
+    if (dryRun) {
+      return {
+        packageJsonPath: context.targetPackageJsonPath,
+        status: 'unchanged',
+      }
+    }
+    const confirmation = await runtime.prompts.confirmWrite(skills.length === 0)
+    if (confirmation === 'review') {
+      const reviewed = await runtime.prompts.reviewPermissions(
+        candidates,
+        selection,
+      )
+      if (reviewed === null) return { status: 'canceled' }
+      selection = reviewed
+      continue
+    }
+    if (confirmation !== true) {
+      console.log('Permissions: canceled.')
+      return { status: 'canceled' }
+    }
     return {
       packageJsonPath: context.targetPackageJsonPath,
-      status: 'unchanged',
+      status: writePreparedPackageSkillsUpdate(update),
     }
-  }
-
-  const confirmation = await runtime.prompts.confirmWrite(skills.length === 0)
-  if (confirmation !== true) {
-    console.log('Permissions: canceled.')
-    return { status: 'canceled' }
-  }
-
-  return {
-    packageJsonPath: context.targetPackageJsonPath,
-    status: writePreparedPackageSkillsUpdate(update),
   }
 }

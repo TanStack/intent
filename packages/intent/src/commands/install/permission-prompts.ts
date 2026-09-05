@@ -4,17 +4,16 @@ import {
   autocomplete,
   autocompleteMultiselect,
   cancel,
-  confirm,
   isCancel,
   select,
 } from '@clack/prompts'
+import { selectedPermissionSkills } from './permissions.js'
 import type { PermissionPackage, PermissionPrompts } from './permissions.js'
 
 export interface ClackPermissionRuntime {
   autocomplete: typeof autocomplete
   autocompleteMultiselect: typeof autocompleteMultiselect
   cancel: typeof cancel
-  confirm: typeof confirm
   isCancel: typeof isCancel
   select: typeof select
 }
@@ -29,7 +28,6 @@ export function createPermissionPrompts(
     autocomplete,
     autocompleteMultiselect,
     cancel,
-    confirm,
     isCancel,
     select,
   },
@@ -51,217 +49,176 @@ export function createPermissionPrompts(
   }
 
   return {
-    selectPermissions: async (packages, packageJsonPath) => {
-      let selected: Array<string> = []
-      const available = (pkg: PermissionPackage) =>
-        pkg.skills.filter((skill) => !skill.excluded)
-      const selectionLabel = (pkg: PermissionPackage): string => {
-        if (selected.includes(pkg.id)) return 'all current and future skills'
-        const count = pkg.skills.filter((skill) =>
-          selected.includes(skill.id),
-        ).length
-        return count > 0
-          ? `${count} individual skill${count === 1 ? '' : 's'} selected`
-          : 'none selected'
-      }
-      const replaceSelection = (
-        pkg: PermissionPackage,
-        values: Array<string>,
-      ) => {
-        selected = selected.filter(
-          (value) => value !== pkg.id && !value.startsWith(`${pkg.id}#`),
-        )
-        selected.push(...values)
-      }
-
-      const choosePackages = async (): Promise<boolean> => {
-        const result = await runtime.autocompleteMultiselect({
-          ...picker,
-          message: 'Choose packages — allows their current and future skills',
-          options: packages
-            .filter((pkg) => available(pkg).length > 0)
-            .map((pkg) => ({
-              value: pkg.id,
-              label: `${pkg.id} (${available(pkg).length} skill${available(pkg).length === 1 ? '' : 's'})`,
-              hint: pkg.version,
-            })),
-          initialValues: selected.filter((value) => !value.includes('#')),
-          required: false,
-        })
-        if (canceled(result)) return false
-        // Revisiting package choices must not discard existing exact selections.
-        const packageIds = result
-        selected = selected.filter(
-          (value) =>
-            value.includes('#') &&
-            !packageIds.some((id) => value.startsWith(`${id}#`)),
-        )
-        selected.push(...packageIds)
-        return true
-      }
-
-      if (!(await choosePackages())) return null
+    selectPermissions: async (packages) => {
+      const availablePackages = packages.filter((pkg) =>
+        pkg.skills.some((skill) => !skill.excluded),
+      )
+      const availableSkills = packages
+        .flatMap((pkg) => pkg.skills)
+        .filter((skill) => !skill.excluded)
 
       for (;;) {
-        const selectedPackages = packages.filter((pkg) =>
-          selected.includes(pkg.id),
-        ).length
-        const selectedSkills = selected.filter((value) =>
-          value.includes('#'),
-        ).length
-        const action = await runtime.autocomplete<string | PermissionPackage>({
-          ...searchablePicker,
-          message: `Review permissions — packages: ${selectedPackages}, individual skills: ${selectedSkills}`,
+        const action = await runtime.select({
+          ...picker,
+          message: 'Which skills would you like to enable?',
           options: [
             {
-              value: 'continue',
-              label: 'Continue to confirmation',
-              hint: 'Nothing is saved yet',
-            },
-            ...[...packages]
-              .sort((left, right) => {
-                const hasSelection = (pkg: PermissionPackage) =>
-                  selected.some(
-                    (value) =>
-                      value === pkg.id || value.startsWith(`${pkg.id}#`),
-                  )
-                return Number(hasSelection(right)) - Number(hasSelection(left))
-              })
-              .map((pkg) => ({
-                value: pkg,
-                label: `${pkg.id} — ${selectionLabel(pkg)}`,
-                hint: `${pkg.version}; ${available(pkg).length} available, ${pkg.skills.length - available(pkg).length} excluded. Enter to inspect or edit.`,
-              })),
-            { value: 'packages', label: 'Change package selections' },
-            { value: 'config', label: 'Show exact configuration' },
-            {
               value: 'all',
-              label: 'Advanced: allow all current and future sources',
+              label: 'Enable all',
+              hint: 'All npm and workspace sources, including future additions',
             },
+            {
+              value: 'packages',
+              label: 'Choose packages or scopes',
+              hint: 'Enable all skills in selected packages or scopes',
+            },
+            {
+              value: 'skills',
+              label: 'Choose individual skills',
+              hint: 'Select specific skills instead',
+            },
+            { value: 'inspect', label: 'Inspect descriptions and exclusions' },
+            { value: 'access', label: 'About skill access and updates' },
           ],
         })
         if (canceled(action)) return null
-        if (action === 'continue') return selected
+        if (action === 'all') return ['*']
         if (action === 'packages') {
-          if (!(await choosePackages())) return null
-          continue
+          const selected = await runtime.autocompleteMultiselect({
+            ...picker,
+            message: 'Choose packages or scopes — type to filter',
+            options: [
+              ...[
+                ...new Set(
+                  availablePackages
+                    .map((pkg) => pkg.id.match(/^(?:workspace:)?@[^/]+\//)?.[0])
+                    .filter((scope): scope is string => scope !== undefined),
+                ),
+              ].map((scope) => ({
+                value: `${scope}*`,
+                label: `${scope}* (whole scope)`,
+                hint: 'Includes future packages and skills in this scope',
+              })),
+              ...availablePackages.map((pkg) => {
+                const count = pkg.skills.filter(
+                  (skill) => !skill.excluded,
+                ).length
+                return {
+                  value: pkg.id,
+                  label: `${pkg.id} (${count} skill${count === 1 ? '' : 's'})`,
+                  hint: pkg.version,
+                }
+              }),
+            ],
+            initialValues: [],
+            required: false,
+          })
+          if (canceled(selected)) return null
+          return selected
         }
-        if (action === 'config') {
-          console.log(`Permission destination: ${packageJsonPath}`)
+        if (action === 'skills') {
+          const selected = await runtime.autocompleteMultiselect({
+            ...picker,
+            message:
+              'Choose individual skills — type a package or skill name to filter',
+            options: availableSkills.map((skill) => ({
+              value: skill.id,
+              label: skill.id,
+              hint: descriptionHint(skill.description),
+            })),
+            initialValues: [],
+            required: false,
+          })
+          return canceled(selected) ? null : selected
+        }
+        if (action === 'access') {
+          console.log('Enabled skills can provide instructions to AI agents.')
           console.log(
-            `intent.skills: ${JSON.stringify([...selected].sort(), null, 2)}`,
+            'Package and scope rules include future skills in matching sources. Exact skill entries enable only that name. Exclusions always apply.',
+          )
+          console.log(
+            'Skill instructions can change when dependencies update. Intent does not yet track or notify you about those changes.',
           )
           continue
         }
-        if (action === 'all') {
-          const confirmed = await runtime.confirm({
-            ...io,
-            message:
-              'Allow all current and future npm and workspace skill sources?',
-            initialValue: false,
-          })
-          if (canceled(confirmed)) return null
-          if (confirmed === true) return ['*']
-          continue
-        }
-
-        if (typeof action === 'string') continue
-        const pkg = action
-        let editing = true
-        while (editing) {
-          const choice = await runtime.select({
-            ...picker,
-            message: `${pkg.id} — ${selectionLabel(pkg)}`,
+        for (;;) {
+          const skill = await runtime.autocomplete<
+            PermissionPackage['skills'][number] | 'back'
+          >({
+            ...searchablePicker,
+            message: 'Inspect a skill — type a package or skill name to filter',
             options: [
-              { value: 'back', label: 'Back to review' },
-              {
-                value: 'skills',
-                label: 'Choose individual skills',
-                hint: 'Only these skills; future additions are not included',
-                disabled: available(pkg).length === 0,
-              },
-              {
-                value: 'all',
-                label: 'Allow all current and future skills in this package',
-                disabled: available(pkg).length === 0,
-              },
-              {
-                value: 'none',
-                label: 'Remove this package from the selection',
-              },
-              {
-                value: 'details',
-                label: 'Inspect skill descriptions and exclusions',
-                hint: 'Viewing details does not change permissions',
-              },
+              { value: 'back', label: 'Back to setup' },
+              ...packages
+                .flatMap((pkg) => pkg.skills)
+                .map((entry) => ({
+                  value: entry,
+                  label: `${entry.id}${entry.excluded ? ' (excluded)' : ''}`,
+                  hint: entry.excluded
+                    ? 'Unavailable because of intent.exclude'
+                    : descriptionHint(entry.description),
+                })),
             ],
           })
-          if (canceled(choice)) return null
-          if (choice === 'back') break
-          if (choice === 'all' || choice === 'none') {
-            replaceSelection(pkg, choice === 'all' ? [pkg.id] : [])
-            break
-          }
-          if (choice === 'skills') {
-            const skills = available(pkg)
-            const result = await runtime.autocompleteMultiselect({
-              ...picker,
-              message: `${pkg.id} — choose individual skills`,
-              options: skills.map((skill) => ({
-                value: skill.id,
-                label: skill.name,
-                hint: descriptionHint(skill.description),
-              })),
-              initialValues: selected.includes(pkg.id)
-                ? skills.map((skill) => skill.id)
-                : skills
-                    .filter((skill) => selected.includes(skill.id))
-                    .map((skill) => skill.id),
-              required: false,
-            })
-            if (canceled(result)) return null
-            replaceSelection(pkg, result)
-            editing = false
-          }
-          if (choice === 'details') {
-            for (;;) {
-              const skill = await runtime.autocomplete<
-                PermissionPackage['skills'][number] | 'back'
-              >({
-                ...searchablePicker,
-                message: `${pkg.id} — inspect a skill`,
-                options: [
-                  { value: 'back', label: 'Back to package' },
-                  ...pkg.skills.map((entry) => ({
-                    value: entry,
-                    label: `${entry.name}${entry.excluded ? ' (excluded)' : ''}`,
-                    hint: entry.excluded
-                      ? 'Unavailable because of intent.exclude'
-                      : descriptionHint(entry.description),
-                  })),
-                ],
-              })
-              if (canceled(skill)) return null
-              if (skill === 'back') break
-              const entry = skill
-              console.log(
-                `\n${entry.id}${entry.excluded ? ' — excluded by intent.exclude' : ''}`,
-              )
-              console.log(stripVTControlCharacters(entry.description))
-            }
-          }
+          if (canceled(skill)) return null
+          if (skill === 'back') break
+          console.log(
+            `\n${skill.id}${skill.excluded ? ' — excluded by intent.exclude' : ''}`,
+          )
+          console.log(stripVTControlCharacters(skill.description))
         }
       }
     },
+    reviewPermissions: async (packages, selection) => {
+      const available = packages
+        .flatMap((pkg) => pkg.skills)
+        .filter((skill) => !skill.excluded)
+      const selected = await runtime.autocompleteMultiselect({
+        ...picker,
+        message: 'Review individual skills — uncheck to exclude',
+        options: available.map((skill) => ({
+          value: skill.id,
+          label: skill.id,
+          hint: descriptionHint(skill.description),
+        })),
+        initialValues: selectedPermissionSkills(packages, selection).map(
+          (skill) => skill.id,
+        ),
+        required: false,
+      })
+      if (canceled(selected)) return null
+      const broad = selection.skills.filter((skill) => !skill.includes('#'))
+      const covered = new Set(
+        selectedPermissionSkills(packages, { skills: broad, exclude: [] }).map(
+          (skill) => skill.id,
+        ),
+      )
+      return {
+        skills: [...broad, ...selected.filter((id) => !covered.has(id))],
+        // Exclusions are package-name based for both npm and workspace sources.
+        exclude: [...covered]
+          .filter((id) => !selected.includes(id))
+          .map((id) => id.replace(/^workspace:/, '')),
+      }
+    },
     confirmWrite: async (denyAll) => {
-      const result = await runtime.confirm({
-        ...io,
+      const result = await runtime.select({
+        ...picker,
         message: denyAll
           ? 'Disable all skills by writing intent.skills: []?'
-          : 'Write this permission configuration?',
-        initialValue: false,
+          : 'Save these permissions?',
+        initialValue: 'cancel',
+        options: [
+          {
+            value: 'save',
+            label: denyAll ? 'Disable all skills' : 'Enable selected skills',
+          },
+          { value: 'review', label: 'Review individual skills' },
+          { value: 'cancel', label: 'Cancel' },
+        ],
       })
-      return canceled(result) ? null : result
+      if (canceled(result)) return null
+      return result === 'review' ? 'review' : result === 'save'
     },
   }
 }

@@ -1,7 +1,21 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import * as clack from '@clack/prompts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { compileExcludePatterns } from '../src/core/excludes.js'
+import { createPermissionPrompts } from '../src/commands/install/permission-prompts.js'
+import {
+  applySourcePolicy,
+  isSourcePermitted,
+  readSkillSourcesConfig,
+} from '../src/core/source-policy.js'
 import { setupInitialPermissions } from '../src/commands/install/permissions.js'
 import { ALLOW_ALL_NOTICE } from '../src/shared/cli-output.js'
 import type {
@@ -71,6 +85,9 @@ function prompts({
       result.groups = groups
       return selection
     }),
+    reviewPermissions: vi.fn((_groups, selection) =>
+      Promise.resolve(selection),
+    ),
     confirmWrite: vi.fn(async () => confirmWrite),
   }
   return result
@@ -149,6 +166,9 @@ describe('interactive permission selection', () => {
       })
       const text = output.mock.calls.flat().join('\n')
       expect(text).toContain('Found 82 skills in 14 packages.')
+      expect(
+        text.split('Skills can change when dependencies update.'),
+      ).toHaveLength(2)
       expect(text).not.toContain('Long agent routing description')
       expect(text.length).toBeLessThan(500)
     } finally {
@@ -168,6 +188,173 @@ describe('interactive permission selection', () => {
         ]),
       })
       expect(output.mock.calls.flat().join('\n')).not.toContain('core guidance')
+    } finally {
+      output.mockRestore()
+    }
+  })
+
+  it('saves enable-all as a compact rule covering later packages and skills', async () => {
+    const select = vi
+      .fn()
+      .mockResolvedValueOnce('all')
+      .mockResolvedValueOnce('save')
+    const { packageJsonPath } = await configure({
+      permissionPrompts: createPermissionPrompts({
+        ...clack,
+        select,
+      }),
+    })
+    expect(configuredSkills(packageJsonPath)).toEqual(['*'])
+    const policy = readSkillSourcesConfig(dirname(packageJsonPath))
+    expect(isSourcePermitted(policy, '@scope/npm', 'npm', 'core')).toBe(true)
+    expect(isSourcePermitted(policy, '@scope/npm', 'npm', 'added-later')).toBe(
+      true,
+    )
+    expect(isSourcePermitted(policy, '@scope/new', 'npm', 'core')).toBe(true)
+    expect(
+      isSourcePermitted(policy, '@scope/workspace', 'workspace', 'routing'),
+    ).toBe(true)
+    expect(
+      isSourcePermitted(policy, '@scope/workspace', 'npm', 'routing'),
+    ).toBe(true)
+    expect(select).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['@scope/npm', '@scope/*', '*'])(
+    'reviews %s and saves exclusions without expanding the rule',
+    async (rule) => {
+      const select = vi
+        .fn()
+        .mockResolvedValueOnce('packages')
+        .mockResolvedValueOnce('review')
+        .mockResolvedValueOnce('save')
+      const multiselect = vi
+        .fn()
+        .mockResolvedValueOnce([rule])
+        .mockResolvedValueOnce([])
+      const { packageJsonPath } = await configure({
+        exclude: ['@scope/npm#advanced'],
+        permissionPrompts: createPermissionPrompts({
+          ...clack,
+          select,
+          autocompleteMultiselect: multiselect,
+        }),
+      })
+      const intent = JSON.parse(readFileSync(packageJsonPath, 'utf8')).intent
+      expect(intent.skills).toEqual([rule])
+      expect(intent.exclude).toContain('@scope/npm#advanced')
+      expect(intent.exclude).toContain('@scope/npm#core')
+      const future = applySourcePolicy(
+        scan([
+          packageCandidate('@scope/npm', 'npm', [
+            'core',
+            'advanced',
+            'added-later',
+          ]),
+          packageCandidate('@scope/new', 'npm', ['core']),
+          packageCandidate('@else/pkg', 'npm', ['core']),
+        ]),
+        {
+          config: readSkillSourcesConfig(dirname(packageJsonPath)),
+          excludeMatchers: compileExcludePatterns(intent.exclude),
+        },
+      )
+      expect(future.packages[0]?.skills.map((skill) => skill.name)).toEqual([
+        'added-later',
+      ])
+      expect(future.packages.some((pkg) => pkg.name === '@scope/new')).toBe(
+        rule !== '@scope/npm',
+      )
+      expect(future.packages.some((pkg) => pkg.name === '@else/pkg')).toBe(
+        rule === '*',
+      )
+      expect(select).toHaveBeenCalledTimes(3)
+    },
+  )
+
+  it.each(['cancel', 'dry-run'])(
+    'does not persist reviewed exclusions on %s',
+    async (action) => {
+      const initial = prompts({
+        selection: ['@scope/npm'],
+        confirmWrite: false,
+      })
+      vi.mocked(initial.confirmWrite)
+        .mockResolvedValueOnce('review')
+        .mockResolvedValueOnce(false)
+      vi.mocked(initial.reviewPermissions).mockResolvedValue({
+        skills: ['@scope/npm'],
+        exclude: ['@scope/npm#core'],
+      })
+      const { packageJsonPath } = await configure({
+        dryRun: action === 'dry-run',
+        permissionPrompts: initial,
+      })
+      const intent = JSON.parse(readFileSync(packageJsonPath, 'utf8')).intent
+      expect(intent.skills).toBeUndefined()
+      expect(intent.exclude).toEqual([])
+    },
+  )
+
+  it('preserves inherited exclusions while saving new exceptions locally', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-permissions-inherited-'))
+    tempDirs.push(root)
+    const child = join(root, 'packages', 'app')
+    mkdirSync(child, { recursive: true })
+    const rootSource = JSON.stringify({
+      name: 'root',
+      workspaces: ['packages/*'],
+      intent: { exclude: ['@scope/npm#advanced'] },
+    })
+    writeFileSync(join(root, 'package.json'), rootSource)
+    writeFileSync(join(child, 'package.json'), JSON.stringify({ name: 'app' }))
+    const runtime = createPermissionPrompts({
+      ...clack,
+      select: vi
+        .fn()
+        .mockResolvedValueOnce('all')
+        .mockResolvedValueOnce('review')
+        .mockResolvedValueOnce('save'),
+      autocompleteMultiselect: vi.fn().mockResolvedValueOnce([]),
+    })
+    await setupInitialPermissions({
+      root: child,
+      runtime: {
+        prompts: runtime,
+        scan: () =>
+          scan([packageCandidate('@scope/npm', 'npm', ['core', 'advanced'])]),
+      },
+    })
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(rootSource)
+    expect(
+      JSON.parse(readFileSync(join(child, 'package.json'), 'utf8')).intent,
+    ).toEqual({ skills: ['*'], exclude: ['@scope/npm#core'] })
+  })
+
+  it('counts effective skills under a scope rule and keeps large previews bounded', async () => {
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      await configure({
+        exclude: ['@scope/npm#advanced'],
+        permissionPrompts: prompts({ selection: ['@scope/*'] }),
+      })
+      expect(output.mock.calls.flat().join('\n')).toContain(
+        'Selected: 1 skill from 1 package currently available.',
+      )
+      output.mockClear()
+      const skills = Array.from({ length: 82 }, (_, i) => `skill-${i}`)
+      await configure({
+        packages: [packageCandidate('pkg', 'npm', skills)],
+        permissionPrompts: prompts({
+          selection: skills.map((skill) => `pkg#${skill}`),
+        }),
+      })
+      const text = output.mock.calls.flat().join('\n')
+      expect(text).toContain(
+        'Selected: 82 skills from 1 package currently available.',
+      )
+      expect(text).toContain('(+76 more)')
+      expect(text.length).toBeLessThan(1000)
     } finally {
       output.mockRestore()
     }
@@ -205,6 +392,22 @@ describe('interactive permission selection', () => {
 
   it.each([
     ['deny all', [], []],
+    [
+      'scope plus package',
+      ['@scope/*', '@scope/npm', '@scope/npm#core'],
+      ['@scope/*'],
+    ],
+    ['whole package', ['@scope/npm'], ['@scope/npm']],
+    [
+      'separate kinds',
+      ['@scope/*', 'workspace:@scope/workspace'],
+      ['@scope/*', 'workspace:@scope/workspace'],
+    ],
+    [
+      'no implicit scope',
+      ['@scope/npm', '@scope/second'],
+      ['@scope/npm', '@scope/second'],
+    ],
     ['exact only', ['@scope/npm#core'], ['@scope/npm#core']],
     [
       'package plus child',

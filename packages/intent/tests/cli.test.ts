@@ -75,6 +75,9 @@ function permissionPrompts({
 } = {}): PermissionPrompts {
   return {
     selectPermissions: vi.fn(async () => selection),
+    reviewPermissions: vi.fn((_groups, selection) =>
+      Promise.resolve(selection),
+    ),
     confirmWrite: vi.fn(async () => confirmWrite),
   }
 }
@@ -468,7 +471,7 @@ describe('cli commands', () => {
       `Permission destination: ${join(root, 'package.json')}`,
     )
     expect(output).toContain(
-      'Trust change: package-wide permissions: 1; individual skills: 0. These sources can provide instructions to AI agents.',
+      'Selected: 1 skill from 1 package currently available.',
     )
     expect(output).toContain('Permissions: updated package.json.')
     expect(output).toContain('Guidance: created AGENTS.md.')
@@ -735,7 +738,7 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain(
-      'Trust change: package-wide permissions: 1; individual skills: 0. These sources can provide instructions to AI agents.',
+      'Selected: 1 skill from 1 package currently available.',
     )
     expect(output).toContain('Permissions: unchanged package.json (dry run).')
     expect(output).toContain('Generated skill loading guidance for AGENTS.md.')
