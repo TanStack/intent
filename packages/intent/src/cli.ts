@@ -126,8 +126,9 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
       'Create or update skill loading guidance in an agent config file',
     )
     .usage(
-      'install [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]',
+      'install [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]',
     )
+    .option('--review', 'Review and change skill permissions interactively')
     .option('--map', 'Write explicit skill-to-task mappings')
     .option('--dry-run', 'Print the generated block without writing')
     .option(
@@ -138,6 +139,7 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
     .option('--global-only', 'Install mappings from global packages only')
     .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('install')
+    .example('install --review')
     .example('install --map')
     .example('install --dry-run')
     .example('install --print-prompt')

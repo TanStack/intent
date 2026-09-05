@@ -48,6 +48,12 @@ When no effective policy exists, `intent install` follows this flow:
 
 The completion summary reports skills available under the saved policy. It does not prove that an agent loaded or applied them. See [Default install](../cli/intent-install#default-install) for picker controls and permission choices.
 
+## Revisiting permissions
+
+Run `intent install --review` to revisit current permissions. Existing decisions are retained until you confirm changes. The review can add permission rules, remove selected rules, and add individual exclusions under broader rules. Existing exclusions continue to win.
+
+A review inside a workspace starts with inherited permissions. Confirmed edits create a local override; an unchanged review preserves inheritance. This reviews permission configuration, not whether skill content has changed. See [Review existing permissions](../cli/intent-install#review-existing-permissions).
+
 ## Static discovery
 
 Intent reads package data as files. It never imports, requires, or executes the code of a discovered package to find or load a skill. Adding a package to your dependency tree cannot run that package's code through Intent.
