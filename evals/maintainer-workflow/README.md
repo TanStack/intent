@@ -36,11 +36,11 @@ The live check used an already installed Copilot CLI with a separate `COPILOT_HO
 
 On September 5, 2026, Copilot CLI `1.0.82-1` with its default `claude-sonnet-5` model found the installed maintainer instructions and ran `meta generate-skill` without the initial request naming Intent. It created both agreed skills and executable task checks. A separate consumer session discovered and loaded both skills through `list` and `load`.
 
-| Condition | Protected consumer check | Finding |
-| --- | --- | --- |
-| Initial generated skills | Failed | The suggested `error.code` classifier replaced a null rejection with a `TypeError`. |
-| Same task without skills | Passed | The baseline guarded access and preserved the original rejection. |
-| Corrected skills, another fresh session | Passed | The unchanged grader accepted retry bounds, error identity, cancellation and pagination. |
+| Condition                               | Protected consumer check | Finding                                                                                  |
+| --------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------- |
+| Initial generated skills                | Failed                   | The suggested `error.code` classifier replaced a null rejection with a `TypeError`.      |
+| Same task without skills                | Passed                   | The baseline guarded access and preserved the original rejection.                        |
+| Corrected skills, another fresh session | Passed                   | The unchanged grader accepted retry bounds, error identity, cancellation and pagination. |
 
 Source review also caught inaccurate claims about synchronous throws and cancellation after successful operations. The correction pass produced 16 passing library/task tests. That author session stalled after writing the repair artifacts and was stopped; its completion was not counted as a pass. The artifacts were checked separately, and a remaining overbroad claim about primitive property access was corrected after a direct runtime check. The subsequent consumer session completed normally and passed the protected grader.
 
