@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import {
   closeSync,
   existsSync,
+  fstatSync,
   lstatSync,
   openSync,
   readFileSync,
@@ -35,6 +36,7 @@ export interface ReadFs {
   openSync?: typeof openSync
   readSync?: typeof readSync
   closeSync?: typeof closeSync
+  fstatSync?: typeof fstatSync
 }
 
 export const nodeReadFs: ReadFs = {
@@ -46,6 +48,7 @@ export const nodeReadFs: ReadFs = {
   openSync,
   readSync,
   closeSync,
+  fstatSync,
 }
 
 /**
@@ -391,10 +394,11 @@ export function readScalarField(
 }
 
 /**
- * Parse YAML frontmatter from a file. Returns null if no frontmatter or on error.
+ * Parse YAML frontmatter from a path or caller-owned descriptor at offset zero.
+ * Returns null if no frontmatter or on error; caller-owned descriptors stay open.
  */
 export function parseFrontmatter(
-  filePath: string,
+  filePath: string | number,
   fs: ReadFs = nodeReadFs,
 ): Record<string, unknown> | null {
   const content = readFrontmatterRegion(filePath, fs)
@@ -418,13 +422,14 @@ const frontmatterBuffer = Buffer.allocUnsafe(FRONTMATTER_READ_LIMIT)
  * instead of its whole body. Falls back to a full read when the bounded read
  * primitives are unavailable or the frontmatter exceeds the probe limit.
  */
-function readFrontmatterRegion(filePath: string, fs: ReadFs): string | null {
+function readFrontmatterRegion(
+  filePath: string | number,
+  fs: ReadFs,
+): string | null {
   if (fs.openSync && fs.readSync && fs.closeSync) {
-    let region: string | null = null
-    let truncated = false
     let fd: number
     try {
-      fd = fs.openSync(filePath, 'r')
+      fd = typeof filePath === 'number' ? filePath : fs.openSync(filePath, 'r')
     } catch {
       return null
     }
@@ -436,16 +441,20 @@ function readFrontmatterRegion(filePath: string, fs: ReadFs): string | null {
         FRONTMATTER_READ_LIMIT,
         0,
       )
-      region = frontmatterBuffer.toString('utf8', 0, bytesRead)
+      const region = frontmatterBuffer.toString('utf8', 0, bytesRead)
       // A full buffer means the file may extend past the probe window; only
       // trust the bounded read when it captured the closing fence.
-      truncated =
+      const truncated =
         bytesRead === FRONTMATTER_READ_LIMIT &&
         !/\r?\n---/.test(region.slice(3))
+      // The positional probe leaves the descriptor at offset zero. Keep the
+      // full-read fallback on that descriptor so replacement cannot redirect it.
+      return truncated ? fs.readFileSync(fd, 'utf8') : region
+    } catch {
+      return null
     } finally {
-      fs.closeSync(fd)
+      if (typeof filePath !== 'number') fs.closeSync(fd)
     }
-    if (!truncated) return region
   }
 
   try {

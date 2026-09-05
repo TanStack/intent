@@ -88,7 +88,7 @@ function formatLoadCommand(
 ): string {
   return formatIntentCommand(packageManager, [
     'load',
-    skill.use,
+    `${skill.packageName}#${skill.skillName}`,
     ...(scopeFlag ? [scopeFlag.trim()] : []),
   ])
 }

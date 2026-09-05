@@ -2,7 +2,7 @@
 // executes discovered package code. The only sanctioned dynamic load is Yarn's
 // PnP runtime (.pnp.cjs / pnpapi), used solely to map identities to readable
 // roots. Enforced by the `intent/static-discovery` ESLint rule.
-import { existsSync } from 'node:fs'
+import { constants, existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import semver from 'semver'
@@ -266,15 +266,36 @@ function readSkillEntry(
   skillFile: string,
   readFs: ReadFs = nodeReadFs,
 ): SkillEntry | null {
-  let realSkillFile: string
+  if (!readFs.openSync || !readFs.fstatSync || !readFs.closeSync) return null
+  let fd: number | undefined
+  let fm: Record<string, unknown> | null
   try {
-    realSkillFile = readFs.realpathSync.native(skillFile)
+    const realSkillFile = readFs.realpathSync.native(skillFile)
     const realPackageRoot = readFs.realpathSync.native(dirname(skillsDir))
     if (!isWithinOrEqual(realSkillFile, realPackageRoot)) return null
+    const expected = readFs.lstatSync(realSkillFile)
+    if (!expected.isFile()) return null
+    if (readFs.realpathSync.native(realSkillFile) !== realSkillFile) return null
+
+    fd = readFs.openSync(
+      realSkillFile,
+      constants.O_RDONLY | constants.O_NOFOLLOW,
+    )
+    const opened = readFs.fstatSync(fd)
+    // Compare the opened file with the checked entry before reading any bytes.
+    // The descriptor then survives pathname replacement, including parent swaps.
+    if (
+      !opened.isFile() ||
+      opened.dev !== expected.dev ||
+      opened.ino !== expected.ino
+    )
+      return null
+    fm = parseFrontmatter(fd, readFs)
   } catch {
     return null
+  } finally {
+    if (fd !== undefined) readFs.closeSync(fd)
   }
-  const fm = parseFrontmatter(realSkillFile, readFs)
   const relName = toPosixPath(relative(skillsDir, childDir))
   const desc =
     typeof fm?.description === 'string'

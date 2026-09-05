@@ -148,8 +148,8 @@ JSON includes diagnostics in the object instead of printing separate warning or 
 ## Common errors
 
 - **Invalid permissions or unreadable policy files:** Intent stops and reports the problem. Fix the reported package.json or `intent.skills` entry before retrying.
-- **Unsupported runnable identifier:** generated commands accept only ASCII letters, numbers, `_`, `.`, `/`, `@`, `#`, and `-`. Identifiers cannot start with `#`. Rename the package or skill to generate runnable guidance. `--json` can still expose permitted identifiers as data.
-- **Unreadable or out-of-package skill metadata:** discovery skips skill files whose real path cannot be resolved or lies outside the package root, with a warning. Symlinks within the resolved package root remain supported. External frontmatter is not read into the catalog.
+- **Unsupported runnable identifier:** generated commands accept only ASCII letters, numbers, `_`, `.`, `/`, `@`, `#`, and `-`. Identifiers cannot start with `#`; leading and trailing whitespace is rejected rather than trimmed. Rename the package or skill to generate runnable guidance. `--json` can still expose permitted identifiers as data.
+- **Unreadable or out-of-package skill metadata:** discovery skips skill files whose real path cannot be resolved or lies outside the package root, with a warning. It checks the opened file's identity before reading and uses that descriptor for the full metadata read, including large frontmatter, so later pathname replacement cannot redirect the read. Symlinks within the resolved package root remain supported.
 - **Deno without `node_modules`:** this discovery mode is unsupported.
 
 ## Related

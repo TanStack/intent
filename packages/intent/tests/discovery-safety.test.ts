@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -139,6 +140,9 @@ describe('discovered command arguments', () => {
     'core!PATH!',
     'core&echo',
     'core|echo',
+    ' core',
+    'core ',
+    '\tcore\n',
   ])('refuses runnable commands for unsafe skill names: %j', (skillName) => {
     // A scan result can contain names that are not valid filenames on this host.
     write(
@@ -154,6 +158,42 @@ describe('discovered command arguments', () => {
     expect(() =>
       formatRuntimeSkillLookupHint({ packageName, skillName }),
     ).toThrow('Cannot generate an Intent command')
+  })
+
+  it.each([' @scope/library', '@scope/library ', '\t@scope/library\n'])(
+    'refuses whitespace-wrapped package names: %j',
+    (unsafePackage) => {
+      write(
+        join(packageRoot(), 'skills', 'core', 'SKILL.md'),
+        skillFile('Safe'),
+      )
+      const scan = scanForIntents(root)
+      scan.packages[0]!.name = unsafePackage
+      expect(() => buildIntentSkillsBlock(scan)).toThrow(
+        'Cannot generate an Intent command',
+      )
+      expect(() =>
+        formatRuntimeSkillLookupHint({
+          packageName: unsafePackage,
+          skillName: 'core',
+        }),
+      ).toThrow('Cannot generate an Intent command')
+    },
+  )
+
+  it('does not emit a trimmed identifier for a different existing skill', async () => {
+    write(
+      join(packageRoot(), 'skills', 'core', 'SKILL.md'),
+      skillFile('Other skill'),
+    )
+    write(
+      join(packageRoot(), 'skills', ' core ', 'SKILL.md'),
+      skillFile('Whitespace skill'),
+    )
+    process.chdir(root)
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await main(['list'])).toBe(1)
   })
 
   it('refuses an unsafe identifier in runnable list output', async () => {
@@ -176,6 +216,107 @@ describe('discovered command arguments', () => {
 })
 
 describe('discovered metadata containment', () => {
+  it('rejects a parent-directory replacement during the identity check', () => {
+    const file = join(packageRoot(), 'skills', 'core', 'SKILL.md')
+    const outside = join(root, 'outside', 'SKILL.md')
+    write(file, skillFile('Internal'))
+    write(outside, skillFile('EXTERNAL_METADATA_SENTINEL'))
+    const lstat = nodeReadFs.lstatSync
+    let replaced = false
+    vi.spyOn(nodeReadFs, 'lstatSync').mockImplementation(
+      (...args: Parameters<typeof lstat>) => {
+        if (args[0] === file && !replaced) {
+          replaced = true
+          renameSync(dirname(file), `${dirname(file)}.original`)
+          symlinkSync(dirname(outside), dirname(file), 'junction')
+        }
+        return lstat(...args)
+      },
+    )
+    const read = vi.spyOn(nodeReadFs, 'readSync')
+    const result = listIntentSkills({ cwd: root })
+    expect(replaced).toBe(true)
+    expect(result.skills).toEqual([])
+    expect(read).not.toHaveBeenCalled()
+  })
+
+  it.each(['file', 'directory'] as const)(
+    'rejects a %s replaced with an escaping symlink before open',
+    (kind) => {
+      const file = join(packageRoot(), 'skills', 'core', 'SKILL.md')
+      const outside = join(root, 'outside', 'SKILL.md')
+      write(file, skillFile('Internal'))
+      write(outside, skillFile('EXTERNAL_METADATA_SENTINEL'))
+      const open = nodeReadFs.openSync!
+      const read = vi.spyOn(nodeReadFs, 'readSync')
+      const close = vi.spyOn(nodeReadFs, 'closeSync')
+      let replaced = false
+      vi.spyOn(nodeReadFs, 'openSync').mockImplementation(
+        (path, flags, mode) => {
+          if (path === file && !replaced) {
+            replaced = true
+            const target = kind === 'file' ? file : dirname(file)
+            renameSync(target, `${target}.original`)
+            symlinkSync(
+              kind === 'file' ? outside : dirname(outside),
+              target,
+              kind === 'file' ? 'file' : 'junction',
+            )
+          }
+          return open(path, flags, mode)
+        },
+      )
+      const result = listIntentSkills({ cwd: root })
+      expect(replaced).toBe(true)
+      expect(result.skills).toEqual([])
+      expect(read).not.toHaveBeenCalled()
+      if (kind === 'directory') expect(close).toHaveBeenCalledTimes(1)
+      expect(JSON.stringify(result)).not.toContain('EXTERNAL_METADATA_SENTINEL')
+    },
+  )
+
+  it.each([false, true])(
+    'reads the validated descriptor after replacement (large frontmatter: %s)',
+    (large) => {
+      const file = join(packageRoot(), 'skills', 'core', 'SKILL.md')
+      const outside = join(root, 'outside', 'SKILL.md')
+      const internal = large
+        ? `---\nname: core\npadding: ${'x'.repeat(20_000)}\ndescription: Internal\n---\n`
+        : skillFile('Internal')
+      write(file, internal)
+      write(outside, skillFile('EXTERNAL_METADATA_SENTINEL'))
+      const read = nodeReadFs.readSync!
+      let replaced = false
+      vi.spyOn(nodeReadFs, 'readSync').mockImplementation(
+        (...args: Parameters<typeof read>) => {
+          if (!replaced) {
+            replaced = true
+            renameSync(file, `${file}.original`)
+            symlinkSync(outside, file)
+          }
+          return read(...args)
+        },
+      )
+      const result = listIntentSkills({ cwd: root })
+      expect(replaced).toBe(true)
+      expect(result.skills[0]?.description).toBe('Internal')
+      expect(JSON.stringify(result)).not.toContain('EXTERNAL_METADATA_SENTINEL')
+    },
+  )
+
+  it('closes the descriptor when reading frontmatter fails', () => {
+    write(
+      join(packageRoot(), 'skills', 'core', 'SKILL.md'),
+      skillFile('Internal'),
+    )
+    vi.spyOn(nodeReadFs, 'readSync').mockImplementation(() => {
+      throw new Error('read failed')
+    })
+    const close = vi.spyOn(nodeReadFs, 'closeSync')
+    expect(listIntentSkills({ cwd: root }).skills[0]?.description).toBe('')
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
   it('does not read escaping frontmatter through discovery or direct loading', () => {
     const outside = join(root, 'outside', 'SKILL.md')
     const link = join(packageRoot(), 'skills', 'core', 'SKILL.md')
