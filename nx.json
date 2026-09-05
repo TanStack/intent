@@ -28,13 +28,13 @@
     "test:lib": {
       "cache": true,
       "dependsOn": ["^build"],
-      "inputs": ["default", "^production", "{projectRoot}/meta/**/*"],
+      "inputs": ["default", "^production"],
       "outputs": ["{projectRoot}/coverage"]
     },
     "test:integration": {
       "cache": true,
       "dependsOn": ["build", "^build"],
-      "inputs": ["default", "^production", "{projectRoot}/meta/**/*"]
+      "inputs": ["default", "^production"]
     },
     "test:eslint": {
       "cache": true,
