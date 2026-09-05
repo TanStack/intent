@@ -27,7 +27,7 @@ export interface StaleTargetResult {
   workflowAdvisories: Array<string>
 }
 
-export const INTENT_CHECK_SKILLS_WORKFLOW_VERSION = 3
+export const INTENT_CHECK_SKILLS_WORKFLOW_VERSION = 4
 
 export function getMetaDir(): string {
   return findMetaDir(dirname(fileURLToPath(import.meta.url)))

@@ -14,6 +14,7 @@ import {
 import {
   buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
+  buildMaintainerGuidanceBlock,
   resolveIntentSkillsBlockTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
@@ -129,6 +130,7 @@ tanstackIntent:
    - The verification result`
 
 export interface InstallCommandOptions extends GlobalScanFlags {
+  maintainer?: boolean
   dryRun?: boolean
   map?: boolean
   review?: boolean
@@ -212,6 +214,59 @@ export async function runInstallCommand(
   scanIntentsOrFail: (coreOptions?: IntentCoreOptions) => Promise<ScanResult>,
   runtime: InstallCommandRuntime = {},
 ): Promise<void> {
+  if (options.maintainer) {
+    if (
+      options.map ||
+      options.review ||
+      options.printPrompt ||
+      options.global ||
+      options.globalOnly
+    ) {
+      fail(
+        '--maintainer cannot be combined with --map, --review, --print-prompt, --global, or --global-only.',
+      )
+    }
+    const generated = buildMaintainerGuidanceBlock(
+      detectIntentCommandPackageManager(),
+    )
+    const namespace = 'intent-maintainer'
+    if (options.dryRun) {
+      const targetPath = resolveIntentSkillsBlockTargetPath(
+        process.cwd(),
+        1,
+        namespace,
+      )!
+      console.log(
+        `Generated maintainer guidance for ${formatTargetPath(targetPath)}.`,
+      )
+      console.log(generated.block)
+      return
+    }
+    const result = writeIntentSkillsBlock({
+      ...generated,
+      namespace,
+      root: process.cwd(),
+      skipWhenEmpty: false,
+    })
+    if (!result.targetPath) fail('Maintainer guidance target was not created.')
+    const verification = verifyIntentSkillsBlockFile({
+      expectedBlock: generated.block,
+      targetPath: result.targetPath,
+      namespace,
+    })
+    if (!verification.ok)
+      fail(
+        `Maintainer setup verification failed: ${verification.errors.join(' ')}`,
+      )
+    console.log(
+      `Maintainer guidance: ${result.status} ${formatTargetPath(result.targetPath)}.`,
+    )
+    console.log(
+      'Your agent can now discover skill authoring and maintenance from the repository instructions.',
+    )
+    return
+  }
+
   if (
     options.review &&
     (options.map || options.printPrompt || options.global || options.globalOnly)

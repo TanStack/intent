@@ -1,4 +1,5 @@
 import { appendFileSync, writeFileSync } from 'node:fs'
+import { formatIntentCommand } from '../shared/command-runner.js'
 import type { StalenessReport } from '../shared/types.js'
 
 export interface StaleReviewItem {
@@ -103,14 +104,11 @@ export function buildStaleReviewBody(items: Array<StaleReviewItem>): string {
   const prompt = [
     'You are helping maintain Intent skills for this repository.',
     '',
-    'Run `npx @tanstack/intent@latest meta generate-skill` and follow the printed procedure, including its review-signals reference.',
-    'Use the current conversation, relevant code/docs change, and review items below as context. Reuse decisions and evidence already available in this repository.',
+    `Run \`${formatIntentCommand('npm', 'meta generate-skill')}\` and follow the printed procedure, including its review-signals reference.`,
+    'Use the current conversation, relevant code/docs change, and review items above as context. Reuse decisions and evidence already available in this repository.',
     'Review signals are investigation inputs, not proof that content must change.',
     '',
-    'Review signals:',
-    JSON.stringify(items, null, 2),
-    '',
-    'Return a disposition and source evidence for each review item, a bounded diff when needed, and validation results. Identify missing evidence explicitly.',
+    'Use the review items above. Return a disposition and source evidence for each item, a bounded diff when needed, and task-check results. Identify missing evidence explicitly. For source-review or unmapped-change items, regenerate `intent review --json` after edits and record completed outcomes using the source-review procedure.',
   ].join('\n')
 
   return [
@@ -134,13 +132,11 @@ export function buildStaleReviewBody(items: Array<StaleReviewItem>): string {
     '| --- | --- | --- | --- |',
     ...itemRows,
     '',
-    '### Agent Prompt',
+    '### Agent Review',
     '',
-    'Paste this into your coding agent:',
+    'Ask your coding agent to review this PR. Installed maintainer guidance loads the procedure automatically; the instructions below also work as a standalone entry point.',
     '',
-    '```text',
     prompt,
-    '```',
     '',
     'This PR is a review reminder only. It does not update skills automatically.',
   ].join('\n')

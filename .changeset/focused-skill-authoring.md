@@ -2,13 +2,8 @@
 '@tanstack/intent': minor
 ---
 
-Connect skill authoring and review through one focused procedure. Maintainers
-can ask their existing coding agent to create guidance for a developer task,
-update it from the current code/docs change, or investigate an Intent review
-report using the context already in the conversation.
+Bring library skill authoring and maintenance into the normal coding-agent workflow. `intent install --maintainer` installs persistent guidance for agreed skill batches, source-grounded updates, representative executable task checks, and fresh-consumer verification when available.
 
-Lead `scaffold` with this path, add an actionable next step to flagged `stale`
-text reports, and route generated review PR prompts to the same procedure.
-Remove mandatory discovery artifacts and fixed interviews from focused work;
-keep full-library design available explicitly. Document direct Markdown
-authoring, validation, evidence-backed no-ops, and unresolved review signals.
+Add `intent review` to identify affected guidance and unmapped changes from Git, then record evidence-backed outcomes against source and skill content hashes. Repeated no-ops stay quiet until content changes; missing source evidence remains unresolved. The generated release workflow uses recorded reviews when present and retains the existing staleness fallback otherwise.
+
+Keep focused authoring available through `scaffold`, `meta generate-skill`, and review reminders without mandatory full-library discovery. Add maintainer fixtures and protected task graders.

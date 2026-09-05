@@ -290,7 +290,13 @@ Existing fixture guidance, pending source review.
       }),
     ])
     const body = readFileSync(join(cwd, 'pr-body.md'), 'utf8')
-    expect(body).toContain(JSON.stringify(items, null, 2))
+    for (const item of items) {
+      expect(body).toContain(
+        `| \`${item.type}\` | \`${item.subject}\` | \`${item.library}\` | ${item.reasons.join('; ')} |`,
+      )
+    }
+    expect(body).toContain('### Agent Review')
+    expect(body).not.toContain('Paste this into your coding agent')
     expect(body).toContain('npx @tanstack/intent@latest meta generate-skill')
 
     // Execute the advertised meta command with this extracted release.
@@ -369,5 +375,70 @@ Existing fixture guidance, pending source review.
     expect(result.stderr).toContain('interactive terminal')
     expect(readFileSync(join(cwd, 'package.json'), 'utf8')).toBe(original)
     expect(existsSync(join(cwd, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('installs the maintainer workflow and reviews sources with the packed CLI', () => {
+    execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], { cwd })
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'core.fsmonitor=false',
+        '-c',
+        'user.name=Fixture',
+        '-c',
+        'user.email=fixture@example.invalid',
+        'commit',
+        '--allow-empty',
+        '-qm',
+        'fixture',
+      ],
+      { cwd },
+    )
+    const installed = run(['install', '--maintainer'])
+    expect(installed.status, installed.stderr).toBe(0)
+    expect(readFileSync(join(cwd, 'AGENTS.md'), 'utf8')).toContain(
+      'intent-maintainer:start',
+    )
+    expect(packedFiles).toContain(
+      'meta/generate-skill/references/initial-batches.md',
+    )
+    expect(packedFiles).toContain(
+      'meta/generate-skill/references/task-quality.md',
+    )
+    expect(packedFiles).toContain(
+      'meta/generate-skill/references/source-review.md',
+    )
+    mkdirSync(join(cwd, 'src'))
+    writeFileSync(join(cwd, 'src/client.js'), 'export const attempts = 3\n')
+    mkdirSync(join(cwd, 'skills/client'), { recursive: true })
+    writeFileSync(
+      join(cwd, 'skills/client/SKILL.md'),
+      '---\nname: client\nsources: [src/client.js]\n---\nClient task\n',
+    )
+    const review = run(['review', '--json'])
+    expect(review.status, review.stderr).toBe(0)
+    const report = JSON.parse(review.stdout)
+    expect(report.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'skill',
+          path: 'skills/client/SKILL.md',
+          problems: [],
+        }),
+      ]),
+    )
+    for (const item of report.items) {
+      item.outcome = 'no-change'
+      item.reason = 'Fixture source and guidance agree.'
+      item.evidence = ['src/client.js']
+    }
+    mkdirSync(join(cwd, '.intent'))
+    writeFileSync(join(cwd, '.intent/review.json'), JSON.stringify(report))
+    const recorded = run(['review', '--record', '.intent/review.json'])
+    expect(recorded.status, recorded.stderr).toBe(0)
+    expect(run(['review', '--check']).status).toBe(0)
+    writeFileSync(join(cwd, 'src/client.js'), 'export const attempts = 4\n')
+    expect(run(['review', '--check']).status).toBe(1)
   })
 })
