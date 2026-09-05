@@ -170,23 +170,48 @@ export function createPermissionPrompts(
       }
     },
     reviewPermissions: async (packages, selection) => {
-      const available = packages
-        .flatMap((pkg) => pkg.skills)
-        .filter((skill) => !skill.excluded)
-      const selected = await runtime.autocompleteMultiselect({
+      const reviewable = packages.filter(
+        (pkg) =>
+          selectedPermissionSkills([pkg], {
+            skills: selection.skills,
+            exclude: [],
+          }).length > 0,
+      )
+      const packageIds = await runtime.autocompleteMultiselect({
         ...picker,
-        message: 'Review individual skills — uncheck to exclude',
-        options: available.map((skill) => ({
-          value: skill.id,
-          label: skill.id,
-          hint: descriptionHint(skill.description),
-        })),
-        initialValues: selectedPermissionSkills(packages, selection).map(
-          (skill) => skill.id,
-        ),
+        message: 'Review individual skills — choose packages to review',
+        placeholder: 'Leave empty to continue with all selected skills',
+        options: reviewable.map((pkg) => ({ value: pkg.id, label: pkg.id })),
+        initialValues: [],
         required: false,
       })
-      if (canceled(selected)) return null
+      if (canceled(packageIds)) return null
+      if (packageIds.length === 0) return selection
+      const selected = new Set(
+        selectedPermissionSkills(packages, selection).map((skill) => skill.id),
+      )
+      for (const pkg of reviewable.filter((pkg) =>
+        packageIds.includes(pkg.id),
+      )) {
+        const skills = await runtime.autocompleteMultiselect({
+          ...picker,
+          message: `Choose skills from ${pkg.id} — uncheck to exclude`,
+          options: pkg.skills
+            .filter((skill) => !skill.excluded)
+            .map((skill) => ({
+              value: skill.id,
+              label: skill.name,
+              hint: descriptionHint(skill.description),
+            })),
+          initialValues: pkg.skills
+            .filter((skill) => selected.has(skill.id))
+            .map((skill) => skill.id),
+          required: false,
+        })
+        if (canceled(skills)) return null
+        for (const skill of pkg.skills) selected.delete(skill.id)
+        for (const skill of skills) selected.add(skill)
+      }
       const broad = selection.skills.filter((skill) => !skill.includes('#'))
       const covered = new Set(
         selectedPermissionSkills(packages, { skills: broad, exclude: [] }).map(
@@ -194,10 +219,10 @@ export function createPermissionPrompts(
         ),
       )
       return {
-        skills: [...broad, ...selected.filter((id) => !covered.has(id))],
+        skills: [...broad, ...[...selected].filter((id) => !covered.has(id))],
         // Exclusions are package-name based for both npm and workspace sources.
         exclude: [...covered]
-          .filter((id) => !selected.includes(id))
+          .filter((id) => !selected.has(id))
           .map((id) => id.replace(/^workspace:/, '')),
       }
     },
@@ -211,9 +236,13 @@ export function createPermissionPrompts(
         options: [
           {
             value: 'save',
-            label: denyAll ? 'Disable all skills' : 'Enable selected skills',
+            label: denyAll
+              ? 'Disable all skills'
+              : 'Continue with all selected skills',
           },
-          { value: 'review', label: 'Review individual skills' },
+          ...(denyAll
+            ? []
+            : [{ value: 'review', label: 'Review individual skills' }]),
           { value: 'cancel', label: 'Cancel' },
         ],
       })

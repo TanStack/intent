@@ -37,7 +37,7 @@ When no effective policy exists, `intent install` follows this flow:
 
 1. **Discover:** summarize npm and workspace skill counts. Descriptions and exclusions are available through optional inspection.
 2. **Choose:** enable all sources, choose packages or scopes, or select individual skills. Package and scope selections stay compact and include future matching skills. A whole scope requires an explicit selection.
-3. **Confirm once:** show the current skill count, saved rules, and destination file. Optional individual review can add exclusions while retaining broad rules. Only affirmative confirmation saves permissions and exclusions atomically, then installs guidance. An empty selection explicitly confirms disabling all skills.
+3. **Confirm once:** show the current skill count, saved rules, and destination file. Optional individual review opens skill lists only for the selected packages you choose to inspect. It can add exclusions while retaining broad rules; unreviewed packages keep their selection. Only affirmative confirmation saves permissions and exclusions atomically, then installs guidance. An empty selection explicitly confirms disabling all skills.
 
 | Outcome | Files changed |
 | --- | --- |

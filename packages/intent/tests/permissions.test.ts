@@ -231,6 +231,7 @@ describe('interactive permission selection', () => {
       const multiselect = vi
         .fn()
         .mockResolvedValueOnce([rule])
+        .mockResolvedValueOnce(['@scope/npm'])
         .mockResolvedValueOnce([])
       const { packageJsonPath } = await configure({
         exclude: ['@scope/npm#advanced'],
@@ -315,7 +316,10 @@ describe('interactive permission selection', () => {
         .mockResolvedValueOnce('all')
         .mockResolvedValueOnce('review')
         .mockResolvedValueOnce('save'),
-      autocompleteMultiselect: vi.fn().mockResolvedValueOnce([]),
+      autocompleteMultiselect: vi
+        .fn()
+        .mockResolvedValueOnce(['@scope/npm'])
+        .mockResolvedValueOnce([]),
     })
     await setupInitialPermissions({
       root: child,

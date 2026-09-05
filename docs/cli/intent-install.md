@@ -34,7 +34,7 @@ Otherwise, first-run setup requires an interactive terminal. Non-TTY execution f
 #### First-run flow
 
 1. **Choose what to enable.** Pick **Enable all**, **Choose packages or scopes**, or **Choose individual skills**. Package and skill lists support search.
-2. **Confirm once.** Check the current skill count, saved rules, and destination file. Choose **Enable selected skills** to save, **Review individual skills** to adjust the selection, or **Cancel**. Cancel is selected by default.
+2. **Confirm once.** Check the current skill count, saved rules, and destination file. Choose **Continue with all selected skills** to save, **Review individual skills** to inspect specific packages, or **Cancel**. Cancel is selected by default.
 3. **Finish** with verified guidance, available skill and package counts, and a command to list those skills.
 
 Descriptions, exclusions, and information about skill updates are optional choices on the setup screen.
@@ -50,7 +50,7 @@ Descriptions, exclusions, and information about skill updates are optional choic
 
 Workspace choices use the `workspace:` prefix. Scope rules are saved only when explicitly selected; choosing several packages does not grant access to the whole scope.
 
-**Review individual skills** lets you uncheck skills covered by a package, scope, or all-sources rule. Intent keeps the broad rule and adds those skills to `intent.exclude`. Existing exclusions always win and cannot be enabled through the picker.
+**Review individual skills** lists only packages covered by your selection. Choose the packages you want to review, or leave the list empty to continue with all selected skills. Each chosen package opens its own skill list; other packages keep their selection. Unchecking a skill covered by a package, scope, or all-sources rule keeps the broad rule and adds that skill to `intent.exclude`. Existing exclusions always win and cannot be enabled through the picker.
 
 Skill instructions can change when dependencies update. Enabling access does not freeze content or record approval of specific instructions. Update notifications are not available yet.
 
