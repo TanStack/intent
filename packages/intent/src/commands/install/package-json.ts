@@ -77,15 +77,44 @@ function formattingOptions(content: string): {
 export function preparePackageSkillsUpdate(
   packageJsonPath: string,
   skills: Array<string>,
+  additionalExcludes: Array<string> = [],
 ): PreparedPackageSkillsUpdate {
   const source = readFileSync(packageJsonPath, 'utf8')
-  parsePackageJson(source, packageJsonPath)
-  const content = applyEdits(
+  const original = parsePackageJson(source, packageJsonPath)
+  let content = applyEdits(
     source,
     modify(source, ['intent', 'skills'], skills, {
       formattingOptions: formattingOptions(source),
     }),
   )
+  if (additionalExcludes.length > 0) {
+    const intent = original.intent as Record<string, unknown> | undefined
+    const existing = intent?.exclude ?? []
+    if (
+      !Array.isArray(existing) ||
+      existing.some((value) => typeof value !== 'string')
+    ) {
+      throw new Error(
+        `Cannot update ${packageJsonPath}: intent.exclude must contain an array of strings.`,
+      )
+    }
+    const exclude = [...new Set([...existing, ...additionalExcludes])]
+    content = applyEdits(
+      content,
+      modify(content, ['intent', 'exclude'], exclude, {
+        formattingOptions: formattingOptions(source),
+      }),
+    )
+    const updated = parsePackageJson(content, packageJsonPath).intent as Record<
+      string,
+      unknown
+    >
+    if (JSON.stringify(updated.exclude) !== JSON.stringify(exclude)) {
+      throw new Error(
+        `Cannot update ${packageJsonPath}: intent.exclude validation failed.`,
+      )
+    }
+  }
   const updated = parsePackageJson(content, packageJsonPath)
   const updatedIntent = updated.intent as Record<string, unknown>
   if (JSON.stringify(updatedIntent.skills) !== JSON.stringify(skills)) {

@@ -13,15 +13,12 @@ Run this in an interactive terminal. On first use, Intent helps you choose which
 
 Examples use `npx` for npm projects. In pnpm, Yarn, or Bun projects, use the matching runner: `pnpm dlx`, `yarn dlx`, or `bunx`.
 
-The command:
+1. **Choose what to enable.** Pick **Enable all**, **Choose packages or scopes**, or **Choose individual skills**. Package and skill lists support search.
+2. **Confirm and finish.** Check the saved rules and destination `package.json`. Choose **Continue with all selected skills** to save, or **Review individual skills** to pick which selected packages to inspect before confirming. Intent writes permissions and guidance, verifies the guidance, and shows a command to list available skills.
 
-1. Shows discovered packages, versions, skill descriptions, and exclusions
-2. Lets you choose package-wide or individual skill permissions
-3. Previews the exact `intent.skills` configuration and destination `package.json`, then asks for confirmation
-4. Writes the confirmed permissions and creates or updates the `intent-skills` guidance block, preserving unrelated content
-5. Verifies the guidance and reports the available skill count and a command to list those skills
+**Enable all** saves `"*"`. A package choice saves `"@tanstack/ai"`; a whole scope saves `"@tanstack/*"`. These rules include future matching skills. Individual choices use `"@tanstack/ai#skill"`. Unchecking a skill during review adds an exclusion while keeping its broad rule.
 
-Choose **No** when asked about allowing all current and future skill sources to select specific packages and skills. Press Space to toggle choices and Enter to review your selection. A package's **All skills** choice includes its current and future skills; an individual choice permits only that named skill. Excluded skills appear in the discovery overview but cannot be selected.
+Skill instructions can change when dependencies update. Update notifications are not available yet. See **About skill access and updates** in the installer for details.
 
 Selecting nothing requires explicit confirmation to disable all skills. If no skills are found, or all are excluded, Intent explains the next step and leaves permissions and guidance unchanged. Install a package that ships skills or review your exclusions, then run `install` again.
 

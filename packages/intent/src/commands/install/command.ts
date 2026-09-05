@@ -18,10 +18,8 @@ import {
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from './guidance.js'
-import {
-  createPermissionPrompts,
-  setupInitialPermissions,
-} from './permissions.js'
+import { setupInitialPermissions } from './permissions.js'
+import { createPermissionPrompts } from './permission-prompts.js'
 import type { GlobalScanFlags } from '../support.js'
 import type { IntentCoreOptions } from '../../core/index.js'
 import type { ScanResult } from '../../shared/types.js'
@@ -302,9 +300,10 @@ export async function runInstallCommand(
         )
       }
 
-      printWriteResult(result)
       if (permissions) {
         console.log(`Guidance: ${result.status} ${target}.`)
+      } else {
+        printWriteResult(result)
       }
       printPlacementTip(result.targetPath)
       if (available && permissions) {

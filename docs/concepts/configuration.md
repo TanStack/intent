@@ -91,15 +91,27 @@ Run `intent list` to see which packages the current policy surfaces.
 | Saved or inherited `intent.skills` | Updates guidance only. Keeps permissions unchanged and does not prompt. |
 | No effective `intent.skills` | Starts interactive permission setup. Non-TTY execution fails without writes. |
 
-First-run setup discovers candidates before policy filtering and shows their versions and descriptions. It previews the selected allowlist and nearest owning `package.json`, then requires confirmation before saving permissions and installing guidance.
+First-run setup offers **Enable all**, **Choose packages or scopes**, and **Choose individual skills**, followed by one confirmation before saving to the nearest owning `package.json` and installing guidance.
 
-- **Excluded candidates** stay visible in the overview but cannot be selected. Exclusions remain unchanged.
-- **Package-wide choices** include current and future skills and remove redundant selected children. Exact choices permit only the named skill.
-- **Allow-all** is offered separately after the overview and saves `["*"]` alone.
-- **An empty selection** explicitly confirms disabling all skills with `[]`.
-- **Empty or fully excluded discovery** writes nothing, so setup can be retried.
+- **Compact rules:** Enable all saves `"*"`; package choices save names such as `"@tanstack/ai"`; explicit scope choices save patterns such as `"@tanstack/*"`. These rules include future matching skills and packages. Individual choices save exact names such as `"@tanstack/ai#skill"`.
+- **Optional skill review:** choose **Review individual skills** at confirmation, then pick which selected packages to inspect. Leave the list empty to keep all selected skills. Only those packages open individual skill lists; unchecking a skill covered by a broad rule adds an exclusion. Existing and inherited exclusions stay in force.
+- **Changing instructions:** access choices do not record approval of specific content. Skills can change with dependency updates; update notifications are not available yet.
+- **Empty selection:** explicitly confirms disabling all skills with `[]`. Empty or fully excluded discovery writes nothing, so setup can be retried.
 
-See [Default install](../cli/intent-install#default-install) for picker controls, previews, and cancellation behavior.
+For example, enabling a scope and unchecking one skill saves:
+
+```json
+{
+  "intent": {
+    "skills": ["@tanstack/*"],
+    "exclude": ["@tanstack/ai#skill"]
+  }
+}
+```
+
+This permits matching npm packages, including future additions, except the excluded skill. Selecting several packages individually never silently expands to a scope rule.
+
+See [Default install](../cli/intent-install#default-install) for picker controls and cancellation behavior.
 
 ### Suppressing notices temporarily
 
