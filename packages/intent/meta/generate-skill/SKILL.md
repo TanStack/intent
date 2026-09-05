@@ -1,5 +1,5 @@
 ---
-name: skill-generate
+name: generate-skill
 description: >
   Generate a complete SKILL.md file for a library from source documentation
   and skill tree artifacts. Activate when bootstrapping skills for a new
@@ -10,16 +10,9 @@ description: >
 metadata:
   version: '1.0'
   category: meta-tooling
-  input_artifacts:
-    - skills/_artifacts/skill_tree.yaml
-    - skills/_artifacts/domain_map.yaml
-    - skills/_artifacts/skill_spec.md
-    - source documentation
-  output_artifacts:
-    - SKILL.md
-  skills:
-    - skill-tree-generator
-    - skill-domain-discovery
+  input_artifacts: 'skills/_artifacts/skill_tree.yaml; skills/_artifacts/domain_map.yaml; skills/_artifacts/skill_spec.md; source documentation'
+  output_artifacts: 'SKILL.md'
+  skills: 'tree-generator; domain-discovery'
 ---
 
 # Skill Generation
@@ -78,7 +71,7 @@ Read the inputs and classify the skill type:
 | `security`    | Audit checklist or security validation                     |
 
 The skill type determines the frontmatter and body structure. See
-skill-tree-generator for the full spec of each type.
+tree-generator for the full spec of each type.
 
 ---
 

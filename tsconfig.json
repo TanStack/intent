@@ -25,5 +25,5 @@
     "noErrorTruncation": true,
     "types": ["node"]
   },
-  "include": ["scripts", "*.config.*", "vitest.workspace.js"]
+  "include": ["scripts", "*.config.*"]
 }

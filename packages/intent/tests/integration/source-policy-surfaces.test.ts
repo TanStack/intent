@@ -125,6 +125,38 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     )
   })
 
+  it.each([
+    ['list', '--json'],
+    ['load', `${LISTED}#core`],
+    ['load', `${LISTED}#core`, '--json'],
+    ['load', `${LISTED}#core`, '--path'],
+    ['install'],
+    ['install', '--map'],
+  ])('rejects a malformed npm workspace ancestor for %j', async (...args) => {
+    const appDir = join(root, 'packages', 'app')
+    const manifest = join(root, 'package.json')
+    writeFileSync(
+      manifest,
+      `{"workspaces":["packages/*"],"intent":{"exclude":["${LISTED}"]},`,
+    )
+    writeJson(join(appDir, 'package.json'), {
+      name: 'app',
+      intent: { skills: [LISTED] },
+    })
+    writeIntentPackage(appDir, LISTED, 'core')
+    process.chdir(appDir)
+    const stdoutSpy = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation(() => true)
+    expect(await main(args)).toBe(1)
+    expect(logSpy).not.toHaveBeenCalled()
+    expect(stdoutSpy).not.toHaveBeenCalled()
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining(manifest),
+    )
+    expect(existsSync(join(appDir, 'AGENTS.md'))).toBe(false)
+  })
+
   it('list and load accept packages matched by an allowlist glob', () => {
     writeJson(join(root, 'package.json'), {
       name: 'app',
