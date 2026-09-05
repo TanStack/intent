@@ -1,13 +1,14 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import semver from 'semver'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
-  findSkillFiles,
   parseFrontmatter,
   readScalarField,
   toPosixPath,
 } from '../shared/utils.js'
 import { readIntentArtifacts } from './artifact-coverage.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type {
   IntentArtifactSet,
   IntentArtifactSkill,
@@ -79,17 +80,6 @@ function normalizeVersion(version: string): string | null {
 // Version resolution
 // ---------------------------------------------------------------------------
 
-function readLocalVersion(packageDir: string): string | null {
-  try {
-    const pkgJson = JSON.parse(
-      readFileSync(join(packageDir, 'package.json'), 'utf8'),
-    ) as Record<string, unknown>
-    return typeof pkgJson.version === 'string' ? pkgJson.version : null
-  } catch {
-    return null
-  }
-}
-
 const NPM_REGISTRY_FETCH_TIMEOUT_MS = 5_000
 
 async function fetchNpmVersion(packageName: string): Promise<string | null> {
@@ -109,8 +99,10 @@ async function fetchNpmVersion(packageName: string): Promise<string | null> {
 async function fetchCurrentVersion(
   packageDir: string,
   packageName: string,
+  fsCache: IntentFsCache,
 ): Promise<string | null> {
-  return readLocalVersion(packageDir) ?? (await fetchNpmVersion(packageName))
+  const version = fsCache.readPackageJson(packageDir)?.version
+  return typeof version === 'string' ? version : fetchNpmVersion(packageName)
 }
 
 // ---------------------------------------------------------------------------
@@ -171,21 +163,14 @@ function readSyncState(packageDir: string): SyncState | null {
   }
 }
 
-export function readPackageName(packageDir: string): string {
-  const packageJson = readPackageJson(packageDir)
+export function readPackageName(
+  packageDir: string,
+  fsCache = createIntentFsCache(),
+): string {
+  const packageJson = fsCache.readPackageJson(packageDir)
   return typeof packageJson?.name === 'string'
     ? packageJson.name
     : relative(process.cwd(), packageDir) || 'unknown'
-}
-
-function readPackageJson(packageDir: string): Record<string, unknown> | null {
-  try {
-    return JSON.parse(
-      readFileSync(join(packageDir, 'package.json'), 'utf8'),
-    ) as Record<string, unknown>
-  } catch {
-    return null
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -258,14 +243,11 @@ function resolveArtifactSkillPaths(
 
 function findMatchingSkill(
   artifact: IntentArtifactSkill,
-  skillMetas: Array<SkillMeta>,
+  skillsByPath: Map<string, SkillMeta>,
+  skillsByName: Map<string, SkillMeta>,
   packageDir: string,
   artifactRoot: string,
 ): SkillMeta | null {
-  const skillsByPath = new Map(
-    skillMetas.map((skill) => [normalizeFilePath(skill.filePath), skill]),
-  )
-
   for (const candidatePath of resolveArtifactSkillPaths(
     artifact,
     packageDir,
@@ -273,11 +255,6 @@ function findMatchingSkill(
   )) {
     const match = skillsByPath.get(candidatePath)
     if (match) return match
-  }
-
-  const skillsByName = new Map<string, SkillMeta>()
-  for (const skill of skillMetas) {
-    skillsByName.set(skill.relName, skill)
   }
 
   return (
@@ -301,6 +278,13 @@ function buildArtifactSignals({
   skillMetas: Array<SkillMeta>
 }): Array<StalenessSignal> {
   if (!artifacts) return []
+
+  const skillsByPath = new Map(
+    skillMetas.map((skill) => [normalizeFilePath(skill.filePath), skill]),
+  )
+  const skillsByName = new Map(
+    skillMetas.map((skill) => [skill.relName, skill]),
+  )
 
   const artifactFiles = new Map(
     [...artifacts.skillTrees, ...artifacts.domainMaps].map((file) => [
@@ -326,7 +310,8 @@ function buildArtifactSignals({
     const subject = artifact.slug ?? artifact.name ?? artifact.path
     const matchingSkill = findMatchingSkill(
       artifact,
-      skillMetas,
+      skillsByPath,
+      skillsByName,
       packageDir,
       artifactRoot,
     )
@@ -423,19 +408,21 @@ export function buildWorkspaceCoverageSignals({
   artifactRoot,
   artifacts,
   packageDirs,
+  fsCache = createIntentFsCache(),
 }: {
   artifactRoot: string
   artifacts: IntentArtifactSet | null
   packageDirs: Array<string>
+  fsCache?: IntentFsCache
 }): Array<StalenessSignal> {
   if (!artifacts) return []
 
   const signals: Array<StalenessSignal> = []
   for (const packageDir of packageDirs) {
-    const packageJson = readPackageJson(packageDir)
+    const packageJson = fsCache.readPackageJson(packageDir)
     if (packageJson?.private === true) continue
 
-    const packageName = readPackageName(packageDir)
+    const packageName = readPackageName(packageDir, fsCache)
     if (
       artifactIgnoresPackage(artifacts, packageDir, packageName, artifactRoot)
     ) {
@@ -443,7 +430,7 @@ export function buildWorkspaceCoverageSignals({
     }
 
     const hasGeneratedSkill =
-      findSkillFiles(join(packageDir, 'skills')).length > 0
+      fsCache.findSkillFiles(join(packageDir, 'skills')).length > 0
     const hasArtifactCoverage = artifacts.skills.some((artifact) =>
       artifactCoversPackage(artifact, packageDir, packageName, artifactRoot),
     )
@@ -474,12 +461,19 @@ export async function checkStaleness(
   packageDir: string,
   packageName?: string,
   artifactRoot = packageDir,
+  {
+    fsCache = createIntentFsCache(),
+    artifacts = readIntentArtifacts(artifactRoot),
+  }: {
+    fsCache?: IntentFsCache
+    artifacts?: IntentArtifactSet | null
+  } = {},
 ): Promise<StalenessReport> {
   const skillsDir = join(packageDir, 'skills')
-  const library = packageName ?? readPackageName(packageDir)
+  const library = packageName ?? readPackageName(packageDir, fsCache)
 
   // Find all skills
-  const skillFiles = findSkillFiles(skillsDir)
+  const skillFiles = fsCache.findSkillFiles(skillsDir)
   const skillMetas: Array<SkillMeta> = skillFiles.map((filePath) => {
     const fm = parseFrontmatter(filePath)
     const relName = toPosixPath(relative(skillsDir, filePath)).replace(
@@ -496,16 +490,12 @@ export async function checkStaleness(
     }
   })
 
-  const artifacts = existsSync(join(artifactRoot, '_artifacts'))
-    ? readIntentArtifacts(artifactRoot)
-    : null
-
   // Get the version from frontmatter (use first skill that has it)
   const skillVersion =
     skillMetas.find((s) => s.libraryVersion)?.libraryVersion ?? null
 
   // Resolve current version: prefer local package.json, fall back to npm registry
-  const currentVersion = await fetchCurrentVersion(packageDir, library)
+  const currentVersion = await fetchCurrentVersion(packageDir, library, fsCache)
 
   // Classify drift
   const versionDrift =

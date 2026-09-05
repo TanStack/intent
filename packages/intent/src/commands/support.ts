@@ -3,7 +3,9 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fail } from '../shared/cli-error.js'
 import { resolveProjectContext } from '../core/project-context.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
 import type { IntentCoreOptions } from '../core/index.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type {
   ScanOptions,
   ScanResult,
@@ -82,13 +84,15 @@ export function getCheckSkillsWorkflowAdvisories(root: string): Array<string> {
 
 export async function scanIntentsOrFail(
   coreOptions: IntentCoreOptions = {},
+  fsCache?: IntentFsCache,
 ): Promise<ScanResult> {
   const { scanForPolicedIntents } = await import('../core/source-policy.js')
 
   try {
+    const scanOptions = { ...scanOptionsFromGlobalFlags(coreOptions), fsCache }
     const { scan } = scanForPolicedIntents({
       cwd: process.cwd(),
-      scanOptions: scanOptionsFromGlobalFlags(coreOptions),
+      scanOptions,
       coreOptions,
     })
     return scan
@@ -154,6 +158,7 @@ export function printDebugInfo(
 export async function resolveStaleTargets(
   targetDir?: string,
 ): Promise<StaleTargetResult> {
+  const fsCache = createIntentFsCache()
   const resolvedRoot = targetDir
     ? resolve(process.cwd(), targetDir)
     : process.cwd()
@@ -178,41 +183,45 @@ export async function resolveStaleTargets(
       reports: [
         await checkStaleness(
           context.packageRoot,
-          readPackageName(context.packageRoot),
+          readPackageName(context.packageRoot, fsCache),
           context.workspaceRoot ?? context.packageRoot,
+          { fsCache },
         ),
       ],
       workflowAdvisories,
     }
   }
 
-  const { findWorkspaceRoot, getWorkspaceInfo } =
+  const { findWorkspaceRoot, findWorkspacePackages } =
     await import('../setup/workspace-patterns.js')
   const workspaceRoot = findWorkspaceRoot(resolvedRoot)
-  const workspaceInfo = workspaceRoot ? getWorkspaceInfo(workspaceRoot) : null
-  if (workspaceInfo) {
-    const reports = await Promise.all(
-      workspaceInfo.packageDirsWithSkills.map((packageDir) =>
-        checkStaleness(
-          packageDir,
-          readPackageName(packageDir),
-          workspaceInfo.root,
-        ),
-      ),
+  if (workspaceRoot) {
+    const packageDirs = findWorkspacePackages(workspaceRoot)
+    const packageDirsWithSkills = packageDirs.filter(
+      (dir) => fsCache.findSkillFiles(join(dir, 'skills')).length > 0,
     )
     const { readIntentArtifacts } =
       await import('../staleness/artifact-coverage.js')
-    const artifacts = existsSync(join(workspaceInfo.root, '_artifacts'))
-      ? readIntentArtifacts(workspaceInfo.root)
-      : null
+    const artifacts = readIntentArtifacts(workspaceRoot)
+    const reports = await Promise.all(
+      packageDirsWithSkills.map((packageDir) =>
+        checkStaleness(
+          packageDir,
+          readPackageName(packageDir, fsCache),
+          workspaceRoot,
+          { fsCache, artifacts },
+        ),
+      ),
+    )
     const coverageSignals = buildWorkspaceCoverageSignals({
-      artifactRoot: workspaceInfo.root,
+      artifactRoot: workspaceRoot,
       artifacts,
-      packageDirs: workspaceInfo.packageDirs,
+      packageDirs,
+      fsCache,
     })
     if (coverageSignals.length > 0) {
       reports.push({
-        library: relative(process.cwd(), workspaceInfo.root) || 'workspace',
+        library: relative(process.cwd(), workspaceRoot) || 'workspace',
         currentVersion: null,
         skillVersion: null,
         versionDrift: null,
@@ -232,17 +241,19 @@ export async function resolveStaleTargets(
   if (existsSync(join(resolvedRoot, 'skills'))) {
     return {
       reports: [
-        await checkStaleness(resolvedRoot, readPackageName(resolvedRoot)),
+        await checkStaleness(resolvedRoot, undefined, resolvedRoot, {
+          fsCache,
+        }),
       ],
       workflowAdvisories,
     }
   }
 
-  const staleResult = await scanIntentsOrFail()
+  const staleResult = await scanIntentsOrFail({}, fsCache)
   return {
     reports: await Promise.all(
       staleResult.packages.map((pkg) =>
-        checkStaleness(pkg.packageRoot, pkg.name),
+        checkStaleness(pkg.packageRoot, pkg.name, pkg.packageRoot, { fsCache }),
       ),
     ),
     workflowAdvisories,

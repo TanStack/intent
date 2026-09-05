@@ -43,6 +43,7 @@ interface MarkdownDestinationRewriteContext {
   cwd: string
   resolvedPackageRoot: string
   skillDir: string
+  rewrittenDestinations: Map<string, string>
 }
 
 function findClosingBracket(line: string, start: number): number {
@@ -164,6 +165,8 @@ function rewriteMarkdownDestination({
   destination: string
 }): string {
   if (isExternalOrAbsoluteDestination(destination)) return destination
+  const cached = context.rewrittenDestinations.get(destination)
+  if (cached !== undefined) return cached
 
   const { pathPart, suffix } = splitDestinationSuffix(destination)
   if (isExternalOrAbsoluteDestination(pathPart)) return destination
@@ -188,7 +191,9 @@ function rewriteMarkdownDestination({
       ? relativeToCwd
       : resolvedDestinationPath
 
-  return `${toPosixPath(rewrittenPath)}${suffix}`
+  const rewritten = `${toPosixPath(rewrittenPath)}${suffix}`
+  context.rewrittenDestinations.set(destination, rewritten)
+  return rewritten
 }
 
 function rewriteMarkdownLineDestinations({
@@ -283,6 +288,7 @@ export function rewriteLoadedSkillMarkdownDestinations({
     cwd,
     resolvedPackageRoot: resolveFromCwd(packageRoot),
     skillDir: dirname(skillFilePath),
+    rewrittenDestinations: new Map(),
   }
   let inFence: '`' | '~' | null = null
   const parts = content.split(/(\r?\n)/)

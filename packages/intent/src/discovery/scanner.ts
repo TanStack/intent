@@ -4,7 +4,15 @@
 // roots. Enforced by the `intent/static-discovery` ESLint rule.
 import { constants, existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from 'node:path'
 import semver from 'semver'
 import {
   detectGlobalNodeModules,
@@ -507,13 +515,45 @@ function getScanScope(options: ScanOptions): ScanScope {
 
 function createWorkspacePackageKeySet(
   workspaceRoot: string | null,
-  getFsIdentity: (path: string) => string,
+  fsCache: IntentFsCache,
 ): Set<string> {
   if (!workspaceRoot) return new Set()
 
-  return new Set(
-    findWorkspacePackages(workspaceRoot).map((dir) => getFsIdentity(dir)),
-  )
+  const packagesByParent = new Map<string, Array<string>>()
+  for (const dir of findWorkspacePackages(workspaceRoot)) {
+    const parent = dirname(dir)
+    const dirs = packagesByParent.get(parent)
+    if (dirs) dirs.push(dir)
+    else packagesByParent.set(parent, [dir])
+  }
+
+  const keys = new Set<string>()
+  for (const [parent, dirs] of packagesByParent) {
+    if (dirs.length === 1) {
+      keys.add(fsCache.getFsIdentity(dirs[0]!))
+      continue
+    }
+    const ordinaryEntries = new Set<string>()
+    try {
+      for (const entry of fsCache
+        .getReadFs()
+        .readdirSync(parent, { withFileTypes: true })) {
+        if (!entry.isSymbolicLink()) ordinaryEntries.add(entry.name)
+      }
+    } catch {
+      // Fall back to individual identity checks if the parent cannot be read.
+    }
+    // Directory entries supply the same symlink test as lstat, in one read
+    // per parent. Refresh each invocation so retargeted links change kind.
+    for (const dir of dirs) {
+      keys.add(
+        ordinaryEntries.has(basename(dir))
+          ? resolve(dir)
+          : fsCache.getFsIdentity(dir),
+      )
+    }
+  }
+  return keys
 }
 
 function createPackageKindResolver(
@@ -536,7 +576,11 @@ export function scanForIntents(
   const fsCache =
     (options as ScanOptionsWithFsCache).fsCache ?? createIntentFsCache()
   const workspaceRoot = findWorkspaceRoot(projectRoot)
-  const packageManager = detectPackageManager(projectRoot, [workspaceRoot])
+  const packageManager = detectPackageManager(
+    projectRoot,
+    [workspaceRoot],
+    fsCache,
+  )
   const nodeModulesDir = join(projectRoot, 'node_modules')
   const explicitGlobalNodeModules =
     process.env.INTENT_GLOBAL_NODE_MODULES?.trim() || null
@@ -572,7 +616,7 @@ export function scanForIntents(
   let pnpApi: PnpApi | null | undefined
 
   const getPackageKind = createPackageKindResolver(
-    createWorkspacePackageKeySet(workspaceRoot, fsCache.getFsIdentity),
+    createWorkspacePackageKeySet(workspaceRoot, fsCache),
     fsCache.getFsIdentity,
   )
 
@@ -810,10 +854,7 @@ export function scanIntentPackageAtRoot(
   const packageIndexes = new Map<string, number>()
   const fsCache = options.fsCache ?? createIntentFsCache()
   const getPackageKind = createPackageKindResolver(
-    createWorkspacePackageKeySet(
-      findWorkspaceRoot(projectRoot),
-      fsCache.getFsIdentity,
-    ),
+    createWorkspacePackageKeySet(findWorkspaceRoot(projectRoot), fsCache),
     fsCache.getFsIdentity,
   )
 

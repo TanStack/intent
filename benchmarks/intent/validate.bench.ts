@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterAll, beforeAll, bench, describe } from 'vitest'
+import { afterAll, beforeAll, describe, test } from 'vitest'
 import {
   createBenchOptions,
   createCliRunner,
@@ -9,7 +9,7 @@ import {
   writeFile,
   writeJson,
   writeSkill,
-} from './helpers.js'
+} from './helpers.ts'
 
 type ValidateFixture = {
   root: string
@@ -120,14 +120,16 @@ describe('intent validate', () => {
   beforeAll(setup)
   afterAll(teardown)
 
-  bench(
+  test(
     'checks a shipped skills tree',
-    async () => {
-      const state = getFixture()
-      for (let index = 0; index < 3; index++) {
-        await state.runner.run(['validate'])
-      }
+    { timeout: 30_000 },
+    async ({ bench }) => {
+      await bench('checks a shipped skills tree', async () => {
+        const state = getFixture()
+        for (let index = 0; index < 3; index++) {
+          await state.runner.run(['validate'])
+        }
+      }).run(createBenchOptions(setup, teardown))
     },
-    createBenchOptions(setup, teardown),
   )
 })

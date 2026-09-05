@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterAll, beforeAll, bench, describe } from 'vitest'
+import { afterAll, beforeAll, describe, test } from 'vitest'
 import {
   createBenchOptions,
   createCliRunner,
@@ -9,7 +9,7 @@ import {
   writeFile,
   writeJson,
   writePackage,
-} from './helpers.js'
+} from './helpers.ts'
 
 type ListFixture = {
   globalNodeModules: string
@@ -148,14 +148,12 @@ describe('intent list', () => {
   beforeAll(setup)
   afterAll(teardown)
 
-  bench(
-    'scans a consumer workspace',
-    async () => {
+  test('scans a consumer workspace', { timeout: 30_000 }, async ({ bench }) => {
+    await bench('scans a consumer workspace', async () => {
       const state = getFixture()
       for (let index = 0; index < 3; index++) {
         await state.runner.run(['list', '--json'])
       }
-    },
-    createBenchOptions(setup, teardown),
-  )
+    }).run(createBenchOptions(setup, teardown))
+  })
 })
