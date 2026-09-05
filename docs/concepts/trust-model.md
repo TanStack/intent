@@ -11,9 +11,11 @@ A package ships skills in a `skills/` directory. Discovery finds every installed
 
 When configured, `package.json#intent.skills` controls which discovered skills can surface through the CLI and agent integrations:
 
-- **Package entries** permit current and future skills from matching packages.
-- **Exact skill entries** permit only the named skill.
+- **Package entries** enable skills from matching packages, including skills added later.
+- **Exact skill entries** enable only the named skill; its instructions can still change.
 - **Source kinds stay separate:** `foo` permits an npm source; `workspace:foo` permits a workspace source. Their wildcard patterns remain kind-specific. The exact `*` entry permits every discovered npm and workspace source.
+
+Enabling a source does not record approval of its specific instructions. Skill content can change when dependencies update, and Intent does not yet track or notify you about those changes.
 
 Trust does not propagate to dependencies. A dependency that ships skills needs its own matching entry. Intent omits unlisted packages and reports them so you can opt in or ignore them.
 
@@ -33,10 +35,9 @@ This also applies to inherited policy within a resolved workspace. Malformed JSO
 
 When no effective policy exists, `intent install` follows this flow:
 
-1. **Discover:** show npm and workspace packages, versions, and skill descriptions. Excluded candidates appear in the overview but cannot be selected.
-2. **Choose:** select package-wide or exact-skill permissions. An empty selection explicitly confirms disabling all skills.
-3. **Review:** show the exact `intent.skills` value and destination file.
-4. **Confirm:** replace `package.json` atomically only after affirmative confirmation, then install guidance.
+1. **Discover:** summarize npm and workspace skill counts. Descriptions and exclusions are available through optional inspection.
+2. **Choose:** enable all sources, choose packages or scopes, or select individual skills. Package and scope selections stay compact and include future matching skills. A whole scope requires an explicit selection.
+3. **Confirm once:** show the current skill count, saved rules, and destination file. Optional individual review opens skill lists only for the selected packages you choose to inspect. It can add exclusions while retaining broad rules; unreviewed packages keep their selection. Only affirmative confirmation saves permissions and exclusions atomically, then installs guidance. An empty selection explicitly confirms disabling all skills.
 
 | Outcome | Files changed |
 | --- | --- |

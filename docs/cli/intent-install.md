@@ -33,21 +33,28 @@ Otherwise, first-run setup requires an interactive terminal. Non-TTY execution f
 
 #### First-run flow
 
-1. **Review** discovered npm and workspace packages, versions, and skill descriptions. Excluded candidates appear in the overview but cannot be selected.
-2. **Choose** permissions. After the overview, Intent asks about allow-all; choose No to select individual packages or skills. Press Space to toggle grouped choices and Enter to review.
-3. **Confirm** the exact `intent.skills` value, destination file, and trust change. Confirmation defaults to No.
-4. **Finish** with verified guidance, available skill and package counts, and a package-manager-aware `list` command. If no skills are enabled, Intent explains how to edit `intent.skills`.
+1. **Choose what to enable.** Pick **Enable all**, **Choose packages or scopes**, or **Choose individual skills**. Package and skill lists support search.
+2. **Confirm once.** Check the current skill count, saved rules, and destination file. Choose **Continue with all selected skills** to save, **Review individual skills** to inspect specific packages, or **Cancel**. Cancel is selected by default.
+3. **Finish** with verified guidance, available skill and package counts, and a command to list those skills.
 
-#### Permission choices
+Descriptions, exclusions, and information about skill updates are optional choices on the setup screen.
 
-| Choice | Effect |
-| --- | --- |
-| All skills in a package | Permits its current and future skills. |
-| Individual skill | Permits only the named skill. |
-| Allow all sources | Writes `["*"]` and skips narrower selection. |
-| Select nothing | Explicitly confirms writing `[]`, disabling current and future sources until `intent.skills` is edited. |
+#### What gets enabled
 
-Existing `intent.exclude` rules always apply and remain unchanged.
+| Choice | Saved rule | Includes future additions? |
+| --- | --- | --- |
+| Enable all | `"*"` | All npm and workspace sources. |
+| A package | `"@tanstack/ai"` | New skills in that package. |
+| A whole scope | `"@tanstack/*"` | New npm packages and skills in that scope. |
+| An individual skill | `"@tanstack/ai#skill"` | Only that skill name. |
+
+Workspace choices use the `workspace:` prefix. Scope rules are saved only when explicitly selected; choosing several packages does not grant access to the whole scope.
+
+**Review individual skills** lists only packages covered by your selection. Choose the packages you want to review, or leave the list empty to continue with all selected skills. Each chosen package opens its own skill list; other packages keep their selection. Unchecking a skill covered by a package, scope, or all-sources rule keeps the broad rule and adds that skill to `intent.exclude`. Existing exclusions always win and cannot be enabled through the picker.
+
+Skill instructions can change when dependencies update. Enabling access does not freeze content or record approval of specific instructions. Update notifications are not available yet.
+
+Selecting nothing requires explicit confirmation before writing `[]` to disable all skills. Unchecking every current skill under a broad rule excludes those skills; the rule still covers future additions.
 
 #### Files and retry behavior
 

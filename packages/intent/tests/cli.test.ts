@@ -67,17 +67,17 @@ function writeInstalledIntentPackage(
 }
 
 function permissionPrompts({
-  allowAll = false,
   confirmWrite = true,
   selection = [],
 }: {
-  allowAll?: boolean | null
   confirmWrite?: boolean | null
   selection?: Array<string> | null
 } = {}): PermissionPrompts {
   return {
-    confirmAllowAll: vi.fn(async () => allowAll),
     selectPermissions: vi.fn(async () => selection),
+    reviewPermissions: vi.fn((_groups, selection) =>
+      Promise.resolve(selection),
+    ),
     confirmWrite: vi.fn(async () => confirmWrite),
   }
 }
@@ -470,12 +470,14 @@ describe('cli commands', () => {
     expect(output).toContain(
       `Permission destination: ${join(root, 'package.json')}`,
     )
-    expect(output).toContain('intent.skills: [\n  "@tanstack/query"\n]')
     expect(output).toContain(
-      'Trust change: selected packages and skills can provide instructions to AI agents.',
+      'Selected: 1 skill from 1 package currently available.',
     )
     expect(output).toContain('Permissions: updated package.json.')
     expect(output).toContain('Guidance: created AGENTS.md.')
+    expect(output).not.toContain(
+      'Created AGENTS.md with skill loading guidance.',
+    )
     expect(output).toContain('Available: 1 skill from 1 package.')
     expect(output).toContain('Next: npx @tanstack/intent@latest list')
     expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
@@ -508,7 +510,6 @@ describe('cli commands', () => {
       permissionPrompts: prompts,
     })
     expect(exitCode).toBe(0)
-    expect(prompts.confirmAllowAll).not.toHaveBeenCalled()
     expect(prompts.selectPermissions).not.toHaveBeenCalled()
     expect(readFileSync(packageJsonPath, 'utf8')).toBe(packageJson)
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
@@ -528,7 +529,7 @@ describe('cli commands', () => {
     const runtime = { isTTY: true, permissionPrompts: prompts }
 
     expect(await main(['install'], runtime)).toBe(0)
-    expect(prompts.confirmAllowAll).not.toHaveBeenCalled()
+    expect(prompts.selectPermissions).not.toHaveBeenCalled()
     expect(readFileSync(packageJsonPath, 'utf8')).toBe(source)
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
     expect(logSpy.mock.calls.flat().join('\n')).toContain(
@@ -640,7 +641,7 @@ describe('cli commands', () => {
     expect(errors).toContain(
       `Failed to parse Intent policy from ${packageJsonPath}: invalid JSON.`,
     )
-    expect(prompts.confirmAllowAll).not.toHaveBeenCalled()
+    expect(prompts.selectPermissions).not.toHaveBeenCalled()
     expect(logSpy).not.toHaveBeenCalled()
     expect(readFileSync(packageJsonPath, 'utf8')).toBe(packageJson)
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
@@ -648,7 +649,6 @@ describe('cli commands', () => {
 
   it.each([
     ['decline', permissionPrompts({ confirmWrite: false })],
-    ['allow-all cancel', permissionPrompts({ allowAll: null })],
     ['selection cancel', permissionPrompts({ selection: null })],
     ['confirmation cancel', permissionPrompts({ confirmWrite: null })],
   ])(
@@ -737,7 +737,9 @@ describe('cli commands', () => {
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
-    expect(output).toContain('intent.skills: [\n  "@tanstack/query"\n]')
+    expect(output).toContain(
+      'Selected: 1 skill from 1 package currently available.',
+    )
     expect(output).toContain('Permissions: unchanged package.json (dry run).')
     expect(output).toContain('Generated skill loading guidance for AGENTS.md.')
     expect(prompts.selectPermissions).toHaveBeenCalledOnce()

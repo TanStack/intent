@@ -8,6 +8,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { parse } from 'jsonc-parser'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildIntentSkillGuidanceBlock,
@@ -720,6 +721,42 @@ describe('package.json permission writer', () => {
       '\t\t"skills": [\r\n\t\t\t"@scope/npm#core",\r\n\t\t\t"workspace:@scope/local"\r\n\t\t]',
     )
     expect(content.replace(/\r\n/g, '')).not.toContain('\n')
+  })
+
+  it('atomically appends skill exclusions while preserving existing rules and JSONC', () => {
+    const root = tempRoot()
+    const targetPath = join(root, 'package.json')
+    writeFileSync(
+      targetPath,
+      '{\n  // keep this\n  "name": "app",\n  "intent": { "exclude": ["@scope/private"], "custom": true }\n}\n',
+    )
+    const update = preparePackageSkillsUpdate(
+      targetPath,
+      ['@scope/*'],
+      ['@scope/npm#core', '@scope/private'],
+    )
+    expect(readFileSync(targetPath, 'utf8')).not.toContain('"skills"')
+    expect(writePreparedPackageSkillsUpdate(update)).toBe('updated')
+    const content = readFileSync(targetPath, 'utf8')
+    expect(content).toContain('// keep this')
+    const intent = parse(content).intent
+    expect(intent).toEqual({
+      custom: true,
+      skills: ['@scope/*'],
+      exclude: ['@scope/private', '@scope/npm#core'],
+    })
+    expect(readdirSync(root)).toEqual(['package.json'])
+  })
+
+  it('rejects malformed exclusions instead of replacing them during review', () => {
+    const root = tempRoot()
+    const targetPath = join(root, 'package.json')
+    const source = '{"intent":{"exclude":"@scope/private"}}'
+    writeFileSync(targetPath, source)
+    expect(() =>
+      preparePackageSkillsUpdate(targetPath, ['*'], ['pkg#core']),
+    ).toThrow('intent.exclude must contain an array of strings')
+    expect(readFileSync(targetPath, 'utf8')).toBe(source)
   })
 
   it('rejects source-byte drift before replacement', () => {
