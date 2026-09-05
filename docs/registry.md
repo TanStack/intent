@@ -18,7 +18,11 @@ Tell your AI coding agent to run:
 npx @tanstack/intent@latest scaffold
 ```
 
-This walks the agent through domain discovery, skill tree generation, and skill creation. You review at each stage. Skills land in a `skills/` directory at your package root — each as a `SKILL.md` file in its own subdirectory.
+Give the agent a developer task or concrete code/docs change. The focused
+procedure creates or updates the relevant guidance and validates it for review;
+full-library discovery remains available when explicitly requested. Skills
+use the owning package’s `skills/` directory or its existing custom root. See
+the [maintainer quick start](./getting-started/quick-start-maintainers).
 
 ### 2. Validate
 
@@ -56,7 +60,10 @@ Skills derived from docs drift when docs change. Two commands keep them honest:
 npx @tanstack/intent@latest stale
 ```
 
-Flags skills whose source docs have changed since the skill was last updated.
+Reports version drift, missing stored source SHAs, and artifact or package
+coverage signals. It does not compare source diffs. Flagged text reports
+include the focused authoring command so your agent can investigate the
+evidence and return a reviewable update or an explained no-op.
 
 ```bash
 npx @tanstack/intent@latest setup

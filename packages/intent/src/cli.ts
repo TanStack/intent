@@ -86,7 +86,7 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
     .command('meta [name]', 'List meta-skills, or print one by name')
     .usage('meta [name]')
     .example('meta')
-    .example('meta domain-discovery')
+    .example('meta generate-skill')
     .action(async (name?: string) => {
       const [{ getMetaDir }, { runMetaCommand }] = await Promise.all([
         import('./commands/support.js'),
@@ -180,7 +180,7 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
     )
 
   cli
-    .command('scaffold', 'Print maintainer scaffold prompt')
+    .command('scaffold', 'Print focused skill authoring guidance')
     .usage('scaffold')
     .action(async () => {
       const [{ getMetaDir }, { runScaffoldCommand }] = await Promise.all([

@@ -163,7 +163,7 @@ A skill is well-shaped when:
 
 - A developer would ask for it by name ("help me set up sync")
 - It covers enough for the agent to complete the task end-to-end
-- It doesn't require loading 3 other skills to be useful
+- Its genuine prerequisites are accessible through precise reading pointers
 
 Some domains produce multiple skills (a broad domain like "data access"
 might yield "live-queries", "mutations", "offline-sync"). Some tasks
@@ -203,7 +203,7 @@ For each skill, extract failure modes that pass all three tests:
 
 - **Plausible** — An agent would generate this because it looks correct
   based on the library's design, a similar API, or an older version
-- **Silent** — No immediate crash; fails at runtime or under specific conditions
+- **Consequential** — Wrong results, runtime errors, or failures under specific conditions
 - **Grounded** — Traceable to a specific doc page, source location, or issue
 
 **Where to find them:**
@@ -219,7 +219,8 @@ For each skill, extract failure modes that pass all three tests:
 | GitHub issues        | Recurring bug reports with workarounds → wrong/correct code pairs    |
 | GitHub discussions   | "How do I…" threads with non-obvious answers → missing skill content |
 
-Target 3 failure modes per skill minimum. Complex skills target 5–6.
+Include the source-backed failure modes necessary for the task. Preserve
+error handling; do not invent extra entries to meet a count.
 
 **Code patterns.** Every failure mode should include `wrong_pattern` and
 `correct_pattern` fields with short code snippets (3–10 lines each).
@@ -234,12 +235,12 @@ skills. A developer doing SSR work and a developer doing state management
 both need to know about "stale state during hydration" — they load
 different skills but need the same advice. When a failure mode spans
 skills, list all relevant skill slugs in its `skills` field. The
-tree-generator will write it into every corresponding SKILL file.
+tree-generator will make it accessible from every corresponding SKILL file.
 
 List a cross-skill failure mode once, under its primary skill. Set
 the `skills` field to all skill slugs it applies to. Do not duplicate
-the entry in the YAML — the tree-generator handles duplication
-into multiple SKILL files at generation time.
+the entry in the YAML. Tree-generator makes the authoritative guidance
+reachable from every affected skill through precise reading pointers.
 
 ### 3e — Identify cross-skill tensions
 

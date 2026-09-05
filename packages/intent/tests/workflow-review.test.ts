@@ -129,13 +129,14 @@ describe('workflow review helpers', () => {
       '- `missing-package-coverage` for `@tanstack/react-start-rsc`: workspace package is not represented',
     )
     expect(body).toContain('`@tanstack/react-start-rsc`')
+    expect(body).toContain('npx @tanstack/intent@latest meta generate-skill')
     expect(body).toContain(
+      'Review signals are investigation inputs, not proof that content must change.',
+    )
+    expect(body).not.toContain(
       'Before editing skills or artifacts, ask the maintainer:',
     )
-    expect(body).toContain('- Do not auto-generate skills.')
-    expect(body).toContain(
-      'Summarize every package as one of: existing-skill coverage, new skill, ignored, or deferred.',
-    )
+    expect(body).not.toContain('If maintainer confirms updates:')
   })
 
   it('builds a useful failed stale check review item', () => {
