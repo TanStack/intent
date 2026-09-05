@@ -1,115 +1,24 @@
-import { readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { parse as parseYaml } from 'yaml'
+import { runValidateCommand } from '../src/commands/validate.js'
 import { findSkillFiles } from '../src/shared/utils.js'
 
-// ── Types ──
-
-interface SkillFrontmatter {
-  name: string
-  description: string
-  type?: string
-  library?: string
-  framework?: string
-  library_version?: string
-  requires?: Array<string>
-  sources?: Array<string>
-}
-
-// ── Helpers ──
-
 const META_DIR = join(__dirname, '..', 'meta')
-const MAX_META_SKILL_LINES = 1000
 
-function extractFrontmatter(
-  content: string,
-): { frontmatter: SkillFrontmatter; body: string } | null {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)/)
-  if (!match || !match[1] || match[2] === undefined) return null
-
-  try {
-    const frontmatter = parseYaml(match[1]) as SkillFrontmatter
-    return { frontmatter, body: match[2] }
-  } catch {
-    return null
-  }
-}
-
-function skillPathFromFile(baseDir: string, filePath: string): string {
-  return relative(baseDir, filePath)
-    .replace(/[/\\]SKILL\.md$/, '')
-    .split(sep)
-    .join('/')
-}
-
-// ── Collect meta-skills ──
-
-const metaSkillFiles = findSkillFiles(META_DIR)
-const metaSkills = metaSkillFiles.map((filePath) => {
-  const content = readFileSync(filePath, 'utf-8')
-  const parsed = extractFrontmatter(content)
-  const relPath = skillPathFromFile(META_DIR, filePath)
-  return { filePath, content, parsed, relPath }
-})
-
-// ── Tests ──
-
-describe('meta-skill discovery', () => {
-  it('should find meta-skill files', () => {
-    expect(metaSkillFiles.length).toBeGreaterThan(0)
+describe('shipped meta-skills', () => {
+  it('keeps every existing meta command available', () => {
+    const names = findSkillFiles(META_DIR).map((file) =>
+      relative(META_DIR, file).split(sep).slice(0, -1).join('/'),
+    )
+    expect(names.sort()).toEqual([
+      'domain-discovery',
+      'generate-skill',
+      'skill-staleness-check',
+      'tree-generator',
+    ])
   })
 
-  it('should include domain-discovery', () => {
-    expect(
-      metaSkills.find((s) => s.relPath === 'domain-discovery'),
-    ).toBeDefined()
+  it('passes the same validator used by library maintainers', async () => {
+    await runValidateCommand(META_DIR)
   })
-
-  it('should include tree-generator', () => {
-    expect(metaSkills.find((s) => s.relPath === 'tree-generator')).toBeDefined()
-  })
-
-  it('should include generate-skill', () => {
-    expect(metaSkills.find((s) => s.relPath === 'generate-skill')).toBeDefined()
-  })
-
-  it('should include skill-staleness-check', () => {
-    expect(
-      metaSkills.find((s) => s.relPath === 'skill-staleness-check'),
-    ).toBeDefined()
-  })
-})
-
-describe('meta-skill frontmatter', () => {
-  for (const skill of metaSkills) {
-    describe(skill.relPath, () => {
-      it('should have valid frontmatter', () => {
-        expect(skill.parsed).not.toBeNull()
-      })
-
-      if (!skill.parsed) return
-
-      const { frontmatter } = skill.parsed
-
-      it('should have a name', () => {
-        expect(frontmatter.name).toBeTruthy()
-      })
-
-      it('should have a description', () => {
-        expect(frontmatter.description).toBeTruthy()
-      })
-    })
-  }
-})
-
-describe('meta-skill content', () => {
-  for (const skill of metaSkills) {
-    describe(skill.relPath, () => {
-      it(`should not exceed ${MAX_META_SKILL_LINES} lines`, () => {
-        const lineCount = skill.content.split(/\r?\n/).length
-        expect(lineCount).toBeLessThanOrEqual(MAX_META_SKILL_LINES)
-      })
-    })
-  }
 })

@@ -47,6 +47,51 @@ afterEach(() => {
 })
 
 describe('resolveProjectContext', () => {
+  it('keeps a nested Git repository separate from an enclosing workspace', () => {
+    const root = createRoot()
+    createPnpmWorkspaceRoot(root)
+    const packageRoot = createWorkspacePackage(root, 'standalone')
+    mkdirSync(join(packageRoot, '.git'))
+
+    expect(resolveProjectContext({ cwd: packageRoot }).workspaceRoot).toBeNull()
+    expect(
+      resolveProjectContext({ cwd: root, targetPath: packageRoot })
+        .workspaceRoot,
+    ).toBeNull()
+  })
+
+  it('does not borrow an ancestor package across a Git boundary', () => {
+    const root = createRoot()
+    writeFileSync(join(root, 'package.json'), '{ unrelated ancestor')
+    const checkout = join(root, 'checkout')
+    mkdirSync(join(checkout, '.git'), { recursive: true })
+
+    const context = resolveProjectContext({ cwd: checkout })
+    expect(context.packageRoot).toBeNull()
+    expect(context.workspaceRoot).toBeNull()
+  })
+
+  it('reads the workspace declaration at the Git boundary', () => {
+    const root = createRoot()
+    createPnpmWorkspaceRoot(root)
+    mkdirSync(join(root, '.git'))
+    const packageRoot = createWorkspacePackage(root, 'router')
+
+    expect(resolveProjectContext({ cwd: packageRoot }).workspaceRoot).toBe(root)
+  })
+
+  it('stops at a valid workspace before an unrelated malformed ancestor', () => {
+    const root = createRoot()
+    writeFileSync(join(root, 'package.json'), '{ unrelated ancestor')
+    const workspace = join(root, 'workspace')
+    createPnpmWorkspaceRoot(workspace)
+    const packageRoot = createWorkspacePackage(workspace, 'router')
+
+    expect(resolveProjectContext({ cwd: packageRoot }).workspaceRoot).toBe(
+      workspace,
+    )
+  })
+
   it('resolves the workspace root from the workspace cwd', () => {
     const root = createRoot()
     createPnpmWorkspaceRoot(root)

@@ -160,28 +160,70 @@ describe('listIntentSkills', () => {
     ).toThrow(packageJsonPath)
   })
 
-  it('rejects malformed inherited policy even when the child permits the skill', () => {
-    const appDir = join(root, 'packages', 'app')
+  it.each(['npm', 'pnpm'])(
+    'rejects malformed inherited %s policy even when the child permits the skill',
+    (manager) => {
+      const appDir = join(root, 'packages', 'app')
+      const packageJsonPath = join(root, 'package.json')
+      if (manager === 'pnpm')
+        writeFileSync(
+          join(root, 'pnpm-workspace.yaml'),
+          'packages:\n  - packages/*\n',
+        )
+      writeFileSync(
+        packageJsonPath,
+        '{"workspaces":["packages/*"],"intent":{"exclude":["@tanstack/query"]},',
+      )
+      writeJson(join(appDir, 'package.json'), {
+        name: 'app',
+        intent: { skills: ['@tanstack/query'] },
+      })
+      writeInstalledIntentPackage(appDir, {
+        name: '@tanstack/query',
+        version: '5.0.0',
+        skillName: 'fetching',
+        description: 'Query data fetching patterns',
+      })
+
+      expect(() => listIntentSkills({ cwd: appDir })).toThrow(packageJsonPath)
+      expect(() =>
+        loadIntentSkill('@tanstack/query#fetching', { cwd: appDir }),
+      ).toThrow(packageJsonPath)
+    },
+  )
+
+  it.each(['directory', 'file'])(
+    'does not inspect unrelated ancestors above a Git %s boundary',
+    (marker) => {
+      writeFileSync(join(root, 'package.json'), '{ invalid ancestor')
+      const appDir = join(root, 'app')
+      writeJson(join(appDir, 'package.json'), {
+        name: 'app',
+        intent: { skills: ['@tanstack/query'] },
+      })
+      if (marker === 'directory') mkdirSync(join(appDir, '.git'))
+      else writeFileSync(join(appDir, '.git'), 'gitdir: /unrelated/git')
+      writeInstalledIntentPackage(appDir, {
+        name: '@tanstack/query',
+        version: '5.0.0',
+        skillName: 'fetching',
+        description: 'Query data fetching patterns',
+      })
+      expect(listIntentSkills({ cwd: appDir }).skills).toHaveLength(1)
+      expect(
+        loadIntentSkill('@tanstack/query#fetching', { cwd: appDir }).content,
+      ).toContain('Skill content here.')
+    },
+  )
+
+  it('refuses an ambiguous malformed ancestor without an independent boundary', () => {
     const packageJsonPath = join(root, 'package.json')
-    writeFileSync(
-      join(root, 'pnpm-workspace.yaml'),
-      'packages:\n  - packages/*\n',
-    )
-    writeFileSync(
-      packageJsonPath,
-      '{"workspaces":["packages/*"],"intent":{"exclude":["@tanstack/query"]},',
-    )
+    writeFileSync(packageJsonPath, '{ invalid ancestor')
+    const appDir = join(root, 'app')
     writeJson(join(appDir, 'package.json'), {
       name: 'app',
-      intent: { skills: ['@tanstack/query'] },
+      intent: { skills: ['*'] },
     })
-    writeInstalledIntentPackage(appDir, {
-      name: '@tanstack/query',
-      version: '5.0.0',
-      skillName: 'fetching',
-      description: 'Query data fetching patterns',
-    })
-
     expect(() => listIntentSkills({ cwd: appDir })).toThrow(packageJsonPath)
     expect(() =>
       loadIntentSkill('@tanstack/query#fetching', { cwd: appDir }),
