@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 let builtCliMainPromise: Promise<
   (argv?: Array<string>) => Promise<number>
@@ -168,12 +168,20 @@ export function writeSkill(
   options: SkillOptions,
 ): void {
   const frontmatter = [
-    `name: ${JSON.stringify(skillName)}`,
+    `name: ${JSON.stringify(basename(skillName))}`,
     `description: ${JSON.stringify(options.description)}`,
   ]
 
-  if (options.type) {
-    frontmatter.push(`type: ${JSON.stringify(options.type)}`)
+  if (options.type || options.libraryVersion) {
+    frontmatter.push('metadata:')
+    if (options.type) {
+      frontmatter.push(`  type: ${JSON.stringify(options.type)}`)
+    }
+    if (options.libraryVersion) {
+      frontmatter.push(
+        `  library_version: ${JSON.stringify(options.libraryVersion)}`,
+      )
+    }
   }
 
   if (options.requires) {
@@ -181,12 +189,6 @@ export function writeSkill(
     for (const requirement of options.requires) {
       frontmatter.push(`  - ${JSON.stringify(requirement)}`)
     }
-  }
-
-  if (options.libraryVersion) {
-    frontmatter.push(
-      `library_version: ${JSON.stringify(options.libraryVersion)}`,
-    )
   }
 
   if (options.sources) {
