@@ -29,9 +29,12 @@ npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--glob
 
 - When effective `intent.skills` is already configured, keeps the existing guidance-only behavior without prompting or changing `package.json`.
 - When effective `intent.skills` is absent, requires an interactive terminal and discovers raw npm and workspace permission candidates.
-- Groups choices by package. Press Space to select or deselect package-wide and exact-skill permissions, then press Enter to confirm the group selection. An empty selection is deny-all (`[]`).
-- Shows excluded packages and skills as disabled with an `intent.exclude` hint. The setup does not change `intent.exclude`.
-- Asks about allow-all separately. Accepting it writes only `["*"]` and skips narrower selection.
+- Shows package versions, skill descriptions, and excluded candidates before asking about permissions.
+- Groups selectable choices by package. Press Space to select or deselect package-wide and exact-skill permissions, then press Enter to review. Package-wide choices include current and future skills; exact choices permit only the named skill.
+- Lists excluded packages and skills in the discovery overview and omits them from the picker. The setup does not change `intent.exclude`.
+- Asks about allow-all separately, after the discovery overview. Accepting it writes only `["*"]` and skips narrower selection.
+- An empty selection previews deny-all (`[]`) and explicitly asks whether to disable all skills. The preview explains that this also blocks future sources until `intent.skills` is edited.
+- When no skills are discovered, or all discovered skills are excluded, explains how to retry and writes neither permissions nor guidance. It does not create a deny-all policy from empty discovery.
 - Previews the exact `intent.skills` value, destination, and trust change before confirmation.
 - Uses a final confirmation that defaults to no. Decline or cancellation at any stage does not write permission or guidance files.
 - Fails before discovery and writes when effective `intent.skills` is absent and stdin is not a TTY.
@@ -42,6 +45,7 @@ npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--glob
 - Updates an existing managed block in a supported config file.
 - Preserves all content outside the managed block.
 - Verifies the managed block before reporting success.
+- After confirmed setup, scans with the saved policy and reports the available skill and package counts. Prints a package-manager-aware `list` command when skills are available, or instructions to edit `intent.skills` when none are enabled.
 
 `--dry-run` performs discovery and selection, prints the permission and guidance previews, and writes neither file.
 

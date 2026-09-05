@@ -1,7 +1,10 @@
 import { relative } from 'node:path'
 import { readSkillSourcesConfig } from '../../core/source-policy.js'
 import { fail } from '../../shared/cli-error.js'
-import { detectIntentCommandPackageManager } from '../../shared/command-runner.js'
+import {
+  detectIntentCommandPackageManager,
+  formatIntentCommand,
+} from '../../shared/command-runner.js'
 import {
   coreOptionsFromGlobalFlags,
   noticeOptionsFromGlobalFlags,
@@ -247,7 +250,11 @@ export async function runInstallCommand(
             : String(error)
         fail(`Permissions: failed: ${message}`)
       }
-      if (permissions.status === 'canceled') return
+      if (
+        permissions.status === 'canceled' ||
+        permissions.status === 'unavailable'
+      )
+        return
       console.log(
         options.dryRun
           ? 'Permissions: unchanged package.json (dry run).'
@@ -268,6 +275,7 @@ export async function runInstallCommand(
       return
     }
 
+    const available = permissions ? await scanIntentsOrFail() : null
     try {
       const result = writeIntentSkillsBlock({
         ...generated,
@@ -299,6 +307,27 @@ export async function runInstallCommand(
         console.log(`Guidance: ${result.status} ${target}.`)
       }
       printPlacementTip(result.targetPath)
+      if (available && permissions) {
+        const packages = available.packages.filter(
+          (pkg) => pkg.skills.length > 0,
+        )
+        const skillCount = packages.reduce(
+          (count, pkg) => count + pkg.skills.length,
+          0,
+        )
+        console.log(
+          `Available: ${skillCount} ${skillCount === 1 ? 'skill' : 'skills'} from ${packages.length} ${packages.length === 1 ? 'package' : 'packages'}.`,
+        )
+        if (skillCount > 0) {
+          console.log(
+            `Next: ${formatIntentCommand(detectIntentCommandPackageManager(), 'list')}`,
+          )
+        } else {
+          console.log(
+            `To enable skills, edit intent.skills in ${formatTargetPath(permissions.packageJsonPath)} and run intent install again.`,
+          )
+        }
+      }
       return
     } catch (error) {
       if (permissions) {

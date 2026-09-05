@@ -476,13 +476,15 @@ describe('cli commands', () => {
     )
     expect(output).toContain('Permissions: updated package.json.')
     expect(output).toContain('Guidance: created AGENTS.md.')
+    expect(output).toContain('Available: 1 skill from 1 package.')
+    expect(output).toContain('Next: npx @tanstack/intent@latest list')
     expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
       '## Skill Loading',
     )
     expect(prompts.confirmWrite).toHaveBeenCalledOnce()
   })
 
-  it('keeps excluded permission candidates unavailable during selection', async () => {
+  it('does not write policy or guidance when all candidates are excluded', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-excluded-'))
     tempDirs.push(root)
     const packageJsonPath = join(root, 'package.json')
@@ -505,32 +507,69 @@ describe('cli commands', () => {
       isTTY: true,
       permissionPrompts: prompts,
     })
-    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
-      intent?: { exclude?: Array<string>; skills?: Array<string> }
-    }
-    const groups = vi.mocked(prompts.selectPermissions).mock.calls[0]?.[0]
-
     expect(exitCode).toBe(0)
-    expect(groups).toEqual([
-      {
-        label: '@tanstack/query',
-        options: [
-          expect.objectContaining({
-            value: '@tanstack/query',
-            disabled: true,
-          }),
-          expect.objectContaining({
-            value: '@tanstack/query#fetching',
-            disabled: true,
-          }),
-        ],
-      },
-    ])
-    expect(pkg.intent).toEqual({
-      exclude: ['@tanstack/query'],
-      skills: [],
+    expect(prompts.confirmAllowAll).not.toHaveBeenCalled()
+    expect(prompts.selectPermissions).not.toHaveBeenCalled()
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(packageJson)
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'All discovered skills are excluded by intent.exclude.',
+    )
+  })
+
+  it('can retry first-run setup after installing a package with skills', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-retry-'))
+    tempDirs.push(root)
+    const packageJsonPath = join(root, 'package.json')
+    const source = '{"name":"app"}\n'
+    writeFileSync(packageJsonPath, source)
+    process.chdir(root)
+    const prompts = permissionPrompts({ selection: ['pkg#core'] })
+    const runtime = { isTTY: true, permissionPrompts: prompts }
+
+    expect(await main(['install'], runtime)).toBe(0)
+    expect(prompts.confirmAllowAll).not.toHaveBeenCalled()
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(source)
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'No intent-enabled skills found. Install a package that ships skills, then run intent install again.',
+    )
+
+    writeInstalledIntentPackage(root, {
+      name: 'pkg',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Core guidance',
     })
-    expect(readFileSync(packageJsonPath, 'utf8')).not.toBe(packageJson)
+    expect(await main(['install'], runtime)).toBe(0)
+    expect(prompts.selectPermissions).toHaveBeenCalledOnce()
+    expect(
+      JSON.parse(readFileSync(packageJsonPath, 'utf8')).intent.skills,
+    ).toEqual(['pkg#core'])
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(true)
+  })
+
+  it('reports intentional deny-all without claiming skills are available', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-deny-all-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), { name: 'app' })
+    writeInstalledIntentPackage(root, {
+      name: 'pkg',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Core guidance',
+    })
+    process.chdir(root)
+    const prompts = permissionPrompts({ selection: [] })
+
+    expect(
+      await main(['install'], { isTTY: true, permissionPrompts: prompts }),
+    ).toBe(0)
+    expect(prompts.confirmWrite).toHaveBeenCalledWith(true)
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('Available: 0 skills from 0 packages.')
+    expect(output).toContain('To enable skills, edit intent.skills in')
+    expect(output).not.toContain('Next:')
   })
 
   it('keeps confirmed permissions and reports a later guidance failure separately', async () => {
