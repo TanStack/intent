@@ -86,7 +86,11 @@ function formatLoadCommand(
   packageManager: ScanResult['packageManager'],
   scopeFlag: string,
 ): string {
-  return formatIntentCommand(packageManager, `load ${skill.use}${scopeFlag}`)
+  return formatIntentCommand(packageManager, [
+    'load',
+    skill.use,
+    ...(scopeFlag ? [scopeFlag.trim()] : []),
+  ])
 }
 
 function printHiddenSources(result: IntentSkillList, audience: string): void {

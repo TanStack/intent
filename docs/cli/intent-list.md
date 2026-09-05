@@ -150,3 +150,5 @@ An excluded package never triggers the unlisted-source notice, because an exclud
 
 - Scanner failures are printed as errors
 - Deno projects without `node_modules` are unsupported
+- Runnable commands require identifiers containing only ASCII letters, numbers, `_`, `.`, `/`, `@`, `#`, and `-`. Identifiers cannot start with `#`. Other characters cause an error before a command is emitted; rename the package or skill to generate runnable guidance. `--json` still exposes permitted identifiers as data, not shell commands.
+- Discovery skips skill files whose real path cannot be resolved or lies outside their package root, with a warning. Symlinks to files inside the resolved package root remain supported. External frontmatter is not read or included in catalogs or mappings.

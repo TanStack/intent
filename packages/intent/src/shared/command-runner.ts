@@ -11,11 +11,28 @@ const runnerByPackageManager: Record<PackageManager, string> = {
   yarn: 'yarn dlx @tanstack/intent@latest',
 }
 
+/** Use argument arrays for discovered identifiers; strings are trusted templates. */
 export function formatIntentCommand(
   packageManager: PackageManager,
-  args: string,
+  args: string | ReadonlyArray<string>,
 ): string {
   const command = runnerByPackageManager[packageManager]
-  const trimmedArgs = args.trim()
+  const trimmedArgs =
+    typeof args === 'string'
+      ? args.trim()
+      : args
+          .map((arg) => {
+            if (
+              arg === '' ||
+              arg.startsWith('#') ||
+              /[^a-zA-Z0-9_./@#-]/.test(arg)
+            ) {
+              throw new Error(
+                'Cannot generate an Intent command: identifiers must contain only letters, numbers, underscores, dots, slashes, @, #, and hyphens, and cannot start with #.',
+              )
+            }
+            return arg
+          })
+          .join(' ')
   return trimmedArgs ? `${command} ${trimmedArgs}` : command
 }
