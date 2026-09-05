@@ -1,13 +1,20 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { readPackageJson } from '../../core/package-json.js'
 import {
   compileExcludePatterns,
+  getConfigDirs,
   getEffectiveExcludePatterns,
   isPackageExcluded,
   isSkillExcluded,
 } from '../../core/excludes.js'
 import { parseSkillSources } from '../../core/skill-sources.js'
-import { isSourcePermitted } from '../../core/source-policy.js'
+import {
+  compileSkillSourcePolicy,
+  isSourcePermitted,
+} from '../../core/source-policy.js'
 import { resolveProjectContext } from '../../core/project-context.js'
-// First-run permission setup must show unpoliced candidates for explicit review.
+// Permission setup and review must show unpoliced candidates for human selection.
 // eslint-disable-next-line no-restricted-imports
 import { scanForIntents } from '../../discovery/scanner.js'
 import {
@@ -45,7 +52,14 @@ export interface PermissionPrompts {
     packages: Array<PermissionPackage>,
     selection: PermissionSelection,
   ) => Promise<PermissionSelection | null>
-  confirmWrite: (denyAll: boolean) => Promise<boolean | 'review' | null>
+  editPermissions: (
+    packages: Array<PermissionPackage>,
+    selection: PermissionSelection,
+  ) => Promise<PermissionSelection | null>
+  confirmWrite: (
+    denyAll: boolean,
+    review?: boolean,
+  ) => Promise<boolean | 'review' | null>
 }
 
 export interface PermissionSetupRuntime {
@@ -56,7 +70,11 @@ export interface PermissionSetupRuntime {
 export type PermissionSetupResult =
   | { status: 'canceled' }
   | { status: 'unavailable' }
-  | { packageJsonPath: string; status: 'unchanged' | 'updated' }
+  | {
+      packageJsonPath: string
+      status: 'unchanged' | 'updated'
+      available?: { skills: number; packages: number }
+    }
 
 function selectorForPackage(pkg: IntentPackage): string {
   return pkg.kind === 'workspace' ? `workspace:${pkg.name}` : pkg.name
@@ -89,7 +107,7 @@ export function selectedPermissionSkills(
   packages: Array<PermissionPackage>,
   selection: PermissionSelection,
 ): Array<PermissionPackage['skills'][number]> {
-  const config = parseSkillSources(selection.skills)
+  const policy = compileSkillSourcePolicy(parseSkillSources(selection.skills))
   const excludes = compileExcludePatterns(selection.exclude)
   return packages.flatMap((pkg) => {
     const kind = pkg.id.startsWith('workspace:') ? 'workspace' : 'npm'
@@ -98,7 +116,7 @@ export function selectedPermissionSkills(
     return pkg.skills.filter(
       (skill) =>
         !skill.excluded &&
-        isSourcePermitted(config, name, kind, skill.name) &&
+        policy.permits(name, kind, skill.name) &&
         !isSkillExcluded(name, skill.name, excludes),
     )
   })
@@ -127,10 +145,12 @@ function normalizePermissions(selected: Array<string>): Array<string> {
 
 export async function setupInitialPermissions({
   dryRun = false,
+  review = false,
   root,
   runtime,
 }: {
   dryRun?: boolean
+  review?: boolean
   root: string
   runtime: PermissionSetupRuntime
 }): Promise<PermissionSetupResult> {
@@ -139,6 +159,40 @@ export async function setupInitialPermissions({
     throw new Error(
       'Cannot configure permissions: no owning package.json was found.',
     )
+  }
+
+  const originalManifest = readFileSync(context.targetPackageJsonPath, 'utf8')
+  const policyManifests = review
+    ? getConfigDirs(root, context).map((dir) => ({
+        dir,
+        manifest: readPackageJson(dir),
+      }))
+    : []
+  const assertPolicyUnchanged = () => {
+    if (
+      policyManifests.some(
+        ({ dir, manifest }) =>
+          JSON.stringify(readPackageJson(dir)) !== JSON.stringify(manifest),
+      )
+    ) {
+      throw new Error(
+        'Project policy changed during permission review. Run intent install --review again.',
+      )
+    }
+  }
+  let initial: Array<string> | undefined
+  let inheritedFrom: string | undefined
+  if (review) {
+    for (const { dir, manifest } of policyManifests) {
+      const intent = manifest?.intent as Record<string, unknown> | undefined
+      if (intent?.skills === undefined || intent.skills === null) continue
+      parseSkillSources(intent.skills)
+      initial = intent.skills as Array<string>
+      if (join(dir, 'package.json') !== context.targetPackageJsonPath) {
+        inheritedFrom = join(dir, 'package.json')
+      }
+      break
+    }
   }
 
   const scan = (
@@ -159,7 +213,7 @@ export async function setupInitialPermissions({
   console.log(
     `Found ${discoveredSkills.length} skill${discoveredSkills.length === 1 ? '' : 's'} in ${packages.length} package${packages.length === 1 ? '' : 's'}.`,
   )
-  if (availableSkillCount === 0) {
+  if (availableSkillCount === 0 && initial === undefined) {
     console.log(
       discoveredSkills.length === 0
         ? 'No intent-enabled skills found. Install a package that ships skills, then run intent install again.'
@@ -175,16 +229,41 @@ export async function setupInitialPermissions({
     )
   }
   console.log('Skills can change when dependencies update.')
-  const selected = await runtime.prompts.selectPermissions(candidates)
-  if (selected === null) return { status: 'canceled' }
-  let selection: PermissionSelection = { skills: selected, exclude: [] }
+  if (inheritedFrom) {
+    console.log(
+      `Current permissions inherited from ${inheritedFrom}. Confirming changes creates a local override in ${context.targetPackageJsonPath}; inherited exclusions still apply.`,
+    )
+  }
+  let selection: PermissionSelection
+  if (initial !== undefined) {
+    const edited = await runtime.prompts.editPermissions(candidates, {
+      skills: [...initial],
+      exclude: [],
+    })
+    if (edited === null) return { status: 'canceled' }
+    selection = edited
+  } else {
+    const selected = await runtime.prompts.selectPermissions(candidates)
+    if (selected === null) return { status: 'canceled' }
+    selection = { skills: selected, exclude: [] }
+  }
   for (;;) {
-    const skills = normalizePermissions(selection.skills)
+    const skills =
+      initial === undefined
+        ? normalizePermissions(selection.skills)
+        : selection.skills
+    parseSkillSources(skills)
     const update = preparePackageSkillsUpdate(
       context.targetPackageJsonPath,
       skills,
       selection.exclude,
     )
+    assertPolicyUnchanged()
+    if (update.source !== originalManifest) {
+      throw new Error(
+        'Project policy changed during permission review. Run intent install --review again.',
+      )
+    }
     const enabled = selectedPermissionSkills(candidates, selection)
     const packageCount = new Set(enabled.map((skill) => skill.id.split('#')[0]))
       .size
@@ -213,8 +292,20 @@ export async function setupInitialPermissions({
         `${label}: ${JSON.stringify(values.slice(0, 6))}${values.length > 6 ? ` (+${values.length - 6} more)` : ''}`,
       )
     }
-    if (skills.length === 1 && skills[0] === '*')
-      printNotices([ALLOW_ALL_NOTICE])
+    if (initial !== undefined) {
+      const before = new Set(initial)
+      const after = new Set(skills)
+      for (const [label, entries] of [
+        ['Add permissions', skills.filter((rule) => !before.has(rule))],
+        ['Remove permissions', initial.filter((rule) => !after.has(rule))],
+      ] as const) {
+        if (entries.length > 0)
+          console.log(
+            `${label}: ${JSON.stringify(entries.slice(0, 6))}${entries.length > 6 ? ` (+${entries.length - 6} more; choose Show exact proposed configuration in review)` : ''}`,
+          )
+      }
+    }
+    if (skills.includes('*')) printNotices([ALLOW_ALL_NOTICE])
 
     if (dryRun) {
       return {
@@ -222,12 +313,15 @@ export async function setupInitialPermissions({
         status: 'unchanged',
       }
     }
-    const confirmation = await runtime.prompts.confirmWrite(skills.length === 0)
+    const confirmation = await (initial === undefined
+      ? runtime.prompts.confirmWrite(skills.length === 0)
+      : runtime.prompts.confirmWrite(skills.length === 0, true))
     if (confirmation === 'review') {
-      const reviewed = await runtime.prompts.reviewPermissions(
-        candidates,
-        selection,
-      )
+      const reviewed = await (
+        initial === undefined
+          ? runtime.prompts.reviewPermissions
+          : runtime.prompts.editPermissions
+      )(candidates, selection)
       if (reviewed === null) return { status: 'canceled' }
       selection = reviewed
       continue
@@ -236,9 +330,19 @@ export async function setupInitialPermissions({
       console.log('Permissions: canceled.')
       return { status: 'canceled' }
     }
+    assertPolicyUnchanged()
+    const unchanged =
+      initial !== undefined &&
+      JSON.stringify(skills) === JSON.stringify(initial) &&
+      selection.exclude.length === 0
     return {
       packageJsonPath: context.targetPackageJsonPath,
-      status: writePreparedPackageSkillsUpdate(update),
+      status: unchanged
+        ? 'unchanged'
+        : writePreparedPackageSkillsUpdate(update),
+      ...(review
+        ? { available: { skills: enabled.length, packages: packageCount } }
+        : {}),
     }
   }
 }
