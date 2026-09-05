@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fail } from '../shared/cli-error.js'
+import { rewriteLoadedSkillMarkdownDestinations } from '../core/markdown.js'
 
 export async function runMetaCommand(
   name: string | undefined,
@@ -23,7 +24,14 @@ export async function runMetaCommand(
     }
 
     try {
-      console.log(readFileSync(skillFile, 'utf8'))
+      console.log(
+        rewriteLoadedSkillMarkdownDestinations({
+          content: readFileSync(skillFile, 'utf8'),
+          cwd: process.cwd(),
+          packageRoot: dirname(metaDir),
+          skillFilePath: skillFile,
+        }),
+      )
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       fail(`Failed to read meta-skill "${name}": ${msg}`)

@@ -4,19 +4,14 @@ description: >
   Evaluate intent skills for staleness when source files change in upstream
   TanStack package repos. Matches changed files against metadata.sources,
   evaluates whether diffs affect documented behavior, rewrites stale skills
-  using skill-generate, checks cross-skill references, and opens PRs.
+  using generate-skill, checks cross-skill references, and opens PRs.
   Silent when nothing needs updating.
 metadata:
   version: '1.0'
   category: meta-tooling
-  input_artifacts:
-    - webhook payload (package name, commit SHA, changed files)
-  output_artifacts:
-    - updated SKILL.md files
-    - pull requests
-  skills:
-    - skill-generate
-    - skill-tree-generator
+  input_artifacts: 'webhook payload (package name, commit SHA, changed files)'
+  output_artifacts: 'updated SKILL.md files; pull requests'
+  skills: 'generate-skill; tree-generator'
 ---
 
 # Skill Staleness Check
@@ -116,7 +111,7 @@ affect one line of one skill, or none at all.
 
 For skills classified as needing content updates:
 
-1. Load the skill-generate meta skill
+1. Load the generate-skill meta skill
 2. Provide it with:
    - The existing SKILL.md content
    - The source diff

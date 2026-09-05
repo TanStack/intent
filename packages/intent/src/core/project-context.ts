@@ -18,7 +18,7 @@ export type ProjectContext = {
 /**
  * Resolves project structure by walking up from targetPath (or cwd) to find the
  * owning package.json, then searches for a workspace root from the package root.
- * Falls back to searching from cwd when targetPath points deep into a package.
+ * The target owns its ancestry; caller cwd cannot override a standalone target.
  */
 export function resolveProjectContext({
   cwd,
@@ -32,9 +32,7 @@ export function resolveProjectContext({
     ? resolve(resolvedCwd, targetPath)
     : resolvedCwd
   const packageRoot = findOwningPackageRoot(resolvedTargetPath)
-  const workspaceRoot =
-    findWorkspaceRoot(packageRoot ?? resolvedTargetPath) ??
-    findWorkspaceRoot(resolvedCwd)
+  const workspaceRoot = findWorkspaceRoot(packageRoot ?? resolvedTargetPath)
   const workspacePatterns = workspaceRoot
     ? (readWorkspacePatterns(workspaceRoot) ?? [])
     : []
@@ -60,6 +58,8 @@ function findOwningPackageRoot(startPath: string): string | null {
     if (existsSync(join(dir, 'package.json'))) {
       return dir
     }
+
+    if (existsSync(join(dir, '.git'))) return null
 
     prev = dir
     dir = dirname(dir)

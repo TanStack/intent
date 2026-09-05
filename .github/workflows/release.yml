@@ -30,25 +30,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true # changesets/action pushes Version PR commits
-      - name: Check for changesets
-        id: changesets
-        run: |
-          CHANGESET_FILES=$(ls .changeset/*.md 2>/dev/null | grep -v README.md || true)
-          if [ -z "$CHANGESET_FILES" ]; then
-            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
-          fi
       - name: Start Nx Agents
-        if: steps.changesets.outputs.has_changesets == 'true'
         run: npx nx-cloud start-ci-run --distribute-on=".nx/workflows/dynamic-changesets.yaml"
       - name: Setup Tools
         uses: TanStack/config/.github/setup@10ece5e28cfc5599fe7f4925275b895ed2e4cdf3 # main
       - name: Run Tests
-        if: steps.changesets.outputs.has_changesets == 'true'
         run: pnpm run test:ci --parallel=3
       - name: Stop Nx Agents
-        if: ${{ always() && steps.changesets.outputs.has_changesets == 'true' }}
+        if: ${{ always() }}
         run: npx nx-cloud stop-all-agents
       - name: Enter Pre-Release Mode
         if: "contains(github.ref_name, '-pre') && !hashFiles('.changeset/pre.json')"
