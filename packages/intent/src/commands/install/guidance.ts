@@ -304,10 +304,10 @@ export function buildIntentSkillsBlock(
       )
       lines.push(
         `    run: ${quoteYamlString(
-          formatIntentCommand(
-            scanResult.packageManager,
-            `load ${formatSkillUse(pkg.name, skill.name)}`,
-          ),
+          formatIntentCommand(scanResult.packageManager, [
+            'load',
+            `${pkg.name}#${skill.name}`,
+          ]),
         )}`,
       )
       lines.push(`    for: ${quoteYamlString(formatWhen(pkg.name, skill))}`)

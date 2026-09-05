@@ -2,7 +2,7 @@
 // executes discovered package code. The only sanctioned dynamic load is Yarn's
 // PnP runtime (.pnp.cjs / pnpapi), used solely to map identities to readable
 // roots. Enforced by the `intent/static-discovery` ESLint rule.
-import { existsSync } from 'node:fs'
+import { constants, existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import semver from 'semver'
@@ -265,8 +265,37 @@ function readSkillEntry(
   childDir: string,
   skillFile: string,
   readFs: ReadFs = nodeReadFs,
-): SkillEntry {
-  const fm = parseFrontmatter(skillFile, readFs)
+): SkillEntry | null {
+  if (!readFs.openSync || !readFs.fstatSync || !readFs.closeSync) return null
+  let fd: number | undefined
+  let fm: Record<string, unknown> | null
+  try {
+    const realSkillFile = readFs.realpathSync.native(skillFile)
+    const realPackageRoot = readFs.realpathSync.native(dirname(skillsDir))
+    if (!isWithinOrEqual(realSkillFile, realPackageRoot)) return null
+    const expected = readFs.lstatSync(realSkillFile)
+    if (!expected.isFile()) return null
+    if (readFs.realpathSync.native(realSkillFile) !== realSkillFile) return null
+
+    fd = readFs.openSync(
+      realSkillFile,
+      constants.O_RDONLY | constants.O_NOFOLLOW,
+    )
+    const opened = readFs.fstatSync(fd)
+    // Compare the opened file with the checked entry before reading any bytes.
+    // The descriptor then survives pathname replacement, including parent swaps.
+    if (
+      !opened.isFile() ||
+      opened.dev !== expected.dev ||
+      opened.ino !== expected.ino
+    )
+      return null
+    fm = parseFrontmatter(fd, readFs)
+  } catch {
+    return null
+  } finally {
+    if (fd !== undefined) readFs.closeSync(fd)
+  }
   const relName = toPosixPath(relative(skillsDir, childDir))
   const desc =
     typeof fm?.description === 'string'
@@ -299,7 +328,13 @@ function discoverSkillByNameHint(
     const { childDir, skillFile } = resolvedHint
     if (!readFs.existsSync(skillFile)) continue
 
-    const skill = readSkillEntry(skillsDir, childDir, skillFile, readFs)
+    // Keep the hinted identity so loading can report its existing path error,
+    // without reading metadata from an unreadable or escaping target.
+    const skill = readSkillEntry(skillsDir, childDir, skillFile, readFs) ?? {
+      name: hint,
+      path: skillFile,
+      description: '',
+    }
     if (skill.name !== hint || seen.has(skill.name)) continue
 
     seen.add(skill.name)
@@ -311,7 +346,9 @@ function discoverSkillByNameHint(
 
 function discoverSkills(
   skillsDir: string,
+  packageName: string,
   fsCache: IntentFsCache,
+  warnings: Array<string>,
 ): Array<SkillEntry> {
   const readFs = fsCache.getReadFs()
   return fsCache
@@ -319,7 +356,14 @@ function discoverSkills(
     .flatMap((skillFile): Array<SkillEntry> => {
       const childDir = dirname(skillFile)
       if (childDir === skillsDir) return []
-      return [readSkillEntry(skillsDir, childDir, skillFile, readFs)]
+      const skill = readSkillEntry(skillsDir, childDir, skillFile, readFs)
+      if (!skill) {
+        warnings.push(
+          `Skipped unreadable or out-of-package skill metadata for "${packageName}".`,
+        )
+        return []
+      }
+      return [skill]
     })
 }
 
@@ -580,7 +624,8 @@ export function scanForIntents(
     createPackageRegistrar({
       comparePackageVersions,
       deriveIntentConfig,
-      discoverSkills: (skillsDir) => discoverSkills(skillsDir, fsCache),
+      discoverSkills: (skillsDir, packageName) =>
+        discoverSkills(skillsDir, packageName, fsCache, warnings),
       getPackageDepth,
       getPackageKind,
       getFsIdentity: fsCache.getFsIdentity,
@@ -787,7 +832,8 @@ export function scanIntentPackageAtRoot(
             options.skillNameHint!,
             fsCache.getReadFs(),
           )
-      : (skillsDir) => discoverSkills(skillsDir, fsCache),
+      : (skillsDir, packageName) =>
+          discoverSkills(skillsDir, packageName, fsCache, warnings),
     getPackageDepth,
     getPackageKind,
     getFsIdentity: fsCache.getFsIdentity,

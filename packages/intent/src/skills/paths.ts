@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { toPosixPath } from '../shared/utils.js'
+import { formatIntentCommand } from '../shared/command-runner.js'
 import type { SkillUse } from './use.js'
 import type { SkillEntry } from '../shared/types.js'
 
@@ -64,7 +65,12 @@ export function rewriteSkillLoadPaths({
 }
 
 export function formatRuntimeSkillLookupComment(target: SkillUse): string {
-  return `Runtime lookup only: run \`npx @tanstack/intent@latest load ${target.packageName}#${target.skillName} --path\`, and load its reported path for this session. Do not copy the resolved path into this file.`
+  const command = formatIntentCommand('npm', [
+    'load',
+    `${target.packageName}#${target.skillName}`,
+    '--path',
+  ])
+  return `Runtime lookup only: run \`${command}\`, and load its reported path for this session. Do not copy the resolved path into this file.`
 }
 
 export function isRuntimeSkillLookupComment(value: string): boolean {

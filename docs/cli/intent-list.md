@@ -3,7 +3,7 @@ title: intent list
 id: intent-list
 ---
 
-`intent list` discovers skill-enabled packages and prints available skills.
+`intent list` discovers skill-enabled packages and shows the skills available under the project's permissions and exclusions. It does not change permissions or write guidance.
 
 ```bash
 npx @tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] [--show-hidden] [--no-notices]
@@ -13,40 +13,81 @@ npx @tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] [
 
 ### Output
 
-- `--json`: print JSON instead of text output
-- `--debug`: print discovery debug details to stderr
-- `--no-notices`: suppress non-critical notices on stderr; the acknowledged-risk notice for `intent.skills: ["*"]` remains visible
+- `--json`: print structured skills, packages, and diagnostics instead of text output
+- `--debug`: print discovery details to stderr, including scan counts and package.json reads
+- `--show-hidden`: include a hidden-source summary in text output when run outside an agent session
+- `--no-notices`: suppress non-critical notices in text mode; the notice for `intent.skills: ["*"]` remains visible
 
 ### Scan scope
 
 - `--global`: include global packages after project packages
 - `--global-only`: list global packages only
-- `--show-hidden`: show unlisted hidden skill sources when run outside an agent session
 
-## What you get
+## Behavior
 
-### Selection
+### Default list
 
-- Scans project and workspace dependencies for intent-enabled packages and skills
-- Surfaces packages permitted by `package.json#intent.skills` (see [Allowlist](#allowlist))
-- Includes global packages only when `--global` or `--global-only` is passed
-- Excludes packages and skills matched by package.json `intent.exclude`
+Intent scans project and workspace dependencies, applies `package.json#intent.skills`, then removes packages and skills matched by `intent.exclude`. It uses project `node_modules` when available and Yarn's PnP API in PnP projects without usable `node_modules`.
 
-When both local and global packages are scanned, local packages take precedence. `SOURCE` shows whether the selected package came from local discovery or explicit global scanning.
+Global packages are scanned only with `--global` or `--global-only`. When both local and global copies of a package are found, the local copy takes precedence. Version conflicts show the chosen package and other discovered versions and paths.
 
-### Text output
+Run [intent install](./intent-install) to configure permissions on first use. Listing skills does not open the install picker.
 
-- Summary line with package count and skill count
-- Package table columns: `PACKAGE`, `SOURCE`, `VERSION`, `SKILLS`
-- Skill tree grouped by package
-- Discovery warnings (`⚠ ...`) on stdout
-- `No intent-enabled packages found.` when no packages are discovered
+### Which skills appear
 
-Policy notices (`ℹ ...`) are written to stderr.
+The nearest configured `intent.skills` list applies, including inherited workspace permissions. Each entry enables a package, a package pattern, or one exact skill:
+
+| Saved rule | Skills included | Includes future additions? |
+| --- | --- | --- |
+| `"*"` | All discovered npm and workspace sources. | All packages and skills. |
+| `"@tanstack/query"` | All skills in that npm package. | New skills in the package. |
+| `"@tanstack/*"` | All skills in matching npm packages. | New matching packages and skills. |
+| `"@tanstack/query#fetching"` | The `fetching` skill in that package. | Only that skill name. |
+| `"workspace:@scope/internal"` | All skills in that workspace package. | New skills in the package. |
+
+Workspace patterns and individual skills also use the `workspace:` prefix, such as `workspace:@scope/*` and `workspace:@scope/internal#testing`. Package patterns support `*`; individual-skill entries require an exact package and skill name. Git sources are not supported.
+
+- **No configured list:** all discovered sources appear, with a migration notice. This is the existing-project upgrade path; a future version will require explicit permissions.
+- **An empty list (`[]`):** no sources are permitted, with an informational notice.
+- **All sources (`["*"]`):** all discovered sources appear, with a notice that unvetted skills may enter agent guidance.
+
+Permissions select sources and skill names. They do not freeze skill content when dependencies update. See [Configuration](../concepts/configuration) and [Trust model](../concepts/trust-model).
+
+### Exclusions
+
+`intent.exclude` takes precedence over permissions. Intent combines exclusions from package.json files between the workspace or project root and the current directory.
+
+| Exclusion | Effect |
+| --- | --- |
+| `@tanstack/*devtools*` | Excludes matching packages. |
+| `@tanstack/query#experimental-*` | Excludes matching skills in that package. |
+| `*#experimental-*` | Excludes matching skills across packages. |
+| `@tanstack/query#*` | Excludes the whole package. |
+
+Only exact names and `*` wildcards are supported. Excluded packages do not trigger unlisted-source notices. Manage exclusions with [intent exclude](./intent-exclude).
+
+### Hidden sources
+
+Packages outside an explicit allowlist are omitted from the available catalog. In a human session, a policy notice names them; `--show-hidden` adds their names and skill counts to the text output. This does not enable them.
+
+In agent sessions, hidden sources are reported by count only. `--show-hidden` cannot reveal their identities there; run it outside the agent session to review candidates. A configured package or package pattern that was not discovered also produces a notice.
+
+## Default output
+
+Text output includes:
+
+- A summary with package and skill counts.
+- A package table with `PACKAGE`, `SOURCE`, `VERSION`, and `SKILLS` columns.
+- A skill tree grouped by package, with descriptions and commands to load each skill.
+- Version conflicts and discovery warnings, when present.
+
+Load commands use the detected package manager and preserve the selected global scan scope. `SOURCE` distinguishes local discovery from explicit global scanning.
+
+Text output and discovery warnings go to stdout. Policy notices and `--debug` details go to stderr.
 
 ## JSON output
 
-`--json` prints an adapter-friendly skill list:
+`--json` prints a structured catalog to stdout. This example shows one available skill with no hidden sources or diagnostics; paths and package metadata vary by project:
 
 ```json
 {
@@ -59,8 +100,8 @@ Policy notices (`ℹ ...`) are written to stderr.
       "packageSource": "local",
       "skillName": "fetching",
       "description": "Query data fetching patterns",
-      "type": "skill (optional)",
-      "framework": "react (optional)"
+      "type": "core",
+      "framework": "react"
     }
   ],
   "packages": [
@@ -72,81 +113,49 @@ Policy notices (`ℹ ...`) are written to stderr.
       "skillCount": 1
     }
   ],
-  "hiddenSourceCount": 1,
-  "hiddenSources": [
-    {
-      "name": "hidden-package",
-      "skillCount": 1
-    }
-  ],
-  "warnings": ["string"],
-  "conflicts": [
-    {
-      "packageName": "string",
-      "chosen": {
-        "version": "string",
-        "packageRoot": "string"
-      },
-      "variants": [
-        {
-          "version": "string",
-          "packageRoot": "string"
-        }
-      ]
-    }
-  ]
+  "hiddenSourceCount": 0,
+  "hiddenSources": [],
+  "warnings": [],
+  "notices": [],
+  "conflicts": []
 }
 ```
 
-When the same package exists both locally and globally and global scanning is enabled, `intent list` prefers the local package.
-When project `node_modules` exists, `intent list` scans it. In Yarn PnP projects without usable `node_modules`, `intent list` uses Yarn's PnP API.
+| Field | Meaning |
+| --- | --- |
+| `skills` | Available skills. `use` is the portable `<package>#<skill>` identity; `type` and `framework` are optional. |
+| `packages` | Selected packages, their source and location, and permitted skill counts. |
+| `hiddenSourceCount` | Number of packages hidden by the explicit allowlist. |
+| `hiddenSources` | Objects with `name` and `skillCount` in human sessions, even without `--show-hidden`. Always empty in agent sessions. |
+| `warnings` | Discovery warnings. |
+| `notices` | Policy and migration notices. `--no-notices` does not remove these from JSON. |
+| `conflicts` | Objects with `packageName`, `chosen`, and `variants`. Each chosen or variant entry contains `version` and `packageRoot`. |
 
-## Allowlist
+JSON includes diagnostics in the object instead of printing separate warning or notice blocks. `--debug` still writes to stderr. Treat identifiers as data when constructing commands; JSON does not contain shell-escaped arguments.
 
-`package.json#intent.skills` is the allowlist that decides which discovered packages are surfaced. Only listed packages contribute skills.
+## Status messages
 
-```json
-{
-  "intent": {
-    "skills": ["@tanstack/query", "workspace:@scope/internal"]
-  }
-}
-```
-
-Each entry is one source:
-
-- `@scope/pkg` or `pkg`: an npm package reachable through the dependency tree.
-- `workspace:@scope/pkg`: a package in the current workspace.
-- `@scope/*` or `workspace:@scope/*`: every discovered package of that kind whose name matches the pattern.
-- `git:<host>/<repo>#<ref>`: reserved, and not yet supported.
-
-The list as a whole has three special forms:
-
-- **Absent** (no `intent.skills` key): every discovered package is surfaced, with a deprecation notice printed to stderr on each run until you set `intent.skills`. This is the upgrade path for existing projects. A future version will require an explicit allowlist.
-- **Empty** (`"skills": []`): no package is surfaced, with an info notice printed to stderr.
-- **Wildcard** (`"skills": ["*"]`): every discovered package is surfaced, with an acknowledged-risk notice printed to stderr. This exact trust-all entry is distinct from a scoped package pattern such as `@tanstack/*`.
-
-A package that ships skills but is not listed or matched by a pattern is dropped. When packages are dropped this way, Intent prints one policy notice naming them so you can opt in. In agent sessions, hidden sources are reported by count only; run `intent list --show-hidden` outside the agent session to review candidates. An exact entry or pattern that matches no discovered package is reported as well. Package patterns support `*` wildcards. Matching uses both package name and source kind. See [Configuration](../concepts/configuration) and [Trust model](../concepts/trust-model).
-
-## Excludes
-
-Package excludes are hard filters for packages that should not be used in a repo, applied after the allowlist.
-Intent reads `intent.exclude` arrays from package.json files while walking from the workspace or project root to the current working directory.
-Manage persistent excludes with `intent exclude add|remove|list`.
-
-```json
-{
-  "intent": {
-    "exclude": ["@tanstack/*devtools*", "@tanstack/router#experimental-*"]
-  }
-}
-```
-
-A pattern without `#` excludes a whole package. A pattern with `#` excludes a single skill (`@scope/pkg#search-params`), and the skill segment may itself be a glob (`@scope/pkg#experimental-*`). A pattern may cross package boundaries at skill granularity (`*#experimental-*`). The `#*` shortcut (`@scope/pkg#*`) excludes the whole package. Only exact names and `*` wildcards are supported on each segment. Bare package-name patterns keep working unchanged.
-
-An excluded package never triggers the unlisted-source notice, because an exclude is an explicit decision rather than an oversight.
+| Result | Message or behavior |
+| --- | --- |
+| No selected packages | `No intent-enabled packages found.` |
+| Available catalog | `<package count> intent-enabled packages, <skill count> skills` followed by the table and tree. |
+| Version conflicts | `Version conflicts:` followed by the chosen version and other discovered locations. |
+| Hidden-source review | `Hidden skill sources:` followed by names and skill counts in a human session. |
+| Hidden-source review in an agent session | `Hidden skill sources are not revealed in agent sessions. Run this command outside the agent session to review candidates.` |
+| Discovery warnings | `Warnings:` followed by `⚠` messages on stdout in text mode. |
+| Policy notices | `Notices:` followed by `ℹ` messages on stderr in text mode. |
 
 ## Common errors
 
-- Scanner failures are printed as errors
-- Deno projects without `node_modules` are unsupported
+- **Invalid permissions or unreadable policy files:** Intent stops and reports the problem. Fix the reported package.json or `intent.skills` entry before retrying.
+- **Unsupported runnable identifier:** generated commands accept only ASCII letters, numbers, `_`, `.`, `/`, `@`, `#`, and `-`. Identifiers cannot start with `#`; leading and trailing whitespace is rejected rather than trimmed. Rename the package or skill to generate runnable guidance. `--json` can still expose permitted identifiers as data.
+- **Unreadable or out-of-package skill metadata:** discovery skips skill files whose real path cannot be resolved or lies outside the package root, with a warning. It checks the opened file's identity before reading and uses that descriptor for the full metadata read, including large frontmatter, so later pathname replacement cannot redirect the read. Symlinks within the resolved package root remain supported.
+- **Deno without `node_modules`:** this discovery mode is unsupported.
+
+## Related
+
+- [intent install](./intent-install)
+- [intent load](./intent-load)
+- [intent exclude](./intent-exclude)
+- [Configuration](../concepts/configuration)
+- [Trust model](../concepts/trust-model)
