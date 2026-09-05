@@ -613,7 +613,7 @@ describe('cli commands', () => {
     expect(readFileSync(agentsPath, 'utf8')).toBe(guidance)
   })
 
-  it('reports package validation failure as a permission failure without writes', async () => {
+  it('rejects invalid policy before permission setup without writes', async () => {
     const root = mkdtempSync(
       join(realTmpdir, 'intent-cli-install-invalid-package-'),
     )
@@ -637,8 +637,11 @@ describe('cli commands', () => {
     const errors = errorSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(1)
-    expect(errors).toContain('Permissions: failed:')
-    expect(errors).toContain('invalid JSONC')
+    expect(errors).toContain(
+      `Failed to parse Intent policy from ${packageJsonPath}: invalid JSON.`,
+    )
+    expect(prompts.confirmAllowAll).not.toHaveBeenCalled()
+    expect(logSpy).not.toHaveBeenCalled()
     expect(readFileSync(packageJsonPath, 'utf8')).toBe(packageJson)
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })

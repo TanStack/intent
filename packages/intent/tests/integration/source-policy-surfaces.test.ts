@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -75,6 +76,37 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     writeIntentPackage(root, UNLISTED, 'core')
     writeIntentPackage(root, EXCLUDED, 'core')
   }
+
+  it.each([
+    ['list', '--json'],
+    ['load', `${LISTED}#core`],
+    ['load', `${LISTED}#core`, '--json'],
+    ['load', `${LISTED}#core`, '--path'],
+    ['install'],
+    ['install', '--map'],
+  ])(
+    'fails without delivering skills for malformed policy: %j',
+    async (...args) => {
+      writeStandaloneFixture()
+      const packageJsonPath = join(root, 'package.json')
+      writeFileSync(packageJsonPath, '{"intent":{"skills":[]},')
+      process.env.INTENT_GLOBAL_NODE_MODULES = join(root, 'empty-global')
+      process.chdir(root)
+      const stdoutSpy = vi
+        .spyOn(process.stdout, 'write')
+        .mockImplementation(() => true)
+
+      const exitCode = await main(args)
+
+      expect(exitCode).toBe(1)
+      expect(logSpy).not.toHaveBeenCalled()
+      expect(stdoutSpy).not.toHaveBeenCalled()
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining(packageJsonPath),
+      )
+      expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+    },
+  )
 
   it('list surfaces only the listed package', () => {
     writeStandaloneFixture()

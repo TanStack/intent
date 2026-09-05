@@ -23,6 +23,12 @@ The gate is opt-in today. Without an effective `intent.skills` declaration, disc
 
 Default `intent install` handles this state through interactive permission setup.
 
+### Invalid policy files
+
+Intent stops policy-controlled listing, loading, and installation when a policy `package.json` cannot be read, contains invalid JSON, or is not a JSON object. The error names the file. Repair or restore that file, then retry the command.
+
+This also applies to inherited policy within a resolved workspace. Malformed JSON that prevents discovery from identifying the workspace root itself remains a [known limitation](https://github.com/TanStack/intent/issues/240).
+
 ## First-run permission review
 
 When no effective policy exists, `intent install` follows this flow:
