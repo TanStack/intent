@@ -57,7 +57,7 @@
     "@tanstack/eslint-config": "0.4.0",
     "@tanstack/typedoc-config": "^0.3.3",
     "@types/node": "^25.0.7",
-    "eslint": "^9.39.4",
+    "eslint": "^10.10.0",
     "eslint-plugin-unused-imports": "^4.4.1",
     "knip": "^6.16.1",
     "markdown-link-extractor": "^4.0.3",
