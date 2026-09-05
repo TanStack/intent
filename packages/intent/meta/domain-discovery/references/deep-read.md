@@ -8,14 +8,21 @@ gotchas.
 
 Read in this order. Each step builds context for the next.
 
-Before starting, list every file in the docs directory (and subdirectories).
-Use this list as a checklist — every narrative file must be read. Do not
-sample a subset and extrapolate.
+Before starting, list every file in the local docs directory (and
+subdirectories). Use this list as a checklist — read every local narrative
+file, regardless of the collection's size. Do not extrapolate from a sample.
 
-1. **Narrative guides** — read as many as needed to build confidence in
-   your understanding. Prioritize getting-started, migration, and guides
-   covering the skill areas from Phase 2. Skip exhaustive reading of large
-   online-only doc sets.
+1. **Narrative guides** — read local guides exhaustively. Prioritize
+   getting-started, migration, and guides covering the skill areas from
+   Phase 2; priority determines reading order, not which local files to omit.
+   For online-only docs or exceptionally large external collections,
+   sampling is allowed only when full reading would exceed an explicit
+   task budget or access limit. Record that limit and inventory the available
+   pages from the documentation index. Read the getting-started and migration
+   guides plus guides for each Phase 2 skill area. Record the selected URLs,
+   unread areas, and selection rationale in the coverage checklist; flag
+   inaccessible or uncovered areas as gaps rather than claiming full coverage.
+   This exception does not apply to local documentation.
 2. **Migration guides** — highest-yield source for failure modes; every
    breaking change is exactly what agents trained on older versions produce
 3. **API reference** — scan for exports, type signatures, option shapes
@@ -313,7 +320,9 @@ Present the draft to the maintainer before starting Phase 4:
 > I need your input."
 
 Include the full draft domain_map.yaml in your message so the maintainer
-can review it. Also include a checklist of all docs files you read.
+can review it. Also include the coverage checklist: all local docs files read
+and, when external docs were sampled, the limit, selected URLs, unread areas,
+and selection rationale.
 
 **── STOP ── Do not proceed to Phase 4 until the maintainer has
 reviewed the draft and responded. Their response to the draft informs

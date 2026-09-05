@@ -438,7 +438,7 @@ retain the documented custom-root and monorepo placement.
 | Dense surfaces flagged                | Topics with >10 patterns noted as reference_candidates                     |
 | Lifecycle skills considered           | Suggest journey skills when docs have the material                         |
 | Cross-references mapped               | Skills that illuminate each other get "See also" pointers                  |
-| **All docs files read**               | List docs directory contents and read every narrative file — no sampling   |
+| **Documentation coverage**           | Read all local narrative files; document external sampling under the [Phase 3 reading policy](references/deep-read.md#reading-order) |
 
 ---
 
