@@ -43,7 +43,7 @@ beforeEach(() => {
     join(metaDir, 'templates', 'workflows', 'check-skills.yml'),
     [
       'label: {{PACKAGE_LABEL}}',
-      '# intent-workflow-version: 3',
+      '# intent-workflow-version: 4',
       'install: npm install -g @tanstack/intent',
       'validate: intent validate --github-summary',
       'review: intent stale --github-review --package-label "{{PACKAGE_LABEL}}"',
@@ -263,7 +263,7 @@ describe('runSetupGithubActions', () => {
       'utf8',
     )
     expect(checkContent).toContain('label: @tanstack/query')
-    expect(checkContent).toContain('# intent-workflow-version: 3')
+    expect(checkContent).toContain('# intent-workflow-version: 4')
     expect(checkContent).toContain('install: npm install -g @tanstack/intent')
     expect(checkContent).toContain('validate: intent validate --github-summary')
     expect(checkContent).toContain(

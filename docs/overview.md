@@ -43,9 +43,7 @@ Use the runner for your package manager:
 npx @tanstack/intent@latest list
 ```
 
-Scans the current project's installed dependencies for intent-enabled packages, including `node_modules`, workspace dependencies, and Yarn PnP projects without `node_modules`. You can narrow which packages are surfaced with `package.json#intent.skills`. See the [Trust model](./concepts/trust-model) and [Configuration](./concepts/configuration) for how the allowlist works.
-Global package scanning is explicit; pass `--global` to include global packages or `--global-only` to ignore local packages.
-When both local and global packages are scanned, local packages take precedence.
+Scans the current project's installed dependencies for intent-enabled packages, including `node_modules`, workspace dependencies, and Yarn PnP projects without `node_modules`. You can narrow which packages are surfaced with `package.json#intent.skills`. See the [Trust model](./concepts/trust-model) and [Configuration](./concepts/configuration) for how the allowlist works. Global package scanning is explicit; pass `--global` to include global packages or `--global-only` to ignore local packages. When both local and global packages are scanned, local packages take precedence.
 
 ```bash
 npx @tanstack/intent@latest install
@@ -71,10 +69,7 @@ Loads the matching `SKILL.md` content for the installed package version. Pass `-
 npx @tanstack/intent@latest scaffold
 ```
 
-Prints a focused authoring procedure for your agent to follow using the
-current task or concrete code/docs change. Full-library discovery and its
-maintainer interviews remain available when explicitly requested. See the
-[maintainer quick start](./getting-started/quick-start-maintainers).
+Prints a focused authoring procedure for your agent to follow using the current task or concrete code/docs change. Full-library discovery and its maintainer interviews remain available when explicitly requested. See the [maintainer quick start](./getting-started/quick-start-maintainers).
 
 ```bash
 npx @tanstack/intent@latest validate
@@ -88,7 +83,4 @@ Enforces SKILL.md format rules and packaging requirements before publish.
 npx @tanstack/intent@latest stale
 ```
 
-Reports version drift and source, artifact, or package coverage signals that
-may require skill review. Flagged text reports and generated review PR prompts
-route your agent to the same focused authoring procedure. The agent checks
-the source evidence before deciding whether guidance needs to change.
+Reports version drift and source, artifact, or package coverage signals that may require skill review. Flagged text reports and generated review PR prompts route your agent to the same focused authoring procedure. The agent checks the source evidence before deciding whether guidance needs to change.

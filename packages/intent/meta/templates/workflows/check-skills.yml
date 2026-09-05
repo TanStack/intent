@@ -1,13 +1,13 @@
 # check-skills.yml — Drop this into your library repo's .github/workflows/
 #
-# Validates intent skills on PRs. After a release or manual run, opens or
+# Validates intent skills and recorded source reviews on PRs. After a release or manual run, opens or
 # updates one review PR when existing skills, artifact coverage, or workspace
 # package coverage need review.
 #
-# Triggers: pull requests touching skills/artifacts, new release published, or
+# Triggers: pull requests, new release published, or
 # manual workflow_dispatch.
 #
-# intent-workflow-version: 3
+# intent-workflow-version: 4
 #
 # Template variables (replaced by `intent setup`):
 #   {{PACKAGE_LABEL}} — e.g. @tanstack/query or my-workspace workspace
@@ -15,12 +15,7 @@
 name: Check Skills
 
 on:
-  pull_request:
-    paths:
-      - 'skills/**'
-      - '**/skills/**'
-      - '_artifacts/**'
-      - '**/_artifacts/**'
+  pull_request: {}
   release:
     types: [published]
   workflow_dispatch: {}
@@ -37,6 +32,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -48,6 +45,14 @@ jobs:
 
       - name: Validate skills
         run: intent validate --github-summary
+
+      - name: Check recorded source reviews
+        env:
+          INTENT_REVIEW_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -f .intent/review-state.json ] || grep -q -- '<!-- intent-maintainer:start -->' AGENTS.md CLAUDE.md .cursorrules .github/copilot-instructions.md 2>/dev/null; then
+            intent review --base "$INTENT_REVIEW_BASE" --check
+          fi
 
   review:
     name: Check intent skill coverage
@@ -70,7 +75,11 @@ jobs:
       - name: Check skills
         id: stale
         run: |
-          intent stale --github-review --package-label "{{PACKAGE_LABEL}}"
+          if [ -f .intent/review-state.json ]; then
+            intent review --github-review --package-label "{{PACKAGE_LABEL}}"
+          else
+            intent stale --github-review --package-label "{{PACKAGE_LABEL}}"
+          fi
 
       - name: Open or update review PR
         if: steps.stale.outputs.has_review == 'true'

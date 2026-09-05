@@ -17,10 +17,7 @@ metadata:
 
 # Skill Tree Generator
 
-You produce and maintain a tree of SKILL.md files for a library. Every file
-you create is read directly by AI coding agents across Claude, GPT-4+,
-Gemini, Cursor, Copilot, Codex, and open-source models. Your output must
-be portable, concise, and grounded in actual library behavior.
+You produce and maintain a tree of SKILL.md files for a library. Every file you create is read directly by AI coding agents across Claude, Codex, Gemini, Cursor, Copilot, and open-source models. Your output must be portable, concise, and grounded in actual library behavior.
 
 ### Skill types
 
@@ -35,18 +32,13 @@ Every skill has a `metadata.type` field in its frontmatter. Valid types:
 | `composition` | Integration between two or more libraries                  | `electric-drizzle`        |
 | `security`    | Audit checklist or security validation                     | `electric-security-check` |
 
-Agents discover skills via `npx @tanstack/intent list` and read them directly
-from `node_modules`. Framework skills declare a `requires` dependency on
-their core skill so agents load them in the right order.
+Agents discover skills via `npx @tanstack/intent list` and read them directly from `node_modules`. Framework skills declare a `requires` dependency on their core skill so agents load them in the right order.
 
 There are two workflows. Detect which applies.
 
-**Workflow A — Generate:** Build a complete skill tree from a domain map.
-**Workflow B — Update:** Review identified changes against existing guidance.
+**Workflow A — Generate:** Build a complete skill tree from a domain map. **Workflow B — Update:** Review identified changes against existing guidance.
 
-For one task without a requested full-library design, follow
-[generate-skill](../generate-skill/SKILL.md) instead. Before writing any
-skill, apply its [shared writing rules](../generate-skill/SKILL.md#writing-rules).
+For one task without a requested full-library design, follow [generate-skill](../generate-skill/SKILL.md) instead. Before writing any skill, apply its [shared writing rules](../generate-skill/SKILL.md#writing-rules).
 
 ---
 
@@ -56,34 +48,26 @@ skill, apply its [shared writing rules](../generate-skill/SKILL.md#writing-rules
 
 You need one of:
 
-- `skills/_artifacts/domain_map.yaml` and `skills/_artifacts/skill_spec.md`
-  from domain-discovery
-- Raw library documentation and source code (run a compressed domain
-  discovery first)
+- `skills/_artifacts/domain_map.yaml` and `skills/_artifacts/skill_spec.md` from domain-discovery
+- Raw library documentation and source code (run a compressed domain discovery first)
 
-If starting from raw docs without a domain map, run a compressed
-discovery. This produces lower-fidelity output than the full
-domain-discovery skill — prefer running that when time permits.
+If starting from raw docs without a domain map, run a compressed discovery. This produces lower-fidelity output than the full domain-discovery skill — prefer running that when time permits.
 
 1. Build a concept inventory (every export, config key, constraint, warning)
 2. Group into capability domains using work-oriented names (let library complexity drive the count — 2–3 for focused libraries, more for large frameworks)
-3. Identify independently useful developer tasks; combine overlapping
-   guidance and justify each independent loading condition
+3. Identify independently useful developer tasks; combine overlapping guidance and justify each independent loading condition
 4. Extract the failure modes supported by the sources for each task
 5. Proceed to Step 1 below
 
 ### Scaffold flow output
 
-If the maintainer uses a custom skills root, replace `skills/` in the paths
-below with their chosen directory.
+If the maintainer uses a custom skills root, replace `skills/` in the paths below with their chosen directory.
 
-For the scaffold workflow, produce a single artifact before writing any
-SKILL.md files:
+For the scaffold workflow, produce a single artifact before writing any SKILL.md files:
 
 - `skills/_artifacts/skill_tree.yaml`
 
-This file enumerates every skill that must be generated in the next step.
-Do not write SKILL.md files yet unless explicitly asked.
+This file enumerates every skill that must be generated in the next step. Do not write SKILL.md files yet unless explicitly asked.
 
 Use this format:
 
@@ -118,35 +102,23 @@ skills:
       - 'references/[file].md' # omit if none
 ```
 
-**Monorepo layout:** For monorepos, each skill's `path` is relative to its
-package directory (e.g. `packages/client/skills/core/SKILL.md`). Set the
-`package` field so generate-skill knows where to write the file. The domain
-map artifacts stay at the repo root.
+**Monorepo layout:** For monorepos, each skill's `path` is relative to its package directory (e.g. `packages/client/skills/core/SKILL.md`). Set the `package` field so generate-skill knows where to write the file. The domain map artifacts stay at the repo root.
 
 ### Minimal library fast path
 
-If tasks stand alone, there are no framework adapter packages, and a shared
-overview would add no necessary guidance, skip the core overview + sub-skill
-registry pattern.
-Instead:
+If tasks stand alone, there are no framework adapter packages, and a shared overview would add no necessary guidance, skip the core overview + sub-skill registry pattern. Instead:
 
 - Use **flat structure** — each skill gets its own `skills/[skill-name]/SKILL.md`
 - **No router skill** — the intent CLI `list` command is sufficient for discovery
 - **No core overview skill** — go directly to individual skill files
-- Each skill is type `core` (not `sub-skill`) and stands alone without
-  a parent registry
-- Skip Step 2 (core overview) and Step 3 (sub-skills) — go directly to
-  writing individual skills as standalone core skills using Step 3's body
-  format
+- Each skill is type `core` (not `sub-skill`) and stands alone without a parent registry
+- Skip Step 2 (core overview) and Step 3 (sub-skills) — go directly to writing individual skills as standalone core skills using Step 3's body format
 
-This avoids unnecessary scaffolding for focused libraries where the
-overhead of a hierarchical skill tree exceeds the navigation benefit.
+This avoids unnecessary scaffolding for focused libraries where the overhead of a hierarchical skill tree exceeds the navigation benefit.
 
 ### Step 1 — Plan the file tree
 
-From the domain map, each entry in the `skills` list becomes a SKILL.md
-file. The `type` field on each skill (`core`, `framework`, `lifecycle`,
-`composition`) determines where it goes. Determine the file tree:
+From the domain map, each entry in the `skills` list becomes a SKILL.md file. The `type` field on each skill (`core`, `framework`, `lifecycle`, `composition`) determines where it goes. Determine the file tree:
 
 **Core vs framework decision:**
 
@@ -164,19 +136,9 @@ file. The `type` field on each skill (`core`, `framework`, `lifecycle`,
 
 If a library has no framework adapters, produce only core skills.
 
-**Framework-integration domain decomposition:** If the domain map from
-domain-discovery contains a single "Framework Integration" domain
-and the library has separate framework adapter packages, decompose it
-into per-framework skills co-located with each adapter package. Do not
-produce a single monolithic framework-integration skill that covers
-React, Vue, Solid, etc. in one file.
+**Framework-integration domain decomposition:** If the domain map from domain-discovery contains a single "Framework Integration" domain and the library has separate framework adapter packages, decompose it into per-framework skills co-located with each adapter package. Do not produce a single monolithic framework-integration skill that covers React, Vue, Solid, etc. in one file.
 
-**Adapter-heavy domains:** When a domain covers multiple backends or
-adapters with distinct config interfaces (e.g. 5 sync adapters, 3
-database drivers), keep one SKILL.md for the shared patterns but
-produce one reference file per adapter with its specific config,
-setup, and gotchas. The SKILL.md covers what's common; each
-`references/[adapter].md` covers what's unique.
+**Adapter-heavy domains:** When a domain covers multiple backends or adapters with distinct config interfaces (e.g. 5 sync adapters, 3 database drivers), keep one SKILL.md for the shared patterns but produce one reference file per adapter with its specific config, setup, and gotchas. The SKILL.md covers what's common; each `references/[adapter].md` covers what's unique.
 
 **Flat vs nested structure:**
 
@@ -194,9 +156,7 @@ Use **flat** (`skills/[skill-name]/SKILL.md`) when:
 - The domain discovery process recommended task-focused skills
 - Skills map 1:1 to distinct developer intents with minimal overlap
 
-Both are valid. The domain map's `type` field and structure will signal
-which fits. When in doubt, prefer flat — it's simpler and each skill
-is independently discoverable.
+Both are valid. The domain map's `type` field and structure will signal which fits. When in doubt, prefer flat — it's simpler and each skill is independently discoverable.
 
 **Nested structure:**
 
@@ -241,15 +201,11 @@ skills/
 │   └── SKILL.md
 ```
 
-**Router skill:** Add a router only when its decision guidance helps agents
-choose between tasks that `intent list` and the skills' descriptions cannot
-adequately distinguish. Skill count alone does not justify a router.
+**Router skill:** Add a router only when its decision guidance helps agents choose between tasks that `intent list` and the skills' descriptions cannot adequately distinguish. Skill count alone does not justify a router.
 
 **Source repository layout for npm distribution:**
 
-Skills must ship with their respective packages so they're available in
-`node_modules` after install. In a monorepo, co-locate skills with the
-package they document:
+Skills must ship with their respective packages so they're available in `node_modules` after install. In a monorepo, co-locate skills with the package they document:
 
 ```
 packages/
@@ -269,21 +225,13 @@ packages/
 │   └── package.json             # Add "skills" to files array
 ```
 
-Publishing configuration is separate from authoring. When the maintainer
-requests it, `npx @tanstack/intent@latest edit-package-json` prepares the
-package; review its resulting diff.
+Publishing configuration is separate from authoring. When the maintainer requests it, `npx @tanstack/intent@latest edit-package-json` prepares the package; review its resulting diff.
 
 ### Steps 2–7 — Write skills
 
-When writing skill files (after the scaffold plan is approved), read
-[the skill-writing procedures and templates](references/write-skills.md).
-Follow the applicable steps in order: core overview, core sub-skills,
-framework skills, tension notes, composition skills, and checklist skills.
-The reference owns each type's frontmatter, body, dependency rules,
-failure-mode handling, and reference-file criteria.
+When writing skill files (after the scaffold plan is approved), read [the skill-writing procedures and templates](references/write-skills.md). Follow the applicable steps in order: core overview, core sub-skills, framework skills, tension notes, composition skills, and checklist skills. The reference owns each type's frontmatter, body, dependency rules, failure-mode handling, and reference-file criteria.
 
-For the minimal-library fast path, use Step 3's body format for standalone
-core skills. For scaffold-only requests, stop after `skill_tree.yaml`.
+For the minimal-library fast path, use Step 3's body format for standalone core skills. For scaffold-only requests, stop after `skill_tree.yaml`.
 
 ### Step 8 — Validate the complete tree
 
@@ -319,11 +267,7 @@ Run every check before outputting. Fix any failures before proceeding.
 
 ## Workflow B — Update existing skills
 
-When a library version, changelog, migration guide, or accuracy report
-requires updating existing skills, read [the update workflow](references/update-skills.md).
-Use the focused procedure it points to for each affected task; keep existing
-artifact decisions unless the evidence requires a correction. Apply the
-constraints below to every updated file.
+When a library version, changelog, migration guide, or accuracy report requires updating existing skills, read [the update workflow](references/update-skills.md). Use the focused procedure it points to for each affected task; keep existing artifact decisions unless the evidence requires a correction. Apply the constraints below to every updated file.
 
 ## Constraints — verify for every file
 
@@ -381,7 +325,6 @@ When generating a complete skill tree:
 
 When updating:
 
-Return the evidence, focused diffs or justified no-ops, validation results,
-and unresolved uncertainty required by generate-skill.
+Return the evidence, focused diffs or justified no-ops, validation results, and unresolved uncertainty required by generate-skill.
 
 ---
