@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -178,11 +179,36 @@ describe('intent meta', () => {
         '(references/artifacts.md)',
         `(${join(metaDir, 'domain-discovery', 'references', 'artifacts.md')})`,
       )
+      .replaceAll(
+        '(../generate-skill/SKILL.md)',
+        `(${join(metaDir, 'generate-skill', 'SKILL.md')})`,
+      )
 
     const exitCode = await main(['meta', 'domain-discovery'])
 
     expect(exitCode).toBe(0)
     expect(logSpy).toHaveBeenCalledWith(expected)
+  })
+
+  it('loads the focused procedure with its format and full-library paths', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-focused-meta-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main(['meta', 'generate-skill'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('name: generate-skill\n')
+    for (const path of [
+      join('generate-skill', 'references', 'skill-format.md'),
+      join('domain-discovery', 'SKILL.md'),
+      join('tree-generator', 'SKILL.md'),
+    ]) {
+      expect(output).toContain(`](${join(metaDir, path)})`)
+      expect(existsSync(join(metaDir, path))).toBe(true)
+    }
+    expect(readdirSync(root)).toEqual([])
   })
 
   it('fails cleanly for invalid meta-skill names', async () => {
@@ -1153,13 +1179,33 @@ describe('cli commands', () => {
     expect(content).not.toContain('@tanstack/local#local-skill')
   })
 
-  it('prints the scaffold prompt', async () => {
+  it('prints focused and full-library entry paths without changing the caller', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-scaffold-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), { name: 'authoring-fixture' })
+    const original = readFileSync(join(root, 'package.json'), 'utf8')
+    process.chdir(root)
+
     const exitCode = await main(['scaffold'])
     const output = String(logSpy.mock.calls[0]?.[0])
 
     expect(exitCode).toBe(0)
-    expect(output).toContain('## Step 1')
-    expect(output).toContain(join('meta', 'domain-discovery', 'SKILL.md'))
+    expect(logSpy).toHaveBeenCalledTimes(1)
+    expect(errorSpy).not.toHaveBeenCalled()
+    expect(output.indexOf(join('generate-skill', 'SKILL.md'))).toBeLessThan(
+      output.indexOf(join('domain-discovery', 'SKILL.md')),
+    )
+    for (const name of [
+      'generate-skill',
+      'domain-discovery',
+      'tree-generator',
+    ]) {
+      const path = join(metaDir, name, 'SKILL.md')
+      expect(output).toContain(path)
+      expect(existsSync(path)).toBe(true)
+    }
+    expect(readdirSync(root)).toEqual(['package.json'])
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(original)
   })
 
   it('updates package.json for skill publishing', async () => {

@@ -5,9 +5,8 @@ description: >
   files) for any JavaScript or TypeScript library. Produces core skills
   (framework-agnostic) and framework skills (React, Solid, Vue bindings)
   with dependency linking. Activate when producing skill files from a domain
-  map, updating existing skills after a library version change, or auditing
-  skill accuracy. Takes domain_map.yaml and skill_spec.md from
-  domain-discovery as primary inputs.
+  map or explicitly designing or auditing a full-library skill set. Takes
+  domain_map.yaml and skill_spec.md from domain-discovery as primary inputs.
 metadata:
   version: '3.0'
   category: meta-tooling
@@ -43,7 +42,11 @@ their core skill so agents load them in the right order.
 There are two workflows. Detect which applies.
 
 **Workflow A — Generate:** Build a complete skill tree from a domain map.
-**Workflow B — Update:** Diff a library version change and update skills.
+**Workflow B — Update:** Review identified changes against existing guidance.
+
+For one task without a requested full-library design, follow
+[generate-skill](../generate-skill/SKILL.md) instead. Before writing any
+skill, apply its [shared writing rules](../generate-skill/SKILL.md#writing-rules).
 
 ---
 
@@ -64,9 +67,9 @@ domain-discovery skill — prefer running that when time permits.
 
 1. Build a concept inventory (every export, config key, constraint, warning)
 2. Group into capability domains using work-oriented names (let library complexity drive the count — 2–3 for focused libraries, more for large frameworks)
-3. Enumerate 10–20 task-focused skills from the intersection of domains
-   and developer tasks
-4. Extract 3+ failure modes per skill (plausible, silent, grounded)
+3. Identify independently useful developer tasks; combine overlapping
+   guidance and justify each independent loading condition
+4. Extract the failure modes supported by the sources for each task
 5. Proceed to Step 1 below
 
 ### Scaffold flow output
@@ -122,8 +125,9 @@ map artifacts stay at the repo root.
 
 ### Minimal library fast path
 
-If the domain map contains **fewer than 5 skills** and no framework
-adapter packages, skip the core overview + sub-skill registry pattern.
+If tasks stand alone, there are no framework adapter packages, and a shared
+overview would add no necessary guidance, skip the core overview + sub-skill
+registry pattern.
 Instead:
 
 - Use **flat structure** — each skill gets its own `skills/[skill-name]/SKILL.md`
@@ -158,8 +162,7 @@ file. The `type` field on each skill (`core`, `framework`, `lifecycle`,
 | SSR/hydration patterns specific to a framework | Framework  |
 | Framework-specific gotchas                     | Framework  |
 
-If a library has no framework adapters (e.g. Store, DB), produce only
-core skills.
+If a library has no framework adapters, produce only core skills.
 
 **Framework-integration domain decomposition:** If the domain map from
 domain-discovery contains a single "Framework Integration" domain
@@ -181,7 +184,7 @@ Choose the structure that matches how the domain map's skills are shaped.
 
 Use **nested** (`[lib]-core/[domain]/SKILL.md`) when:
 
-- Developer tasks cluster cleanly into 3–5 conceptual domains
+- Developer tasks cluster cleanly into conceptual domains
 - The library has a clear core + framework adapter split
 - Skills build on each other in a layered way
 
@@ -238,13 +241,9 @@ skills/
 │   └── SKILL.md
 ```
 
-**Router skill:** A router skill (lightweight entry point with a decision
-table) is optional. If the intent CLI provides `list` and `show`
-commands, agents can discover skills directly without a router. Only
-create a router skill if the skill set is large enough (15+) that
-browsing the list is insufficient, or if the nested structure needs
-an entry point to guide agents to the right sub-skill. Libraries with
-fewer than 5 skills should never have a router skill.
+**Router skill:** Add a router only when its decision guidance helps agents
+choose between tasks that `intent list` and the skills' descriptions cannot
+adequately distinguish. Skill count alone does not justify a router.
 
 **Source repository layout for npm distribution:**
 
@@ -270,9 +269,9 @@ packages/
 │   └── package.json             # Add "skills" to files array
 ```
 
-Run `npx @tanstack/intent@latest edit-package-json` to wire each package's `package.json`
-automatically (adds `"skills"`, `"bin"`, and `"!skills/_artifacts"` to the
-`files` array, and adds the `bin` entry if missing).
+Publishing configuration is separate from authoring. When the maintainer
+requests it, `npx @tanstack/intent@latest edit-package-json` prepares the
+package; review its resulting diff.
 
 ### Steps 2–7 — Write skills
 
@@ -301,7 +300,7 @@ Run every check before outputting. Fix any failures before proceeding.
 | No concept explanations                           | No "TypeScript is...", no "React hooks are..."                                              |
 | No marketing prose                                | First body line is heading or dependency note                                               |
 | Every code block is complete                      | Works without modification when pasted                                                      |
-| Common Mistakes are silent                        | Not obvious compile errors                                                                  |
+| Common Mistakes cover real failures               | Preserve silent failures and necessary error handling                                       |
 | Common Mistakes are library-specific              | Not generic TS/React mistakes                                                               |
 | Common Mistakes are sourced                       | Every mistake traceable to doc or source                                                    |
 | Core skills reference framework skills            | "For React usage, see..."                                                                   |
@@ -309,11 +308,11 @@ Run every check before outputting. Fix any failures before proceeding.
 | Composition skills don't repeat individual skills | Only the seam                                                                               |
 | `name` matches parent directory                   | `name: search-params` → `router-core/search-params/SKILL.md`                                |
 | `sources` filled in sub-skills                    | At least one repo:path per sub-skill                                                        |
-| Cross-skill failures in all relevant files        | Failure modes with multiple `skills` appear in each listed SKILL.md                         |
+| Cross-skill failures in all relevant files        | Every affected entry point routes to the authoritative failure guidance                     |
 | Tensions noted in affected skills                 | Each tension has notes in all involved domain skills                                        |
 | Framework domains decomposed per-package          | No single skill covering multiple framework adapters                                        |
-| Adapter-heavy domains have references             | 3+ adapters/backends → one reference file per adapter                                       |
-| Dense API surfaces in references                  | >10 distinct patterns → reference file, not inline                                          |
+| Adapter-heavy domains have references             | Conditional adapter details have precise reading pointers                                   |
+| Dense API surfaces in references                  | Conditional API details are referenced by task relevance                                    |
 | Checklist skills use audit body                   | Security/go-live skills use checklist template, not Setup → Core Patterns → Common Mistakes |
 
 ---
@@ -322,20 +321,20 @@ Run every check before outputting. Fix any failures before proceeding.
 
 When a library version, changelog, migration guide, or accuracy report
 requires updating existing skills, read [the update workflow](references/update-skills.md).
-Produce its staleness report, update the affected skills according to the
-change category, and write the changelog entry. Apply the constraints below
-to every updated file.
+Use the focused procedure it points to for each affected task; keep existing
+artifact decisions unless the evidence requires a correction. Apply the
+constraints below to every updated file.
 
 ## Constraints — verify for every file
 
 | Check                                       | Rule                                                                                |
 | ------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Under 500 lines per SKILL.md                | Move excess to references/; also create references for content depth                |
+| Under 500 lines per SKILL.md                | Use relevant references while retaining necessary guidance                          |
 | Real imports in every code block            | Exact package, correct adapter                                                      |
 | No external concept explanations            | No "TypeScript is...", no "React hooks are..." — library-specific concepts are fine |
 | No marketing prose                          | First body line is heading, code, or dependency note                                |
 | Complete code blocks                        | Every block works without modification                                              |
-| Common Mistakes are silent                  | Not obvious compile errors                                                          |
+| Common Mistakes cover real failures         | Preserve silent failures and necessary error handling                               |
 | Common Mistakes are library-specific        | Not generic TS/React mistakes                                                       |
 | Common Mistakes are sourced                 | Traceable to doc or source                                                          |
 | Core skills are framework-agnostic          | No hooks, no components, no providers                                               |
@@ -344,7 +343,7 @@ to every updated file.
 | Composition skills require all dependencies | Lists all core + framework skills                                                   |
 | `name` matches parent directory             | `name: search-params` → `router-core/search-params/SKILL.md`                        |
 | `library_version` in every frontmatter      | Which version the skill targets                                                     |
-| Cross-skill failures duplicated             | Each listed skill gets the failure mode                                             |
+| Cross-skill failures accessible             | Each listed skill points to the authoritative failure guidance                      |
 | Tensions cross-referenced                   | Tension notes in each involved skill point to the other                             |
 | Skills ship with packages                   | `"skills"` in package.json `files` array                                            |
 | Checklist skills use audit template         | Security/go-live skills use checklist body, not standard body                       |
@@ -359,7 +358,7 @@ Output is consumed by all major AI coding agents. To ensure consistency:
 - No XML tags in generated skill content
 - Code blocks use triple backticks with language annotation
 - Section boundaries use ## headers
-- Descriptions are keyword-packed for routing
+- Descriptions state distinct loading conditions
 - Examples show concrete values, never placeholders
 - Positive instructions ("Use X") over negative ("Don't use Y")
 - Critical info at start or end of sections (not buried in middle)
@@ -382,8 +381,7 @@ When generating a complete skill tree:
 
 When updating:
 
-1. staleness_report.yaml
-2. Updated SKILL.md files (core then framework)
-3. CHANGELOG.md entry
+Return the evidence, focused diffs or justified no-ops, validation results,
+and unresolved uncertainty required by generate-skill.
 
 ---

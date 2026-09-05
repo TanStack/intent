@@ -21,7 +21,7 @@ Intent provides tooling for two workflows:
 
 **For maintainers (library teams):**
 
-- Scaffold skills through AI-assisted domain discovery
+- Create or update focused skill guidance with your existing coding agent
 - Validate SKILL.md format and packaging
 - Ship skills in the same release pipeline as code
 - Review version, source, artifact, and package coverage signals
@@ -71,7 +71,10 @@ Loads the matching `SKILL.md` content for the installed package version. Pass `-
 npx @tanstack/intent@latest scaffold
 ```
 
-Guides your agent through domain discovery, tree generation, and skill authoring with interactive maintainer interviews.
+Prints a focused authoring procedure for your agent to follow using the
+current task or concrete code/docs change. Full-library discovery and its
+maintainer interviews remain available when explicitly requested. See the
+[maintainer quick start](./getting-started/quick-start-maintainers).
 
 ```bash
 npx @tanstack/intent@latest validate
@@ -85,4 +88,7 @@ Enforces SKILL.md format rules and packaging requirements before publish.
 npx @tanstack/intent@latest stale
 ```
 
-Reports version drift and source, artifact, or package coverage signals that may require skill review.
+Reports version drift and source, artifact, or package coverage signals that
+may require skill review. Flagged text reports and generated review PR prompts
+route your agent to the same focused authoring procedure. The agent checks
+the source evidence before deciding whether guidance needs to change.

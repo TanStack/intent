@@ -1,13 +1,10 @@
 ---
 name: domain-discovery
 description: >
-  Analyze library documentation and source code, then interview maintainers
-  to discover capability domains and task-focused skills for AI coding
-  agents. Activate when creating skills for a new library, organizing
-  existing documentation into skill categories, or when a maintainer wants
-  help deciding how to structure their library's agent-facing knowledge.
-  Produces a domain_map.yaml and skill_spec.md that feed directly into
-  the tree-generator skill.
+  Design a full-library skill set when the maintainer explicitly requests
+  library-wide discovery or a taxonomy review. Analyze source and docs,
+  interview the maintainer, and produce domain_map.yaml and skill_spec.md
+  for tree-generator.
 metadata:
   version: '3.0'
   category: meta-tooling
@@ -16,6 +13,11 @@ metadata:
 ---
 
 # Domain Discovery & Maintainer Interview
+
+Use this interview only for explicitly requested full-library design. For
+one developer task or a concrete code/docs update, follow
+[generate-skill](../generate-skill/SKILL.md) instead; the interview phases
+and artifacts below do not apply to that focused path.
 
 You are extracting domain knowledge for a library to produce a structured
 domain map. Your job is not to summarize documentation — it is to build a
@@ -423,7 +425,7 @@ retain the documented custom-root and monorepo placement.
 | Batch only confirmations              | Yes/no questions may batch 2–3; open-ended questions get their own message                                                           |
 | Questions reference findings          | No generic questions — cite what you found                                                                                           |
 | Skills are task-focused               | Each skill matches a developer moment, not a conceptual area                                                                         |
-| 3+ failure modes per skill            | Complex skills target 5–6                                                                                                            |
+| Failure modes follow evidence         | Preserve necessary failure handling; do not invent entries to meet a quota                                                           |
 | Every failure mode sourced            | Doc page, source file, issue link, or maintainer interview                                                                           |
 | Gaps are explicit                     | Unknown areas flagged, not guessed                                                                                                   |
 | No marketing prose                    | Library description is factual, not promotional                                                                                      |

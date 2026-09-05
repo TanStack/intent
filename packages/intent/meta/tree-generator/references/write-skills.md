@@ -1,3 +1,6 @@
+Before using these full-library templates, apply the
+[shared writing rules](../../generate-skill/SKILL.md#writing-rules).
+
 ### Step 2 — Write the core skill
 
 The core skill is the foundational overview for the library. It covers
@@ -9,9 +12,8 @@ framework-agnostic concepts and contains the sub-skill registry.
 ---
 name: '[lib]-core'
 description: >
-  [1–3 sentences. What this library does and the framework-agnostic
-  concepts it provides. Pack with keywords: function names, config
-  options, concepts. This is a routing key, not a human summary.]
+  [Distinct developer tasks that need this shared framework-agnostic
+  guidance. Include API names only when they distinguish those tasks.]
 metadata:
   type: core
   library: '[lib]'
@@ -47,7 +49,8 @@ Targets [library] v[X.Y.Z].
 
 ### Step 3 — Write core sub-skills
 
-One SKILL.md per domain. Follow this structure exactly.
+One SKILL.md per independently useful task. Use this section order when
+the sections contain necessary, source-backed guidance.
 
 **Frontmatter:**
 
@@ -55,8 +58,8 @@ One SKILL.md per domain. Follow this structure exactly.
 ---
 name: '[domain-slug]'
 description: >
-  [1–3 sentences. What this domain covers AND when to load it. Name
-  specific functions, options, or APIs. Dense routing key.]
+  [When an agent should load this task guidance. Distinguish its loading
+  conditions from neighboring skills.]
 metadata:
   type: sub-skill
   library: '[lib]'
@@ -81,7 +84,7 @@ Minimum working example for this domain.
 
 **2. Core Patterns**
 
-2–4 patterns. For each:
+Include the patterns needed to complete the task. For each:
 
 - One-line heading: what it accomplishes
 - Complete code block using core API
@@ -91,14 +94,14 @@ Minimum working example for this domain.
 **3. Common Mistakes**
 
 Each `failure_mode` entry from the domain map becomes a Common Mistake
-entry in the SKILL file. Minimum 3 entries. Complex domains target 5–6.
+entry or a required pointer to its authoritative home. Include only
+source-backed failures relevant to the task.
 
-**Cross-skill failure modes:** The domain map may contain failure modes
-with a `skills` list naming multiple skill slugs. Write these into
-every SKILL file whose skill is listed. A developer loading the SSR
-skill and a developer loading the state management skill both need to
-see "stale state during hydration" — the same advice must appear in
-both files. Do not deduplicate across skills at the cost of coverage.
+**Cross-skill failure modes:** Every skill named by a failure mode's
+`skills` list must make that guidance accessible. Keep the rule in one home
+and put a precise reading pointer in each affected skill. A developer doing
+SSR work and one managing state must both reach the hydration constraint
+before applying patterns that depend on it.
 
 Format:
 
@@ -128,8 +131,8 @@ Priority levels:
 - **HIGH** — Incorrect behavior under common conditions.
 - **MEDIUM** — Incorrect under specific conditions or edge cases.
 
-Every mistake must be plausible (an agent would generate it), silent
-(no immediate crash), and grounded (traceable to doc or source).
+Every mistake must be plausible and grounded in source or docs. Preserve
+both silent failures and necessary error handling.
 
 **Failure mode status from domain map:** The domain map may include a
 `status` field on failure modes. Handle as follows:
@@ -148,21 +151,11 @@ Every mistake must be plausible (an agent would generate it), silent
 - [Complete option reference](references/options.md)
 ```
 
-Create reference files when any of these apply — not just length overflow:
-
-- **Length:** The skill would exceed 500 lines without them
-- **Multiple subsystems:** The domain covers 3+ independent backends,
-  adapters, or providers with distinct config interfaces. Create one
-  reference file per subsystem (e.g. `references/electric-adapter.md`,
-  `references/query-adapter.md`)
-- **Dense API surface:** A topic has >10 distinct API patterns, operators,
-  or option shapes that agents need for implementation. Move the full
-  reference to `references/` and keep only the most common 2–3 in the
-  SKILL.md
-- **Deep validation/schema patterns:** If the library has schema
-  validation, type transforms (TInput/TOutput), or similar deep
-  configuration surfaces, give them a dedicated reference file even if
-  they technically fit in the parent skill
+Choose reference boundaries using the shared writing rules. Keep common
+patterns and required constraints accessible at the entry point. Put
+adapter-specific configuration, uncommon API patterns, and deep schema or
+validation detail behind links naming when to read them. This applies even
+when the content would fit within 500 lines.
 
 ### Step 4 — Write framework skills
 

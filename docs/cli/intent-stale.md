@@ -6,7 +6,7 @@ id: intent-stale
 `intent stale` reports whether shipped skills may need review.
 
 ```bash
-npx @tanstack/intent@latest stale [--json]
+npx @tanstack/intent@latest stale [dir] [--json]
 ```
 
 ## Options
@@ -32,6 +32,7 @@ npx @tanstack/intent@latest stale [--json]
 ### Output and workflow state
 
 - Prints text output by default or JSON with `--json`
+- When skills or coverage need review, text output includes a command for your agent to load the focused authoring procedure; JSON contains only report data
 - Prints a non-failing workflow update reminder when `.github/workflows/check-skills.yml` is missing the current `intent-workflow-version` stamp
 - If no packages are found, prints `No intent-enabled packages found.`
 
@@ -85,7 +86,7 @@ Report fields:
 | Field | Meaning |
 | --- | --- |
 | `library` | Package name |
-| `currentVersion` | Latest version from npm registry, or `null` if unavailable |
+| `currentVersion` | Local package version when available; otherwise latest from npm, or `null` if unavailable |
 | `skillVersion` | `library_version` from skills, or `null` |
 | `versionDrift` | `major`, `minor`, `patch`, or `null` |
 | `skills` | Per-skill checks |
@@ -109,6 +110,25 @@ Reason generation:
 - When no skill reasons exist: `All skills up-to-date`
 - Otherwise: one warning line per stale skill or review signal (`⚠ <name>: <reason1>, <reason2>, ...`)
 
+## Review the findings
+
+Ask your coding agent to run the command printed after a flagged report and
+follow it using that report and the relevant code/docs change. The command
+loads `generate-skill`, including its conditional review-signals reference.
+The agent reuses the existing conversation and repository evidence, then
+returns a disposition per item and a validated diff when edits are warranted.
+
+The existing `--github-review` workflow mode writes `review-items.json` and,
+when there are items, `pr-body.md`. Its Agent Prompt routes to the same
+procedure. The command itself does not create a remote PR or edit skills;
+the installed GitHub workflow handles the review reminder.
+
+Version drift and missing stored source SHAs do not prove that guidance is
+wrong. Review actual source changes before editing. Missing evidence stays
+unresolved, and an evidence-backed no-op may leave a signal flagged. Failed
+checks require logs; workflow advisories are separate maintenance items.
+Neither is a reason to rewrite skills.
+
 ## Common errors
 
 - Package scan failure: prints a scanner error
@@ -120,4 +140,5 @@ Reason generation:
 
 ## Related
 
+- [Maintainer quick start](../getting-started/quick-start-maintainers)
 - [intent list](./intent-list)
