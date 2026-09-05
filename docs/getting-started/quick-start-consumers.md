@@ -9,16 +9,23 @@ id: quick-start-consumers
 npx @tanstack/intent@latest install
 ```
 
-This command creates or updates skill-loading guidance for your agent.
+Run this in an interactive terminal. On first use, Intent helps you choose which installed packages and skills your agent may use, then creates or updates skill-loading guidance.
 
 Examples use `npx` for npm projects. In pnpm, Yarn, or Bun projects, use the matching runner: `pnpm dlx`, `yarn dlx`, or `bunx`.
 
 The command:
 
-1. Checks for existing `intent-skills` guidance in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.)
-2. Writes lightweight instructions for skill discovery and loading
-3. Preserves content outside the managed block
-4. Verifies the managed block before reporting success
+1. Shows discovered packages, versions, skill descriptions, and exclusions
+2. Lets you choose package-wide or individual skill permissions
+3. Previews the exact `intent.skills` configuration and destination `package.json`, then asks for confirmation
+4. Writes the confirmed permissions and creates or updates the `intent-skills` guidance block, preserving unrelated content
+5. Verifies the guidance and reports the available skill count and a command to list those skills
+
+Choose **No** when asked about allowing all current and future skill sources to select specific packages and skills. Press Space to toggle choices and Enter to review your selection. A package's **All skills** choice includes its current and future skills; an individual choice permits only that named skill. Excluded skills appear in the discovery overview but cannot be selected.
+
+Selecting nothing requires explicit confirmation to disable all skills. If no skills are found, or all are excluded, Intent explains the next step and leaves permissions and guidance unchanged. Install a package that ships skills or review your exclusions, then run `install` again.
+
+Canceling before confirmation writes neither file. `--dry-run` previews the flow without writing. First-run setup requires a terminal; noninteractive execution fails without writes when permissions have not been configured.
 
 If an `intent-skills` block already exists, Intent updates that file in place.
 If no block exists, `AGENTS.md` is the default target.
@@ -64,19 +71,19 @@ Hooks do not verify that:
 
 To control what appears in the session catalog, configure `intent.skills` and `intent.exclude` in `package.json`.
 
-## 2. Choose which packages' skills to use
+## 2. Review the saved permissions
 
-`package.json#intent.skills` is an allowlist of the packages whose skills you want surfaced.
+`install` saves your choices in `package.json#intent.skills`, an allowlist of packages or individual skills. It uses the nearest `package.json` that owns the directory where you ran the command.
 
 ```json
 {
   "intent": {
-    "skills": ["@tanstack/*"]
+    "skills": ["@tanstack/react-query#core"]
   }
 }
 ```
 
-List the packages or `*` package patterns you trust. Intent then surfaces skills from matching packages and leaves the rest out. See the [source entries](../concepts/configuration#source-entries) in Configuration for the forms an entry can take, and [Trust model](../concepts/trust-model) for why the allowlist exists.
+When permissions already exist, including inherited workspace permissions, `install` preserves them and only updates guidance. To change your choices, edit the owning `intent.skills` declaration. You can also use `*` package patterns such as `@tanstack/*`. Existing `intent.exclude` rules still take precedence. See the [source entries](../concepts/configuration#source-entries) in Configuration and the [Trust model](../concepts/trust-model).
 
 ## 3. Use skills in your workflow
 

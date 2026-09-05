@@ -7,13 +7,16 @@ import { fail, isCliFailure } from './shared/cli-error.js'
 import type { CAC } from 'cac'
 import type { ExcludeCommandOptions } from './commands/exclude.js'
 import type { HooksInstallCommandOptions } from './commands/hooks/command.js'
-import type { InstallCommandOptions } from './commands/install/command.js'
+import type {
+  InstallCommandOptions,
+  InstallCommandRuntime,
+} from './commands/install/command.js'
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
 import type { StaleCommandOptions } from './commands/stale.js'
 import type { ValidateCommandOptions } from './commands/validate.js'
 
-function createCli(): CAC {
+function createCli(runtime: InstallCommandRuntime = {}): CAC {
   const cli = cac('intent')
   cli.usage('<command> [options]')
 
@@ -144,7 +147,7 @@ function createCli(): CAC {
         import('./commands/support.js'),
         import('./commands/install/command.js'),
       ])
-      await runInstallCommand(options, scanIntentsOrFail)
+      await runInstallCommand(options, scanIntentsOrFail, runtime)
     })
 
   cli
@@ -271,9 +274,12 @@ function createCli(): CAC {
   return cli
 }
 
-export async function main(argv: Array<string> = process.argv.slice(2)) {
+export async function main(
+  argv: Array<string> = process.argv.slice(2),
+  runtime: InstallCommandRuntime = {},
+) {
   try {
-    const cli = createCli()
+    const cli = createCli(runtime)
 
     if (argv.length === 0) {
       cli.outputHelp()

@@ -82,6 +82,7 @@ describe('source policy — all four surfaces filter excluded and unlisted', () 
     ['load', `${LISTED}#core`],
     ['load', `${LISTED}#core`, '--json'],
     ['load', `${LISTED}#core`, '--path'],
+    ['install'],
     ['install', '--map'],
   ])(
     'fails without delivering skills for malformed policy: %j',

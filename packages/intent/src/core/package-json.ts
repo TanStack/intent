@@ -1,6 +1,10 @@
 import { lstatSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+/**
+ * Reads a project policy manifest, returning null only when the file is absent.
+ * Unreadable or invalid manifests throw so failures cannot remove restrictions.
+ */
 export function readPackageJson(dir: string): Record<string, unknown> | null {
   const filePath = join(dir, 'package.json')
   let content: string

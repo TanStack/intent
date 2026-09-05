@@ -3,7 +3,7 @@ title: intent install
 id: intent-install
 ---
 
-`intent install` creates or updates an `intent-skills` guidance block in a project guidance file.
+`intent install` confirms skill-source permissions on first use, then creates or updates an `intent-skills` guidance block in a project guidance file.
 
 ```bash
 npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
@@ -25,13 +25,39 @@ npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--glob
 
 ## Behavior
 
-### Default guidance
+### Default install
 
-- Writes lightweight skill loading guidance by default.
-- Creates `AGENTS.md` when no managed block exists.
-- Updates an existing managed block in a supported config file.
-- Preserves all content outside the managed block.
-- Verifies the managed block before reporting success.
+If `intent.skills` is already configured, including through workspace inheritance, `install` only updates guidance. It does not prompt or change `package.json`.
+
+Otherwise, first-run setup requires an interactive terminal. Non-TTY execution fails before discovery or writes. Node.js 20.12.0 or newer is required.
+
+#### First-run flow
+
+1. **Review** discovered npm and workspace packages, versions, and skill descriptions. Excluded candidates appear in the overview but cannot be selected.
+2. **Choose** permissions. After the overview, Intent asks about allow-all; choose No to select individual packages or skills. Press Space to toggle grouped choices and Enter to review.
+3. **Confirm** the exact `intent.skills` value, destination file, and trust change. Confirmation defaults to No.
+4. **Finish** with verified guidance, available skill and package counts, and a package-manager-aware `list` command. If no skills are enabled, Intent explains how to edit `intent.skills`.
+
+#### Permission choices
+
+| Choice | Effect |
+| --- | --- |
+| All skills in a package | Permits its current and future skills. |
+| Individual skill | Permits only the named skill. |
+| Allow all sources | Writes `["*"]` and skips narrower selection. |
+| Select nothing | Explicitly confirms writing `[]`, disabling current and future sources until `intent.skills` is edited. |
+
+Existing `intent.exclude` rules always apply and remain unchanged.
+
+#### Files and retry behavior
+
+Permissions go in the nearest owning `package.json`. Inside a workspace package, this is that package's file. The update preserves formatting and uses an atomic replacement; if the file changes after preview, Intent stops and asks you to retry.
+
+After permissions are saved, Intent updates an existing managed guidance block in a supported config file, or creates one in `AGENTS.md`. Content outside the block is preserved, and the block is verified before success is reported.
+
+- **No skills found, or all excluded:** explains how to retry and writes nothing. Empty discovery does not create a deny-all policy.
+- **Decline or cancel a prompt:** writes neither permissions nor guidance.
+- **`--dry-run`:** performs discovery and selection, previews permissions and guidance, and writes neither file.
 
 ### Mapping mode
 
@@ -88,6 +114,10 @@ tanstackIntent:
 | Mappings unchanged | `No changes to AGENTS.md; 2 mappings already current.` |
 | Guidance created | `Created AGENTS.md with skill loading guidance.` |
 | Guidance unchanged | `No changes to AGENTS.md; skill loading guidance already current.` |
+| Permissions updated | `Permissions: updated package.json.` |
+| Permissions canceled | `Permissions: canceled.` |
+| Guidance result after setup | `Guidance: created AGENTS.md.` |
+| Guidance failure after setup | `Guidance: failed: <error>` |
 | Placement tip | `Tip: Keep the intent-skills block near the top of AGENTS.md so agents read it before task-specific instructions.` |
 | No actionable skills in `--map` mode | `No intent-enabled skills found.` |
 

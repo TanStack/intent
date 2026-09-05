@@ -3,19 +3,49 @@ title: Trust model
 id: trust-model
 ---
 
-Intent discovers skills from your dependencies and can surface permitted skills through its CLI and agent integrations. A skill is instructions an agent follows, so the set of packages allowed to contribute skills is a trust decision. Intent makes that decision explicit through the `intent.skills` allowlist.
+Skills contain instructions for an agent. Choosing which packages can supply those instructions is a trust decision, controlled by the `intent.skills` allowlist.
 
 ## Explicit sources
 
 A package ships skills in a `skills/` directory. Discovery finds every installed package that has one, including transitive dependencies. Discovery does not grant trust.
 
-`package.json#intent.skills` is the gate. A discovered package contributes skills only when an exact entry or `*` pattern in the allowlist matches its package name and source kind. An unlisted package is dropped, and Intent reports it so you can opt in or ignore it.
+When configured, `package.json#intent.skills` controls which discovered skills can surface through the CLI and agent integrations:
 
-The gate is opt-in today. A project with no `intent.skills` key still surfaces every discovered package, and Intent prints a deprecation notice to stderr on each run until you set `intent.skills`. A future version will require an explicit allowlist. See the [special forms](./configuration#special-forms) in Configuration.
+- **Package entries** permit current and future skills from matching packages.
+- **Exact skill entries** permit only the named skill.
+- **Source kinds stay separate:** `foo` permits an npm source; `workspace:foo` permits a workspace source. Their wildcard patterns remain kind-specific. The exact `*` entry permits every discovered npm and workspace source.
 
-A missing policy manifest is distinct from an invalid one. If a `package.json` used for project policy cannot be read, contains invalid JSON, or is not a JSON object, Intent stops policy-controlled listing and loading with an error naming the file. This includes inherited policy within a resolved workspace. If malformed JSON prevents workspace discovery from identifying the root itself, that remains a [known limitation](https://github.com/TanStack/intent/issues/240).
+Trust does not propagate to dependencies. A dependency that ships skills needs its own matching entry. Intent omits unlisted packages and reports them so you can opt in or ignore them.
 
-Trust does not propagate. A listed package may depend on another package that ships skills, but that dependency stays unlisted unless another entry matches it. A bare entry such as `foo` permits an npm source, while `workspace:foo` permits a workspace source. Their wildcard forms remain kind-specific. The exact `*` entry permits every discovered npm and workspace source.
+### Projects without an allowlist
+
+The gate is opt-in today. Without an effective `intent.skills` declaration, discovery commands still surface every discovered package and print a deprecation notice to stderr. A future version will require an explicit allowlist. See [Special forms](./configuration#special-forms).
+
+Default `intent install` handles this state through interactive permission setup.
+
+### Invalid policy files
+
+Intent stops policy-controlled listing, loading, and installation when a policy `package.json` cannot be read, contains invalid JSON, or is not a JSON object. The error names the file. Repair or restore that file, then retry the command.
+
+This also applies to inherited policy within a resolved workspace. Malformed JSON that prevents discovery from identifying the workspace root itself remains a [known limitation](https://github.com/TanStack/intent/issues/240).
+
+## First-run permission review
+
+When no effective policy exists, `intent install` follows this flow:
+
+1. **Discover:** show npm and workspace packages, versions, and skill descriptions. Excluded candidates appear in the overview but cannot be selected.
+2. **Choose:** select package-wide or exact-skill permissions. An empty selection explicitly confirms disabling all skills.
+3. **Review:** show the exact `intent.skills` value and destination file.
+4. **Confirm:** replace `package.json` atomically only after affirmative confirmation, then install guidance.
+
+| Outcome | Files changed |
+| --- | --- |
+| No skills discovered, or all excluded | None. |
+| Cancel any prompt | None. |
+| Run first-time setup without a TTY | None; the command fails. |
+| Save permissions, then fail to write or verify guidance | Confirmed permissions remain saved; the guidance failure is reported separately. |
+
+The completion summary reports skills available under the saved policy. It does not prove that an agent loaded or applied them. See [Default install](../cli/intent-install#default-install) for picker controls and permission choices.
 
 ## Static discovery
 
