@@ -1,6 +1,10 @@
 import { relative } from 'node:path'
+import { readSkillSourcesConfig } from '../../core/source-policy.js'
 import { fail } from '../../shared/cli-error.js'
-import { detectIntentCommandPackageManager } from '../../shared/command-runner.js'
+import {
+  detectIntentCommandPackageManager,
+  formatIntentCommand,
+} from '../../shared/command-runner.js'
 import {
   coreOptionsFromGlobalFlags,
   noticeOptionsFromGlobalFlags,
@@ -14,9 +18,14 @@ import {
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from './guidance.js'
+import {
+  createPermissionPrompts,
+  setupInitialPermissions,
+} from './permissions.js'
 import type { GlobalScanFlags } from '../support.js'
 import type { IntentCoreOptions } from '../../core/index.js'
 import type { ScanResult } from '../../shared/types.js'
+import type { PermissionPrompts } from './permissions.js'
 
 export const INSTALL_PROMPT = `You are an AI assistant helping a developer set up skill-to-task mappings for their project.
 
@@ -127,6 +136,11 @@ export interface InstallCommandOptions extends GlobalScanFlags {
   printPrompt?: boolean
 }
 
+export interface InstallCommandRuntime {
+  isTTY?: boolean
+  permissionPrompts?: PermissionPrompts
+}
+
 function formatTargetPath(targetPath: string): string {
   return relative(process.cwd(), targetPath) || targetPath
 }
@@ -197,6 +211,7 @@ function printWriteResult({
 export async function runInstallCommand(
   options: InstallCommandOptions,
   scanIntentsOrFail: (coreOptions?: IntentCoreOptions) => Promise<ScanResult>,
+  runtime: InstallCommandRuntime = {},
 ): Promise<void> {
   if (options.printPrompt) {
     console.log(INSTALL_PROMPT)
@@ -207,6 +222,46 @@ export async function runInstallCommand(
   const noticeOptions = noticeOptionsFromGlobalFlags(options)
 
   if (!options.map) {
+    const policy = readSkillSourcesConfig(process.cwd())
+    let permissions: Awaited<
+      ReturnType<typeof setupInitialPermissions>
+    > | null = null
+
+    if (policy.mode === 'absent') {
+      const isTTY = runtime.isTTY ?? process.stdin.isTTY === true
+      if (!isTTY) {
+        fail(
+          'Permissions: failed: intent.skills is not configured. Run `intent install` in an interactive terminal to review and confirm permissions.',
+        )
+      }
+
+      try {
+        permissions = await setupInitialPermissions({
+          dryRun: options.dryRun,
+          root: process.cwd(),
+          runtime: {
+            prompts: runtime.permissionPrompts ?? createPermissionPrompts(),
+          },
+        })
+      } catch (error) {
+        const message =
+          error && typeof error === 'object' && 'message' in error
+            ? String(error.message)
+            : String(error)
+        fail(`Permissions: failed: ${message}`)
+      }
+      if (
+        permissions.status === 'canceled' ||
+        permissions.status === 'unavailable'
+      )
+        return
+      console.log(
+        options.dryRun
+          ? 'Permissions: unchanged package.json (dry run).'
+          : `Permissions: ${permissions.status} package.json.`,
+      )
+    }
+
     const generated = buildIntentSkillGuidanceBlock(
       detectIntentCommandPackageManager(),
     )
@@ -220,34 +275,70 @@ export async function runInstallCommand(
       return
     }
 
-    const result = writeIntentSkillsBlock({
-      ...generated,
-      root: process.cwd(),
-      skipWhenEmpty: false,
-    })
+    const available = permissions ? await scanIntentsOrFail() : null
+    try {
+      const result = writeIntentSkillsBlock({
+        ...generated,
+        root: process.cwd(),
+        skipWhenEmpty: false,
+      })
 
-    if (!result.targetPath) {
-      fail('Install guidance target was not created.')
+      if (!result.targetPath) {
+        fail('Install guidance target was not created.')
+      }
+
+      const verification = verifyIntentSkillsBlockFile({
+        expectedBlock: generated.block,
+        targetPath: result.targetPath,
+      })
+
+      const target = formatTargetPath(result.targetPath)
+      if (!verification.ok) {
+        fail(
+          [
+            `Install verification failed for ${target}:`,
+            ...verification.errors.map((error) => `- ${error}`),
+          ].join('\n'),
+        )
+      }
+
+      printWriteResult(result)
+      if (permissions) {
+        console.log(`Guidance: ${result.status} ${target}.`)
+      }
+      printPlacementTip(result.targetPath)
+      if (available && permissions) {
+        const packages = available.packages.filter(
+          (pkg) => pkg.skills.length > 0,
+        )
+        const skillCount = packages.reduce(
+          (count, pkg) => count + pkg.skills.length,
+          0,
+        )
+        console.log(
+          `Available: ${skillCount} ${skillCount === 1 ? 'skill' : 'skills'} from ${packages.length} ${packages.length === 1 ? 'package' : 'packages'}.`,
+        )
+        if (skillCount > 0) {
+          console.log(
+            `Next: ${formatIntentCommand(detectIntentCommandPackageManager(), 'list')}`,
+          )
+        } else {
+          console.log(
+            `To enable skills, edit intent.skills in ${formatTargetPath(permissions.packageJsonPath)} and run intent install again.`,
+          )
+        }
+      }
+      return
+    } catch (error) {
+      if (permissions) {
+        const message =
+          error && typeof error === 'object' && 'message' in error
+            ? String(error.message)
+            : String(error)
+        fail(`Guidance: failed: ${message}`)
+      }
+      throw error
     }
-
-    const verification = verifyIntentSkillsBlockFile({
-      expectedBlock: generated.block,
-      targetPath: result.targetPath,
-    })
-
-    const target = formatTargetPath(result.targetPath)
-    if (!verification.ok) {
-      fail(
-        [
-          `Install verification failed for ${target}:`,
-          ...verification.errors.map((error) => `- ${error}`),
-        ].join('\n'),
-      )
-    }
-
-    printWriteResult(result)
-    printPlacementTip(result.targetPath)
-    return
   }
 
   const scanResult = await scanIntentsOrFail(coreOptions)

@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
@@ -15,6 +16,10 @@ import {
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from '../src/commands/install/guidance.js'
+import {
+  preparePackageSkillsUpdate,
+  writePreparedPackageSkillsUpdate,
+} from '../src/commands/install/package-json.js'
 import type {
   IntentPackage,
   ScanResult,
@@ -686,5 +691,87 @@ tanstackIntent:
         'Skill mapping `for` must not include local file paths.',
       ]),
     )
+  })
+})
+
+describe('package.json permission writer', () => {
+  it('preserves JSONC formatting, exclusions, and unrelated fields', () => {
+    const root = tempRoot()
+    const targetPath = join(root, 'package.json')
+    writeFileSync(
+      targetPath,
+      '{\r\n\t// retained\r\n\t"name": "app",\r\n\t"intent": {\r\n\t\t"exclude": ["@scope/private"]\r\n\t},\r\n\t"custom": { "kept": true }\r\n}\r\n',
+    )
+
+    const update = preparePackageSkillsUpdate(targetPath, [
+      '@scope/npm#core',
+      'workspace:@scope/local',
+    ])
+    const status = writePreparedPackageSkillsUpdate(update)
+    const content = readFileSync(targetPath, 'utf8')
+
+    expect(status).toBe('updated')
+    expect(content).toContain('\r\n\t// retained\r\n')
+    expect(content).toContain(
+      '\t\t"exclude": [\r\n\t\t\t"@scope/private"\r\n\t\t]',
+    )
+    expect(content).toContain('\t"custom": { "kept": true }')
+    expect(content).toContain(
+      '\t\t"skills": [\r\n\t\t\t"@scope/npm#core",\r\n\t\t\t"workspace:@scope/local"\r\n\t\t]',
+    )
+    expect(content.replace(/\r\n/g, '')).not.toContain('\n')
+  })
+
+  it('rejects source-byte drift before replacement', () => {
+    const root = tempRoot()
+    const targetPath = join(root, 'package.json')
+    const source = '{\n  "name": "app"\n}\n'
+    const changed = '{\n  "name": "app",\n  "changed": true\n}\n'
+    writeFileSync(targetPath, source)
+    const update = preparePackageSkillsUpdate(targetPath, ['@scope/npm'])
+
+    expect(() =>
+      writePreparedPackageSkillsUpdate(update, {
+        beforeReplace: () => writeFileSync(targetPath, changed),
+      }),
+    ).toThrow('package.json changed after permission review')
+    expect(readFileSync(targetPath, 'utf8')).toBe(changed)
+    expect(readdirSync(root)).toEqual(['package.json'])
+  })
+
+  it('rejects parse and validation failures without writing', () => {
+    const root = tempRoot()
+    const targetPath = join(root, 'package.json')
+    const invalidJson = '{ "name": "app", '
+    writeFileSync(targetPath, invalidJson)
+    expect(() => preparePackageSkillsUpdate(targetPath, [])).toThrow(
+      'invalid JSONC',
+    )
+    expect(readFileSync(targetPath, 'utf8')).toBe(invalidJson)
+
+    const invalidIntent = '{\n  "name": "app",\n  "intent": []\n}\n'
+    writeFileSync(targetPath, invalidIntent)
+    expect(() => preparePackageSkillsUpdate(targetPath, [])).toThrow(
+      'intent must contain an object',
+    )
+    expect(readFileSync(targetPath, 'utf8')).toBe(invalidIntent)
+  })
+
+  it('preserves the original file when atomic replacement fails', () => {
+    const root = tempRoot()
+    const targetPath = join(root, 'package.json')
+    const source = '{\n  "name": "app"\n}\n'
+    writeFileSync(targetPath, source)
+    const update = preparePackageSkillsUpdate(targetPath, ['@scope/npm'])
+
+    expect(() =>
+      writePreparedPackageSkillsUpdate(update, {
+        rename: () => {
+          throw new Error('replacement failed')
+        },
+      }),
+    ).toThrow('replacement failed')
+    expect(readFileSync(targetPath, 'utf8')).toBe(source)
+    expect(readdirSync(root)).toEqual(['package.json'])
   })
 })

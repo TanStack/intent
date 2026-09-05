@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { INSTALL_PROMPT } from '../src/commands/install/command.js'
 import { isMainModule, main } from '../src/cli.js'
+import type { PermissionPrompts } from '../src/commands/install/permissions.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const metaDir = join(thisDir, '..', 'meta')
@@ -63,6 +64,22 @@ function writeInstalledIntentPackage(
     name: skillName,
     description,
   })
+}
+
+function permissionPrompts({
+  allowAll = false,
+  confirmWrite = true,
+  selection = [],
+}: {
+  allowAll?: boolean | null
+  confirmWrite?: boolean | null
+  selection?: Array<string> | null
+} = {}): PermissionPrompts {
+  return {
+    confirmAllowAll: vi.fn(async () => allowAll),
+    selectPermissions: vi.fn(async () => selection),
+    confirmWrite: vi.fn(async () => confirmWrite),
+  }
 }
 
 let originalCwd: string
@@ -355,6 +372,11 @@ describe('cli commands', () => {
       join(realTmpdir, 'intent-cli-install-empty-global-'),
     )
     tempDirs.push(root, isolatedGlobalRoot)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: [] },
+    })
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',
       version: '5.0.0',
@@ -397,12 +419,275 @@ describe('cli commands', () => {
     expect(readFileSync(agentsPath, 'utf8')).toBe(content)
   })
 
+  it('fails without writes when intent.skills is absent in non-TTY use', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-non-tty-'))
+    tempDirs.push(root)
+    const packageJsonPath = join(root, 'package.json')
+    const agentsPath = join(root, 'AGENTS.md')
+    const packageJson = '{\n  "name": "app",\n  "private": true\n}\n'
+    const guidance = '# Existing guidance\n'
+    writeFileSync(packageJsonPath, packageJson)
+    writeFileSync(agentsPath, guidance)
+    process.chdir(root)
+
+    const exitCode = await main(['install'])
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Permissions: failed: intent.skills is not configured. Run `intent install` in an interactive terminal to review and confirm permissions.',
+    )
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(packageJson)
+    expect(readFileSync(agentsPath, 'utf8')).toBe(guidance)
+  })
+
+  it('selects, previews, and confirms package permissions before guidance', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-confirm-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    process.chdir(root)
+    const prompts = permissionPrompts({ selection: ['@tanstack/query'] })
+
+    const exitCode = await main(['install'], {
+      isTTY: true,
+      permissionPrompts: prompts,
+    })
+    const packageJson = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    ) as { intent?: { skills?: Array<string> } }
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(packageJson.intent?.skills).toEqual(['@tanstack/query'])
+    expect(output).toContain(
+      `Permission destination: ${join(root, 'package.json')}`,
+    )
+    expect(output).toContain('intent.skills: [\n  "@tanstack/query"\n]')
+    expect(output).toContain(
+      'Trust change: selected packages and skills can provide instructions to AI agents.',
+    )
+    expect(output).toContain('Permissions: updated package.json.')
+    expect(output).toContain('Guidance: created AGENTS.md.')
+    expect(output).toContain('Available: 1 skill from 1 package.')
+    expect(output).toContain('Next: npx @tanstack/intent@latest list')
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+      '## Skill Loading',
+    )
+    expect(prompts.confirmWrite).toHaveBeenCalledOnce()
+  })
+
+  it('does not write policy or guidance when all candidates are excluded', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-excluded-'))
+    tempDirs.push(root)
+    const packageJsonPath = join(root, 'package.json')
+    writeJson(packageJsonPath, {
+      name: 'app',
+      private: true,
+      intent: { exclude: ['@tanstack/query'] },
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    const packageJson = readFileSync(packageJsonPath, 'utf8')
+    process.chdir(root)
+    const prompts = permissionPrompts({ selection: [] })
+
+    const exitCode = await main(['install'], {
+      isTTY: true,
+      permissionPrompts: prompts,
+    })
+    expect(exitCode).toBe(0)
+    expect(prompts.confirmAllowAll).not.toHaveBeenCalled()
+    expect(prompts.selectPermissions).not.toHaveBeenCalled()
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(packageJson)
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'All discovered skills are excluded by intent.exclude.',
+    )
+  })
+
+  it('can retry first-run setup after installing a package with skills', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-retry-'))
+    tempDirs.push(root)
+    const packageJsonPath = join(root, 'package.json')
+    const source = '{"name":"app"}\n'
+    writeFileSync(packageJsonPath, source)
+    process.chdir(root)
+    const prompts = permissionPrompts({ selection: ['pkg#core'] })
+    const runtime = { isTTY: true, permissionPrompts: prompts }
+
+    expect(await main(['install'], runtime)).toBe(0)
+    expect(prompts.confirmAllowAll).not.toHaveBeenCalled()
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(source)
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'No intent-enabled skills found. Install a package that ships skills, then run intent install again.',
+    )
+
+    writeInstalledIntentPackage(root, {
+      name: 'pkg',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Core guidance',
+    })
+    expect(await main(['install'], runtime)).toBe(0)
+    expect(prompts.selectPermissions).toHaveBeenCalledOnce()
+    expect(
+      JSON.parse(readFileSync(packageJsonPath, 'utf8')).intent.skills,
+    ).toEqual(['pkg#core'])
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(true)
+  })
+
+  it('reports intentional deny-all without claiming skills are available', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-deny-all-'))
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), { name: 'app' })
+    writeInstalledIntentPackage(root, {
+      name: 'pkg',
+      version: '1.0.0',
+      skillName: 'core',
+      description: 'Core guidance',
+    })
+    process.chdir(root)
+    const prompts = permissionPrompts({ selection: [] })
+
+    expect(
+      await main(['install'], { isTTY: true, permissionPrompts: prompts }),
+    ).toBe(0)
+    expect(prompts.confirmWrite).toHaveBeenCalledWith(true)
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('Available: 0 skills from 0 packages.')
+    expect(output).toContain('To enable skills, edit intent.skills in')
+    expect(output).not.toContain('Next:')
+  })
+
+  it('keeps confirmed permissions and reports a later guidance failure separately', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-guidance-failure-'),
+    )
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+    })
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    const agentsPath = join(root, 'AGENTS.md')
+    const guidance = '<!-- intent-skills:start -->\ninvalid\n'
+    writeFileSync(agentsPath, guidance)
+    process.chdir(root)
+    const prompts = permissionPrompts({ selection: ['@tanstack/query'] })
+
+    const exitCode = await main(['install'], {
+      isTTY: true,
+      permissionPrompts: prompts,
+    })
+    const pkg = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    ) as {
+      intent?: { skills?: Array<string> }
+    }
+    const output = logSpy.mock.calls.flat().join('\n')
+    const errors = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(pkg.intent?.skills).toEqual(['@tanstack/query'])
+    expect(output).toContain('Permissions: updated package.json.')
+    expect(errors).toContain('Guidance: failed:')
+    expect(errors).toContain('Invalid intent-skills block in')
+    expect(readFileSync(agentsPath, 'utf8')).toBe(guidance)
+  })
+
+  it('reports package validation failure as a permission failure without writes', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-invalid-package-'),
+    )
+    tempDirs.push(root)
+    const packageJsonPath = join(root, 'package.json')
+    const packageJson = '{ "name": "app", '
+    writeFileSync(packageJsonPath, packageJson)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    process.chdir(root)
+    const prompts = permissionPrompts({ selection: ['@tanstack/query'] })
+
+    const exitCode = await main(['install'], {
+      isTTY: true,
+      permissionPrompts: prompts,
+    })
+    const errors = errorSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(1)
+    expect(errors).toContain('Permissions: failed:')
+    expect(errors).toContain('invalid JSONC')
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(packageJson)
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
+  it.each([
+    ['decline', permissionPrompts({ confirmWrite: false })],
+    ['allow-all cancel', permissionPrompts({ allowAll: null })],
+    ['selection cancel', permissionPrompts({ selection: null })],
+    ['confirmation cancel', permissionPrompts({ confirmWrite: null })],
+  ])(
+    'leaves configuration and guidance unchanged on %s',
+    async (_label, prompts) => {
+      const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-cancel-'))
+      tempDirs.push(root)
+      const packageJsonPath = join(root, 'package.json')
+      const agentsPath = join(root, 'AGENTS.md')
+      const packageJson = '{\n  "name": "app"\n}\n'
+      const guidance = '# Existing guidance\n'
+      writeFileSync(packageJsonPath, packageJson)
+      writeFileSync(agentsPath, guidance)
+      writeInstalledIntentPackage(root, {
+        name: '@tanstack/query',
+        version: '5.0.0',
+        skillName: 'fetching',
+        description: 'Query data fetching patterns',
+      })
+      process.chdir(root)
+      const exitCode = await main(['install'], {
+        isTTY: true,
+        permissionPrompts: prompts,
+      })
+
+      expect(exitCode).toBe(0)
+      expect(readFileSync(packageJsonPath, 'utf8')).toBe(packageJson)
+      expect(readFileSync(agentsPath, 'utf8')).toBe(guidance)
+    },
+  )
+
   it('prints generated skill loading guidance without writing during dry run', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-dry-run-'))
     const isolatedGlobalRoot = mkdtempSync(
       join(realTmpdir, 'intent-cli-install-dry-run-empty-global-'),
     )
     tempDirs.push(root, isolatedGlobalRoot)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['*'] },
+    })
     writeInstalledIntentPackage(root, {
       name: '@tanstack/router',
       version: '1.0.0',
@@ -425,11 +710,49 @@ describe('cli commands', () => {
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
+  it('previews first-run permissions without writing during dry run', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-install-first-run-dry-'),
+    )
+    tempDirs.push(root)
+    const packageJsonPath = join(root, 'package.json')
+    const packageJson = '{\n  "name": "app"\n}\n'
+    writeFileSync(packageJsonPath, packageJson)
+    writeInstalledIntentPackage(root, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+    process.chdir(root)
+    const prompts = permissionPrompts({ selection: ['@tanstack/query'] })
+
+    const exitCode = await main(['install', '--dry-run'], {
+      isTTY: true,
+      permissionPrompts: prompts,
+    })
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('intent.skills: [\n  "@tanstack/query"\n]')
+    expect(output).toContain('Permissions: unchanged package.json (dry run).')
+    expect(output).toContain('Generated skill loading guidance for AGENTS.md.')
+    expect(prompts.selectPermissions).toHaveBeenCalledOnce()
+    expect(prompts.confirmWrite).not.toHaveBeenCalled()
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(packageJson)
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  })
+
   it('prints package-manager-specific install guidance', async () => {
     const root = mkdtempSync(
       join(realTmpdir, 'intent-cli-install-package-runner-'),
     )
     tempDirs.push(root)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: ['@tanstack/router'] },
+    })
     writeFileSync(join(root, 'pnpm-lock.yaml'), '')
 
     process.chdir(root)
@@ -450,6 +773,11 @@ describe('cli commands', () => {
       join(realTmpdir, 'intent-cli-install-empty-global-'),
     )
     tempDirs.push(root, isolatedGlobalRoot)
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      private: true,
+      intent: { skills: [] },
+    })
 
     process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
     process.chdir(root)
@@ -461,6 +789,36 @@ describe('cli commands', () => {
     expect(output).toContain('Created AGENTS.md with skill loading guidance.')
     expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
       'npx @tanstack/intent@latest list',
+    )
+  })
+
+  it('keeps inherited intent.skills on the guidance-only install path', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-install-inherited-'))
+    const packageRoot = join(root, 'packages', 'app')
+    tempDirs.push(root)
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - packages/*\n',
+    )
+    writeJson(join(root, 'package.json'), {
+      name: 'workspace',
+      private: true,
+      intent: { skills: ['*'] },
+    })
+    writeJson(join(packageRoot, 'package.json'), {
+      name: '@scope/app',
+      private: true,
+    })
+    const packageJsonPath = join(packageRoot, 'package.json')
+    const packageJson = readFileSync(packageJsonPath, 'utf8')
+    process.chdir(packageRoot)
+
+    const exitCode = await main(['install'])
+
+    expect(exitCode).toBe(0)
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(packageJson)
+    expect(readFileSync(join(packageRoot, 'AGENTS.md'), 'utf8')).toContain(
+      '## Skill Loading',
     )
   })
 
