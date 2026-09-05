@@ -129,16 +129,16 @@ For each skill, extract failure modes that pass all three tests:
 
 **Where to find them:**
 
-| Source | What to extract |
-| --- | --- |
-| Migration guides | Every breaking change → old pattern is the wrong code |
-| Doc callouts | Any "note", "warning", "avoid" with surrounding context |
-| Source assertions | `throw` and `invariant()` messages describe the failure |
-| Default values | Undocumented or surprising defaults that cause wrong behavior |
-| Type precision | Source type more restrictive than docs imply |
-| Environment branches | `typeof window`, SSR flags, `NODE_ENV` — behavior differs silently |
-| GitHub issues | Recurring bug reports with workarounds → wrong/correct code pairs |
-| GitHub discussions | "How do I…" threads with non-obvious answers → missing skill content |
+| Source               | What to extract                                                      |
+| -------------------- | -------------------------------------------------------------------- |
+| Migration guides     | Every breaking change → old pattern is the wrong code                |
+| Doc callouts         | Any "note", "warning", "avoid" with surrounding context              |
+| Source assertions    | `throw` and `invariant()` messages describe the failure              |
+| Default values       | Undocumented or surprising defaults that cause wrong behavior        |
+| Type precision       | Source type more restrictive than docs imply                         |
+| Environment branches | `typeof window`, SSR flags, `NODE_ENV` — behavior differs silently   |
+| GitHub issues        | Recurring bug reports with workarounds → wrong/correct code pairs    |
+| GitHub discussions   | "How do I…" threads with non-obvious answers → missing skill content |
 
 Include the source-backed failure modes necessary for the task. Preserve error handling; do not invent extra entries to meet a count.
 
