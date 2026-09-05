@@ -33,10 +33,10 @@ Otherwise, first-run setup requires an interactive terminal. Non-TTY execution f
 
 #### First-run flow
 
-1. **Review** discovered npm and workspace packages, versions, and skill descriptions. Excluded candidates appear in the overview but cannot be selected.
-2. **Choose** permissions. After the overview, Intent asks about allow-all; choose No to select individual packages or skills. Press Space to toggle grouped choices and Enter to review.
-3. **Confirm** the exact `intent.skills` value, destination file, and trust change. Confirmation defaults to No.
-4. **Finish** with verified guidance, available skill and package counts, and a package-manager-aware `list` command. If no skills are enabled, Intent explains how to edit `intent.skills`.
+1. **Choose packages** from a searchable list. Type to filter, use arrow keys to move, Tab to toggle, and Enter to review. Nothing is selected by default.
+2. **Review** your choices, with selected packages first. Type to find a package, then press Enter to choose individual skills, remove it, or inspect descriptions and exclusions. Full descriptions appear only when requested.
+3. **Confirm** the permission summary and destination file. **Show exact configuration** previews `intent.skills`; **Continue to confirmation** asks before saving and defaults to No.
+4. **Finish** with verified guidance, available skill and package counts, and a command to list those skills.
 
 #### Permission choices
 
@@ -44,7 +44,7 @@ Otherwise, first-run setup requires an interactive terminal. Non-TTY execution f
 | --- | --- |
 | All skills in a package | Permits its current and future skills. |
 | Individual skill | Permits only the named skill. |
-| Allow all sources | Writes `["*"]` and skips narrower selection. |
+| Advanced: allow all current and future sources | Separately confirms writing `["*"]`, replacing narrower choices. |
 | Select nothing | Explicitly confirms writing `[]`, disabling current and future sources until `intent.skills` is edited. |
 
 Existing `intent.exclude` rules always apply and remain unchanged.

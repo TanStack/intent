@@ -13,15 +13,11 @@ Run this in an interactive terminal. On first use, Intent helps you choose which
 
 Examples use `npx` for npm projects. In pnpm, Yarn, or Bun projects, use the matching runner: `pnpm dlx`, `yarn dlx`, or `bunx`.
 
-The command:
+1. **Choose packages.** Type to filter, use arrow keys to move, Tab to toggle, and Enter to review. The list scrolls; nothing is selected by default.
+2. **Review permissions.** Type to find a package and press Enter to inspect its skills or edit its permissions. Descriptions and exclusions are available on demand.
+3. **Confirm and finish.** Review the destination `package.json`, then confirm saving. Intent writes permissions and guidance, verifies the guidance, and shows a command to list available skills.
 
-1. Shows discovered packages, versions, skill descriptions, and exclusions
-2. Lets you choose package-wide or individual skill permissions
-3. Previews the exact `intent.skills` configuration and destination `package.json`, then asks for confirmation
-4. Writes the confirmed permissions and creates or updates the `intent-skills` guidance block, preserving unrelated content
-5. Verifies the guidance and reports the available skill count and a command to list those skills
-
-Choose **No** when asked about allowing all current and future skill sources to select specific packages and skills. Press Space to toggle choices and Enter to review your selection. A package's **All skills** choice includes its current and future skills; an individual choice permits only that named skill. Excluded skills appear in the discovery overview but cannot be selected.
+Selecting a package permits its current and future skills. Choose **individual skills** from package review to permit only those names. Excluded skills cannot be selected. **Show exact configuration** previews the saved value; allowing all sources is a separate advanced choice.
 
 Selecting nothing requires explicit confirmation to disable all skills. If no skills are found, or all are excluded, Intent explains the next step and leaves permissions and guidance unchanged. Install a package that ships skills or review your exclusions, then run `install` again.
 

@@ -1,17 +1,11 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { PassThrough } from 'node:stream'
-import { cancel, confirm, groupMultiselect, isCancel } from '@clack/prompts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  createPermissionPrompts,
-  setupInitialPermissions,
-} from '../src/commands/install/permissions.js'
+import { setupInitialPermissions } from '../src/commands/install/permissions.js'
 import { ALLOW_ALL_NOTICE } from '../src/shared/cli-output.js'
 import type {
-  ClackPermissionRuntime,
-  PermissionPromptGroup,
+  PermissionPackage,
   PermissionPrompts,
 } from '../src/commands/install/permissions.js'
 import type { IntentPackage, ScanResult } from '../src/shared/types.js'
@@ -65,18 +59,15 @@ function scan(packages: Array<IntentPackage>): ScanResult {
 }
 
 function prompts({
-  allowAll = false,
   confirmWrite = true,
   selection = [],
 }: {
-  allowAll?: boolean | null
   confirmWrite?: boolean | null
   selection?: Array<string> | null
-} = {}): PermissionPrompts & { groups: Array<PermissionPromptGroup> } {
+} = {}): PermissionPrompts & { groups: Array<PermissionPackage> } {
   const result = {
-    groups: [] as Array<PermissionPromptGroup>,
-    confirmAllowAll: vi.fn(async () => allowAll),
-    selectPermissions: vi.fn(async (groups: Array<PermissionPromptGroup>) => {
+    groups: [] as Array<PermissionPackage>,
+    selectPermissions: vi.fn(async (groups: Array<PermissionPackage>) => {
       result.groups = groups
       return selection
     }),
@@ -98,12 +89,12 @@ async function configure({
   exclude?: Array<string>
   packages?: Array<IntentPackage>
   permissionPrompts?: PermissionPrompts & {
-    groups?: Array<PermissionPromptGroup>
+    groups?: Array<PermissionPackage>
   }
 } = {}): Promise<{
   packageJsonPath: string
   permissionPrompts: PermissionPrompts & {
-    groups?: Array<PermissionPromptGroup>
+    groups?: Array<PermissionPackage>
   }
   result: Awaited<ReturnType<typeof setupInitialPermissions>>
 }> {
@@ -135,18 +126,48 @@ function configuredSkills(packageJsonPath: string): Array<string> | undefined {
 }
 
 describe('interactive permission selection', () => {
-  it('shows discovered descriptions and versions before asking about allow-all', async () => {
+  it('keeps large discovery output compact before package selection', async () => {
     const output = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const permissionPrompts = prompts({ allowAll: null })
-    vi.mocked(permissionPrompts.confirmAllowAll).mockImplementation(() => {
+    const packages = Array.from({ length: 14 }, (_, index) =>
+      packageCandidate(
+        `package-${index}`,
+        'npm',
+        Array.from(
+          { length: index === 13 ? 4 : 6 },
+          (_, skill) => `skill-${skill}`,
+        ),
+      ),
+    )
+    for (const pkg of packages) {
+      for (const skill of pkg.skills)
+        skill.description = 'Long agent routing description. '.repeat(30)
+    }
+    try {
+      await configure({
+        packages,
+        permissionPrompts: prompts({ selection: null }),
+      })
       const text = output.mock.calls.flat().join('\n')
-      expect(text).toContain('@scope/npm@1.0.0')
-      expect(text).toContain('core guidance')
-      expect(text).toContain('All skills includes current and future skills')
-      return Promise.resolve(null)
-    })
+      expect(text).toContain('Found 82 skills in 14 packages.')
+      expect(text).not.toContain('Long agent routing description')
+      expect(text.length).toBeLessThan(500)
+    } finally {
+      output.mockRestore()
+    }
+  })
+  it('passes descriptions and versions to the picker without printing them', async () => {
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const permissionPrompts = prompts({ selection: null })
     try {
       await configure({ permissionPrompts })
+      expect(permissionPrompts.groups[0]).toMatchObject({
+        id: '@scope/npm',
+        version: '1.0.0',
+        skills: expect.arrayContaining([
+          expect.objectContaining({ description: 'core guidance' }),
+        ]),
+      })
+      expect(output.mock.calls.flat().join('\n')).not.toContain('core guidance')
     } finally {
       output.mockRestore()
     }
@@ -177,7 +198,6 @@ describe('interactive permission selection', () => {
 
       expect(result).toEqual({ status: 'unavailable' })
       expect(configuredSkills(packageJsonPath)).toBeUndefined()
-      expect(permissionPrompts.confirmAllowAll).not.toHaveBeenCalled()
       expect(permissionPrompts.selectPermissions).not.toHaveBeenCalled()
       expect(permissionPrompts.confirmWrite).not.toHaveBeenCalled()
     },
@@ -204,15 +224,11 @@ describe('interactive permission selection', () => {
     expect(configuredSkills(packageJsonPath)).toEqual(expected)
   })
 
-  it('keeps allow-all separate from grouped selections', async () => {
-    const permissionPrompts = prompts({
-      allowAll: true,
-      selection: ['@scope/npm#core'],
+  it('writes an explicitly selected allow-all policy', async () => {
+    const { packageJsonPath } = await configure({
+      permissionPrompts: prompts({ selection: ['*'] }),
     })
-    const { packageJsonPath } = await configure({ permissionPrompts })
-
     expect(configuredSkills(packageJsonPath)).toEqual(['*'])
-    expect(permissionPrompts.selectPermissions).not.toHaveBeenCalled()
   })
 
   it('prints the allow-all notice before final confirmation', async () => {
@@ -222,7 +238,7 @@ describe('interactive permission selection', () => {
       .mockImplementation((message) => {
         events.push(String(message))
       })
-    const permissionPrompts = prompts({ allowAll: true })
+    const permissionPrompts = prompts({ selection: ['*'] })
     vi.mocked(permissionPrompts.confirmWrite).mockImplementation(() => {
       events.push('confirm-write')
       return Promise.resolve(false)
@@ -251,7 +267,7 @@ describe('interactive permission selection', () => {
     try {
       await configure({
         dryRun: true,
-        permissionPrompts: prompts({ allowAll: true }),
+        permissionPrompts: prompts({ selection: ['*'] }),
       })
     } finally {
       errorSpy.mockRestore()
@@ -260,45 +276,40 @@ describe('interactive permission selection', () => {
     expect(errors).toContain(`  ℹ ${ALLOW_ALL_NOTICE}`)
   })
 
-  it('constructs package groups with package-wide, exact, and disabled exclusion options', async () => {
-    const permissionPrompts = prompts({ selection: [] })
+  it('preserves package identity, metadata, and exclusions for inspection', async () => {
+    const permissionPrompts = prompts()
     await configure({
       exclude: ['@scope/npm#advanced', '@scope/workspace'],
       permissionPrompts,
     })
-
     expect(permissionPrompts.groups).toEqual([
       {
-        label: '@scope/npm',
-        options: [
+        id: '@scope/npm',
+        version: '1.0.0',
+        skills: [
           {
-            label: 'All skills',
-            value: '@scope/npm',
-            hint: 'Current and future skills; exclusions still apply',
+            id: '@scope/npm#advanced',
+            name: 'advanced',
+            description: 'advanced guidance',
+            excluded: true,
           },
           {
-            label: 'advanced',
-            value: '@scope/npm#advanced',
-            disabled: true,
-            hint: 'Excluded by intent.exclude',
+            id: '@scope/npm#core',
+            name: 'core',
+            description: 'core guidance',
+            excluded: false,
           },
-          { label: 'core', value: '@scope/npm#core', hint: 'core guidance' },
         ],
       },
       {
-        label: 'workspace:@scope/workspace',
-        options: [
+        id: 'workspace:@scope/workspace',
+        version: '1.0.0',
+        skills: [
           {
-            label: 'All skills',
-            value: 'workspace:@scope/workspace',
-            disabled: true,
-            hint: 'Excluded by intent.exclude',
-          },
-          {
-            label: 'routing',
-            value: 'workspace:@scope/workspace#routing',
-            disabled: true,
-            hint: 'Excluded by intent.exclude',
+            id: 'workspace:@scope/workspace#routing',
+            name: 'routing',
+            description: 'routing guidance',
+            excluded: true,
           },
         ],
       },
@@ -306,8 +317,7 @@ describe('interactive permission selection', () => {
   })
 
   it.each([
-    ['allow-all prompt', prompts({ allowAll: null })],
-    ['grouped selection', prompts({ selection: null })],
+    ['package selection', prompts({ selection: null })],
     ['write confirmation', prompts({ selection: [], confirmWrite: null })],
     ['declined write', prompts({ selection: [], confirmWrite: false })],
   ])(
@@ -330,129 +340,5 @@ describe('interactive permission selection', () => {
     expect(result).toEqual({ packageJsonPath, status: 'unchanged' })
     expect(permissionPrompts.confirmWrite).not.toHaveBeenCalled()
     expect(configuredSkills(packageJsonPath)).toBeUndefined()
-  })
-})
-
-describe('Clack permission adapter', () => {
-  it('cannot select an excluded skill through the real grouped picker', async () => {
-    const input = new PassThrough()
-    const output = new PassThrough()
-    output.resume()
-    const permissionPrompts = createPermissionPrompts({
-      cancel,
-      confirm,
-      isCancel,
-      groupMultiselect: (options) => {
-        const result = groupMultiselect({ ...options, input, output })
-        process.nextTick(() => input.write(' \r'))
-        return result
-      },
-    })
-
-    try {
-      await expect(
-        permissionPrompts.selectPermissions([
-          {
-            label: 'excluded-package',
-            options: [
-              {
-                label: 'All skills',
-                value: 'excluded-package',
-                disabled: true,
-              },
-            ],
-          },
-          {
-            label: 'pkg',
-            options: [
-              { label: 'blocked', value: 'pkg#blocked', disabled: true },
-              { label: 'allowed', value: 'pkg#allowed' },
-            ],
-          },
-        ]),
-      ).resolves.toEqual(['pkg#allowed'])
-    } finally {
-      input.destroy()
-      output.destroy()
-    }
-  })
-
-  it('maps grouped options and prompt defaults to Clack', async () => {
-    const runtime = {
-      cancel: vi.fn(),
-      confirm: vi.fn(async () => false),
-      groupMultiselect: vi.fn(async () => ['pkg#core']),
-      isCancel: vi.fn(() => false),
-    } as unknown as ClackPermissionRuntime
-    const permissionPrompts = createPermissionPrompts(runtime)
-    const groups: Array<PermissionPromptGroup> = [
-      {
-        label: 'pkg',
-        options: [
-          { label: 'All skills', value: 'pkg' },
-          {
-            label: 'private',
-            value: 'pkg#private',
-            disabled: true,
-            hint: 'Excluded by intent.exclude',
-          },
-        ],
-      },
-    ]
-
-    await expect(permissionPrompts.confirmAllowAll()).resolves.toBe(false)
-    await expect(permissionPrompts.selectPermissions(groups)).resolves.toEqual([
-      'pkg#core',
-    ])
-    await expect(permissionPrompts.confirmWrite(false)).resolves.toBe(false)
-
-    expect(runtime.confirm).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        message: 'Allow all current and future skill sources?',
-        initialValue: false,
-      }),
-    )
-    expect(runtime.groupMultiselect).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: 'Select trusted packages and skills',
-        options: { pkg: [{ label: 'All skills', value: 'pkg' }] },
-        required: false,
-        selectableGroups: false,
-      }),
-    )
-    expect(runtime.confirm).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        message: 'Write this permission configuration?',
-        initialValue: false,
-      }),
-    )
-    await expect(permissionPrompts.confirmWrite(true)).resolves.toBe(false)
-    expect(runtime.confirm).toHaveBeenNthCalledWith(
-      3,
-      expect.objectContaining({
-        message: 'Disable all skills by writing intent.skills: []?',
-        initialValue: false,
-      }),
-    )
-  })
-
-  it('maps a Clack cancel symbol to one cancellation message', async () => {
-    const canceled = Symbol('cancel')
-    const runtime = {
-      cancel: vi.fn(),
-      confirm: vi.fn(async () => canceled),
-      groupMultiselect: vi.fn(),
-      isCancel: vi.fn((value) => value === canceled),
-    } as unknown as ClackPermissionRuntime
-    const permissionPrompts = createPermissionPrompts(runtime)
-
-    await expect(permissionPrompts.confirmAllowAll()).resolves.toBeNull()
-    expect(runtime.cancel).toHaveBeenCalledOnce()
-    expect(runtime.cancel).toHaveBeenCalledWith(
-      'Permissions: canceled.',
-      expect.objectContaining({ output: process.stdout }),
-    )
   })
 })

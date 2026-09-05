@@ -33,9 +33,9 @@ This also applies to inherited policy within a resolved workspace. Malformed JSO
 
 When no effective policy exists, `intent install` follows this flow:
 
-1. **Discover:** show npm and workspace packages, versions, and skill descriptions. Excluded candidates appear in the overview but cannot be selected.
+1. **Discover:** summarize npm and workspace skill counts, then show a scrolling package picker. Versions appear beside focused packages; descriptions and exclusions are available through inspection.
 2. **Choose:** select package-wide or exact-skill permissions. An empty selection explicitly confirms disabling all skills.
-3. **Review:** show the exact `intent.skills` value and destination file.
+3. **Review:** show selected packages first, allow permission changes, and offer the exact `intent.skills` configuration on demand. Name the destination file before saving.
 4. **Confirm:** replace `package.json` atomically only after affirmative confirmation, then install guidance.
 
 | Outcome | Files changed |

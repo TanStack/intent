@@ -91,11 +91,11 @@ Run `intent list` to see which packages the current policy surfaces.
 | Saved or inherited `intent.skills` | Updates guidance only. Keeps permissions unchanged and does not prompt. |
 | No effective `intent.skills` | Starts interactive permission setup. Non-TTY execution fails without writes. |
 
-First-run setup discovers candidates before policy filtering and shows their versions and descriptions. It previews the selected allowlist and nearest owning `package.json`, then requires confirmation before saving permissions and installing guidance.
+First-run setup discovers candidates before policy filtering and opens a scrolling package picker. Review shows selected packages first, with search and optional skill details. It names the nearest owning `package.json` and requires confirmation before saving permissions and installing guidance. Choose **Show exact configuration** to inspect the allowlist.
 
-- **Excluded candidates** stay visible in the overview but cannot be selected. Exclusions remain unchanged.
+- **Excluded candidates** can be inspected from package review but cannot be selected. Exclusions remain unchanged.
 - **Package-wide choices** include current and future skills and remove redundant selected children. Exact choices permit only the named skill.
-- **Allow-all** is offered separately after the overview and saves `["*"]` alone.
+- **Allow-all** is a separate advanced choice in review and saves `["*"]` alone after confirmation.
 - **An empty selection** explicitly confirms disabling all skills with `[]`.
 - **Empty or fully excluded discovery** writes nothing, so setup can be retried.
 
