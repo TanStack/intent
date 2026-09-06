@@ -1,7 +1,7 @@
 ---
 name: generate-skill
 description: >
-  Use when creating or extending library skill batches, updating guidance after library source or docs change, or acting on an Intent review report, including when the maintainer asks only for the library change.
+  Use when creating or extending library skill batches, updating guidance after library source or docs change, or acting on an Intent review report, including when the maintainer asks only for the library change. For full-library discovery or taxonomy design, use domain-discovery; for generating an approved full-library tree, use tree-generator.
 metadata:
   purpose: >
     Author and maintain library skills when creating an initial skill batch, changing library source or docs, or acting on an Intent review report. Use the current task and source evidence to create useful guidance, verify it on representative tasks, and update affected skills.
@@ -25,7 +25,7 @@ Check repository instructions and Git status before edits; preserve unrelated ch
 
 For an initial skill set or a request spanning several developer tasks, read [initial batches](references/initial-batches.md). Reuse scope already approved in the conversation. For one concrete task, proceed directly below. During ordinary library work, keep the code change as the primary task. Read [source review](references/source-review.md) to identify affected guidance from actual changes and record completed reviews before handing off any of these workflows.
 
-For every authoring batch or update, read [the planning record procedure](references/planning-records.md) and create or incrementally maintain `domain_map.yaml`, `skill_spec.md`, and `skill_tree.yaml`. Read existing records first and preserve prior scope and decisions. These records grow with the batches; maintaining them does not require a full-library interview or generating every planned skill. For an explicitly requested full-library design, start with [domain-discovery](../domain-discovery/SKILL.md), then [tree-generator](../tree-generator/SKILL.md).
+For every authoring batch or update, read [the planning record procedure](references/planning-records.md) and create or incrementally maintain `domain_map.yaml`, `skill_spec.md`, and `skill_tree.yaml`. Read existing records first and preserve prior scope and decisions. These records grow with the batches; maintaining them does not require a full-library interview or generating every planned skill.
 
 When the input is an `intent stale` report or generated review PR, read [review-signals](references/review-signals.md) before deciding what to edit. Investigate the supplied items in the requested scope, applying this procedure to each affected task. A review signal alone is not a task or proof of changed guidance; first use the reference to establish its meaning.
 
@@ -43,7 +43,7 @@ Before editing, identify the existing sections affected or the independently use
 
 Look up discoverable facts yourself. Ask only for unresolved maintainer decisions that change the task boundary, intended behavior, or recommended pattern. Ask dependent questions after their prerequisites are settled. Use the concrete scenario and evidence behind the question, then wait for the answer before writing the dependent guidance. Continue independent work where possible. If evidence remains unavailable, report the affected work as blocked or partially verified rather than inventing an answer.
 
-No fixed interview or review-preference question is needed for one task. An exhaustive design interview belongs to explicitly requested discovery.
+No fixed interview or review-preference question is needed for one task.
 
 ## 4. Write the bounded change
 
@@ -55,6 +55,7 @@ For an **update**, preserve established names, layout, terminology, and scope un
 
 - Write `description` as self-contained “Use when…” activation guidance: concrete developer tasks, library/framework context, and relevant boundaries. Include requests that omit API names. Other agents must be able to select the skill from this standard field alone; exact wording is not a validation rule.
 - Put the descriptive explanation of what the skill is for in `metadata.purpose`. For an existing skill without that field, copy its pre-edit description text unchanged before writing the activation description. Preserve an existing purpose; never replace it with a later activation description. Read [the field contract](references/skill-format.md#purpose-and-activation) before this migration or when creating either field.
+- Start the body with the task procedure. Keep skill-selection criteria in `description`; retain execution prerequisites, conditional reference pointers, and downstream handoffs in the body.
 - Each independent skill enables an independently useful developer task. Keep common, necessary guidance accessible from its entry point.
 - Put conditional detail behind a Markdown link that says **when to read it**. Choose reference boundaries by relevance, not proximity to 500 lines.
 - Group features used in the same developer task under one skill. Use references for conditional detail within that task; create a separate skill only for a task worth discovering independently. API exports and feature counts do not determine skill boundaries.

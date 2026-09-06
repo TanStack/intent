@@ -35,7 +35,7 @@ There are two workflows. Detect which applies.
 
 **Workflow A — Generate:** Build a complete skill tree from a domain map. **Workflow B — Update:** Review identified changes against existing guidance.
 
-For one task without a requested full-library design, follow [generate-skill](../generate-skill/SKILL.md) instead. Before writing any skill, apply its [shared writing rules](../generate-skill/SKILL.md#writing-rules).
+Before writing any skill, apply the [shared writing rules](../generate-skill/SKILL.md#writing-rules).
 
 ---
 
