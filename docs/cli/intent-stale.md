@@ -43,7 +43,7 @@ lit: @tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-l
 ### Output and workflow state
 
 - Prints text output by default or JSON with `--json`
-- When skills or coverage need review, text output includes a command for your agent to load the focused authoring procedure; JSON contains only report data
+- Text output lists flagged skills and review signals with their reasons; JSON contains only report data
 - Prints a non-failing workflow update reminder when `.github/workflows/check-skills.yml` is missing the current `intent-workflow-version` stamp
 - If no packages are found, prints `No intent-enabled packages found.`
 
@@ -121,11 +121,9 @@ Reason generation:
 - When no skill reasons exist: `All skills up-to-date`
 - Otherwise: one warning line per stale skill or review signal (`⚠ <name>: <reason1>, <reason2>, ...`)
 
-## Review the findings
+## Generated review files
 
-Ask your coding agent to run the command printed after a flagged report and follow it using that report and the relevant code/docs change. The command loads `generate-skill`, including its conditional review-signals reference. The agent reuses the existing conversation and repository evidence, then returns a disposition per item and a validated diff when edits are warranted.
-
-The existing `--github-review` workflow mode writes `review-items.json` and, when there are items, `pr-body.md`. Its Agent Review instructions route to the same procedure. The command itself does not create a remote PR or edit skills; the installed GitHub workflow handles the review reminder.
+The existing `--github-review` workflow mode writes `review-items.json` and, when there are items, `pr-body.md`. Its Agent Review instructions route to `generate-skill` and its conditional review-signals reference. The command itself does not create a remote PR or edit skills; the installed GitHub workflow handles the review reminder.
 
 Version drift and missing stored source SHAs do not prove that guidance is wrong. Review actual source changes before editing. Missing evidence stays unresolved, and an evidence-backed no-op may leave a signal flagged. Failed checks require logs; workflow advisories are separate maintenance items. Neither is a reason to rewrite skills.
 

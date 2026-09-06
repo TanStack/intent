@@ -80,7 +80,7 @@ The registry discovers your package on its next sync cycle. Your skills, version
 
 ## Keeping skills current
 
-Use two separate checks as the library changes:
+Use `review` and `stale` as separate checks as the library changes. `setup` optionally installs their CI workflow:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 

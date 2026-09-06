@@ -148,7 +148,7 @@ lit: @tanstack/intent@latest validate
 
 <!-- ::end:tabs -->
 
-Checks SKILL.md format rules and reports packaging warnings before publish.
+Checks SKILL.md format rules, validates `domain_map.yaml`, `skill_spec.md`, and `skill_tree.yaml` when `<dir>/_artifacts` exists, and reports packaging warnings before publish.
 
 ### Staleness tracking
 
