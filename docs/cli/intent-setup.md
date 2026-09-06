@@ -32,6 +32,9 @@ npx @tanstack/intent@latest setup
 - Detects the workspace root in monorepos and writes repo-level workflows there
 - Skips files that already exist at the destination
 
+> [!NOTE]
+> `setup` installs the generated repository workflow, not Intent's maintainer or consumer guidance. Run `install --maintainer` separately for persistent authoring and source-review instructions.
+
 ## Required `files` entries
 
 `edit-package-json` enforces different `files` sets based on package location:
@@ -47,7 +50,10 @@ npx @tanstack/intent@latest setup
 ## Notes
 
 - `setup` skips existing files
-- `check-skills.yml` validates skills on PRs and opens review PRs from release/manual runs
+- On every pull request, `check-skills.yml` runs structural validation
+- On pull requests with `.intent/review-state.json` or an `intent-maintainer` block, it also runs `intent review --base <pull-request-base-sha> --check`
+- On release and manual runs with review state, it runs `intent review --github-review`; without review state, it falls back to `intent stale --github-review`
+- Release and manual runs create or update one review-reminder pull request only when the selected check reports review work
 - To adopt updated workflow templates, delete or move the old generated workflow files first, then rerun `setup`
 - If your repo has an older generated `validate-skills.yml`, remove it after adopting the current `check-skills.yml`; PR validation now lives in `check-skills.yml`
 - In monorepos, run `setup` from either the repo root or a package directory; Intent writes workflows to the workspace root
@@ -55,4 +61,7 @@ npx @tanstack/intent@latest setup
 ## Related
 
 - [intent validate](./intent-validate)
+- [intent review](./intent-review)
+- [intent stale](./intent-stale)
 - [intent scaffold](./intent-scaffold)
+- [Maintainer quick start](../getting-started/quick-start-maintainers)

@@ -3,37 +3,53 @@ title: intent scaffold
 id: intent-scaffold
 ---
 
-`intent scaffold` prints a phased scaffold prompt for generating skills.
+`intent scaffold` prints an entry prompt for creating or updating focused skill guidance with your existing coding agent.
 
 ```bash
 npx @tanstack/intent@latest scaffold
 ```
 
+Ask your agent to run the command and follow its output in the current conversation:
+
+> Run `npx @tanstack/intent@latest scaffold` and follow its focused authoring procedure. Help developers configure retries using this package. Create a skill or update the guidance that already covers it.
+
+For an update, refer to the change already under discussion:
+
+> Run `npx @tanstack/intent@latest scaffold` and follow it to update the retry guidance for the change we just made. Use the existing diff and tests.
+
+The prompt points to `generate-skill`, the authoritative focused procedure. You or your agent can also load it directly:
+
+```bash
+npx @tanstack/intent@latest meta generate-skill
+```
+
+If you run the command yourself, give the printed prompt to your agent with the task or change.
+
 ## Behavior
 
-- Prints prompt text to stdout
-- Does not create files
+- Prints guidance to stdout; does not create files, run an agent, or change your project.
+- Leads with a useful task batch or concrete change; the agent creates or extends the cumulative domain map, spec, and skill tree without requiring full-library discovery.
+- Points to shipped meta-skills using paths from the Intent package in use.
+- Keeps full-library discovery available when explicitly requested.
 
-## Output
+> [!NOTE]
+> `scaffold` is a standalone prompt entry point. It does not install the persistent maintainer block, configure package publishing, change consumer permissions, or add CI.
 
-The printed prompt defines three ordered phases:
+The agent returns a focused diff with source evidence and validation results, or an evidence-backed explanation that no guidance needs changing. Missing evidence is reported as uncertainty, not treated as no impact. The CLI does not generate content or automatically identify affected skills.
 
-1. `domain-discovery`
-2. `tree-generator`
-3. `generate-skill`
+## Full-library design
 
-Each phase includes a stop gate before continuing.
+Ask your agent to use the full-library branch of the printed prompt. It starts with `domain-discovery`, then `tree-generator`, then `generate-skill`. The discovery interviews and artifact reviews apply to that larger exercise. The public commands remain available individually:
 
-The prompt also includes a post-generation checklist:
-
-- Run `npx @tanstack/intent@latest validate` and fix issues
-- Commit generated `skills/` and `skills/_artifacts/`
-- Ensure `@tanstack/intent` is in `devDependencies`
-- Run setup commands as needed:
-  - `npx @tanstack/intent@latest edit-package-json`
-  - `npx @tanstack/intent@latest setup`
+```bash
+npx @tanstack/intent@latest meta domain-discovery
+npx @tanstack/intent@latest meta tree-generator
+npx @tanstack/intent@latest meta generate-skill
+```
 
 ## Related
 
+- [Maintainer quick start](../getting-started/quick-start-maintainers)
 - [intent validate](./intent-validate)
+- [intent stale](./intent-stale)
 - [setup commands](./intent-setup)

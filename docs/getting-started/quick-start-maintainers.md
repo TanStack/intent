@@ -3,216 +3,145 @@ title: Quick Start for Maintainers
 id: quick-start-maintainers
 ---
 
-Get started scaffolding, validating, and shipping skills for your library.
+Enable Intent in a library repository, create a focused skill batch with your existing coding agent, keep the guidance reviewed as the library changes, then configure publishing separately.
 
-## Install
+## Enable the maintainer workflow
 
-<!-- ::start:tabs variant="package-manager" mode="dev-install" -->
-react: @tanstack/intent
-solid: @tanstack/intent
-vue: @tanstack/intent
-svelte: @tanstack/intent
-angular: @tanstack/intent
-lit: @tanstack/intent
+Run `install --maintainer` from the library repository with your package manager's runner:
+
+<!-- ::start:tabs -->
+
+### npm
+
+```bash
+npx @tanstack/intent@latest install --maintainer
+```
+
+### pnpm
+
+```bash
+pnpm dlx @tanstack/intent@latest install --maintainer
+```
+
+### Yarn
+
+```bash
+yarn dlx @tanstack/intent@latest install --maintainer
+```
+
+### Bun
+
+```bash
+bunx @tanstack/intent@latest install --maintainer
+```
+
 <!-- ::end:tabs -->
 
-Or run commands without installing:
+This creates an `intent-maintainer` block in `AGENTS.md`, or updates the file that already contains an Intent maintainer or consumer block. It preserves surrounding instructions and a separate `intent-skills` consumer block. Review this setup diff and keep it in the repository so later agent sessions receive the same authoring and review procedure.
 
-```bash
-npx @tanstack/intent@latest scaffold
-```
+> [!NOTE] This command installs repository guidance
+> The runner executes `@tanstack/intent@latest`. `install --maintainer` does not add a dependency, change consumer permissions, install agent hooks, or add CI.
 
----
+## Create the first useful batch
 
-## Initial Setup (With Agent)
+Ask your coding agent for the developer tasks the library should support. For example:
 
-### 1. Scaffold skills
+> Create a skill batch covering safe retries, cancellation, and pagination. Use our public examples and tests, and include executable checks for the important failure cases.
 
-Start the scaffolding process **with your AI agent**:
+The installed instructions load Intent's `generate-skill` procedure. The agent reads the relevant source, tests, examples, docs, and existing skills; proposes a bounded batch when its scope is undecided; and creates or updates the guidance owned by those tasks. A focused batch does not require a full-library interview or a fixed number of skills.
 
-```bash
-npx @tanstack/intent@latest scaffold
-```
+Every skill batch also creates or incrementally updates three planning documents. These records preserve prior scope, maintainer decisions, exclusions, source mappings, and remaining work across later batches.
 
-This prints a comprehensive prompt that walks you and your agent through three phases:
+<!-- ::start:tabs variant="files" -->
 
-**Phase 1: Domain Discovery**
-- Scans your documentation, source code, and GitHub issues
-- Conducts an interactive interview to surface implicit knowledge
-- Produces `domain_map.yaml` and `skill_spec.md` artifacts
-
-**Phase 2: Tree Generation**
-- Designs a skill taxonomy based on the domain map
-- Creates a hierarchical skill structure
-- Produces `skill_tree.yaml` artifact
-
-**Phase 3: Skill Generation**
-- Writes complete SKILL.md files for each skill
-- Includes patterns, failure modes, and API references
-- Validates against the Intent specification
-
-> [!NOTE]
-> Plan for multiple review rounds and regular context compaction. The agent scans documentation, recent issues, and discussions, then asks targeted questions about implicit knowledge and common failure modes. Provide concrete patterns, pitfalls, and real-world usage problems to improve the generated skills.
-
-### 2. Validate skills
-
-After scaffolding, validate that all SKILL.md files are well-formed:
-
-```bash
-npx @tanstack/intent@latest validate
-```
-
-This checks skill structure:
-
-- Valid YAML frontmatter in every SKILL.md
-- Required fields (`name`, `description`) are present
-- Skill `name` is a leaf segment matching its parent directory
-- Description length <= 1024 characters
-- Line count limits (500 lines max per skill)
-
-It also checks Intent metadata and artifacts:
-
-- Intent-specific scalars (`type`, `library`, `library_version`, `framework`) live under `metadata`, not at the top level
-- Framework skills have a `requires` array
-- Required artifact files exist and are non-empty; YAML artifacts parse successfully
-
-### 3. Commit skills and artifacts
-
-Commit both generated skills and the artifacts used to create them:
-
-```
+```text title="Standalone package"
 skills/
-  core/SKILL.md
-  react/SKILL.md
+  task-name/
+    SKILL.md
   _artifacts/
     domain_map.yaml
     skill_spec.md
     skill_tree.yaml
 ```
 
-Artifacts enforce a consistent skill structure across versions, making it easier to audit, refresh, or extend the skill set without starting from scratch.
+```text title="Monorepo"
+_artifacts/
+  domain_map.yaml
+  skill_spec.md
+  skill_tree.yaml
+packages/
+  client/
+    skills/
+      task-name/
+        SKILL.md
+```
 
----
+<!-- ::end:tabs -->
 
-## Publish Configuration
+Existing custom skill and artifact locations are retained when supported. The domain map records domains and developer tasks, the spec records readable coverage and decisions, and the tree records skill placement, prerequisites, and source mappings.
 
-### 4. Configure your package for publishing
+Review the resulting skills, planning documents, and checks as one batch:
 
-Run these commands to prepare your package for skill publishing:
+| Check | Evidence |
+| --- | --- |
+| Structure | Frontmatter, required fields, and line limits; inspect reference paths and reading conditions separately. |
+| Developer task | Executable checks accept a working solution and reject a plausible mistake. |
+| Discovery | Realistic matching and adjacent nonmatching requests exercise the skill description. |
+| Fresh consumer | An isolated agent attempts the task with the candidate skills and protected checks grade the result. |
+| Bundled scripts, when present | Documented commands run from the installed package layout with valid and invalid inputs. |
+
+A missing runtime or independent run remains explicitly unverified. Structural validation alone does not establish task correctness, skill discovery, or fresh-consumer behavior.
+
+## Keep guidance current during library work
+
+Continue requesting library changes normally. Before handoff, the installed guidance instructs the agent to run `intent review --json`, examine affected skills, the planning record, and changed files outside existing source mappings, then record each completed decision with its evidence.
+
+`intent review` uses Git changes and content fingerprints to find work that has not been reviewed. Intent identifies candidates; the agent and maintainer decide whether the guidance should change. A new file does not automatically require a new skill. A justified `no-change` outcome records why accurate guidance stayed unchanged, while missing evidence remains pending.
+
+Completed outcomes are saved in `.intent/review-state.json`. Keep that file with the source, skill, and planning-record changes it describes. Run `intent review --check` to verify that no review items remain before handoff.
+
+See [`intent review`](../cli/intent-review) for comparison rules, report fields, recording, and failure recovery.
+
+## Use standalone authoring when needed
+
+Without maintainer installation, [`intent scaffold`](../cli/intent-scaffold) prints the same focused authoring entry point for your current agent conversation:
 
 ```bash
-# Update package.json with required fields
-npx @tanstack/intent@latest edit-package-json
+npx @tanstack/intent@latest scaffold
+```
 
-# Copy the CI workflow template
+Use this for a one-off batch or update. Installing the maintainer block instructs agents to route later ordinary library work through review.
+
+For an explicitly requested full-library design, the scaffold procedure retains the longer sequence: `domain-discovery`, then `tree-generator`, then `generate-skill`. That branch includes library-wide research, maintainer interviews, and review gates. Focused work reuses its planning decisions when they already exist.
+
+## Configure publishing
+
+Authoring does not change package publishing or CI. When the skill batch is ready to ship, configure those separately:
+
+`intent validate` currently reports a missing `@tanstack/intent` development dependency as an informational packaging warning. If the repository records Intent with its other development tools, add it with the package manager's installer:
+
+<!-- ::start:tabs variant="package-manager" mode="dev-install" -->
+
+all: @tanstack/intent
+
+<!-- ::end:tabs -->
+
+This package declaration does not change the runner selected by installed guidance. The generated commands continue to execute `@tanstack/intent@latest` through the detected package manager.
+
+```bash
+npx @tanstack/intent@latest edit-package-json
 npx @tanstack/intent@latest setup
 ```
 
-**What these do:**
+`edit-package-json` adds the `tanstack-intent` keyword and the `files` entries needed to publish `skills/`. For a standalone package it also excludes `skills/_artifacts`; a monorepo keeps the shared `_artifacts/` directory at the repository root, outside its package tarballs.
 
-- `edit-package-json` adds:
-  - `tanstack-intent` keyword (used for package detection and registry discovery)
-  - `files` array entries for `skills/`
-  - For single packages: also adds `!skills/_artifacts` to exclude artifacts from npm
-  - For monorepos: skips the artifacts exclusion (artifacts live at repo root)
-- `setup` copies `check-skills.yml` to `.github/workflows/` for automated validation and staleness checking
+`setup` copies `check-skills.yml` to the workspace root's `.github/workflows/` directory and skips an existing destination file. The workflow validates skills and recorded source reviews on pull requests. After a release or manual run, it creates or updates a review-reminder pull request when recorded review state or conservative staleness signals require attention. See [setup commands](../cli/intent-setup).
 
-`setup` does not overwrite existing workflow files. To pick up newer generated workflows, delete or move the old generated files in `.github/workflows/`, then rerun `npx @tanstack/intent@latest setup`.
+> [!WARNING] Review generated repository changes
+> `edit-package-json`, `setup`, and `install --maintainer` change different files for different purposes. Inspect each diff before keeping it. To replace an older generated workflow, move or delete it yourself before rerunning `setup`; Intent does not overwrite it.
 
-If your repo already has an older generated `validate-skills.yml`, remove it after adopting the current `check-skills.yml`; PR validation now runs from `check-skills.yml`.
+Publish through the library's normal release process. Skills in the package's published `skills/` directory version with that library release. Consumers install the library, configure permitted skill sources with consumer [`intent install`](../cli/intent-install#default-install), discover the installed skills with [`intent list`](../cli/intent-list), and load matching guidance with `intent load`.
 
-### 5. Ship skills with your package
+## Check package and release signals
 
-Skills ship inside your npm package. When you publish:
-
-```bash
-npm publish
-```
-
-Consumers who install your library automatically get the skills. They discover local installed skills with `intent list`, add loading guidance with `intent install`, and load matching skills with `intent load`.
-
-**Version alignment:**
-- Skills version with your library releases
-- `intent load` returns skill content from the installed package version
-- Packaging code and skills together keeps their versions aligned
-
----
-
-## Ongoing Maintenance (Manual or Agent-Assisted)
-
-### 6. Set up the CI workflow
-
-After running `setup`, you'll have `check-skills.yml` in `.github/workflows/`:
-
-**check-skills.yml** (runs on PRs touching skills/artifacts, release, or manual trigger)
-
-Validation:
-
-- Validates SKILL.md frontmatter and structure
-- Ensures files stay under 500 lines
-- Automatically detects stale skills and coverage gaps after you publish a new release
-
-Review handoff:
-
-- Opens one grouped review PR with an agent-friendly prompt
-- Includes the reason each skill or package was flagged
-- Requires you to copy the prompt into Claude Code, Cursor, or your agent to update skills
-
-### 7. Update stale skills
-
-When you publish a new release, `check-skills.yml` automatically opens a PR flagging skills that need review.
-
-Manually check which skills need updates with:
-
-```bash
-npx @tanstack/intent@latest stale
-```
-
-When run from a package, this checks that package's shipped skills. When run from a monorepo root, it checks workspace packages with skills and flags public workspace packages missing skill or `_artifacts` coverage.
-
-This detects:
-- **Version drift** — skill targets an older library version than currently installed
-- **New sources** — sources declared in frontmatter that weren't tracked before
-- **Artifact drift** — `_artifacts` entries that no longer match generated skills
-- **Missing package coverage** — public workspace packages not represented by generated skills or artifact coverage
-
-If a public workspace package is intentionally out of scope for skills, record that decision in repo-root `_artifacts`:
-
-```yaml
-coverage:
-  ignored_packages:
-    - '@tanstack/internal-tooling'
-    - name: packages/devtools-fixture
-      reason: test fixture only
-```
-
-Private workspace packages are skipped automatically.
-
-**Prepare the update:**
-
-1. Review the PR opened by `check-skills.yml`
-2. Copy the agent prompt from the PR description
-3. Paste it into Claude Code, Cursor, or your coding agent
-4. The agent reads the stale skills and updates them based on library changes
-
-**Finish the update:**
-
-5. Run `npx @tanstack/intent@latest validate` locally to verify
-6. Commit and merge the PR
-
-> [!NOTE]
-> Skills are updated through agent assistance, not full automation. The workflow detects what's stale and provides the prompt — your agent handles the actual updates.
-
-Use `--json` output for CI integration or scripting.
-
-### 8. Maintain and iterate
-
-As your library evolves:
-
-1. **When APIs change:** Update relevant SKILL.md files with new patterns
-2. **When docs change:** Run `intent stale` to identify affected skills
-3. **When issues are filed:** Check if the failure mode should be added to "Common Mistakes"
-4. **After major releases:** Consider re-running domain discovery to catch new patterns
-
-> [!TIP]
-> Create GitHub issue labels matching your skill names (`skill:core`, `skill:react`). When users file issues, tag them with the relevant skill label to track which areas need the most improvement.
+[`intent stale`](../cli/intent-stale) remains the conservative package-level check for version drift, missing source sync SHAs, artifact warnings, and workspace package coverage. It does not compare source diffs or prove that guidance changed. Use `intent review` for source-aware, recorded maintenance in repositories that enabled the maintainer workflow.

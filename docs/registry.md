@@ -10,15 +10,23 @@ The registry periodically searches npm for packages with the `tanstack-intent` k
 
 ## Ship skills in 4 steps
 
-### 1. Generate skills
+### 1. Create a skill batch
 
-Tell your AI coding agent to run:
+For repository-wide maintenance, enable the maintainer workflow once:
+
+```bash
+npx @tanstack/intent@latest install --maintainer
+```
+
+Then ask your coding agent for a useful batch of developer tasks. The installed instructions load the focused authoring procedure, maintain the shared planning record, and run source-aware review before handoff.
+
+For a one-off authoring session, tell the agent to run:
 
 ```bash
 npx @tanstack/intent@latest scaffold
 ```
 
-This walks the agent through domain discovery, skill tree generation, and skill creation. You review at each stage. Skills land in a `skills/` directory at your package root — each as a `SKILL.md` file in its own subdirectory.
+Give the agent a developer task or concrete code/docs change. The focused procedure creates or updates the relevant guidance and validates it for review; full-library discovery remains available when explicitly requested. Skills use the owning package's `skills/` directory or its existing custom root. See the [maintainer quick start](./getting-started/quick-start-maintainers).
 
 ### 2. Validate
 
@@ -26,19 +34,15 @@ This walks the agent through domain discovery, skill tree generation, and skill 
 npx @tanstack/intent@latest validate
 ```
 
-Catches structural issues, missing frontmatter, and broken source references before you publish.
+Catches structural issues in skill frontmatter and planning artifacts, and reports package configuration warnings before you publish.
 
-### 3. Add the keyword
+### 3. Configure the package
 
-Add `"tanstack-intent"` to the `keywords` array in your `package.json`:
-
-```json
-{
-  "keywords": ["tanstack-intent"]
-}
+```bash
+npx @tanstack/intent@latest edit-package-json
 ```
 
-This is how the registry finds your package on npm.
+This adds the `tanstack-intent` keyword used for registry discovery and the `files` entries needed to publish `skills/`. It excludes `skills/_artifacts` from a standalone package; monorepo artifacts live at the repository root, outside package tarballs. Review the resulting `package.json` diff before keeping it.
 
 ### 4. Publish
 
@@ -50,19 +54,28 @@ The registry discovers your package on its next sync cycle. Your skills, version
 
 ## Keeping skills current
 
-Skills derived from docs drift when docs change. Two commands keep them honest:
+Use two separate checks as the library changes:
+
+```bash
+npx @tanstack/intent@latest review
+```
+
+Uses Git changes and recorded content fingerprints to identify skills, planning records, and unmapped source areas that need semantic review. Record completed outcomes with their evidence in `.intent/review-state.json`; missing evidence remains pending.
 
 ```bash
 npx @tanstack/intent@latest stale
 ```
 
-Flags skills whose source docs have changed since the skill was last updated.
+Reports conservative package and release signals: version drift, missing stored source SHAs, artifact warnings, and package coverage. It does not compare source diffs. Flagged text reports include the focused authoring command so your agent can investigate the evidence and return a reviewable update or an explained no-op.
 
 ```bash
 npx @tanstack/intent@latest setup
 ```
 
-Copies CI workflow templates into your repo so validation and staleness checks run in GitHub Actions. Catch drift before it ships.
+Copies the generated CI workflow into your repository. Pull requests validate skills and check recorded source reviews when maintainer guidance or review state exists. Release and manual runs use recorded review state when available, with conservative `stale` signals as the fallback.
+
+> [!NOTE]
+> Authoring, package publishing, and consumer setup are separate. `install --maintainer` writes repository instructions; `edit-package-json` configures the library package; consumers run their own `intent install` after installing the published library.
 
 ## Requesting a library
 

@@ -82,6 +82,10 @@
         {
           "label": "intent stale",
           "to": "cli/intent-stale"
+        },
+        {
+          "label": "intent review",
+          "to": "cli/intent-review"
         }
       ]
     }

@@ -6,7 +6,7 @@ id: intent-install
 `intent install` confirms skill-source permissions on first use, then creates or updates an `intent-skills` guidance block in a project guidance file.
 
 ```bash
-npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
+npx @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
 ```
 
 ## Options
@@ -28,6 +28,15 @@ npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--glob
 - `--no-notices`: suppress non-critical notices on stderr
 
 ## Behavior
+
+### Maintainer workflow
+
+`install --maintainer` enables initial skill batches and source-aware skill maintenance in repository agent instructions. It works without an interactive terminal or existing consumer permissions. It writes a separate `intent-maintainer` block, preserves consumer guidance, and is idempotent. `--dry-run` previews the block.
+
+Run it from the library root. The block loads the packaged authoring procedure for substantial library work; that procedure covers the cumulative domain map, spec, and skill tree, source review, task checks, and revision-bound outcomes. It updates the file that already contains either Intent managed block, or creates `AGENTS.md` when neither exists. It cannot be combined with `--review`, `--map`, `--print-prompt`, `--global`, or `--global-only`. See [Quick Start for Maintainers](../getting-started/quick-start-maintainers).
+
+> [!NOTE] Maintainer installation writes guidance
+> It does not add Intent to `package.json`, configure consumer skill permissions, install agent hooks, or add CI. The managed block uses the detected package manager's runner with `@tanstack/intent@latest`.
 
 ### Default install
 
@@ -103,7 +112,7 @@ Supported config files: `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copil
 
 ## Default output
 
-The default block tells agents to discover skills and load matching guidance on demand:
+The default block tells agents to discover skills and load matching guidance on demand. This npm example uses the fallback runner; pnpm, Yarn, and Bun projects receive their detected `@latest` runner instead:
 
 ```markdown
 <!-- intent-skills:start -->
