@@ -1,6 +1,6 @@
 import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, test } from 'vitest'
+import { afterAll, beforeAll, bench, describe } from 'vitest'
 import {
   createBenchOptions,
   createCliRunner,
@@ -158,25 +158,25 @@ describe('intent stale', () => {
   beforeAll(setup)
   afterAll(teardown)
 
-  test('reports workspace drift', { timeout: 30_000 }, async ({ bench }) => {
-    await bench('reports workspace drift', async () => {
+  bench(
+    'reports workspace drift',
+    async () => {
       const state = getFixture()
       for (let index = 0; index < 3; index++) {
         await state.runner.run(['stale', '--json'])
       }
-    }).run(createBenchOptions(setup, teardown))
-  })
-
-  test(
-    'reports workspace drift with shared artifacts',
-    { timeout: 30_000 },
-    async ({ bench }) => {
-      await bench('reports workspace drift with shared artifacts', async () => {
-        const state = getFixture()
-        for (let index = 0; index < 3; index++) {
-          await state.runner.run(['stale', '--json'])
-        }
-      }).run(createBenchOptions(setupWithArtifacts, teardown))
     },
+    createBenchOptions(setup, teardown),
+  )
+
+  bench(
+    'reports workspace drift with shared artifacts',
+    async () => {
+      const state = getFixture()
+      for (let index = 0; index < 3; index++) {
+        await state.runner.run(['stale', '--json'])
+      }
+    },
+    createBenchOptions(setupWithArtifacts, teardown),
   )
 })

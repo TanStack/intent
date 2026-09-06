@@ -28,13 +28,21 @@
     "test:lib": {
       "cache": true,
       "dependsOn": ["^build"],
-      "inputs": ["default", "^production"],
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/packages/intent/meta/**/*"
+      ],
       "outputs": ["{projectRoot}/coverage"]
     },
     "test:integration": {
       "cache": true,
       "dependsOn": ["build", "^build"],
-      "inputs": ["default", "^production"]
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/packages/intent/meta/**/*"
+      ]
     },
     "test:eslint": {
       "cache": true,

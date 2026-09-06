@@ -287,14 +287,13 @@ Existing fixture guidance, pending source review.
         type: 'stale-skill',
         subject: 'review-requests',
         library: 'consumer',
+        reasons: ['version drift (1.0.0 → 1.1.0)'],
       }),
     ])
     const body = readFileSync(join(cwd, 'pr-body.md'), 'utf8')
-    for (const item of items) {
-      expect(body).toContain(
-        `| \`${item.type}\` | \`${item.subject}\` | \`${item.library}\` | ${item.reasons.join('; ')} |`,
-      )
-    }
+    expect(body).toContain(
+      '| `stale-skill` | `review-requests` | `consumer` | version drift &#40;1.0.0 → 1.1.0&#41; |',
+    )
     expect(body).toContain('### Agent Review')
     expect(body).not.toContain('Paste this into your coding agent')
     expect(body).toContain('npx @tanstack/intent@latest meta generate-skill')

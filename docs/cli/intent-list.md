@@ -99,8 +99,7 @@ Text output and discovery warnings go to stdout. Policy notices and `--debug` de
       "packageVersion": "5.0.0",
       "packageSource": "local",
       "skillName": "fetching",
-      "description": "Use when fetching and caching server data with TanStack Query.",
-      "purpose": "Query data fetching patterns",
+      "description": "Query data fetching patterns",
       "type": "core",
       "framework": "react"
     }
@@ -125,8 +124,6 @@ Text output and discovery warnings go to stdout. Policy notices and `--debug` de
 | Field | Meaning |
 | --- | --- |
 | `skills` | Available skills. `use` is the portable `<package>#<skill>` identity; `type` and `framework` are optional. |
-| Skill `description` | Standard agent-discovery text describing when to use the skill. Also used in the text listing. |
-| Skill `purpose` | Optional descriptive explanation from `metadata.purpose`, kept separate from activation guidance. Omitted from JSON when absent. |
 | `packages` | Selected packages, their source and location, and permitted skill counts. |
 | `hiddenSourceCount` | Number of packages hidden by the explicit allowlist. |
 | `hiddenSources` | Objects with `name` and `skillCount` in human sessions, even without `--show-hidden`. Always empty in agent sessions. |
