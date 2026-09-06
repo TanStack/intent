@@ -11,6 +11,10 @@ import {
   readSkillSourcesConfig,
 } from '../core/source-policy.js'
 import { isCliFailure } from '../shared/cli-error.js'
+import {
+  detectIntentCommandPackageManager,
+  formatIntentCommand,
+} from '../shared/command-runner.js'
 import type { StalenessReport } from '../shared/types.js'
 
 export interface StaleCommandOptions {
@@ -84,6 +88,22 @@ export async function runStaleCommand(
     }
 
     console.log()
+  }
+
+  if (
+    reports.some(
+      (report) =>
+        report.skills.some((skill) => skill.needsReview) ||
+        report.signals.some((signal) => signal.needsReview),
+    )
+  ) {
+    const command = formatIntentCommand(
+      detectIntentCommandPackageManager(targetDir),
+      'meta generate-skill',
+    )
+    console.log(
+      `Next: ask your coding agent to run \`${command}\` and follow it with this report and the relevant code/docs change.`,
+    )
   }
 }
 

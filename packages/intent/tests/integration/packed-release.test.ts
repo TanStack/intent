@@ -12,9 +12,11 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+// @ts-ignore Could not find a declaration file for module 'markdown-link-extractor'.
+import markdownLinkExtractor from 'markdown-link-extractor'
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const timeout = 30_000
@@ -132,9 +134,22 @@ describe('packed release', () => {
           `](${join(installedRoot, 'meta', name, 'references', 'artifacts.md')})`,
         )
       }
+      const links: Array<string> = markdownLinkExtractor(result.stdout)
+      for (const link of links) {
+        if (/^(https?:|#)/.test(link)) continue
+        const target = link.split('#')[0]!
+        expect(isAbsolute(target), link).toBe(true)
+        expect(target.startsWith(join(installedRoot, 'meta')), link).toBe(true)
+        expect(statSync(target).isFile(), link).toBe(true)
+      }
     }
+    const entries = readdirSync(cwd, { recursive: true, encoding: 'utf8' })
+    const originals = entries
+      .filter((entry) => statSync(join(cwd, entry)).isFile())
+      .map((entry) => [entry, readFileSync(join(cwd, entry))] as const)
     const scaffold = run(['scaffold'])
     expect(scaffold.status, scaffold.stderr).toBe(0)
+    expect(scaffold.stderr).toBe('')
     expect(scaffold.stdout).toContain(
       join(installedRoot, 'meta', 'domain-discovery', 'SKILL.md'),
     )
@@ -144,6 +159,203 @@ describe('packed release', () => {
     expect(scaffold.stdout).toContain(
       join(installedRoot, 'meta', 'generate-skill', 'SKILL.md'),
     )
+    const entryPaths: Array<string> = markdownLinkExtractor(scaffold.stdout)
+    expect(entryPaths).toEqual(
+      ['generate-skill', 'domain-discovery', 'tree-generator'].map((name) =>
+        join(installedRoot, 'meta', name, 'SKILL.md'),
+      ),
+    )
+    expect(readdirSync(cwd, { recursive: true, encoding: 'utf8' })).toEqual(
+      entries,
+    )
+    for (const [entry, content] of originals) {
+      expect(readFileSync(join(cwd, entry))).toEqual(content)
+    }
+  })
+
+  it('keeps nested authoring references usable within the extracted package', () => {
+    for (const file of packedFiles.filter(
+      (path) => path.startsWith('meta/') && path.endsWith('.md'),
+    )) {
+      const path = join(installedRoot, file)
+      const links: Array<string> = markdownLinkExtractor(
+        readFileSync(path, 'utf8'),
+      )
+      for (const link of links) {
+        if (/^(https?:|#)/.test(link)) continue
+        const target = resolve(dirname(path), link.split('#')[0]!)
+        expect(
+          target.startsWith(join(installedRoot, 'meta')),
+          `${file}: ${link}`,
+        ).toBe(true)
+        expect(statSync(target).isFile(), `${file}: ${link}`).toBe(true)
+      }
+    }
+  })
+
+  it('keeps both affected skills linked to one shared reference after loading', () => {
+    const skills = join(cwd, 'node_modules/release-fixture/skills')
+    const reference = join(skills, 'core/references/retry.md')
+    mkdirSync(dirname(reference), { recursive: true })
+    writeFileSync(
+      reference,
+      '# Retry policy\n\nCount the initial request toward the attempt limit.\n',
+    )
+    for (const [name, pointer] of [
+      ['core', '[retry policy](references/retry.md#retry-policy)'],
+      ['pages', '[retry policy](<../core/references/retry.md#retry-policy>)'],
+    ]) {
+      const path = join(skills, name!, 'SKILL.md')
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(
+        path,
+        `---\nname: ${name}\ndescription: Apply retry limits when making ${name} requests.\n---\n\nBefore configuring retries, read the ${pointer}.\n`,
+      )
+    }
+    const validated = run(['validate', skills])
+    expect(validated.status, validated.stderr).toBe(0)
+    expect(validated.stdout).toContain('Validated 2 skill files — all passed')
+
+    // Structural validation does not check references. Exercise the consumer
+    // loader and resolve each emitted pointer independently.
+    for (const name of ['core', 'pages']) {
+      const loaded = run(['load', `release-fixture#${name}`, '--json'])
+      expect(loaded.status, loaded.stderr).toBe(0)
+      const links: Array<string> = markdownLinkExtractor(
+        JSON.parse(loaded.stdout).content,
+      )
+      expect(links).toHaveLength(1)
+      const [target, anchor] = links[0]!.split('#')
+      expect(resolve(cwd, target!)).toBe(reference)
+      expect(anchor).toBe('retry-policy')
+      expect(readFileSync(resolve(cwd, target!), 'utf8')).toContain(
+        '# Retry policy\n',
+      )
+    }
+  })
+
+  it('validates a manually authored skill without maintainer setup', () => {
+    const skillDir = join(cwd, 'skills', 'read-meta')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      `---
+name: read-meta
+description: Read bundled Intent authoring guidance from a library repository.
+metadata:
+  type: core
+  library: '@tanstack/intent'
+  library_version: '0.4.0'
+sources:
+  - 'TanStack/intent:packages/intent/src/commands/meta.ts'
+---
+
+# Read authoring guidance
+
+Run \`npx @tanstack/intent meta\` to discover public meta-skill names, then
+\`npx @tanstack/intent meta generate-skill\` for the focused authoring procedure.
+The command prints Markdown; it does not create skill files. Read linked
+references only when their stated condition applies. Relative links printed
+by the command resolve from the caller's directory.
+
+If a name is unknown, list the names again. A successful read exits with 0
+and prints the selected skill's frontmatter and body.
+`,
+    )
+    const result = run(['validate', 'skills'])
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toContain('Validated 1 skill files — all passed')
+    expect(readdirSync(join(cwd, 'skills'))).toEqual(['read-meta'])
+    expect(existsSync(join(cwd, '_artifacts'))).toBe(false)
+  })
+
+  it('routes local and generated review reports to the shipped focused procedure', () => {
+    writeFileSync(
+      join(cwd, 'package.json'),
+      JSON.stringify({ name: 'consumer', version: '1.1.0', private: true }),
+    )
+    const skillDir = join(cwd, 'skills', 'review-requests')
+    mkdirSync(skillDir, { recursive: true })
+    const skillPath = join(skillDir, 'SKILL.md')
+    const original = `---
+name: review-requests
+description: Review incoming consumer requests.
+metadata:
+  type: core
+  library: consumer
+  library_version: '1.0.0'
+---
+
+# Review requests
+
+Existing fixture guidance, pending source review.
+`
+    writeFileSync(skillPath, original)
+
+    const local = run(['stale'])
+    expect(local.status, local.stderr).toBe(0)
+    expect(local.stdout).toContain('review-requests')
+    expect(local.stdout).toContain('meta generate-skill')
+    expect(existsSync(join(cwd, 'review-items.json'))).toBe(false)
+
+    const json = run(['stale', '--json'])
+    expect(json.status, json.stderr).toBe(0)
+    const reports = JSON.parse(json.stdout)
+    expect(reports[0].skills).toEqual([
+      expect.objectContaining({ name: 'review-requests', needsReview: true }),
+    ])
+
+    const review = spawnSync(
+      process.execPath,
+      [cli, 'stale', '--github-review'],
+      {
+        cwd,
+        encoding: 'utf8',
+        timeout,
+        env: {
+          ...process.env,
+          GITHUB_OUTPUT: join(cwd, 'github-output'),
+          GITHUB_STEP_SUMMARY: join(cwd, 'github-summary'),
+        },
+      },
+    )
+    expect(review.status, review.stderr).toBe(0)
+    const items = JSON.parse(
+      readFileSync(join(cwd, 'review-items.json'), 'utf8'),
+    )
+    expect(items).toEqual([
+      expect.objectContaining({
+        type: 'stale-skill',
+        subject: 'review-requests',
+        library: 'consumer',
+        reasons: ['version drift (1.0.0 → 1.1.0)'],
+      }),
+    ])
+    const body = readFileSync(join(cwd, 'pr-body.md'), 'utf8')
+    expect(body).toContain(
+      '| `stale-skill` | `review-requests` | `consumer` | version drift &#40;1.0.0 → 1.1.0&#41; |',
+    )
+    expect(body).toContain('### Agent Review')
+    expect(body).not.toContain('Paste this into your coding agent')
+    expect(body).toContain('npx @tanstack/intent@latest meta generate-skill')
+
+    // Execute the advertised meta command with this extracted release.
+    const procedure = run(['meta', 'generate-skill'])
+    expect(procedure.status, procedure.stderr).toBe(0)
+    const links: Array<string> = markdownLinkExtractor(procedure.stdout)
+    const reviewReference = join(
+      installedRoot,
+      'meta',
+      'generate-skill',
+      'references',
+      'review-signals.md',
+    )
+    expect(links).toContain(reviewReference)
+    const guidance = readFileSync(reviewReference, 'utf8')
+    expect(guidance).toContain('stale-check-failed')
+    expect(guidance).toContain('workflow-advisory')
+    expect(readFileSync(skillPath, 'utf8')).toBe(original)
+    expect(existsSync(join(cwd, '_artifacts'))).toBe(false)
   })
 
   it.each(['cancel', 'confirm'] as const)(
@@ -204,4 +416,116 @@ describe('packed release', () => {
     expect(readFileSync(join(cwd, 'package.json'), 'utf8')).toBe(original)
     expect(existsSync(join(cwd, 'AGENTS.md'))).toBe(false)
   })
+
+  it('requires the planning records after maintainer setup in the packed CLI', () => {
+    execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], { cwd })
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'core.fsmonitor=false',
+        '-c',
+        'user.name=Fixture',
+        '-c',
+        'user.email=fixture@example.invalid',
+        'commit',
+        '--allow-empty',
+        '-qm',
+        'fixture',
+      ],
+      { cwd },
+    )
+    expect(run(['install', '--maintainer']).status).toBe(0)
+    const missingRecords = JSON.parse(run(['review', '--json']).stdout)
+    expect(
+      missingRecords.items.find(
+        (item: { kind: string }) => item.kind === 'planning',
+      ).problems,
+    ).toHaveLength(3)
+    expect(run(['review', '--check']).status).toBe(1)
+  })
+
+  it.each(['skills', '.agents/knowledge'])(
+    'installs the maintainer workflow and reviews sources under %s with the packed CLI',
+    (skillRoot) => {
+      execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], { cwd })
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'core.fsmonitor=false',
+          '-c',
+          'user.name=Fixture',
+          '-c',
+          'user.email=fixture@example.invalid',
+          'commit',
+          '--allow-empty',
+          '-qm',
+          'fixture',
+        ],
+        { cwd },
+      )
+      const installed = run(['install', '--maintainer'])
+      expect(installed.status, installed.stderr).toBe(0)
+      expect(readFileSync(join(cwd, 'AGENTS.md'), 'utf8')).toContain(
+        'intent-maintainer:start',
+      )
+      expect(packedFiles).toContain(
+        'meta/generate-skill/references/initial-batches.md',
+      )
+      expect(packedFiles).toContain(
+        'meta/generate-skill/references/task-quality.md',
+      )
+      expect(packedFiles).toContain(
+        'meta/generate-skill/references/source-review.md',
+      )
+      expect(packedFiles).toContain(
+        'meta/generate-skill/references/planning-records.md',
+      )
+      mkdirSync(join(cwd, 'src'))
+      writeFileSync(join(cwd, 'src/client.js'), 'export const attempts = 3\n')
+      mkdirSync(join(cwd, `${skillRoot}/client`), { recursive: true })
+      writeFileSync(
+        join(cwd, `${skillRoot}/client/SKILL.md`),
+        '---\nname: client\nsources: [src/client.js]\n---\nClient task\n',
+      )
+      mkdirSync(join(cwd, `${skillRoot}/_artifacts`))
+      writeFileSync(
+        join(cwd, `${skillRoot}/_artifacts/domain_map.yaml`),
+        'library: {name: consumer}\nskills: [{slug: client}]\n',
+      )
+      writeFileSync(
+        join(cwd, `${skillRoot}/_artifacts/skill_spec.md`),
+        '# Consumer skills\n\nClient task: three attempts.\n',
+      )
+      writeFileSync(
+        join(cwd, `${skillRoot}/_artifacts/skill_tree.yaml`),
+        `skills: [{slug: client, path: ${skillRoot}/client/SKILL.md}]\n`,
+      )
+      const review = run(['review', '--json'])
+      expect(review.status, review.stderr).toBe(0)
+      const report = JSON.parse(review.stdout)
+      expect(report.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'skill',
+            path: `${skillRoot}/client/SKILL.md`,
+            problems: [],
+          }),
+        ]),
+      )
+      for (const item of report.items) {
+        item.outcome = 'no-change'
+        item.reason = 'Fixture source and guidance agree.'
+        item.evidence = ['src/client.js']
+      }
+      mkdirSync(join(cwd, '.intent'))
+      writeFileSync(join(cwd, '.intent/review.json'), JSON.stringify(report))
+      const recorded = run(['review', '--record', '.intent/review.json'])
+      expect(recorded.status, recorded.stderr).toBe(0)
+      expect(run(['review', '--check']).status).toBe(0)
+      writeFileSync(join(cwd, 'src/client.js'), 'export const attempts = 4\n')
+      expect(run(['review', '--check']).status).toBe(1)
+    },
+  )
 })

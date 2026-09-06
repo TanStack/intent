@@ -80,7 +80,7 @@ function writeSkillPackages(
     )
     writeFileSync(
       skillPath,
-      `---\nname: "${skillName}"\ndescription: "Guidance for ${area} eval tasks"\n---\n\nUse this skill for ${area} eval tasks.\n`,
+      `---\nname: "${skillName}"\ndescription: "Guidance for ${area} eval tasks"\n---\n\nFixture content for the ${area} discovery evaluation.\n`,
     )
 
     return [packageJsonPath, skillPath]

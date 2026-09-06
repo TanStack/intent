@@ -6,6 +6,8 @@ import { isGeneratedMappingSkill } from '../../skills/categories.js'
 import { formatSkillUse, parseSkillUse } from '../../skills/use.js'
 import type { ScanResult, SkillEntry } from '../../shared/types.js'
 
+type GuidanceNamespace = 'intent-skills' | 'intent-maintainer'
+
 const INTENT_SKILLS_START = '<!-- intent-skills:start -->'
 const INTENT_SKILLS_END = '<!-- intent-skills:end -->'
 const LOCAL_PATH_VALUE_PATTERN =
@@ -26,6 +28,7 @@ export interface IntentSkillsBlockResult {
 export interface WriteIntentSkillsBlockOptions extends IntentSkillsBlockResult {
   root: string
   skipWhenEmpty?: boolean
+  namespace?: GuidanceNamespace
 }
 
 interface WriteIntentSkillsBlockFileResult {
@@ -58,20 +61,25 @@ function normalizeBlock(content: string): string {
   return content.replace(/\r\n/g, '\n').trimEnd()
 }
 
-function readManagedBlock(content: string): {
+function readManagedBlock(
+  content: string,
+  namespace: GuidanceNamespace = 'intent-skills',
+): {
   errors: Array<string>
   hasMarker: boolean
   managedBlock: ManagedBlock | null
 } {
-  const start = content.indexOf(INTENT_SKILLS_START)
+  const startMarker = `<!-- ${namespace}:start -->`
+  const endMarker = `<!-- ${namespace}:end -->`
+  const start = content.indexOf(startMarker)
   const errors: Array<string> = []
-  if (start === -1) errors.push('Missing intent-skills start marker.')
+  if (start === -1) errors.push(`Missing ${namespace} start marker.`)
 
   const endMarkerStart =
     start === -1
-      ? content.indexOf(INTENT_SKILLS_END)
-      : content.indexOf(INTENT_SKILLS_END, start)
-  if (endMarkerStart === -1) errors.push('Missing intent-skills end marker.')
+      ? content.indexOf(endMarker)
+      : content.indexOf(endMarker, start)
+  if (endMarkerStart === -1) errors.push(`Missing ${namespace} end marker.`)
 
   const hasMarker = start !== -1 || endMarkerStart !== -1
 
@@ -79,7 +87,7 @@ function readManagedBlock(content: string): {
     return { errors, hasMarker, managedBlock: null }
   }
 
-  const end = endMarkerStart + INTENT_SKILLS_END.length
+  const end = endMarkerStart + endMarker.length
   return {
     errors,
     hasMarker,
@@ -139,10 +147,12 @@ export function verifyIntentSkillsBlockFile({
   expectedBlock,
   expectedMappingCount,
   targetPath,
+  namespace = 'intent-skills',
 }: {
   expectedBlock: string
   expectedMappingCount?: number
   targetPath: string
+  namespace?: GuidanceNamespace
 }): IntentSkillsVerificationResult {
   const errors: Array<string> = []
 
@@ -155,6 +165,7 @@ export function verifyIntentSkillsBlockFile({
 
   const { managedBlock, errors: markerErrors } = readManagedBlock(
     readFileSync(targetPath, 'utf8'),
+    namespace,
   )
   errors.push(...markerErrors)
 
@@ -263,10 +274,15 @@ export function verifyIntentSkillsBlockFile({
 export function resolveIntentSkillsBlockTargetPath(
   root: string,
   mappingCount: number,
+  namespace: GuidanceNamespace = 'intent-skills',
 ): string | null {
   if (mappingCount === 0) return null
   return (
-    findExistingConfigWithManagedBlock(root)?.filePath ??
+    findExistingConfigWithManagedBlock(root, namespace)?.filePath ??
+    findExistingConfigWithManagedBlock(
+      root,
+      namespace === 'intent-skills' ? 'intent-maintainer' : 'intent-skills',
+    )?.filePath ??
     join(root, 'AGENTS.md')
   )
 }
@@ -351,6 +367,28 @@ export function buildIntentSkillGuidanceBlock(
   }
 }
 
+export function buildMaintainerGuidanceBlock(
+  packageManager: ScanResult['packageManager'] = 'unknown',
+): IntentSkillsBlockResult {
+  const command = formatIntentCommand(packageManager, 'meta generate-skill')
+  const reviewCommand = formatIntentCommand(packageManager, 'review --json')
+  return {
+    block: [
+      '<!-- intent-maintainer:start -->',
+      '## Library Skill Maintenance',
+      '',
+      `Before substantial library source, documentation, examples, tests, or skill work, run \`${command}\` and follow the packaged maintainer procedure.`,
+      'Use the current request and repository evidence. For initial skills, propose a useful batch and reuse any scope already agreed with the maintainer.',
+      `Before handing off a skill batch or library change, run \`${reviewCommand}\`. Follow the maintainer procedure to update affected guidance, run task checks, and record completed review outcomes. Report an evidence-backed no-op or missing evidence explicitly.`,
+      'Create and incrementally maintain domain_map.yaml, skill_spec.md, and skill_tree.yaml in the established artifact location for every skill batch. Preserve prior tasks, maintainer decisions, and remaining work.',
+      'Keep maintainer decisions and changes in the repository; do not require the user to repeat the procedure in later sessions.',
+      '<!-- intent-maintainer:end -->',
+      '',
+    ].join('\n'),
+    mappingCount: 0,
+  }
+}
+
 function detectNewline(content: string): string {
   return content.includes('\r\n') ? '\r\n' : '\n'
 }
@@ -359,7 +397,10 @@ function withNewlineStyle(content: string, newline: string): string {
   return newline === '\n' ? content : content.replace(/\n/g, newline)
 }
 
-function findExistingConfigWithManagedBlock(root: string): {
+function findExistingConfigWithManagedBlock(
+  root: string,
+  namespace: GuidanceNamespace = 'intent-skills',
+): {
   content: string
   filePath: string
   managedBlock: ManagedBlock
@@ -369,11 +410,14 @@ function findExistingConfigWithManagedBlock(root: string): {
     if (!existsSync(filePath)) continue
 
     const content = readFileSync(filePath, 'utf8')
-    const { managedBlock, errors, hasMarker } = readManagedBlock(content)
+    const { managedBlock, errors, hasMarker } = readManagedBlock(
+      content,
+      namespace,
+    )
     if (managedBlock) return { content, filePath, managedBlock }
     if (hasMarker) {
       throw new Error(
-        `Invalid intent-skills block in ${filePath}: ${errors.join(' ')}`,
+        `Invalid ${namespace} block in ${filePath}: ${errors.join(' ')}`,
       )
     }
   }
@@ -396,6 +440,7 @@ export function writeIntentSkillsBlock({
   mappingCount,
   root,
   skipWhenEmpty = true,
+  namespace = 'intent-skills',
 }: WriteIntentSkillsBlockOptions): WriteIntentSkillsBlockResult {
   if (mappingCount === 0 && skipWhenEmpty) {
     return {
@@ -405,8 +450,8 @@ export function writeIntentSkillsBlock({
     }
   }
 
-  const existingTarget = findExistingConfigWithManagedBlock(root)
-  const targetPath = existingTarget?.filePath ?? join(root, 'AGENTS.md')
+  const existingTarget = findExistingConfigWithManagedBlock(root, namespace)
+  const targetPath = resolveIntentSkillsBlockTargetPath(root, 1, namespace)!
 
   if (existingTarget) {
     const nextContent = replaceManagedBlock(

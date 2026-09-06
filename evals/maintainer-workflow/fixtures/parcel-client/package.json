@@ -1,0 +1,14 @@
+{
+  "name": "@intent-fixture/parcel-client",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": "./src/index.mjs",
+  "repository": "https://github.com/intent-fixtures/parcel-client",
+  "files": [
+    "src",
+    "skills"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

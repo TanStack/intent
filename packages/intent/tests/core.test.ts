@@ -92,6 +92,38 @@ afterEach(() => {
 })
 
 describe('listIntentSkills', () => {
+  it('exposes purpose separately while keeping activation descriptions and older skills usable', () => {
+    writeInstalledIntentPackage(root, {
+      name: 'client',
+      version: '1.0.0',
+      skillName: 'requests',
+      description: 'Original request guidance.',
+    })
+    const skillPath = join(root, 'node_modules/client/skills/requests/SKILL.md')
+    const original = listIntentSkills({ cwd: root }).skills[0]!
+    expect(original.description).toBe('Original request guidance.')
+    expect(original.purpose).toBeUndefined()
+
+    writeFileSync(
+      skillPath,
+      '---\nname: requests\ndescription: Use when configuring bounded retries with client.\nmetadata:\n  purpose: Original request guidance.\n---\nRequest guidance.\n',
+    )
+    const migrated = listIntentSkills({ cwd: root }).skills[0]!
+    expect(migrated.description).toBe(
+      'Use when configuring bounded retries with client.',
+    )
+    expect(migrated.purpose).toBe(original.description)
+    expect(loadIntentSkill('client#requests', { cwd: root }).content).toContain(
+      'purpose: Original request guidance.',
+    )
+
+    writeFileSync(
+      skillPath,
+      '---\nname: requests\ndescription: Use when reviewing requests.\nmetadata:\n  purpose: 42\n---\n',
+    )
+    expect(listIntentSkills({ cwd: root }).skills[0]!.purpose).toBeUndefined()
+  })
+
   it('preserves migration mode when the project manifest is missing', () => {
     writeInstalledIntentPackage(root, {
       name: '@tanstack/query',
