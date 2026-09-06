@@ -5,37 +5,26 @@ id: quick-start-maintainers
 
 Enable Intent in a library repository, create a focused skill batch with your existing coding agent, keep the guidance reviewed as the library changes, then configure publishing separately.
 
+## Install
+
+<!-- ::start:tabs variant="package-manager" mode="dev-install" -->
+
+react: @tanstack/intent
+solid: @tanstack/intent
+vue: @tanstack/intent
+svelte: @tanstack/intent
+angular: @tanstack/intent
+lit: @tanstack/intent
+
+<!-- ::end:tabs -->
+
 ## Enable the maintainer workflow
 
-Run `install --maintainer` from the library repository with your package manager's runner:
-
-<!-- ::start:tabs -->
-
-### npm
+Run `install --maintainer` from the library repository:
 
 ```bash
 npx @tanstack/intent@latest install --maintainer
 ```
-
-### pnpm
-
-```bash
-pnpm dlx @tanstack/intent@latest install --maintainer
-```
-
-### Yarn
-
-```bash
-yarn dlx @tanstack/intent@latest install --maintainer
-```
-
-### Bun
-
-```bash
-bunx @tanstack/intent@latest install --maintainer
-```
-
-<!-- ::end:tabs -->
 
 This creates an `intent-maintainer` block in `AGENTS.md`, or updates the file that already contains an Intent maintainer or consumer block. It preserves surrounding instructions and a separate `intent-skills` consumer block. Review this setup diff and keep it in the repository so later agent sessions receive the same authoring and review procedure.
 
@@ -117,16 +106,6 @@ For an explicitly requested full-library design, the scaffold procedure retains 
 ## Configure publishing
 
 Authoring does not change package publishing or CI. When the skill batch is ready to ship, configure those separately:
-
-`intent validate` currently reports a missing `@tanstack/intent` development dependency as an informational packaging warning. If the repository records Intent with its other development tools, add it with the package manager's installer:
-
-<!-- ::start:tabs variant="package-manager" mode="dev-install" -->
-
-all: @tanstack/intent
-
-<!-- ::end:tabs -->
-
-This package declaration does not change the runner selected by installed guidance. The generated commands continue to execute `@tanstack/intent@latest` through the detected package manager.
 
 ```bash
 npx @tanstack/intent@latest edit-package-json
