@@ -5,10 +5,22 @@ id: intent-setup
 
 Intent exposes publishing setup as two commands.
 
-```bash
-npx @tanstack/intent@latest edit-package-json
-npx @tanstack/intent@latest setup
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest edit-package-json
+react: @tanstack/intent@latest setup
+solid: @tanstack/intent@latest edit-package-json
+solid: @tanstack/intent@latest setup
+vue: @tanstack/intent@latest edit-package-json
+vue: @tanstack/intent@latest setup
+svelte: @tanstack/intent@latest edit-package-json
+svelte: @tanstack/intent@latest setup
+angular: @tanstack/intent@latest edit-package-json
+angular: @tanstack/intent@latest setup
+lit: @tanstack/intent@latest edit-package-json
+lit: @tanstack/intent@latest setup
+
+<!-- ::end:tabs -->
 
 ## Commands
 

@@ -22,9 +22,16 @@ lit: @tanstack/intent
 
 Run `install --maintainer` from the library repository:
 
-```bash
-npx @tanstack/intent@latest install --maintainer
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest install --maintainer
+solid: @tanstack/intent@latest install --maintainer
+vue: @tanstack/intent@latest install --maintainer
+svelte: @tanstack/intent@latest install --maintainer
+angular: @tanstack/intent@latest install --maintainer
+lit: @tanstack/intent@latest install --maintainer
+
+<!-- ::end:tabs -->
 
 This creates an `intent-maintainer` block in `AGENTS.md`, or updates the file that already contains an Intent maintainer or consumer block. It preserves surrounding instructions and a separate `intent-skills` consumer block. Review this setup diff and keep it in the repository so later agent sessions receive the same authoring and review procedure.
 
@@ -95,9 +102,16 @@ See [`intent review`](../cli/intent-review) for comparison rules, report fields,
 
 Without maintainer installation, [`intent scaffold`](../cli/intent-scaffold) prints the same focused authoring entry point for your current agent conversation:
 
-```bash
-npx @tanstack/intent@latest scaffold
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest scaffold
+solid: @tanstack/intent@latest scaffold
+vue: @tanstack/intent@latest scaffold
+svelte: @tanstack/intent@latest scaffold
+angular: @tanstack/intent@latest scaffold
+lit: @tanstack/intent@latest scaffold
+
+<!-- ::end:tabs -->
 
 Use this for a one-off batch or update. Installing the maintainer block instructs agents to route later ordinary library work through review.
 
@@ -107,10 +121,22 @@ For an explicitly requested full-library design, the scaffold procedure retains 
 
 Authoring does not change package publishing or CI. When the skill batch is ready to ship, configure those separately:
 
-```bash
-npx @tanstack/intent@latest edit-package-json
-npx @tanstack/intent@latest setup
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest edit-package-json
+react: @tanstack/intent@latest setup
+solid: @tanstack/intent@latest edit-package-json
+solid: @tanstack/intent@latest setup
+vue: @tanstack/intent@latest edit-package-json
+vue: @tanstack/intent@latest setup
+svelte: @tanstack/intent@latest edit-package-json
+svelte: @tanstack/intent@latest setup
+angular: @tanstack/intent@latest edit-package-json
+angular: @tanstack/intent@latest setup
+lit: @tanstack/intent@latest edit-package-json
+lit: @tanstack/intent@latest setup
+
+<!-- ::end:tabs -->
 
 `edit-package-json` adds the `tanstack-intent` keyword and the `files` entries needed to publish `skills/`. For a standalone package it also excludes `skills/_artifacts`; a monorepo keeps the shared `_artifacts/` directory at the repository root, outside its package tarballs.
 

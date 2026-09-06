@@ -5,18 +5,25 @@ id: intent-review
 
 `intent review` shows which library skills and planning records need review after source changes. Completed reviews are remembered until their source or guidance changes again.
 
-```bash
-npx @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-For the normal coding-agent workflow, enable [maintainer installation](./intent-install#maintainer-workflow) once. The installed guidance instructs the agent to review guidance and maintain the planning documents before handoff. The examples below use the npm runner; use the equivalent `@tanstack/intent@latest` runner for pnpm, Yarn, or Bun.
+react: `@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]`
+solid: `@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]`
+vue: `@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]`
+svelte: `@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]`
+angular: `@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]`
+lit: `@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]`
+
+<!-- ::end:tabs -->
+
+For the normal coding-agent workflow, enable [maintainer installation](./intent-install#maintainer-workflow) once. The installed guidance instructs the agent to review guidance and maintain the planning documents before handoff.
 
 ## Quick start
 
-1. Run `npx @tanstack/intent@latest review` from your library repository to see pending work.
+1. Run `intent review` from your library repository to see pending work.
 2. Ask your agent to review those items using the current source change. It updates the skills and planning record, then runs the relevant checks.
 3. Keep the resulting `.intent/review-state.json` with the source, skills, and planning documents in your change.
-4. Run `npx @tanstack/intent@latest review --check` to confirm that no unreviewed items remain.
+4. Run `intent review --check` to confirm that no unreviewed items remain.
 
 A justified no-op is a completed review. Missing evidence remains pending.
 
@@ -71,15 +78,29 @@ Recorded hashes detect later edits even when a review happened before a commit. 
 
 A squash merge, shallow clone, or history rewrite can remove the commit stored as the review baseline. Choose an available commit that covers the changes you intend to review, then create an explicit-base report:
 
-```bash
-npx @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: `@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json`
+solid: `@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json`
+vue: `@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json`
+svelte: `@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json`
+angular: `@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json`
+lit: `@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json`
+
+<!-- ::end:tabs -->
 
 Review and resolve every item in that report, then record it:
 
-```bash
-npx @tanstack/intent@latest review --record .intent/review.json
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest review --record .intent/review.json
+solid: @tanstack/intent@latest review --record .intent/review.json
+vue: @tanstack/intent@latest review --record .intent/review.json
+svelte: @tanstack/intent@latest review --record .intent/review.json
+angular: @tanstack/intent@latest review --record .intent/review.json
+lit: @tanstack/intent@latest review --record .intent/review.json
+
+<!-- ::end:tabs -->
 
 When the previous stored baseline is unavailable, recording this fully resolved explicit-base report adopts the report's base as the new durable baseline. An empty report can also adopt the new base because it records that the selected comparison has no pending items. A partial report, an omitted or `unresolved` outcome, unresolved source or planning evidence, or a changed fingerprint cannot replace the missing baseline. When the stored baseline is still available, recording an explicit-base report does not replace it.
 
@@ -123,16 +144,38 @@ The installed maintainer procedure handles these steps. For manual use:
 
    ```bash
    mkdir -p .intent
-   npx @tanstack/intent@latest review --json > .intent/review.json
    ```
+
+   <!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+   react: `@tanstack/intent@latest review --json > .intent/review.json`
+   solid: `@tanstack/intent@latest review --json > .intent/review.json`
+   vue: `@tanstack/intent@latest review --json > .intent/review.json`
+   svelte: `@tanstack/intent@latest review --json > .intent/review.json`
+   angular: `@tanstack/intent@latest review --json > .intent/review.json`
+   lit: `@tanstack/intent@latest review --json > .intent/review.json`
+
+   <!-- ::end:tabs -->
 
 3. Add an outcome, reason, and evidence to each item you completed. Preserve the report's identities, baseline, and fingerprints.
 4. Record the report and check remaining work:
 
-   ```bash
-   npx @tanstack/intent@latest review --record .intent/review.json
-   npx @tanstack/intent@latest review --check
-   ```
+   <!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+   react: @tanstack/intent@latest review --record .intent/review.json
+   react: @tanstack/intent@latest review --check
+   solid: @tanstack/intent@latest review --record .intent/review.json
+   solid: @tanstack/intent@latest review --check
+   vue: @tanstack/intent@latest review --record .intent/review.json
+   vue: @tanstack/intent@latest review --check
+   svelte: @tanstack/intent@latest review --record .intent/review.json
+   svelte: @tanstack/intent@latest review --check
+   angular: @tanstack/intent@latest review --record .intent/review.json
+   angular: @tanstack/intent@latest review --check
+   lit: @tanstack/intent@latest review --record .intent/review.json
+   lit: @tanstack/intent@latest review --check
+
+   <!-- ::end:tabs -->
 
 ### Outcomes
 

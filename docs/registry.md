@@ -14,41 +14,67 @@ The registry periodically searches npm for packages with the `tanstack-intent` k
 
 For repository-wide maintenance, enable the maintainer workflow once:
 
-```bash
-npx @tanstack/intent@latest install --maintainer
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest install --maintainer
+solid: @tanstack/intent@latest install --maintainer
+vue: @tanstack/intent@latest install --maintainer
+svelte: @tanstack/intent@latest install --maintainer
+angular: @tanstack/intent@latest install --maintainer
+lit: @tanstack/intent@latest install --maintainer
+
+<!-- ::end:tabs -->
 
 Then ask your coding agent for a useful batch of developer tasks. The installed instructions load the focused authoring procedure, maintain the shared planning record, and run source-aware review before handoff.
 
 For a one-off authoring session, tell the agent to run:
 
-```bash
-npx @tanstack/intent@latest scaffold
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest scaffold
+solid: @tanstack/intent@latest scaffold
+vue: @tanstack/intent@latest scaffold
+svelte: @tanstack/intent@latest scaffold
+angular: @tanstack/intent@latest scaffold
+lit: @tanstack/intent@latest scaffold
+
+<!-- ::end:tabs -->
 
 Give the agent a developer task or concrete code/docs change. The focused procedure creates or updates the relevant guidance and validates it for review; full-library discovery remains available when explicitly requested. Skills use the owning package's `skills/` directory or its existing custom root. See the [maintainer quick start](./getting-started/quick-start-maintainers).
 
 ### 2. Validate
 
-```bash
-npx @tanstack/intent@latest validate
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest validate
+solid: @tanstack/intent@latest validate
+vue: @tanstack/intent@latest validate
+svelte: @tanstack/intent@latest validate
+angular: @tanstack/intent@latest validate
+lit: @tanstack/intent@latest validate
+
+<!-- ::end:tabs -->
 
 Catches structural issues in skill frontmatter and planning artifacts, and reports package configuration warnings before you publish.
 
 ### 3. Configure the package
 
-```bash
-npx @tanstack/intent@latest edit-package-json
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest edit-package-json
+solid: @tanstack/intent@latest edit-package-json
+vue: @tanstack/intent@latest edit-package-json
+svelte: @tanstack/intent@latest edit-package-json
+angular: @tanstack/intent@latest edit-package-json
+lit: @tanstack/intent@latest edit-package-json
+
+<!-- ::end:tabs -->
 
 This adds the `tanstack-intent` keyword used for registry discovery and the `files` entries needed to publish `skills/`. It excludes `skills/_artifacts` from a standalone package; monorepo artifacts live at the repository root, outside package tarballs. Review the resulting `package.json` diff before keeping it.
 
 ### 4. Publish
 
-```bash
-npm publish
-```
+Publish through your library's normal release process.
 
 The registry discovers your package on its next sync cycle. Your skills, version history, and download stats appear on the registry automatically.
 
@@ -56,21 +82,42 @@ The registry discovers your package on its next sync cycle. Your skills, version
 
 Use two separate checks as the library changes:
 
-```bash
-npx @tanstack/intent@latest review
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest review
+solid: @tanstack/intent@latest review
+vue: @tanstack/intent@latest review
+svelte: @tanstack/intent@latest review
+angular: @tanstack/intent@latest review
+lit: @tanstack/intent@latest review
+
+<!-- ::end:tabs -->
 
 Uses Git changes and recorded content fingerprints to identify skills, planning records, and unmapped source areas that need semantic review. Record completed outcomes with their evidence in `.intent/review-state.json`; missing evidence remains pending.
 
-```bash
-npx @tanstack/intent@latest stale
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest stale
+solid: @tanstack/intent@latest stale
+vue: @tanstack/intent@latest stale
+svelte: @tanstack/intent@latest stale
+angular: @tanstack/intent@latest stale
+lit: @tanstack/intent@latest stale
+
+<!-- ::end:tabs -->
 
 Reports conservative package and release signals: version drift, missing stored source SHAs, artifact warnings, and package coverage. It does not compare source diffs. Flagged text reports include the focused authoring command so your agent can investigate the evidence and return a reviewable update or an explained no-op.
 
-```bash
-npx @tanstack/intent@latest setup
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest setup
+solid: @tanstack/intent@latest setup
+vue: @tanstack/intent@latest setup
+svelte: @tanstack/intent@latest setup
+angular: @tanstack/intent@latest setup
+lit: @tanstack/intent@latest setup
+
+<!-- ::end:tabs -->
 
 Copies the generated CI workflow into your repository. Pull requests validate skills and check recorded source reviews when maintainer guidance or review state exists. Release and manual runs use recorded review state when available, with conservative `stale` signals as the fallback.
 

@@ -5,9 +5,16 @@ id: intent-exclude
 
 `intent exclude` manages `package.json#intent.exclude` entries.
 
-```bash
-npx @tanstack/intent@latest exclude [list|add|remove] [pattern] [--json]
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest exclude [list|add|remove] [pattern] [--json]
+solid: @tanstack/intent@latest exclude [list|add|remove] [pattern] [--json]
+vue: @tanstack/intent@latest exclude [list|add|remove] [pattern] [--json]
+svelte: @tanstack/intent@latest exclude [list|add|remove] [pattern] [--json]
+angular: @tanstack/intent@latest exclude [list|add|remove] [pattern] [--json]
+lit: @tanstack/intent@latest exclude [list|add|remove] [pattern] [--json]
+
+<!-- ::end:tabs -->
 
 ## Options
 
@@ -21,12 +28,34 @@ npx @tanstack/intent@latest exclude [list|add|remove] [pattern] [--json]
 
 ## Examples
 
-```bash
-npx @tanstack/intent@latest exclude
-npx @tanstack/intent@latest exclude list --json
-npx @tanstack/intent@latest exclude add @tanstack/router#experimental-*
-npx @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest exclude
+react: @tanstack/intent@latest exclude list --json
+react: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
+react: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+solid: @tanstack/intent@latest exclude
+solid: @tanstack/intent@latest exclude list --json
+solid: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
+solid: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+vue: @tanstack/intent@latest exclude
+vue: @tanstack/intent@latest exclude list --json
+vue: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
+vue: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+svelte: @tanstack/intent@latest exclude
+svelte: @tanstack/intent@latest exclude list --json
+svelte: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
+svelte: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+angular: @tanstack/intent@latest exclude
+angular: @tanstack/intent@latest exclude list --json
+angular: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
+angular: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+lit: @tanstack/intent@latest exclude
+lit: @tanstack/intent@latest exclude list --json
+lit: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
+lit: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+
+<!-- ::end:tabs -->
 
 ## Behavior
 

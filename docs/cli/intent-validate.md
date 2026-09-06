@@ -5,9 +5,16 @@ id: intent-validate
 
 `intent validate` checks `SKILL.md` files and artifacts for structural problems.
 
-```bash
-npx @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: `@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]`
+solid: `@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]`
+vue: `@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]`
+svelte: `@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]`
+angular: `@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]`
+lit: `@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]`
+
+<!-- ::end:tabs -->
 
 ## Arguments
 
@@ -24,15 +31,29 @@ npx @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check
 
 Use `--check` in CI to detect mechanical frontmatter migrations that have not been applied:
 
-```bash
-npx @tanstack/intent@latest validate --check
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest validate --check
+solid: @tanstack/intent@latest validate --check
+vue: @tanstack/intent@latest validate --check
+svelte: @tanstack/intent@latest validate --check
+angular: @tanstack/intent@latest validate --check
+lit: @tanstack/intent@latest validate --check
+
+<!-- ::end:tabs -->
 
 Use `--fix` locally to apply the mechanical frontmatter migrations:
 
-```bash
-npx @tanstack/intent@latest validate --fix
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest validate --fix
+solid: @tanstack/intent@latest validate --fix
+vue: @tanstack/intent@latest validate --fix
+svelte: @tanstack/intent@latest validate --fix
+angular: @tanstack/intent@latest validate --fix
+lit: @tanstack/intent@latest validate --fix
+
+<!-- ::end:tabs -->
 
 `--fix` only rewrites unambiguous frontmatter migrations:
 

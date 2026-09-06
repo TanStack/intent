@@ -5,9 +5,16 @@ id: intent-stale
 
 `intent stale` reports whether shipped skills may need review.
 
-```bash
-npx @tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: `@tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]`
+solid: `@tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]`
+vue: `@tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]`
+svelte: `@tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]`
+angular: `@tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]`
+lit: `@tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]`
+
+<!-- ::end:tabs -->
 
 ## Options
 
