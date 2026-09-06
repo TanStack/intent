@@ -193,6 +193,47 @@ describe('packed release', () => {
     }
   })
 
+  it('keeps both affected skills linked to one shared reference after loading', () => {
+    const skills = join(cwd, 'node_modules/release-fixture/skills')
+    const reference = join(skills, 'core/references/retry.md')
+    mkdirSync(dirname(reference), { recursive: true })
+    writeFileSync(
+      reference,
+      '# Retry policy\n\nCount the initial request toward the attempt limit.\n',
+    )
+    for (const [name, pointer] of [
+      ['core', '[retry policy](references/retry.md#retry-policy)'],
+      ['pages', '[retry policy](<../core/references/retry.md#retry-policy>)'],
+    ]) {
+      const path = join(skills, name!, 'SKILL.md')
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(
+        path,
+        `---\nname: ${name}\ndescription: Apply retry limits when making ${name} requests.\n---\n\nBefore configuring retries, read the ${pointer}.\n`,
+      )
+    }
+    const validated = run(['validate', skills])
+    expect(validated.status, validated.stderr).toBe(0)
+    expect(validated.stdout).toContain('Validated 2 skill files — all passed')
+
+    // Structural validation does not check references. Exercise the consumer
+    // loader and resolve each emitted pointer independently.
+    for (const name of ['core', 'pages']) {
+      const loaded = run(['load', `release-fixture#${name}`, '--json'])
+      expect(loaded.status, loaded.stderr).toBe(0)
+      const links: Array<string> = markdownLinkExtractor(
+        JSON.parse(loaded.stdout).content,
+      )
+      expect(links).toHaveLength(1)
+      const [target, anchor] = links[0]!.split('#')
+      expect(resolve(cwd, target!)).toBe(reference)
+      expect(anchor).toBe('retry-policy')
+      expect(readFileSync(resolve(cwd, target!), 'utf8')).toContain(
+        '# Retry policy\n',
+      )
+    }
+  })
+
   it('validates a manually authored skill without maintainer setup', () => {
     const skillDir = join(cwd, 'skills', 'read-meta')
     mkdirSync(skillDir, { recursive: true })
@@ -404,84 +445,87 @@ Existing fixture guidance, pending source review.
     expect(run(['review', '--check']).status).toBe(1)
   })
 
-  it('installs the maintainer workflow and reviews sources with the packed CLI', () => {
-    execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], { cwd })
-    execFileSync(
-      'git',
-      [
-        '-c',
-        'core.fsmonitor=false',
-        '-c',
-        'user.name=Fixture',
-        '-c',
-        'user.email=fixture@example.invalid',
-        'commit',
-        '--allow-empty',
-        '-qm',
-        'fixture',
-      ],
-      { cwd },
-    )
-    const installed = run(['install', '--maintainer'])
-    expect(installed.status, installed.stderr).toBe(0)
-    expect(readFileSync(join(cwd, 'AGENTS.md'), 'utf8')).toContain(
-      'intent-maintainer:start',
-    )
-    expect(packedFiles).toContain(
-      'meta/generate-skill/references/initial-batches.md',
-    )
-    expect(packedFiles).toContain(
-      'meta/generate-skill/references/task-quality.md',
-    )
-    expect(packedFiles).toContain(
-      'meta/generate-skill/references/source-review.md',
-    )
-    expect(packedFiles).toContain(
-      'meta/generate-skill/references/planning-records.md',
-    )
-    mkdirSync(join(cwd, 'src'))
-    writeFileSync(join(cwd, 'src/client.js'), 'export const attempts = 3\n')
-    mkdirSync(join(cwd, 'skills/client'), { recursive: true })
-    writeFileSync(
-      join(cwd, 'skills/client/SKILL.md'),
-      '---\nname: client\nsources: [src/client.js]\n---\nClient task\n',
-    )
-    mkdirSync(join(cwd, 'skills/_artifacts'))
-    writeFileSync(
-      join(cwd, 'skills/_artifacts/domain_map.yaml'),
-      'library: {name: consumer}\nskills: [{slug: client}]\n',
-    )
-    writeFileSync(
-      join(cwd, 'skills/_artifacts/skill_spec.md'),
-      '# Consumer skills\n\nClient task: three attempts.\n',
-    )
-    writeFileSync(
-      join(cwd, 'skills/_artifacts/skill_tree.yaml'),
-      'skills: [{slug: client, path: skills/client/SKILL.md}]\n',
-    )
-    const review = run(['review', '--json'])
-    expect(review.status, review.stderr).toBe(0)
-    const report = JSON.parse(review.stdout)
-    expect(report.items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'skill',
-          path: 'skills/client/SKILL.md',
-          problems: [],
-        }),
-      ]),
-    )
-    for (const item of report.items) {
-      item.outcome = 'no-change'
-      item.reason = 'Fixture source and guidance agree.'
-      item.evidence = ['src/client.js']
-    }
-    mkdirSync(join(cwd, '.intent'))
-    writeFileSync(join(cwd, '.intent/review.json'), JSON.stringify(report))
-    const recorded = run(['review', '--record', '.intent/review.json'])
-    expect(recorded.status, recorded.stderr).toBe(0)
-    expect(run(['review', '--check']).status).toBe(0)
-    writeFileSync(join(cwd, 'src/client.js'), 'export const attempts = 4\n')
-    expect(run(['review', '--check']).status).toBe(1)
-  })
+  it.each(['skills', '.agents/knowledge'])(
+    'installs the maintainer workflow and reviews sources under %s with the packed CLI',
+    (skillRoot) => {
+      execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], { cwd })
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'core.fsmonitor=false',
+          '-c',
+          'user.name=Fixture',
+          '-c',
+          'user.email=fixture@example.invalid',
+          'commit',
+          '--allow-empty',
+          '-qm',
+          'fixture',
+        ],
+        { cwd },
+      )
+      const installed = run(['install', '--maintainer'])
+      expect(installed.status, installed.stderr).toBe(0)
+      expect(readFileSync(join(cwd, 'AGENTS.md'), 'utf8')).toContain(
+        'intent-maintainer:start',
+      )
+      expect(packedFiles).toContain(
+        'meta/generate-skill/references/initial-batches.md',
+      )
+      expect(packedFiles).toContain(
+        'meta/generate-skill/references/task-quality.md',
+      )
+      expect(packedFiles).toContain(
+        'meta/generate-skill/references/source-review.md',
+      )
+      expect(packedFiles).toContain(
+        'meta/generate-skill/references/planning-records.md',
+      )
+      mkdirSync(join(cwd, 'src'))
+      writeFileSync(join(cwd, 'src/client.js'), 'export const attempts = 3\n')
+      mkdirSync(join(cwd, `${skillRoot}/client`), { recursive: true })
+      writeFileSync(
+        join(cwd, `${skillRoot}/client/SKILL.md`),
+        '---\nname: client\nsources: [src/client.js]\n---\nClient task\n',
+      )
+      mkdirSync(join(cwd, `${skillRoot}/_artifacts`))
+      writeFileSync(
+        join(cwd, `${skillRoot}/_artifacts/domain_map.yaml`),
+        'library: {name: consumer}\nskills: [{slug: client}]\n',
+      )
+      writeFileSync(
+        join(cwd, `${skillRoot}/_artifacts/skill_spec.md`),
+        '# Consumer skills\n\nClient task: three attempts.\n',
+      )
+      writeFileSync(
+        join(cwd, `${skillRoot}/_artifacts/skill_tree.yaml`),
+        `skills: [{slug: client, path: ${skillRoot}/client/SKILL.md}]\n`,
+      )
+      const review = run(['review', '--json'])
+      expect(review.status, review.stderr).toBe(0)
+      const report = JSON.parse(review.stdout)
+      expect(report.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'skill',
+            path: `${skillRoot}/client/SKILL.md`,
+            problems: [],
+          }),
+        ]),
+      )
+      for (const item of report.items) {
+        item.outcome = 'no-change'
+        item.reason = 'Fixture source and guidance agree.'
+        item.evidence = ['src/client.js']
+      }
+      mkdirSync(join(cwd, '.intent'))
+      writeFileSync(join(cwd, '.intent/review.json'), JSON.stringify(report))
+      const recorded = run(['review', '--record', '.intent/review.json'])
+      expect(recorded.status, recorded.stderr).toBe(0)
+      expect(run(['review', '--check']).status).toBe(0)
+      writeFileSync(join(cwd, 'src/client.js'), 'export const attempts = 4\n')
+      expect(run(['review', '--check']).status).toBe(1)
+    },
+  )
 })
