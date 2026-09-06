@@ -62,6 +62,30 @@ const digest = (value: string | Buffer) =>
 const sorted = (values: Iterable<string>) => [...new Set(values)].sort()
 const splitPaths = (value: string) => value.split('\0').filter(Boolean)
 
+function normalizedSnapshot(value: Snapshot): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => entry[1] !== null,
+    ),
+  )
+}
+
+function reviewFingerprint(
+  id: string,
+  value: Snapshot,
+  problems: Array<string>,
+): string {
+  return digest(JSON.stringify([id, normalizedSnapshot(value), problems]))
+}
+
+function legacyReviewFingerprint(
+  id: string,
+  value: Snapshot,
+  problems: Array<string>,
+): string {
+  return digest(JSON.stringify([id, value, problems]))
+}
+
 function git(root: string, args: Array<string>): string {
   return execFileSync('git', ['-c', 'core.fsmonitor=false', ...args], {
     cwd: root,
@@ -81,8 +105,17 @@ function revision(root: string, ref: string): string {
     ]).trim()
   } catch {
     throw new Error(
-      `Cannot resolve review base ${JSON.stringify(ref)}. Fetch the referenced history or pass --base with an available commit.`,
+      `Cannot resolve review base ${JSON.stringify(ref)}. Fetch the referenced history, or create a report with an available commit using intent review --base <commit> --json, resolve every item, and record it with intent review --record <report.json> to adopt that commit as the new baseline.`,
     )
+  }
+}
+
+function hasRevision(root: string, ref: string): boolean {
+  try {
+    revision(root, ref)
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -168,7 +201,7 @@ function readState(root: string): {
       !isObject(value.items)
     )
       throw new Error()
-    for (const item of Object.values(value.items)) {
+    for (const [id, item] of Object.entries(value.items)) {
       if (
         !isObject(item) ||
         !isHash(item.fingerprint) ||
@@ -183,6 +216,12 @@ function readState(root: string): {
       )
         throw new Error()
       for (const path of Object.keys(item.snapshot)) validatePath(path)
+      const record = item as unknown as ReviewRecord
+      if (
+        record.fingerprint !== reviewFingerprint(id, record.snapshot, []) &&
+        record.fingerprint !== legacyReviewFingerprint(id, record.snapshot, [])
+      )
+        throw new Error()
     }
     return { state: value as unknown as ReviewState, content }
   } catch {
@@ -353,14 +392,19 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     const id = `${kind}:${path}`
     const current = snapshot(root, paths, problems)
     const previous = state?.items[id]
-    const fingerprint = digest(JSON.stringify([id, current, problems]))
-    if (previous?.fingerprint === fingerprint && problems.length === 0) return
+    const fingerprint = reviewFingerprint(id, current, problems)
+    if (
+      previous &&
+      reviewFingerprint(id, previous.snapshot, problems) === fingerprint &&
+      problems.length === 0
+    )
+      return
     const changedFiles = sorted([
       ...Object.keys(current),
       ...Object.keys(previous?.snapshot ?? {}),
     ]).filter((file) =>
       previous
-        ? current[file] !== previous.snapshot[file]
+        ? (current[file] ?? null) !== (previous.snapshot[file] ?? null)
         : changed.includes(file),
     )
     items.push({
@@ -383,8 +427,10 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       path.startsWith(`${skillDir}/`),
     )
     let frontmatter: Record<string, unknown> | null
+    let skillHash: string | null
     try {
-      if (fileHash(root, file) === null) continue
+      skillHash = fileHash(root, file)
+      if (skillHash === null) continue
       frontmatter = parseFrontmatter(safePath(root, file))
     } catch (error) {
       add(
@@ -397,6 +443,8 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     }
     const sources = frontmatter?.sources
     const sourceFiles: Array<string> = []
+    const recordedSkill = state?.items[`skill:${file}`]
+    const sourceMappingWasRecorded = recordedSkill?.snapshot[file] === skillHash
     if (!Array.isArray(sources) || sources.length === 0)
       problems.push(
         'No source paths declared. Add the evidence used to author this skill.',
@@ -409,7 +457,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
             throw new Error('Source entries must be strings.')
           const pattern = sourcePattern(source, packageDir, names)
           const matches = sorted([...list([pattern]), ...diff([pattern])])
-          if (matches.length === 0)
+          if (matches.length === 0 && !sourceMappingWasRecorded)
             throw new Error(`Source matched no available files: ${source}`)
           sourceFiles.push(...matches)
         } catch (error) {
@@ -523,6 +571,8 @@ export function recordReview(cwd: string, input: unknown): number {
   if (input.root !== current.root)
     throw new Error('This review report belongs to a different working tree.')
   const { state, content } = readState(current.root)
+  const recordedBaselineIsAvailable =
+    state === null || hasRevision(current.root, state.baseline)
   const records: Record<string, ReviewRecord> = { ...state?.items }
   const seen = new Set<string>()
   let count = 0
@@ -560,7 +610,14 @@ export function recordReview(cwd: string, input: unknown): number {
     }
     count++
   }
-  if (count === 0) return 0
+  const reanchorBaseline =
+    state !== null &&
+    !recordedBaselineIsAvailable &&
+    current.base !== state.baseline &&
+    current.items.every(
+      (item) => records[item.id]?.fingerprint === item.fingerprint,
+    )
+  if (count === 0 && !reanchorBaseline) return 0
   const path = safePath(current.root, statePath)
   mkdirSync(dirname(path), { recursive: true })
   const lock = `${path}.lock`
@@ -581,7 +638,9 @@ export function recordReview(cwd: string, input: unknown): number {
       )
     const next: ReviewState = {
       schemaVersion: 1,
-      baseline: state?.baseline ?? current.base,
+      baseline: reanchorBaseline
+        ? current.base
+        : (state?.baseline ?? current.base),
       items: records,
     }
     const descriptor = openSync(temporary, 'wx')

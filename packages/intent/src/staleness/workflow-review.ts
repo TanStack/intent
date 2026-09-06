@@ -80,7 +80,7 @@ export function buildStaleReviewBody(items: Array<StaleReviewItem>): string {
   const grouped = new Map<string, number>()
   const dataText = (value: string) =>
     value.replace(
-      /[&<>`|\r\n]/g,
+      /[&<>`|()[\]\r\n]/g,
       (character) => `&#${character.charCodeAt(0)};`,
     )
 

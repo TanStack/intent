@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, test } from 'vitest'
+import { afterAll, beforeAll, bench, describe } from 'vitest'
 import {
   createBenchOptions,
   createCliRunner,
@@ -120,16 +120,14 @@ describe('intent validate', () => {
   beforeAll(setup)
   afterAll(teardown)
 
-  test(
+  bench(
     'checks a shipped skills tree',
-    { timeout: 30_000 },
-    async ({ bench }) => {
-      await bench('checks a shipped skills tree', async () => {
-        const state = getFixture()
-        for (let index = 0; index < 3; index++) {
-          await state.runner.run(['validate'])
-        }
-      }).run(createBenchOptions(setup, teardown))
+    async () => {
+      const state = getFixture()
+      for (let index = 0; index < 3; index++) {
+        await state.runner.run(['validate'])
+      }
     },
+    createBenchOptions(setup, teardown),
   )
 })

@@ -190,7 +190,7 @@ describe('intent meta', () => {
     expect(logSpy).toHaveBeenCalledWith(expected)
   })
 
-  it('loads the focused procedure with its format and full-library paths', async () => {
+  it('loads the focused procedure with format navigation and shipped full-library alternatives', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-focused-meta-'))
     tempDirs.push(root)
     process.chdir(root)
@@ -200,14 +200,20 @@ describe('intent meta', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('name: generate-skill\n')
+    expect(output).toContain(
+      'For full-library discovery or taxonomy design, use domain-discovery;',
+    )
+    expect(output).toContain(
+      'for generating an approved full-library tree, use tree-generator.',
+    )
+    const format = join('generate-skill', 'references', 'skill-format.md')
+    expect(output).toContain(`](${join(metaDir, format)})`)
     for (const path of [
-      join('generate-skill', 'references', 'skill-format.md'),
+      format,
       join('domain-discovery', 'SKILL.md'),
       join('tree-generator', 'SKILL.md'),
-    ]) {
-      expect(output).toContain(`](${join(metaDir, path)})`)
+    ])
       expect(existsSync(join(metaDir, path))).toBe(true)
-    }
     expect(readdirSync(root)).toEqual([])
   })
 

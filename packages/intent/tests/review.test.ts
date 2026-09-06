@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   mkdirSync,
   mkdtempSync,
@@ -177,6 +178,116 @@ it('uses an explicit comparison base and rejects missing or option-like revision
   )
 })
 
+it('durably adopts an explicit clean baseline after the recorded commit is squashed away', async () => {
+  git('branch', '-M', 'main')
+  git('switch', '-qc', 'feature')
+  write('src/request.ts', 'export const attempts = 4\n')
+  git('add', 'src/request.ts')
+  git('commit', '-qm', 'feature')
+  const reviewedHead = git('rev-parse', 'HEAD')
+  accept()
+  git('add', '.intent/review-state.json')
+  git('commit', '-qm', 'record review')
+  git('switch', '-q', 'main')
+  git('merge', '--squash', 'feature')
+  git('commit', '-qm', 'squashed feature')
+  git('branch', '-D', 'feature')
+  git('reflog', 'expire', '--expire=now', '--all')
+  git('gc', '--prune=now')
+
+  const checkout = join(root, 'rewritten')
+  git(
+    'clone',
+    '--single-branch',
+    '--branch',
+    'main',
+    '--no-local',
+    '.',
+    checkout,
+  )
+  expect(() =>
+    execFileSync('git', ['cat-file', '-e', `${reviewedHead}^{commit}`], {
+      cwd: checkout,
+      stdio: 'ignore',
+    }),
+  ).toThrow()
+  expect(() => createReview(checkout)).toThrow(/Cannot resolve review base/)
+  const recovery = createReview(checkout, 'HEAD')
+  expect(recovery.items).toEqual([])
+  expect(recordReview(checkout, recovery)).toBe(0)
+  expect(
+    JSON.parse(
+      readFileSync(join(checkout, '.intent/review-state.json'), 'utf8'),
+    ).baseline,
+  ).toBe(recovery.base)
+  expect(createReview(checkout).items).toEqual([])
+  expect(await main(['review', checkout, '--check'])).toBe(0)
+
+  const earlier = createReview(checkout, 'HEAD^')
+  expect(earlier.items).toEqual([])
+  expect(recordReview(checkout, earlier)).toBe(0)
+  expect(
+    JSON.parse(
+      readFileSync(join(checkout, '.intent/review-state.json'), 'utf8'),
+    ).baseline,
+  ).toBe(recovery.base)
+})
+
+it('does not adopt an explicit baseline while review items remain unresolved', () => {
+  accept()
+  const path = join(root, '.intent/review-state.json')
+  const state = JSON.parse(readFileSync(path, 'utf8'))
+  state.baseline = '1111111111111111111111111111111111111111'
+  writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`)
+  write('uncovered.ts', 'unreviewed source\n')
+
+  const recovery = createReview(root, 'HEAD')
+  expect(recovery.items.map((item) => item.id)).toEqual(['source:uncovered.ts'])
+  expect(recordReview(root, recovery)).toBe(0)
+  expect(JSON.parse(readFileSync(path, 'utf8')).baseline).toBe(
+    '1111111111111111111111111111111111111111',
+  )
+  expect(() => createReview(root)).toThrow(/Cannot resolve review base/)
+})
+
+it('keeps reviewed deletion fingerprints stable across comparison bases', () => {
+  rmSync(join(root, 'src/request.ts'))
+  write('src/a.ts', 'export const a = true\n')
+  write('src/b.ts', 'export const b = true\n')
+  skill(['acme/library:src/**/*.ts'])
+  git('add', '-A')
+  git('commit', '-qm', 'two sources')
+  accept()
+
+  rmSync(join(root, 'src/a.ts'))
+  accept()
+  git('add', '-A')
+  git('commit', '-qm', 'record source deletion')
+  const afterDeletion = git('rev-parse', 'HEAD')
+
+  expect(createReview(root).items).toEqual([])
+  expect(createReview(root, afterDeletion).items).toEqual([])
+
+  write('src/b.ts', 'export const b = false\n')
+  accept(createReview(root, afterDeletion))
+  expect(createReview(root).items).toEqual([])
+})
+
+it('accepts schema-version-one fingerprints that include reviewed null paths', () => {
+  skill(['acme/library:src/**/*.ts'])
+  accept()
+  const path = join(root, '.intent/review-state.json')
+  const state = JSON.parse(readFileSync(path, 'utf8'))
+  const id = 'skill:skills/request/SKILL.md'
+  state.items[id].snapshot['src/deleted.ts'] = null
+  state.items[id].fingerprint = createHash('sha256')
+    .update(JSON.stringify([id, state.items[id].snapshot, []]))
+    .digest('hex')
+  writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`)
+
+  expect(createReview(root, 'HEAD').items).toEqual([])
+})
+
 it('keeps unavailable, foreign and unsafe source evidence unresolved', () => {
   skill(['other/library:src/request.ts', '../outside', 'src/missing.ts'])
   const report = createReview(root)
@@ -291,6 +402,28 @@ function planningRecords(dir = 'skills/_artifacts') {
   )
   write(`${dir}/skill_tree.yaml`, 'library: { name: library }\nskills: []\n')
 }
+
+it('does not adopt an explicit baseline with source or planning problems', () => {
+  planningRecords()
+  accept()
+  const path = join(root, '.intent/review-state.json')
+  const state = JSON.parse(readFileSync(path, 'utf8'))
+  state.baseline = '2222222222222222222222222222222222222222'
+  writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`)
+  skill(['src/missing.ts'])
+  rmSync(join(root, 'skills/_artifacts/skill_spec.md'))
+
+  const recovery = createReview(root, 'HEAD')
+  expect(
+    recovery.items
+      .filter((item) => item.problems.length > 0)
+      .map((item) => item.kind),
+  ).toEqual(['skill', 'planning'])
+  expect(recordReview(root, recovery)).toBe(0)
+  expect(JSON.parse(readFileSync(path, 'utf8')).baseline).toBe(
+    '2222222222222222222222222222222222222222',
+  )
+})
 
 it('requires all three planning records in the installed maintainer workflow', () => {
   write(
