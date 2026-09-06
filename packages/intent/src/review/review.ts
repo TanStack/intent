@@ -11,7 +11,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
 import { parseFrontmatter } from '../shared/utils.js'
@@ -417,14 +417,14 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       problems,
     })
   }
-  const skillFiles = files.filter((path) =>
-    /(^|\/)skills\/.+\/SKILL\.md$/.test(path),
-  )
+  const skillFiles = files.filter((path) => basename(path) === 'SKILL.md')
   for (const file of skillFiles) {
     const problems: Array<string> = []
     const skillDir = dirname(file)
-    const guidanceFiles = files.filter((path) =>
-      path.startsWith(`${skillDir}/`),
+    const guidanceFiles = files.filter(
+      (path) =>
+        (skillDir === '.' || path.startsWith(`${skillDir}/`)) &&
+        !path.startsWith('.intent/'),
     )
     let frontmatter: Record<string, unknown> | null
     let skillHash: string | null
@@ -450,7 +450,14 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
         'No source paths declared. Add the evidence used to author this skill.',
       )
     else {
-      const packageDir = file.slice(0, file.search(/(^|\/)skills\//))
+      const { packageRoot } = resolveProjectContext({
+        cwd: root,
+        targetPath: safePath(root, file),
+      })
+      const packageDir = relative(root, packageRoot ?? root).replaceAll(
+        '\\',
+        '/',
+      )
       for (const source of sources) {
         try {
           if (typeof source !== 'string')
@@ -469,11 +476,14 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     add('skill', file, [...sourceFiles, ...guidanceFiles], problems)
   }
   const artifactNames = ['domain_map.yaml', 'skill_spec.md', 'skill_tree.yaml']
-  const existingArtifactDirs = ['_artifacts', 'skills/_artifacts'].filter(
-    (dir) =>
-      artifactNames.some((name) => files.includes(`${dir}/${name}`)) ||
-      state?.items[`planning:${dir}`],
-  )
+  const existingArtifactDirs = sorted([
+    ...files
+      .filter((path) => artifactNames.includes(basename(path)))
+      .map((path) => dirname(path)),
+    ...Object.keys(state?.items ?? {})
+      .filter((id) => id.startsWith('planning:'))
+      .map((id) => id.slice('planning:'.length)),
+  ])
   const hasMaintainerGuidance = [
     'AGENTS.md',
     'CLAUDE.md',
@@ -496,7 +506,9 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
             : 'skills/_artifacts',
         ]
     for (const dir of dirs) {
-      const paths = artifactNames.map((name) => `${dir}/${name}`)
+      const paths = artifactNames.map((name) =>
+        join(dir, name).replaceAll('\\', '/'),
+      )
       const problems: Array<string> = []
       for (const path of paths) {
         try {
