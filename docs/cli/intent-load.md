@@ -5,9 +5,18 @@ id: intent-load
 
 `intent load` loads a compact skill identity from the current install and prints the matching `SKILL.md` content.
 
-```bash
-npx @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+```text
+react: @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+solid: @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+vue: @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+svelte: @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+angular: @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+lit: @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
 ```
+
+<!-- ::end:tabs -->
 
 ## Options
 
@@ -44,12 +53,34 @@ The package can be scoped or unscoped. The skill can include slash-separated sub
 
 Examples:
 
-```bash
-npx @tanstack/intent@latest load @tanstack/query#fetching
-npx @tanstack/intent@latest load @tanstack/query#core/fetching
-npx @tanstack/intent@latest load @tanstack/router-core#auth-and-guards
-npx @tanstack/intent@latest load some-lib#core --path
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest load @tanstack/query#fetching
+react: @tanstack/intent@latest load @tanstack/query#core/fetching
+react: @tanstack/intent@latest load @tanstack/router-core#auth-and-guards
+react: @tanstack/intent@latest load some-lib#core --path
+solid: @tanstack/intent@latest load @tanstack/query#fetching
+solid: @tanstack/intent@latest load @tanstack/query#core/fetching
+solid: @tanstack/intent@latest load @tanstack/router-core#auth-and-guards
+solid: @tanstack/intent@latest load some-lib#core --path
+vue: @tanstack/intent@latest load @tanstack/query#fetching
+vue: @tanstack/intent@latest load @tanstack/query#core/fetching
+vue: @tanstack/intent@latest load @tanstack/router-core#auth-and-guards
+vue: @tanstack/intent@latest load some-lib#core --path
+svelte: @tanstack/intent@latest load @tanstack/query#fetching
+svelte: @tanstack/intent@latest load @tanstack/query#core/fetching
+svelte: @tanstack/intent@latest load @tanstack/router-core#auth-and-guards
+svelte: @tanstack/intent@latest load some-lib#core --path
+angular: @tanstack/intent@latest load @tanstack/query#fetching
+angular: @tanstack/intent@latest load @tanstack/query#core/fetching
+angular: @tanstack/intent@latest load @tanstack/router-core#auth-and-guards
+angular: @tanstack/intent@latest load some-lib#core --path
+lit: @tanstack/intent@latest load @tanstack/query#fetching
+lit: @tanstack/intent@latest load @tanstack/query#core/fetching
+lit: @tanstack/intent@latest load @tanstack/router-core#auth-and-guards
+lit: @tanstack/intent@latest load some-lib#core --path
+
+<!-- ::end:tabs -->
 
 ## JSON output
 

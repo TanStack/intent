@@ -5,9 +5,16 @@ id: intent-install
 
 `intent install` confirms skill-source permissions on first use, then creates or updates an `intent-skills` guidance block in a project guidance file.
 
-```bash
-npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
+solid: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
+vue: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
+svelte: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
+angular: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
+lit: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
+
+<!-- ::end:tabs -->
 
 ## Options
 
@@ -28,6 +35,15 @@ npx @tanstack/intent@latest install [--map] [--dry-run] [--print-prompt] [--glob
 - `--no-notices`: suppress non-critical notices on stderr
 
 ## Behavior
+
+### Maintainer workflow
+
+`install --maintainer` enables initial skill batches and source-aware skill maintenance in repository agent instructions. It works without an interactive terminal or existing consumer permissions. It writes a separate `intent-maintainer` block, preserves consumer guidance, and is idempotent. `--dry-run` previews the block.
+
+Run it from the library root. The block loads the packaged authoring procedure for substantial library work; that procedure covers the cumulative domain map, spec, and skill tree, source review, task checks, and revision-bound outcomes. It updates the file that already contains either Intent managed block, or creates `AGENTS.md` when neither exists. It cannot be combined with `--review`, `--map`, `--print-prompt`, `--global`, or `--global-only`. See [Quick Start for Maintainers](../getting-started/quick-start-maintainers).
+
+> [!NOTE] Maintainer installation writes guidance
+> It does not add Intent to `package.json`, configure consumer skill permissions, install agent hooks, or add CI. The managed block uses the detected package manager's runner with `@tanstack/intent@latest`.
 
 ### Default install
 
@@ -73,9 +89,16 @@ After permissions are saved, Intent updates an existing managed guidance block i
 
 ### Review existing permissions
 
-```bash
-npx @tanstack/intent@latest install --review
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest install --review
+solid: @tanstack/intent@latest install --review
+vue: @tanstack/intent@latest install --review
+svelte: @tanstack/intent@latest install --review
+angular: @tanstack/intent@latest install --review
+lit: @tanstack/intent@latest install --review
+
+<!-- ::end:tabs -->
 
 Review starts from the current `intent.skills` rules. Continue with them, add packages/scopes/individual skills, remove explicit rules, or review individual skills within enabled packages. Existing rules stay intact unless you change them, including rules for packages or skills that are **not discovered**. Removing a rule requires unchecking it; Intent never removes it automatically.
 
@@ -103,34 +126,11 @@ Supported config files: `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copil
 
 ## Default output
 
-The default block tells agents to discover skills and load matching guidance on demand:
-
-```markdown
-<!-- intent-skills:start -->
-## Skill Loading
-
-Before editing files for a substantial task:
-- Run `npx @tanstack/intent@latest list` from the workspace root to see available local skills.
-- If a listed skill matches the task, run `npx @tanstack/intent@latest load <package>#<skill>` before changing files.
-- Use the loaded `SKILL.md` guidance while making the change.
-- Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.
-- Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
-<!-- intent-skills:end -->
-```
+The managed `intent-skills` block instructs agents to discover skills with `intent list`, load matching guidance with `intent load`, and apply it before editing. It tells agents to work from the workspace root, prefer the most specific local skill, and load additional skills only when the task spans multiple concerns. Generated commands use the detected package manager's runner with `@tanstack/intent@latest`.
 
 ## Mapping output
 
-`--map` writes compact skill identities and commands:
-
-```yaml
-<!-- intent-skills:start -->
-# TanStack Intent - before editing files, run the matching guidance command.
-tanstackIntent:
-  - id: "@tanstack/query#fetching"
-    run: "npx @tanstack/intent@latest load @tanstack/query#fetching"
-    for: "Query data fetching patterns"
-<!-- intent-skills:end -->
-```
+`--map` writes a `tanstackIntent` list inside the managed `intent-skills` block. Each mapping contains:
 
 - `id`: portable skill identity in `<package>#<skill>` format
 - `run`: package-manager-aware command agents should run before editing
