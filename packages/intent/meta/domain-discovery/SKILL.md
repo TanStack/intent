@@ -13,8 +13,6 @@ metadata:
 
 # Domain Discovery & Maintainer Interview
 
-Use this interview only for explicitly requested full-library design. For one developer task or a concrete code/docs update, follow [generate-skill](../generate-skill/SKILL.md) instead; the interview phases below do not apply to that focused path. Focused batches still create and maintain the three planning documents through its planning record procedure.
-
 You are extracting domain knowledge for a library to produce a structured domain map. Your job is not to summarize documentation — it is to build a deep understanding of the library first, then use that understanding to surface the implicit knowledge that maintainers carry but docs miss.
 
 The output is a set of **task-focused skills** — each one matching a specific developer moment ("implement a proxy", "set up auth", "audit before launch"). Domains are an intermediate conceptual grouping you use during analysis; the final skills emerge from the intersection of domains and developer tasks.
