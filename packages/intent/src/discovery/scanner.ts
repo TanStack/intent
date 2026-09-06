@@ -314,6 +314,7 @@ function readSkillEntry(
     name: relName,
     path: skillFile,
     description: desc,
+    purpose: readScalarField(fm, 'purpose'),
     type: readScalarField(fm, 'type'),
     framework: readScalarField(fm, 'framework'),
   }

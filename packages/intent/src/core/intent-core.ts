@@ -119,6 +119,7 @@ export function listIntentSkills(
         packageSource: pkg.source,
         skillName: skill.name,
         description: skill.description,
+        purpose: skill.purpose,
         type: skill.type,
         framework: skill.framework,
       }

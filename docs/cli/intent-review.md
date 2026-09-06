@@ -3,31 +3,129 @@ title: intent review
 id: intent-review
 ---
 
-Review first-party skills against actual Git source changes and record completed reviews so identical content does not generate repeated reminders.
+`intent review` shows which library skills and planning records need review after source changes. Completed reviews are remembered until their source or guidance changes again.
 
 ```bash
-intent review [dir] [--base <ref>] [--json] [--check]
-intent review [dir] --record <report.json>
-intent review [dir] --github-review [--package-label <label>]
+npx @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check]
 ```
 
-`dir` locates the Git working tree; the review covers that repository, including its packages. Git and an initial commit are required. The default command is read-only.
+For the normal coding-agent workflow, enable [maintainer installation](./intent-install#maintainer-workflow) once. The agent then reviews guidance and maintains the planning documents before handoff. The examples below use the installed `intent` command for manual review.
 
-## What it reports
+## Quick start
 
-- A skill with no recorded review, changed source contents, or changed guidance/references.
-- Changed files outside the declared source mappings, including newly added areas and removed skills. These are investigation inputs, not proof that a new skill is needed.
-- Unknown evidence: missing or unsupported source mappings, foreign repositories, symbolic links, unavailable history, or Git conflicts. Unknown evidence is never treated as no impact.
+1. Run `intent review` from your library repository to see pending work.
+2. Ask your agent to review those items using the current source change. It updates the skills and planning record, then runs the relevant checks.
+3. Keep the resulting `.intent/review-state.json` with the source, skills, and planning documents in your change.
+4. Run `intent review --check` to confirm that no unreviewed items remain.
 
-Discovery covers `skills/**/SKILL.md` inside the repository and its packages. Plain `sources` paths are package-relative. `owner/repository:path` paths are repository-relative and must match the origin or root package repository metadata. Source patterns use Git's glob syntax: `*`, `?`, character classes, and `**`. Brace expansion and extglobs are unsupported. Custom skill roots, ignored files, submodules and external source repositories need manual review.
+A justified no-op is a completed review. Missing evidence remains pending.
 
-The comparison includes committed changes since the base plus staged, unstaged, and untracked files visible to Git. Renames appear as removed and added paths. `--base` selects an available commit explicitly; otherwise the command uses the first recorded baseline or `HEAD`. The referenced history must remain available. Each recorded skill also has content hashes, so another edit reopens review even when the previous review happened before a commit. Earlier uncommitted source text is not retained.
+## Options
 
-Human output lists up to 20 items. `--json` returns the full versioned report with item identities, changed paths, current snapshots, fingerprints, and problems. `--check` returns a nonzero exit code when items remain. Git/setup failures also exit nonzero.
+### Comparison and output
+
+| Option | Behavior |
+| --- | --- |
+| `[dir]` | Locate the Git working tree. The review covers that repository, including its packages. |
+| `--base <ref>` | Compare against an available Git commit or ref, such as the actual PR base. |
+| `--json` | Print the complete structured report for an agent or script. |
+| `--check` | Exit nonzero when review items remain. |
+
+### Recording and reminders
+
+| Option | Behavior |
+| --- | --- |
+| `--record <report.json>` | Record completed outcomes from an annotated JSON report. |
+| `--github-review` | Write `review-items.json`, a `pr-body.md` reminder when needed, and GitHub step output/summary when configured. |
+| `--package-label <label>` | Set the library label in generated reminder items. |
+
+`--record` cannot be combined with `--base`, `--json`, or `--check`. `--github-review` cannot be combined with `--record`, `--json`, or `--check`.
+
+## Behavior
+
+### What appears in a review
+
+| Item | Why it appears | What to do |
+| --- | --- | --- |
+| Skill (`skill`) | No recorded review, changed source, or changed skill/reference content. | Compare the guidance with the source and update it when needed. |
+| Planning records (`planning`) | The domain map, spec, or tree needs initial review, or its source/skill evidence changed. | Reconcile all three documents, preserving earlier decisions and remaining work. |
+| Unmapped change (`source`) | A changed file is outside declared skill sources, or a skill was removed. | Decide whether existing guidance, a new skill, or an exclusion is appropriate. |
+
+An unmapped file does not automatically require a new skill. A planning review can be needed even when nobody edited the planning documents.
+
+### Comparison scope
+
+Git and an initial commit are required. The default command is read-only.
+
+| Setting | Comparison |
+| --- | --- |
+| Explicit `--base` | The commit selected by that ref. |
+| Existing review state | The first recorded baseline, plus each item's recorded content hashes. |
+| No review state | `HEAD` and the current working tree. |
+
+The comparison includes committed changes since the base and staged, unstaged, and untracked files visible to Git. Renames appear as removals and additions. It reviews final working-tree content; a partially staged index is not separately certified.
+
+Recorded hashes detect later edits even when a review happened before a commit. The state retains hashes rather than earlier source text, and the referenced Git history must remain available.
+
+### Source mappings
+
+Discovery covers first-party `skills/**/SKILL.md` files in the repository and its packages. It excludes `node_modules`, even without a Git ignore rule.
+
+| Source entry | Resolution |
+| --- | --- |
+| `src/request.ts` | Relative to the package containing `skills/`. |
+| `owner/repository:src/request.ts` | Relative to the Git root; the repository identity must match the origin or root package metadata. |
+| `src/**/*.ts` | Git glob syntax: `*`, `?`, character classes, and `**`. |
+
+Brace expansion and extglobs are unsupported. Custom skill roots, ignored files, submodules, external source repositories, and symbolic links require manual review. Missing or unsupported mappings remain unresolved.
+
+### Required planning documents
+
+The maintainer workflow keeps a cumulative record across batches:
+
+| Document | Records |
+| --- | --- |
+| `domain_map.yaml` | Domains, developer tasks, relationships, failure modes, and gaps. |
+| `skill_spec.md` | Readable coverage, maintainer decisions, batch history, and remaining work. |
+| `skill_tree.yaml` | Skill identities, paths, package placement, prerequisites, and source mappings. |
+
+Review uses an existing `_artifacts/` or `skills/_artifacts/` location. Without one, installed maintainer guidance requires `_artifacts/` at a monorepo root or `skills/_artifacts/` for a standalone library. Previously recorded locations remain required if their files are deleted.
+
+All three files must be present, nonempty, readable, and visible to Git. Each YAML document must contain an object with a `skills` array. Custom artifact locations require manual checks.
+
+The planning snapshot includes the documents and the discovered skill/source evidence. Changes reopen planning review without reopening an otherwise unchanged individual skill. The check establishes file presence, YAML shape, and reviewed content hashes; the agent and maintainer still assess whether the written record is accurate and complete.
 
 ## Record a completed review
 
-The installed maintainer procedure does this in the coding-agent workflow. For manual use, save `--json` output outside source paths, such as `.intent/review.json` after creating `.intent/`. After editing skills and running checks, regenerate the report and annotate the selected items:
+The installed maintainer procedure handles these steps. For manual use:
+
+1. Review the pending items, edit guidance and planning records as needed, and run the relevant checks.
+2. Regenerate the report after those edits. Save it outside source paths:
+
+   ```bash
+   mkdir -p .intent
+   intent review --json > .intent/review.json
+   ```
+
+3. Add an outcome, reason, and evidence to each item you completed. Preserve the report's identities, baseline, and fingerprints.
+4. Record the report and check remaining work:
+
+   ```bash
+   intent review --record .intent/review.json
+   intent review --check
+   ```
+
+### Outcomes
+
+| Outcome | Meaning | Clears the item? |
+| --- | --- | --- |
+| `updated` | Guidance or planning records were corrected and checked. | Yes, with current fingerprints and resolved evidence. |
+| `no-change` | The existing content was checked and remains accurate. | Yes, with a reason and evidence. |
+| `out-of-scope` | A skill or source item is outside the reviewed guidance scope. | Yes, with a reason and evidence. Not accepted for planning records. |
+| `unresolved` | Required evidence or a decision is still missing. | No. |
+| No outcome | The item has not been reviewed. | No. |
+
+For example, add these fields to an existing report item; this is not a complete report:
 
 ```json
 {
@@ -37,16 +135,57 @@ The installed maintainer procedure does this in the coding-agent workflow. For m
 }
 ```
 
-These fields are added to each existing report item; preserve the report identity and fingerprints. Supported outcomes are `updated`, `no-change`, `out-of-scope`, and `unresolved`. Every completed outcome requires a reason and evidence. Unresolved or unannotated items remain pending. Stale fingerprints and unresolved source mappings cannot be recorded as complete.
+For a planning item, the reason and evidence must cover all three documents. Preserve prior tasks, decisions, and future work when extending them with a new batch.
 
-`--record` writes `.intent/review-state.json` with source/guidance hashes, the compared baseline, reviewed revision, outcome, reason, and evidence. Keep that file with the reviewed change. It does not commit, publish, change skill versions, or verify the truth of the supplied semantic conclusion. Identical recorded content suppresses reminders; another edit reopens the item. Corrupt state fails explicitly instead of discarding earlier decisions.
+### Saved state
 
-The `.intent/` directory is reserved for review state and working reports and is excluded from unmapped-change items. The command excludes `node_modules` even without a Git ignore rule, and does not read ignored files or follow symbolic links for source evidence. It reviews final working-tree content; a partially staged index is not a separately certified snapshot.
+`--record` writes `.intent/review-state.json` containing the baseline, source/guidance hashes, reviewed revision, outcomes, reasons, and evidence. It does not commit, publish, or change skill versions. `.intent/` is reserved for review state and working reports and is excluded from unmapped-change items.
 
-## Release fallback
+Identical recorded content suppresses repeat reminders. Later edits reopen review. The saved state does not replace the planning documents, execute evidence strings, or verify the truth of a recorded conclusion.
 
-`--github-review` writes the existing `review-items.json` and `pr-body.md` reminder artifacts plus GitHub step output/summary when configured. A failed comparison writes a failure reminder so missing evidence remains visible. The generated version 4 workflow selects this mode when recorded state exists, and uses `intent stale --github-review` otherwise.
+## Default and JSON output
 
-The version 4 template also runs `review --base <PR-base-sha> --check` on every PR once maintainer guidance or review state exists. This catches unrecorded source changes when an agent skips the maintenance procedure. It checks coverage and fingerprints; it does not certify semantic conclusions or execute the evidence strings in review state.
+Text output shows the pending count and up to 20 items, with changed paths, unresolved problems, and the next step. Use `--json` for the full report.
 
-No authoring model runs in CI. Your existing coding agent performs updates when you review the reminder. See [Quick Start for Maintainers](../getting-started/quick-start-maintainers) and [setup commands](./intent-setup).
+| JSON field | Meaning |
+| --- | --- |
+| `schemaVersion` | Report format version; currently `1`. |
+| `root`, `head`, `base` | Working-tree identity and compared Git revisions. |
+| `items` | Pending skill, planning, and source review items. |
+| Item `id`, `kind`, `path` | Stable item identity, category, and location. |
+| Item `changedFiles` | Paths changed since the relevant comparison. Can be empty for initial review. |
+| Item `snapshot`, `fingerprint` | Current content hashes and item fingerprint used when recording. |
+| Item `problems` | Unresolved evidence that prevents recording completion. |
+
+## Automated checks
+
+The optional version 4 [setup workflow](./intent-setup) connects review to PRs and releases:
+
+| Trigger | Check |
+| --- | --- |
+| Pull request with maintainer guidance or review state | `review --base <PR-base-sha> --check` |
+| Release/manual run with review state | `review --github-review` |
+| Release/manual run without review state | Existing `stale --github-review` fallback |
+
+This catches skipped review recording and missing planning documents. It does not run an authoring model in CI. Your coding agent handles the reminder using the same maintainer procedure.
+
+## Status and errors
+
+| Result | Behavior or next step |
+| --- | --- |
+| No pending items | `--check` exits `0`. |
+| Pending review | `--check` exits nonzero; review and record the remaining items. |
+| Missing, empty, or invalid planning document | Restore or repair the record before recording completion. |
+| Source or guidance changed after the report | Regenerate `--json` after editing; stale fingerprints are rejected. |
+| Missing comparison history | Fetch the referenced history or pass an available `--base`. |
+| Corrupt review state | Restore or repair the state; Intent does not silently discard it. |
+| Existing recording lock | Wait for the current recording. Remove the reported `.intent/review-state.json.lock` only after confirming no recording is running, then regenerate the report and retry. |
+| Wrong working tree | Regenerate the report in the repository being reviewed. |
+| Git/setup failure | Normal review exits nonzero. `--github-review` writes a failure reminder so the missing evidence stays visible. |
+
+## Related
+
+- [Maintainer quick start](../getting-started/quick-start-maintainers)
+- [intent install](./intent-install)
+- [intent validate](./intent-validate)
+- [intent stale](./intent-stale)

@@ -40,6 +40,9 @@ describe('maintainer installation', () => {
     expect(guidance).toContain('meta generate-skill')
     expect(guidance).toContain('Before substantial library')
     expect(guidance).toContain('review --json')
+    expect(guidance).toContain(
+      'domain_map.yaml, skill_spec.md, and skill_tree.yaml',
+    )
     expect(guidance).not.toContain('<!-- intent-skills:start -->')
     expect(readFileSync('package.json', 'utf8')).toBe(manifest)
     expect(existsSync('node_modules')).toBe(false)

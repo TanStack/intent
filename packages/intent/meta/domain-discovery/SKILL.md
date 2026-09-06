@@ -1,11 +1,10 @@
 ---
 name: domain-discovery
 description: >
-  Design a full-library skill set when the maintainer explicitly requests
-  library-wide discovery or a taxonomy review. Analyze source and docs,
-  interview the maintainer, and produce domain_map.yaml and skill_spec.md
-  for tree-generator.
+  Use when the maintainer explicitly requests full-library discovery or a skill taxonomy review. For an agreed skill batch or a concrete code/docs update, use generate-skill instead.
 metadata:
+  purpose: >
+    Design a full-library skill set when the maintainer explicitly requests library-wide discovery or a taxonomy review. Analyze source and docs, interview the maintainer, and produce domain_map.yaml and skill_spec.md for tree-generator.
   version: '3.0'
   category: meta-tooling
   output_artifacts: 'skills/_artifacts/domain_map.yaml; skills/_artifacts/skill_spec.md'
@@ -14,7 +13,7 @@ metadata:
 
 # Domain Discovery & Maintainer Interview
 
-Use this interview only for explicitly requested full-library design. For one developer task or a concrete code/docs update, follow [generate-skill](../generate-skill/SKILL.md) instead; the interview phases and artifacts below do not apply to that focused path.
+Use this interview only for explicitly requested full-library design. For one developer task or a concrete code/docs update, follow [generate-skill](../generate-skill/SKILL.md) instead; the interview phases below do not apply to that focused path. Focused batches still create and maintain the three planning documents through its planning record procedure.
 
 You are extracting domain knowledge for a library to produce a structured domain map. Your job is not to summarize documentation — it is to build a deep understanding of the library first, then use that understanding to surface the implicit knowledge that maintainers carry but docs miss.
 

@@ -10,9 +10,15 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { main } from '../src/cli.js'
 import { createReview, recordReview } from '../src/review/review.js'
+import type * as NodeFs from 'node:fs'
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>()
+  return { ...actual, renameSync: vi.fn(actual.renameSync) }
+})
 
 let root: string
 function git(...args: Array<string>) {
@@ -63,6 +69,33 @@ it('reviews an initial skill and remembers a justified no-op', () => {
   ])
   accept(report)
   expect(createReview(root).items).toEqual([])
+})
+
+it('holds the recording lock until the replacement state is published', async () => {
+  const actual = await vi.importActual<typeof NodeFs>('node:fs')
+  const lock = join(root, '.intent/review-state.json.lock')
+  let competingWriterBlocked = false
+  vi.mocked(renameSync).mockImplementationOnce((from, to) => {
+    actual.renameSync(from, to)
+    try {
+      writeFileSync(lock, 'competing writer', { flag: 'wx' })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      competingWriterBlocked = true
+    }
+  })
+  accept()
+  expect(competingWriterBlocked).toBe(true)
+  expect(actual.existsSync(lock)).toBe(false)
+  expect(createReview(root).items).toEqual([])
+})
+
+it('explains an existing recording lock without deleting another writer’s lock', () => {
+  write('.intent/review-state.json.lock', 'another writer')
+  expect(() => accept()).toThrow(/recording.*review-state\.json\.lock/)
+  expect(
+    readFileSync(join(root, '.intent/review-state.json.lock'), 'utf8'),
+  ).toBe('another writer')
 })
 
 it('reopens source edits and remembers their review before and after commit', () => {
@@ -245,4 +278,125 @@ it('returns a failing CLI check until recorded review clears the items', async (
   expect(await main(['review', root, '--check'])).toBe(1)
   accept()
   expect(await main(['review', root, '--check'])).toBe(0)
+})
+
+function planningRecords(dir = 'skills/_artifacts') {
+  write(
+    `${dir}/domain_map.yaml`,
+    'library: { name: library }\ndomains: []\nskills: []\n',
+  )
+  write(
+    `${dir}/skill_spec.md`,
+    '# Library skills\n\nRequest tasks and maintainer decisions.\n',
+  )
+  write(`${dir}/skill_tree.yaml`, 'library: { name: library }\nskills: []\n')
+}
+
+it('requires all three planning records in the installed maintainer workflow', () => {
+  write(
+    'AGENTS.md',
+    '<!-- intent-maintainer:start -->\nMaintain skills.\n<!-- intent-maintainer:end -->\n',
+  )
+  const report = createReview(root)
+  const planning = report.items.find((item) => item.kind === 'planning')
+  expect(planning?.path).toBe('skills/_artifacts')
+  expect(planning?.problems).toHaveLength(3)
+  expect(() => accept()).toThrow(/unresolved planning records/)
+  planningRecords()
+  accept()
+  expect(createReview(root).items).toEqual([])
+})
+
+it('reopens planning review for another batch and source edits without reopening unchanged skills', () => {
+  planningRecords()
+  accept()
+  write(
+    'skills/pages/SKILL.md',
+    '---\nname: pages\nsources: [src/request.ts]\n---\nRead all pages.\n',
+  )
+  let report = createReview(root)
+  expect(report.items.map((item) => item.kind)).toEqual(['skill', 'planning'])
+  const planning = report.items.find((item) => item.kind === 'planning')!
+  expect(planning.changedFiles).toContain('skills/pages/SKILL.md')
+  write(
+    'skills/_artifacts/skill_spec.md',
+    '# Library skills\n\nRequests and pagination; preserve existing decisions.\n',
+  )
+  expect(() => accept(report)).toThrow(/changed since this report/)
+  accept()
+  write('src/request.ts', 'export const attempts = 4\n')
+  report = createReview(root)
+  expect(
+    report.items.filter((item) => item.kind === 'planning')[0]?.changedFiles,
+  ).toEqual(['src/request.ts'])
+  accept()
+  expect(createReview(root).items).toEqual([])
+})
+
+it('keeps missing, empty and invalid planning records unresolved after an earlier review', () => {
+  planningRecords()
+  accept()
+  rmSync(join(root, 'skills/_artifacts/skill_spec.md'))
+  write('skills/_artifacts/domain_map.yaml', 'library: [')
+  write('skills/_artifacts/skill_tree.yaml', '  \n')
+  const planning = createReview(root).items.find(
+    (item) => item.kind === 'planning',
+  )
+  expect(planning?.problems).toHaveLength(3)
+  expect(() => accept()).toThrow(/unresolved planning records/)
+  rmSync(join(root, 'skills/_artifacts'), { recursive: true })
+  expect(
+    createReview(root).items.find((item) => item.kind === 'planning')?.problems,
+  ).toHaveLength(3)
+})
+
+it('keeps one shared planning record at the monorepo root', () => {
+  write('package.json', '{"name":"library","workspaces":["packages/*"]}\n')
+  write(
+    'CLAUDE.md',
+    '<!-- intent-maintainer:start -->\nMaintain skills.\n<!-- intent-maintainer:end -->\n',
+  )
+  write(
+    'packages/client/skills/request/SKILL.md',
+    '---\nname: request\nsources: [src/request.ts]\n---\nClient task.\n',
+  )
+  write('packages/client/src/request.ts', 'export const attempts = 3\n')
+  skill(['src/request.ts'])
+  expect(
+    createReview(root).items.find((item) => item.kind === 'planning')?.path,
+  ).toBe('_artifacts')
+  planningRecords('_artifacts')
+  accept()
+  expect(createReview(root).items).toEqual([])
+  expect(
+    readFileSync(join(root, '_artifacts/skill_spec.md'), 'utf8'),
+  ).toContain('maintainer decisions')
+})
+
+it('requires a substantive planning outcome instead of excluding the shared record', () => {
+  planningRecords()
+  const report = createReview(root)
+  const planning = report.items.find((item) => item.kind === 'planning')!
+  planning.outcome = 'out-of-scope'
+  planning.reason = 'Skip the planning documents.'
+  planning.evidence = ['skills/_artifacts']
+  expect(() => recordReview(root, report)).toThrow(
+    /Planning records require updated or no-change/,
+  )
+})
+
+it('reopens planning review for removed skills and rejects ignored records', () => {
+  planningRecords()
+  accept()
+  rmSync(join(root, 'skills/request/SKILL.md'))
+  expect(
+    createReview(root).items.find((item) => item.kind === 'planning')
+      ?.changedFiles,
+  ).toContain('skills/request/SKILL.md')
+  write('.gitignore', 'skills/_artifacts/skill_spec.md\n')
+  expect(
+    createReview(root)
+      .items.find((item) => item.kind === 'planning')
+      ?.problems.join(' '),
+  ).toContain('must be visible to Git')
 })

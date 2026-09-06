@@ -1335,6 +1335,10 @@ describe('cli commands', () => {
       name: 'db-core',
       description: 'Core database concepts',
     })
+    writeFileSync(
+      join(pkgDir, 'skills/db-core/SKILL.md'),
+      '---\nname: db-core\ndescription: Use when configuring TanStack DB collections.\nmetadata:\n  purpose: Core database concepts\n---\n',
+    )
 
     process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
     process.chdir(root)
@@ -1366,10 +1370,17 @@ describe('cli commands', () => {
         use: '@tanstack/db#db-core',
         packageName: '@tanstack/db',
         skillName: 'db-core',
+        description: 'Use when configuring TanStack DB collections.',
+        purpose: 'Core database concepts',
       }),
     ])
     expect(parsed.conflicts).toEqual([])
     expect(parsed.warnings).toEqual([])
+    logSpy.mockClear()
+    expect(await main(['list'])).toBe(0)
+    const text = logSpy.mock.calls.flat().join('\n')
+    expect(text).toContain('Use when configuring TanStack DB collections.')
+    expect(text).not.toContain('Core database concepts')
   })
 
   it('prints full load commands for every skill in human list output', async () => {

@@ -33,7 +33,7 @@ npx @tanstack/intent@latest install [--maintainer] [--map] [--dry-run] [--print-
 
 `install --maintainer` enables initial skill batches and source-aware skill maintenance in repository agent instructions. It works without a terminal or existing consumer permissions. It writes a separate `intent-maintainer` block, preserves consumer guidance, and is idempotent. `--dry-run` previews the block.
 
-Run it from the library root. The block loads the packaged authoring procedure for substantial library work; that procedure covers source review, task checks, and revision-bound outcomes. It does not install dependencies, agent hooks, or CI. It cannot be combined with `--review`, `--map`, `--print-prompt`, `--global`, or `--global-only`. See [Quick Start for Maintainers](../getting-started/quick-start-maintainers).
+Run it from the library root. The block loads the packaged authoring procedure for substantial library work; that procedure covers the cumulative domain map, spec, and skill tree, source review, task checks, and revision-bound outcomes. It does not install dependencies, agent hooks, or CI. It cannot be combined with `--review`, `--map`, `--print-prompt`, `--global`, or `--global-only`. See [Quick Start for Maintainers](../getting-started/quick-start-maintainers).
 
 ### Default install
 
