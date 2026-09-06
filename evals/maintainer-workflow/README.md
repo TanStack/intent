@@ -84,12 +84,12 @@ For the purpose migration, start from the pre-edit skill files in a separate dis
 
 The final migration run used another isolated author session with the same runtime. Independent checks found:
 
-| Check | Observed result |
-| --- | --- |
-| Purpose preservation | Both decoded purposes exactly matched their pre-edit descriptions. Tree purposes retained the same text, with only YAML terminal-newline differences. |
-| Grouping and records | Retries/cancellation stayed together; pagination remained separate. The agent extended the tree and spec, preserved the accurate domain map, and retained earlier batches and the opt-in decision. |
-| Validation and recording | Both skills validated; five unchanged library tests passed. The agent repaired invalid YAML and review evidence during the run, recorded four outcomes, and the independent `review --check` returned zero pending items. |
-| Semantic accuracy | Cancellation wording still failed to distinguish aborting a retry loop from an active operation resolving successfully after abort. A direct runtime check confirmed the distinction; this run is not a semantic-quality pass. |
-| Consumer discovery | Not evaluated in this migration run. |
+| Check                    | Observed result                                                                                                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Purpose preservation     | Both decoded purposes exactly matched their pre-edit descriptions. Tree purposes retained the same text, with only YAML terminal-newline differences.                                                                          |
+| Grouping and records     | Retries/cancellation stayed together; pagination remained separate. The agent extended the tree and spec, preserved the accurate domain map, and retained earlier batches and the opt-in decision.                             |
+| Validation and recording | Both skills validated; five unchanged library tests passed. The agent repaired invalid YAML and review evidence during the run, recorded four outcomes, and the independent `review --check` returned zero pending items.      |
+| Semantic accuracy        | Cancellation wording still failed to distinguish aborting a retry loop from an active operation resolving successfully after abort. A direct runtime check confirmed the distinction; this run is not a semantic-quality pass. |
+| Consumer discovery       | Not evaluated in this migration run.                                                                                                                                                                                           |
 
 For any bundled helper, run its documented invocation from the installed package with valid and invalid input. Verify prerequisites, noninteractive input, exit status, and output. No new helper scripts are required by this fixture.
