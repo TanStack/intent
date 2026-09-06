@@ -7,18 +7,20 @@ id: intent-meta
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
+```text
 react: @tanstack/intent@latest meta
-react: `@tanstack/intent@latest meta <name>`
+react: @tanstack/intent@latest meta <name>
 solid: @tanstack/intent@latest meta
-solid: `@tanstack/intent@latest meta <name>`
+solid: @tanstack/intent@latest meta <name>
 vue: @tanstack/intent@latest meta
-vue: `@tanstack/intent@latest meta <name>`
+vue: @tanstack/intent@latest meta <name>
 svelte: @tanstack/intent@latest meta
-svelte: `@tanstack/intent@latest meta <name>`
+svelte: @tanstack/intent@latest meta <name>
 angular: @tanstack/intent@latest meta
-angular: `@tanstack/intent@latest meta <name>`
+angular: @tanstack/intent@latest meta <name>
 lit: @tanstack/intent@latest meta
-lit: `@tanstack/intent@latest meta <name>`
+lit: @tanstack/intent@latest meta <name>
+```
 
 <!-- ::end:tabs -->
 

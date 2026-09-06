@@ -7,12 +7,14 @@ id: intent-load
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: `@tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]`
-solid: `@tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]`
-vue: `@tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]`
-svelte: `@tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]`
-angular: `@tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]`
-lit: `@tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]`
+```text
+react: @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+solid: @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+vue: @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+svelte: @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+angular: @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+lit: @tanstack/intent@latest load <package>#<skill> [--path] [--json] [--debug] [--global] [--global-only]
+```
 
 <!-- ::end:tabs -->
 

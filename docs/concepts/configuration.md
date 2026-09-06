@@ -146,24 +146,26 @@ Use `intent exclude` to manage this list from the CLI:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
-react: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+```text
+react: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+react: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
 react: @tanstack/intent@latest exclude list
-solid: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
-solid: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+solid: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+solid: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
 solid: @tanstack/intent@latest exclude list
-vue: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
-vue: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+vue: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+vue: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
 vue: @tanstack/intent@latest exclude list
-svelte: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
-svelte: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+svelte: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+svelte: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
 svelte: @tanstack/intent@latest exclude list
-angular: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
-angular: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+angular: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+angular: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
 angular: @tanstack/intent@latest exclude list
-lit: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
-lit: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+lit: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+lit: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
 lit: @tanstack/intent@latest exclude list
+```
 
 <!-- ::end:tabs -->
 

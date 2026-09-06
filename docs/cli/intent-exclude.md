@@ -30,30 +30,32 @@ lit: @tanstack/intent@latest exclude [list|add|remove] [pattern] [--json]
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
+```text
 react: @tanstack/intent@latest exclude
 react: @tanstack/intent@latest exclude list --json
-react: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
-react: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+react: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+react: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
 solid: @tanstack/intent@latest exclude
 solid: @tanstack/intent@latest exclude list --json
-solid: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
-solid: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+solid: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+solid: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
 vue: @tanstack/intent@latest exclude
 vue: @tanstack/intent@latest exclude list --json
-vue: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
-vue: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+vue: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+vue: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
 svelte: @tanstack/intent@latest exclude
 svelte: @tanstack/intent@latest exclude list --json
-svelte: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
-svelte: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+svelte: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+svelte: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
 angular: @tanstack/intent@latest exclude
 angular: @tanstack/intent@latest exclude list --json
-angular: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
-angular: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+angular: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+angular: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
 lit: @tanstack/intent@latest exclude
 lit: @tanstack/intent@latest exclude list --json
-lit: `@tanstack/intent@latest exclude add @tanstack/router#experimental-*`
-lit: `@tanstack/intent@latest exclude remove @tanstack/router#experimental-*`
+lit: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+lit: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
+```
 
 <!-- ::end:tabs -->
 

@@ -7,12 +7,14 @@ id: intent-review
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: `@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]`
-solid: `@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]`
-vue: `@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]`
-svelte: `@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]`
-angular: `@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]`
-lit: `@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]`
+```text
+react: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
+solid: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
+vue: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
+svelte: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
+angular: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
+lit: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
+```
 
 <!-- ::end:tabs -->
 
@@ -80,12 +82,14 @@ A squash merge, shallow clone, or history rewrite can remove the commit stored a
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: `@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json`
-solid: `@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json`
-vue: `@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json`
-svelte: `@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json`
-angular: `@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json`
-lit: `@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json`
+```text
+react: @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
+solid: @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
+vue: @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
+svelte: @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
+angular: @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
+lit: @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
+```
 
 <!-- ::end:tabs -->
 
@@ -148,12 +152,14 @@ The installed maintainer procedure handles these steps. For manual use:
 
    <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-   react: `@tanstack/intent@latest review --json > .intent/review.json`
-   solid: `@tanstack/intent@latest review --json > .intent/review.json`
-   vue: `@tanstack/intent@latest review --json > .intent/review.json`
-   svelte: `@tanstack/intent@latest review --json > .intent/review.json`
-   angular: `@tanstack/intent@latest review --json > .intent/review.json`
-   lit: `@tanstack/intent@latest review --json > .intent/review.json`
+   ```text
+   react: @tanstack/intent@latest review --json > .intent/review.json
+   solid: @tanstack/intent@latest review --json > .intent/review.json
+   vue: @tanstack/intent@latest review --json > .intent/review.json
+   svelte: @tanstack/intent@latest review --json > .intent/review.json
+   angular: @tanstack/intent@latest review --json > .intent/review.json
+   lit: @tanstack/intent@latest review --json > .intent/review.json
+   ```
 
    <!-- ::end:tabs -->
 

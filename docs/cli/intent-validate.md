@@ -7,12 +7,14 @@ id: intent-validate
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: `@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]`
-solid: `@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]`
-vue: `@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]`
-svelte: `@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]`
-angular: `@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]`
-lit: `@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]`
+```text
+react: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]
+solid: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]
+vue: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]
+svelte: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]
+angular: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]
+lit: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]
+```
 
 <!-- ::end:tabs -->
 
