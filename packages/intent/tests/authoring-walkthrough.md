@@ -2,6 +2,8 @@
 
 Manual walkthrough on 2026-09-04 (America/Vancouver), performed by the implementing agent. This is not a live evaluation with an independent agent or a claim that other agents will follow the instructions reliably.
 
+This historical walkthrough predates the cumulative planning-record requirement. The current maintainer authoring workflow creates and maintains all three planning documents; standalone structural validation still accepts manually authored skills without maintainer setup.
+
 ## Source and inputs
 
 - Source: TanStack/intent at `bffcdabbdb9a55af5a3ba1ff09ece0f7da223eb2`, `@tanstack/intent@0.4.0`, with this PR's authoring guidance.

@@ -1,13 +1,10 @@
 ---
 name: tree-generator
 description: >
-  Generate, update, and version a complete skill tree (collection of SKILL.md
-  files) for any JavaScript or TypeScript library. Produces core skills
-  (framework-agnostic) and framework skills (React, Solid, Vue bindings)
-  with dependency linking. Activate when producing skill files from a domain
-  map or explicitly designing or auditing a full-library skill set. Takes
-  domain_map.yaml and skill_spec.md from domain-discovery as primary inputs.
+  Use when turning an approved domain_map.yaml and skill_spec.md into a full-library skill tree or explicitly auditing its structure and dependencies. For agreed batches and source-driven guidance updates, use generate-skill instead.
 metadata:
+  purpose: >
+    Generate, update, and version a complete skill tree (collection of SKILL.md files) for any JavaScript or TypeScript library. Produces core skills (framework-agnostic) and framework skills (React, Solid, Vue bindings) with dependency linking. Activate when producing skill files from a domain map or explicitly designing or auditing a full-library skill set. Takes domain_map.yaml and skill_spec.md from domain-discovery as primary inputs.
   version: '3.0'
   category: meta-tooling
   input_artifacts: 'skills/_artifacts/domain_map.yaml; skills/_artifacts/skill_spec.md'
@@ -63,7 +60,9 @@ If starting from raw docs without a domain map, run a compressed discovery. This
 
 If the maintainer uses a custom skills root, replace `skills/` in the paths below with their chosen directory.
 
-For the scaffold workflow, produce a single artifact before writing any SKILL.md files:
+Focused batches use the format below through generate-skill’s [planning record procedure](../generate-skill/references/planning-records.md), extending the existing tree with the batch. Reading this format does not start full-library discovery.
+
+For the full-library scaffold workflow, produce a single artifact before writing any SKILL.md files:
 
 - `skills/_artifacts/skill_tree.yaml`
 
@@ -90,7 +89,8 @@ skills:
     domain: '[domain slug]'
     path: 'skills/[path]/SKILL.md'
     package: '[package directory, e.g. packages/client]' # monorepo only — which package this skill belongs to
-    description: '[1–2 sentence agent-facing routing key]'
+    description: 'Use when [concrete developer tasks or conditions] with [library/framework]. [Adjacent-task boundary, when needed.]'
+    purpose: '[Descriptive explanation; emitted as metadata.purpose in SKILL.md.]'
     requires:
       - '[other skill slugs]' # omit if none
     sources:

@@ -1,12 +1,10 @@
 ---
 name: skill-staleness-check
 description: >
-  Evaluate intent skills for staleness when source files change in upstream
-  TanStack package repos. Matches changed files against metadata.sources,
-  evaluates whether diffs affect documented behavior, rewrites stale skills
-  using generate-skill, checks cross-skill references, and opens PRs.
-  Silent when nothing needs updating.
+  Use when reviewing an upstream TanStack webhook payload containing the package, commit SHA, and changed files for stale skill guidance. For ordinary library changes or Intent review reports, use generate-skill instead.
 metadata:
+  purpose: >
+    Evaluate intent skills for staleness when source files change in upstream TanStack package repos. Matches changed files against metadata.sources, evaluates whether diffs affect documented behavior, rewrites stale skills using generate-skill, checks cross-skill references, and opens PRs. Silent when nothing needs updating.
   version: '1.0'
   category: meta-tooling
   input_artifacts: 'webhook payload (package name, commit SHA, changed files)'

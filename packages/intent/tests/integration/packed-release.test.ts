@@ -193,7 +193,7 @@ describe('packed release', () => {
     }
   })
 
-  it('validates a focused authored skill without planning artifacts', () => {
+  it('validates a manually authored skill without maintainer setup', () => {
     const skillDir = join(cwd, 'skills', 'read-meta')
     mkdirSync(skillDir, { recursive: true })
     writeFileSync(
@@ -377,6 +377,34 @@ Existing fixture guidance, pending source review.
     expect(existsSync(join(cwd, 'AGENTS.md'))).toBe(false)
   })
 
+  it('requires the planning records after maintainer setup in the packed CLI', () => {
+    execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], { cwd })
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'core.fsmonitor=false',
+        '-c',
+        'user.name=Fixture',
+        '-c',
+        'user.email=fixture@example.invalid',
+        'commit',
+        '--allow-empty',
+        '-qm',
+        'fixture',
+      ],
+      { cwd },
+    )
+    expect(run(['install', '--maintainer']).status).toBe(0)
+    const missingRecords = JSON.parse(run(['review', '--json']).stdout)
+    expect(
+      missingRecords.items.find(
+        (item: { kind: string }) => item.kind === 'planning',
+      ).problems,
+    ).toHaveLength(3)
+    expect(run(['review', '--check']).status).toBe(1)
+  })
+
   it('installs the maintainer workflow and reviews sources with the packed CLI', () => {
     execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], { cwd })
     execFileSync(
@@ -409,12 +437,28 @@ Existing fixture guidance, pending source review.
     expect(packedFiles).toContain(
       'meta/generate-skill/references/source-review.md',
     )
+    expect(packedFiles).toContain(
+      'meta/generate-skill/references/planning-records.md',
+    )
     mkdirSync(join(cwd, 'src'))
     writeFileSync(join(cwd, 'src/client.js'), 'export const attempts = 3\n')
     mkdirSync(join(cwd, 'skills/client'), { recursive: true })
     writeFileSync(
       join(cwd, 'skills/client/SKILL.md'),
       '---\nname: client\nsources: [src/client.js]\n---\nClient task\n',
+    )
+    mkdirSync(join(cwd, 'skills/_artifacts'))
+    writeFileSync(
+      join(cwd, 'skills/_artifacts/domain_map.yaml'),
+      'library: {name: consumer}\nskills: [{slug: client}]\n',
+    )
+    writeFileSync(
+      join(cwd, 'skills/_artifacts/skill_spec.md'),
+      '# Consumer skills\n\nClient task: three attempts.\n',
+    )
+    writeFileSync(
+      join(cwd, 'skills/_artifacts/skill_tree.yaml'),
+      'skills: [{slug: client, path: skills/client/SKILL.md}]\n',
     )
     const review = run(['review', '--json'])
     expect(review.status, review.stderr).toBe(0)

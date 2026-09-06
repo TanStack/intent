@@ -35,14 +35,19 @@ export function runReviewCommand(
         cwd,
         JSON.parse(readFileSync(resolve(options.record), 'utf8')),
       )
-      console.log(`Recorded ${count} skill review outcome(s).`)
+      console.log(`Recorded ${count} review outcome(s).`)
       return
     }
     const report = createReview(cwd, options.base)
     if (options.githubReview) {
       writeStaleReviewWorkflowFiles(
         report.items.map((item) => ({
-          type: item.kind === 'skill' ? 'source-review' : 'unmapped-change',
+          type:
+            item.kind === 'source'
+              ? 'unmapped-change'
+              : item.kind === 'planning'
+                ? 'planning-review'
+                : 'source-review',
           library: options.packageLabel ?? 'workspace',
           subject: item.path,
           reasons: item.problems.length
@@ -62,7 +67,7 @@ export function runReviewCommand(
       console.log(`${report.items.length} item(s) need skill review.`)
       for (const item of report.items.slice(0, 20)) {
         console.log(
-          `  ${item.kind === 'skill' ? 'Skill' : 'Unmapped change'}: ${JSON.stringify(item.path)}`,
+          `  ${item.kind === 'skill' ? 'Skill' : item.kind === 'planning' ? 'Planning records' : 'Unmapped change'}: ${JSON.stringify(item.path)}`,
         )
         for (const problem of item.problems)
           console.log(`    Unknown: ${problem}`)

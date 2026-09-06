@@ -1,15 +1,19 @@
 import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
+  closeSync,
   existsSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { parse as parseYaml } from 'yaml'
+import { resolveProjectContext } from '../core/project-context.js'
 import { parseFrontmatter } from '../shared/utils.js'
 
 type Snapshot = Record<string, string | null>
@@ -17,7 +21,7 @@ type Outcome = 'updated' | 'no-change' | 'out-of-scope' | 'unresolved'
 
 interface ReviewItem {
   id: string
-  kind: 'skill' | 'source'
+  kind: 'skill' | 'source' | 'planning'
   path: string
   fingerprint: string
   snapshot: Snapshot
@@ -369,9 +373,10 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       problems,
     })
   }
-  for (const file of files.filter((path) =>
+  const skillFiles = files.filter((path) =>
     /(^|\/)skills\/.+\/SKILL\.md$/.test(path),
-  )) {
+  )
+  for (const file of skillFiles) {
     const problems: Array<string> = []
     const skillDir = dirname(file)
     const guidanceFiles = files.filter((path) =>
@@ -414,6 +419,80 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     }
     for (const path of [...sourceFiles, ...guidanceFiles]) covered.add(path)
     add('skill', file, [...sourceFiles, ...guidanceFiles], problems)
+  }
+  const artifactNames = ['domain_map.yaml', 'skill_spec.md', 'skill_tree.yaml']
+  const existingArtifactDirs = ['_artifacts', 'skills/_artifacts'].filter(
+    (dir) =>
+      artifactNames.some((name) => files.includes(`${dir}/${name}`)) ||
+      state?.items[`planning:${dir}`],
+  )
+  const hasMaintainerGuidance = [
+    'AGENTS.md',
+    'CLAUDE.md',
+    '.cursorrules',
+    '.github/copilot-instructions.md',
+  ].some(
+    (path) =>
+      files.includes(path) &&
+      fileHash(root, path) !== null &&
+      readFileSync(safePath(root, path), 'utf8').includes(
+        '<!-- intent-maintainer:start -->',
+      ),
+  )
+  if (existingArtifactDirs.length || hasMaintainerGuidance) {
+    const dirs = existingArtifactDirs.length
+      ? existingArtifactDirs
+      : [
+          resolveProjectContext({ cwd: root }).isMonorepo
+            ? '_artifacts'
+            : 'skills/_artifacts',
+        ]
+    for (const dir of dirs) {
+      const paths = artifactNames.map((name) => `${dir}/${name}`)
+      const problems: Array<string> = []
+      for (const path of paths) {
+        try {
+          if (!files.includes(path)) {
+            problems.push(
+              existsSync(safePath(root, path))
+                ? `Planning record must be visible to Git: ${path}`
+                : `Missing required planning record: ${path}`,
+            )
+            continue
+          }
+          if (fileHash(root, path) === null) {
+            problems.push(`Missing required planning record: ${path}`)
+            continue
+          }
+          const content = readFileSync(safePath(root, path), 'utf8')
+          if (!content.trim()) {
+            problems.push(`Planning record is empty: ${path}`)
+          } else if (path.endsWith('.yaml')) {
+            const parsed: unknown = parseYaml(content)
+            if (!isObject(parsed) || !Array.isArray(parsed.skills))
+              problems.push(
+                `Planning record requires an object with a skills array: ${path}`,
+              )
+          }
+        } catch (error) {
+          problems.push(
+            `${path}: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
+      }
+      // The shared record must be reviewed again when its source or guidance changes.
+      add(
+        'planning',
+        dir,
+        [
+          ...covered,
+          ...skillFiles,
+          ...paths.filter((path) => files.includes(path)),
+        ],
+        problems,
+      )
+      for (const path of paths) covered.add(path)
+    }
   }
   for (const path of changed) {
     if (covered.has(path) || path.startsWith('.intent/')) continue
@@ -463,7 +542,13 @@ export function recordReview(cwd: string, input: unknown): number {
       )
     if (item.problems.length > 0)
       throw new Error(
-        `Review ${value.id} has unresolved source evidence. Fix the source mapping before recording it.`,
+        item.kind === 'planning'
+          ? `Review ${value.id} has unresolved planning records. Restore or repair the reported documents before recording it.`
+          : `Review ${value.id} has unresolved source evidence. Fix the source mapping before recording it.`,
+      )
+    if (item.kind === 'planning' && value.outcome === 'out-of-scope')
+      throw new Error(
+        'Planning records require updated or no-change with evidence.',
       )
     records[item.id] = {
       fingerprint: item.fingerprint,
@@ -479,7 +564,16 @@ export function recordReview(cwd: string, input: unknown): number {
   const path = safePath(current.root, statePath)
   mkdirSync(dirname(path), { recursive: true })
   const lock = `${path}.lock`
-  writeFileSync(lock, '', { flag: 'wx' })
+  const temporary = `${path}.${randomUUID()}.tmp`
+  try {
+    writeFileSync(lock, '', { flag: 'wx' })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    throw new Error(
+      `Another recording holds ${statePath}.lock. If no recording is running, remove the stale lock and retry with a fresh report.`,
+    )
+  }
+  let temporaryCreated = false
   try {
     if (readState(current.root).content !== content)
       throw new Error(
@@ -490,10 +584,20 @@ export function recordReview(cwd: string, input: unknown): number {
       baseline: state?.baseline ?? current.base,
       items: records,
     }
-    writeFileSync(lock, `${JSON.stringify(next, null, 2)}\n`)
-    renameSync(lock, path)
+    const descriptor = openSync(temporary, 'wx')
+    temporaryCreated = true
+    try {
+      writeFileSync(descriptor, `${JSON.stringify(next, null, 2)}\n`)
+    } finally {
+      closeSync(descriptor)
+    }
+    renameSync(temporary, path)
   } finally {
-    rmSync(lock, { force: true })
+    try {
+      if (temporaryCreated) rmSync(temporary, { force: true })
+    } finally {
+      rmSync(lock, { force: true })
+    }
   }
   return count
 }

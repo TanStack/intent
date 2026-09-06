@@ -27,3 +27,5 @@ Return to the main procedure once the relevant task and evidence are known. Keep
 Return a disposition for each input item: updated, verified no change, out of scope with evidence, or unresolved with the missing evidence or decision. Include source/version evidence and validation results for edits. A report may remain flagged after an evidence-backed no-op; say why instead of treating a clean `stale` result as the completion criterion.
 
 Stop at a reviewable diff and the item dispositions. Creating, committing, pushing, or closing a PR, changing labels, and installing workflows require the maintainer's request.
+
+For a `planning-review` item, follow [the planning record procedure](planning-records.md). Create missing documents or reconcile the existing domain map, spec, and tree with the reviewed source/skill changes, preserving prior decisions and remaining work. Record the completed planning outcome through source review; a reminder alone does not prove that the documents need rewriting.

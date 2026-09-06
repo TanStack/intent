@@ -28,7 +28,7 @@ If you run the command yourself, give the printed prompt to your agent with the 
 ## Behavior
 
 - Prints guidance to stdout; does not create files, run an agent, or change your project.
-- Leads with one task or concrete change; no discovery artifacts are required.
+- Leads with a useful task batch or concrete change; the agent creates or extends the domain map, spec, and skill tree without requiring full-library discovery.
 - Points to shipped meta-skills using paths from the Intent package in use.
 - Keeps full-library discovery available when explicitly requested.
 

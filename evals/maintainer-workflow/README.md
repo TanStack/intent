@@ -57,3 +57,39 @@ Verify the source behavior independently, then inspect whether the agent updated
 In the observed ordinary-change run, the agent added the callback, updated the retry skill, and passed the package's 20 tests, but omitted recording the review. The real `review --check` failed with two pending skills. Given that failing check as follow-up input, the agent recorded `updated` for retries and an evidence-backed `no-change` for pagination, whose source function was untouched. The repeated check then returned zero pending items. This confirms the fallback catches a skipped procedure; it does not show that agent instructions are obeyed on every first attempt.
 
 A further fresh consumer loaded the updated guidance and implemented a wrapper that reports retries through the new callback. Independent checks passed for callback timing, error/next-attempt arguments, the three-call limit, permanent and null rejection preservation, and callback exceptions preventing another operation call. The installed block now explicitly names `review --json` before handoff as well as the authoring entry point.
+
+## Cumulative planning record check
+
+Use a new disposable fixture and the packed maintainer setup above. Start with only retries and cancellation agreed for the first batch, explicitly requiring retries to remain opt-in and pagination to remain future work. Save the resulting skills and planning documents before a fresh session requests the pagination batch, including empty pages and empty-string cursors.
+
+After each batch, parse `domain_map.yaml` and `skill_tree.yaml`, inspect `skill_spec.md`, and compare them with the actual skill files and the previous snapshot. Check implemented paths separately from planned future entries. Require matching skill identities, retained maintainer decisions, preserved prior batch history, and a recorded reason when planned work becomes implemented. Run the real `review --check`; use its failure output for recovery if review outcomes were omitted.
+
+The September 5, 2026 check used the same installed Copilot runtime and isolation settings described above, with separate author sessions for each batch. It evaluated record creation and incremental maintenance; no additional independent consumer session was provided for this extension.
+
+| Stage                       | Observed result                                                                                                                                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| First batch                 | Created all three documents, the retry/cancellation skill, executable checks, the opt-in decision, and a planned pagination entry. Omitted review recording; the real check caught eight pending items.                         |
+| Second batch                | Added pagination and updated all three documents while retaining the retry skill, opt-in decision, and first batch history. Recorded review outcomes without a recovery prompt; the repeated check returned zero pending items. |
+| Independent artifact checks | Both YAML documents parsed; implemented paths existed and matched the map/spec; previous skill identities and decisions remained present.                                                                                       |
+
+These observations establish that the workflow can extend the record across two batches. They do not prove every generated claim is correct or that agents always finish review recording. Deterministic review tests separately cover source changes reopening planning review, evidence-backed no-ops, missing/invalid/ignored documents, removed skills, stale reports, and monorepo placement.
+
+## Description and script checks
+
+For new or changed skill descriptions, keep realistic should-load and adjacent should-not-load requests with the task cases. Observe actual `SKILL.md` loading through normal consumer setup, and keep that evidence separate from the protected task grader. Description revisions need fresh or held-out requests; the workflow runs above are not a systematic trigger evaluation.
+
+An additional description-only session produced explicit use conditions and cleared recorded review, but independent source checks found overbroad cancellation and duplicate-prevention claims. A repair session was interrupted and is not counted as passing evidence. These results prompted checking description claims against behavior, alongside the body; an activation phrase alone establishes neither accuracy nor discovery quality.
+
+For the purpose migration, start from the pre-edit skill files in a separate disposable fixture. Ask the agent to apply the current authoring format while preserving the existing tasks, descriptive meaning, behavior, and maintainer decisions. Compare decoded `metadata.purpose` with each original `description`, inspect activation scope and the matching tree entries, verify that task grouping and prior history survive, and run the actual review check. Preserve an existing purpose on subsequent updates. This is an authoring check, not a consumer activation measurement.
+
+The final migration run used another isolated author session with the same runtime. Independent checks found:
+
+| Check | Observed result |
+| --- | --- |
+| Purpose preservation | Both decoded purposes exactly matched their pre-edit descriptions. Tree purposes retained the same text, with only YAML terminal-newline differences. |
+| Grouping and records | Retries/cancellation stayed together; pagination remained separate. The agent extended the tree and spec, preserved the accurate domain map, and retained earlier batches and the opt-in decision. |
+| Validation and recording | Both skills validated; five unchanged library tests passed. The agent repaired invalid YAML and review evidence during the run, recorded four outcomes, and the independent `review --check` returned zero pending items. |
+| Semantic accuracy | Cancellation wording still failed to distinguish aborting a retry loop from an active operation resolving successfully after abort. A direct runtime check confirmed the distinction; this run is not a semantic-quality pass. |
+| Consumer discovery | Not evaluated in this migration run. |
+
+For any bundled helper, run its documented invocation from the installed package with valid and invalid input. Verify prerequisites, noninteractive input, exit status, and output. No new helper scripts are required by this fixture.

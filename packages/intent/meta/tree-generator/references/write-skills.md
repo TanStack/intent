@@ -10,9 +10,10 @@ The core skill is the foundational overview for the library. It covers framework
 ---
 name: '[lib]-core'
 description: >
-  [Distinct developer tasks that need this shared framework-agnostic
-  guidance. Include API names only when they distinguish those tasks.]
+  Use when [developer tasks needing this library's shared framework-agnostic guidance]. [Route framework-specific work to its owner.]
 metadata:
+  purpose: >
+    [Descriptive explanation of the shared framework-agnostic guidance this skill provides.]
   type: core
   library: '[lib]'
   library_version: '[version this targets]'
@@ -55,9 +56,10 @@ One SKILL.md per independently useful task. Use this section order when the sect
 ---
 name: '[domain-slug]'
 description: >
-  [When an agent should load this task guidance. Distinguish its loading
-  conditions from neighboring skills.]
+  Use when [concrete developer tasks or conditions] with [library]. [Distinguish neighboring skills.]
 metadata:
+  purpose: >
+    [Descriptive explanation of the library task this skill helps accomplish.]
   type: sub-skill
   library: '[lib]'
   library_version: '[version]'
@@ -149,10 +151,10 @@ Framework skills build on their core skill. They cover only what is specific to 
 ---
 name: 'react-[lib]'
 description: >
-  [1–3 sentences. React-specific bindings for [library]. Name the hooks,
-  components, and providers. Mention React-specific patterns like SSR
-  hydration if applicable.]
+  Use when [React-specific developer tasks or conditions] with [library]. [Name APIs only when they distinguish the trigger.]
 metadata:
+  purpose: >
+    [Descriptive explanation of the React-specific guidance this skill provides.]
   type: framework
   library: '[lib]'
   framework: react
@@ -196,8 +198,10 @@ mismatch, etc.]
 ---
 name: '[domain-slug]'
 description: >
-  [React-specific description for this domain.]
+  Use when [concrete React tasks in this domain]. [Distinguish the core task and other React skills.]
 metadata:
+  purpose: >
+    [React-specific description for this domain.]
   type: sub-skill
   library: '[lib]'
   framework: react
@@ -244,9 +248,10 @@ Composition skills cover how two or more libraries work together. These are fram
 ---
 name: '[lib-a]-[lib-b]'
 description: >
-  [How lib-a and lib-b wire together. Name the specific integration
-  points: functions, hooks, patterns.]
+  Use when [developer tasks requiring lib-a and lib-b together]. [Distinguish using either library alone.]
 metadata:
+  purpose: >
+    [How lib-a and lib-b wire together. Name the specific integration points: functions, hooks, patterns.]
   type: composition
   library_version: '[version of primary lib]'
 requires:
@@ -283,8 +288,10 @@ Some skills don't fit the standard body structure (Setup → Core Patterns → C
 ---
 name: security
 description: >
-  Go-live security validation for [library]. Checks [specific concerns].
+  Use when [reviewing specific security concerns before deployment or release with this library]. [Distinguish the audit from implementation.]
 metadata:
+  purpose: >
+    Go-live security validation for [library]. Checks [specific concerns].
   type: security
   library: '[lib]'
   framework: react
