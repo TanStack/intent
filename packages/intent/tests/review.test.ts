@@ -72,8 +72,30 @@ it('reviews an initial skill and remembers a justified no-op', () => {
   expect(createReview(root).items).toEqual([])
 })
 
+it('does not classify shipped meta skills or unrelated agent instructions as library skills', () => {
+  write(
+    'packages/intent/meta/generate-skill/SKILL.md',
+    '---\nname: generate-skill\ndescription: Author library skills.\n---\nAuthor guidance.\n',
+  )
+  write(
+    'automation/deploy/SKILL.md',
+    '---\nname: deploy\nsources: [src/request.ts]\n---\nDeployment guidance.\n',
+  )
+  planningRecords('_artifacts')
+  git('add', '.')
+  git('commit', '-qm', 'unrelated instructions')
+  expect(createReview(root).items.map((item) => item.id)).toEqual([
+    'skill:skills/request/SKILL.md',
+    'planning:_artifacts',
+  ])
+  accept()
+  expect(createReview(root).items).toEqual([])
+})
+
 it('reviews a repository-root skill without including its own review state', () => {
   renameSync(join(root, 'skills/request/SKILL.md'), join(root, 'SKILL.md'))
+  planningRecords('_artifacts')
+  write('_artifacts/skill_tree.yaml', 'skills: [{path: SKILL.md}]\n')
   const report = createReview(root)
   expect(report.items[0]?.path).toBe('SKILL.md')
   expect(Object.keys(report.items[0]!.snapshot)).toContain('SKILL.md')
@@ -384,6 +406,11 @@ it.each(['skills', '.agents/skills', 'knowledge/network'])(
       '---\nname: task\nsources: [src/index.ts]\n---\nTask\n',
     )
     write('packages/client/src/index.ts', 'public API\n')
+    planningRecords('_artifacts')
+    write(
+      '_artifacts/skill_tree.yaml',
+      `skills: [{package: packages/client, path: ${skillRoot}/task/SKILL.md}]\n`,
+    )
     const item = createReview(root).items.find(
       (entry) => entry.kind === 'skill',
     )!

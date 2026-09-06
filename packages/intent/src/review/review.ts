@@ -417,7 +417,49 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       problems,
     })
   }
-  const skillFiles = files.filter((path) => basename(path) === 'SKILL.md')
+  const artifactNames = ['domain_map.yaml', 'skill_spec.md', 'skill_tree.yaml']
+  const existingArtifactDirs = sorted([
+    ...files
+      .filter((path) => artifactNames.includes(basename(path)))
+      .map((path) => dirname(path)),
+    ...Object.keys(state?.items ?? {})
+      .filter((id) => id.startsWith('planning:'))
+      .map((id) => id.slice('planning:'.length)),
+  ])
+  const customRoots = existingArtifactDirs
+    .filter((dir) => basename(dir) === '_artifacts')
+    .map((dir) => dirname(dir))
+    .filter((dir) => dir !== '.' && !files.includes(`${dir}/package.json`))
+  const declaredSkills = new Set<string>()
+  for (const dir of existingArtifactDirs) {
+    try {
+      const tree: unknown = parseYaml(
+        readFileSync(
+          safePath(root, join(dir, 'skill_tree.yaml').replaceAll('\\', '/')),
+          'utf8',
+        ),
+      )
+      if (!isObject(tree) || !Array.isArray(tree.skills)) continue
+      for (const entry of tree.skills) {
+        if (!isObject(entry) || typeof entry.path !== 'string') continue
+        declaredSkills.add(
+          typeof entry.package === 'string'
+            ? `${entry.package}/${entry.path}`
+            : entry.path,
+        )
+      }
+    } catch {
+      // Missing or invalid trees remain unresolved in planning validation below.
+    }
+  }
+  const skillFiles = files.filter(
+    (path) =>
+      basename(path) === 'SKILL.md' &&
+      (/(^|\/)skills\//.test(path) ||
+        customRoots.some((dir) => path.startsWith(`${dir}/`)) ||
+        declaredSkills.has(path) ||
+        state?.items[`skill:${path}`]),
+  )
   for (const file of skillFiles) {
     const problems: Array<string> = []
     const skillDir = dirname(file)
@@ -475,15 +517,6 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     for (const path of [...sourceFiles, ...guidanceFiles]) covered.add(path)
     add('skill', file, [...sourceFiles, ...guidanceFiles], problems)
   }
-  const artifactNames = ['domain_map.yaml', 'skill_spec.md', 'skill_tree.yaml']
-  const existingArtifactDirs = sorted([
-    ...files
-      .filter((path) => artifactNames.includes(basename(path)))
-      .map((path) => dirname(path)),
-    ...Object.keys(state?.items ?? {})
-      .filter((id) => id.startsWith('planning:'))
-      .map((id) => id.slice('planning:'.length)),
-  ])
   const hasMaintainerGuidance = [
     'AGENTS.md',
     'CLAUDE.md',
