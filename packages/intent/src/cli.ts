@@ -202,6 +202,19 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
     )
     .option('--path <path>', 'SKILL.md path, relative to the owning package')
     .option('--domain <slug>', 'Domain for a new skill')
+    .option(
+      '--distribution <mode>',
+      'Repository distribution: repo for selected public skills, none to opt out',
+    )
+    .option(
+      '--repository <owner/repo>',
+      'GitHub repository for skill distribution',
+    )
+    .option('--plugin-name <name>', 'Name for the generated skill plugin')
+    .option(
+      '--skill <name>',
+      'Skill to distribute from the repository; repeat to select more',
+    )
     .option('--description <text>', 'Activation description for a new skill')
     .option(
       '--source <path>',
