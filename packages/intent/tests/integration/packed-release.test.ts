@@ -116,7 +116,7 @@ describe('packed release', () => {
     expect(result.status, result.stderr).toBe(0)
   })
 
-  it('resolves meta and scaffold paths from the extracted package', () => {
+  it('resolves authoring procedures from the extracted package', () => {
     for (const name of [
       'domain-discovery',
       'generate-skill',
@@ -143,34 +143,10 @@ describe('packed release', () => {
         expect(statSync(target).isFile(), link).toBe(true)
       }
     }
-    const entries = readdirSync(cwd, { recursive: true, encoding: 'utf8' })
-    const originals = entries
-      .filter((entry) => statSync(join(cwd, entry)).isFile())
-      .map((entry) => [entry, readFileSync(join(cwd, entry))] as const)
-    const scaffold = run(['scaffold'])
-    expect(scaffold.status, scaffold.stderr).toBe(0)
-    expect(scaffold.stderr).toBe('')
-    expect(scaffold.stdout).toContain(
-      join(installedRoot, 'meta', 'domain-discovery', 'SKILL.md'),
+    expect(run(['scaffold']).status).toBe(1)
+    expect(run(['maintainer', '--help']).stdout).toContain(
+      'setup|add|status|sync|review|check',
     )
-    expect(scaffold.stdout).toContain(
-      join(installedRoot, 'meta', 'tree-generator', 'SKILL.md'),
-    )
-    expect(scaffold.stdout).toContain(
-      join(installedRoot, 'meta', 'generate-skill', 'SKILL.md'),
-    )
-    const entryPaths: Array<string> = markdownLinkExtractor(scaffold.stdout)
-    expect(entryPaths).toEqual(
-      ['generate-skill', 'domain-discovery', 'tree-generator'].map((name) =>
-        join(installedRoot, 'meta', name, 'SKILL.md'),
-      ),
-    )
-    expect(readdirSync(cwd, { recursive: true, encoding: 'utf8' })).toEqual(
-      entries,
-    )
-    for (const [entry, content] of originals) {
-      expect(readFileSync(join(cwd, entry))).toEqual(content)
-    }
   })
 
   it('keeps nested authoring references usable within the extracted package', () => {
@@ -232,6 +208,66 @@ describe('packed release', () => {
         '# Retry policy\n',
       )
     }
+  })
+
+  it('sets up and registers a skill through the packed CLI and includes it in the owning npm package', () => {
+    execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], { cwd })
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'core.fsmonitor=false',
+        '-c',
+        'user.name=Fixture',
+        '-c',
+        'user.email=fixture@example.invalid',
+        'commit',
+        '--allow-empty',
+        '-qm',
+        'fixture',
+      ],
+      { cwd },
+    )
+    writeFileSync(
+      join(cwd, 'package.json'),
+      '{"name":"consumer","version":"1.0.0","files":["dist"]}\n',
+    )
+    mkdirSync(join(cwd, 'dist'))
+    writeFileSync(
+      join(cwd, 'dist', 'index.js'),
+      'export const query = () => 1\n',
+    )
+    const setup = run(['maintainer', 'setup'])
+    expect(setup.status, setup.stderr).toBe(0)
+    const added = run([
+      'maintainer',
+      'add',
+      'query',
+      '--domain',
+      'queries',
+      '--description',
+      'Use when querying with Library.',
+      '--source',
+      'dist/index.js',
+    ])
+    expect(added.status, added.stderr).toBe(0)
+    const synced = run(['maintainer', 'sync'])
+    expect(synced.status, synced.stderr).toBe(0)
+    expect(run(['maintainer', 'check']).status).toBe(1)
+    const packed = JSON.parse(
+      execFileSync('npm', ['pack', '--dry-run', '--ignore-scripts', '--json'], {
+        cwd,
+        encoding: 'utf8',
+        timeout,
+        env: { ...process.env, npm_config_cache: join(root, 'npm-cache') },
+      }),
+    )
+    expect(packed[0].files.map((file: { path: string }) => file.path)).toEqual(
+      expect.arrayContaining(['skills/query/SKILL.md', 'dist/index.js']),
+    )
+    expect(
+      packed[0].files.map((file: { path: string }) => file.path),
+    ).not.toContain('skills/_artifacts/skill_spec.md')
   })
 
   it('validates a manually authored skill without maintainer setup', () => {
@@ -527,5 +563,6 @@ Existing fixture guidance, pending source review.
       writeFileSync(join(cwd, 'src/client.js'), 'export const attempts = 4\n')
       expect(run(['review', '--check']).status).toBe(1)
     },
+    timeout,
   )
 })

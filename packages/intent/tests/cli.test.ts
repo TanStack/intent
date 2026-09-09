@@ -1185,33 +1185,9 @@ describe('cli commands', () => {
     expect(content).not.toContain('@tanstack/local#local-skill')
   })
 
-  it('prints focused and full-library entry paths without changing the caller', async () => {
-    const root = mkdtempSync(join(realTmpdir, 'intent-scaffold-'))
-    tempDirs.push(root)
-    writeJson(join(root, 'package.json'), { name: 'authoring-fixture' })
-    const original = readFileSync(join(root, 'package.json'), 'utf8')
-    process.chdir(root)
-
-    const exitCode = await main(['scaffold'])
-    const output = String(logSpy.mock.calls[0]?.[0])
-
-    expect(exitCode).toBe(0)
-    expect(logSpy).toHaveBeenCalledTimes(1)
-    expect(errorSpy).not.toHaveBeenCalled()
-    expect(output.indexOf(join('generate-skill', 'SKILL.md'))).toBeLessThan(
-      output.indexOf(join('domain-discovery', 'SKILL.md')),
-    )
-    for (const name of [
-      'generate-skill',
-      'domain-discovery',
-      'tree-generator',
-    ]) {
-      const path = join(metaDir, name, 'SKILL.md')
-      expect(output).toContain(path)
-      expect(existsSync(path)).toBe(true)
-    }
-    expect(readdirSync(root)).toEqual(['package.json'])
-    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(original)
+  it('removes scaffold in favor of the maintainer workflow', async () => {
+    expect(await main(['scaffold'])).toBe(1)
+    expect(getHelpOutput()).toContain('maintainer')
   })
 
   it('updates package.json for skill publishing', async () => {

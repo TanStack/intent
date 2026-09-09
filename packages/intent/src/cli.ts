@@ -14,6 +14,7 @@ import type {
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
 import type { StaleCommandOptions } from './commands/stale.js'
+import type { MaintainerCommandOptions } from './commands/maintainer.js'
 import type { ReviewCommandOptions } from './commands/review.js'
 import type { ValidateCommandOptions } from './commands/validate.js'
 
@@ -186,15 +187,55 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
     )
 
   cli
-    .command('scaffold', 'Print focused skill authoring guidance')
-    .usage('scaffold')
-    .action(async () => {
-      const [{ getMetaDir }, { runScaffoldCommand }] = await Promise.all([
-        import('./commands/support.js'),
-        import('./commands/scaffold.js'),
-      ])
-      runScaffoldCommand(getMetaDir())
-    })
+    .command(
+      'maintainer <action> [name]',
+      'Set up, author, synchronize, and check library skills',
+    )
+    .usage('maintainer <setup|add|status|sync|review|check> [name] [options]')
+    .option(
+      '--artifacts <directory>',
+      'Established planning directory, relative to the repository root',
+    )
+    .option(
+      '--package <directory>',
+      'Owning package directory, relative to the repository root',
+    )
+    .option('--path <path>', 'SKILL.md path, relative to the owning package')
+    .option('--domain <slug>', 'Domain for a new skill')
+    .option('--description <text>', 'Activation description for a new skill')
+    .option(
+      '--source <path>',
+      'Source evidence path; repeat for multiple paths',
+    )
+    .option(
+      '--requires <name>',
+      'Prerequisite skill; repeat for multiple skills',
+    )
+    .option('--base <ref>', 'Git revision to review against')
+    .option('--json', 'Output status or review as JSON')
+    .option(
+      '--record <file>',
+      'Record outcomes from an annotated review report',
+    )
+    .example('maintainer setup')
+    .example(
+      'maintainer add caching --domain queries --description "Use when caching queries." --source "src/**"',
+    )
+    .example('maintainer status --json')
+    .example('maintainer sync')
+    .example('maintainer review --json')
+    .example('maintainer check --base origin/main')
+    .action(
+      async (
+        action: string,
+        name: string | undefined,
+        options: MaintainerCommandOptions,
+      ) => {
+        const { runMaintainerCommand } =
+          await import('./commands/maintainer.js')
+        await runMaintainerCommand(action, name, options)
+      },
+    )
 
   cli
     .command(

@@ -262,7 +262,7 @@ export async function runInstallCommand(
       `Maintainer guidance: ${result.status} ${formatTargetPath(result.targetPath)}.`,
     )
     console.log(
-      'Your agent can now discover skill authoring and maintenance from the repository instructions.',
+      'Maintainer instructions are installed. Run intent maintainer setup to initialize the command workflow.',
     )
     return
   }

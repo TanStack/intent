@@ -7,7 +7,7 @@
 # Triggers: pull requests, new release published, or
 # manual workflow_dispatch.
 #
-# intent-workflow-version: 4
+# intent-workflow-version: 5
 #
 # Template variables (replaced by `intent setup`):
 #   {{PACKAGE_LABEL}} — e.g. @tanstack/query or my-workspace workspace
@@ -46,12 +46,12 @@ jobs:
       - name: Validate skills
         run: intent validate --github-summary
 
-      - name: Check recorded source reviews
+      - name: Check maintainer workflow
         env:
           INTENT_REVIEW_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ -f .intent/review-state.json ] || grep -q -- '<!-- intent-maintainer:start -->' AGENTS.md CLAUDE.md .cursorrules .github/copilot-instructions.md 2>/dev/null; then
-            intent review --base "$INTENT_REVIEW_BASE" --check
+            intent maintainer check --base "$INTENT_REVIEW_BASE"
           fi
 
   review:
