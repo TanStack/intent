@@ -42,6 +42,12 @@ export interface ScanStats {
 
 export interface NodeModulesScanTarget {
   path: string | null
+  /**
+   * All node_modules roots to scan. The global scope can have several: pnpm 11
+   * installs each global package into its own isolated directory. `path` is
+   * kept as the first root for display/backwards compatibility.
+   */
+  paths?: Array<string>
   detected: boolean
   exists: boolean
   scanned: boolean

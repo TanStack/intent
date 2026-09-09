@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { createRequire } from 'node:module'
-import { join, sep } from 'node:path'
+import { delimiter, join, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
@@ -618,6 +618,99 @@ describe('scanForIntents', () => {
     expect(result.nodeModules.global.detected).toBe(true)
     expect(result.nodeModules.global.scanned).toBe(false)
     expect(result.packages).toEqual([])
+  })
+
+  it('discovers global packages across multiple pnpm-style isolated global roots', () => {
+    // pnpm 11 installs each global package into its own isolated directory:
+    // <global>/<dir>/node_modules/<pkg>, so there are several global roots.
+    const rootA = createDir(globalRoot, 'd74d-aaa', 'node_modules')
+    const rootB = createDir(globalRoot, 'd74d-bbb', 'node_modules')
+    process.env.INTENT_GLOBAL_NODE_MODULES = `${rootA}${delimiter}${rootB}`
+
+    const pkgDirA = createDir(rootA, '@tanstack', 'cli')
+    writeJson(join(pkgDirA, 'package.json'), {
+      name: '@tanstack/cli',
+      version: '0.70.0',
+      intent: { version: 1, repo: 'TanStack/cli', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(pkgDirA, 'skills', 'scaffolding'), {
+      name: 'scaffolding',
+      description: 'Global scaffolding skill',
+    })
+
+    const pkgDirB = createDir(rootB, 'other-cli')
+    writeJson(join(pkgDirB, 'package.json'), {
+      name: 'other-cli',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'example/other-cli', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(pkgDirB, 'skills', 'testing'), {
+      name: 'testing',
+      description: 'Global testing skill',
+    })
+
+    const result = scanForIntents(root, { scope: 'global' })
+
+    expect(result.nodeModules.global.detected).toBe(true)
+    expect(result.nodeModules.global.exists).toBe(true)
+    expect(result.nodeModules.global.scanned).toBe(true)
+    expect(result.nodeModules.global.paths).toEqual([rootA, rootB])
+    expect(result.nodeModules.global.path).toBe(rootA)
+    expect(result.packages.map((pkg) => pkg.name).sort()).toEqual([
+      '@tanstack/cli',
+      'other-cli',
+    ])
+    expect(result.packages.every((pkg) => pkg.source === 'global')).toBe(true)
+    expect(result.stats.packageJsonReadCount).toBeGreaterThan(0)
+  })
+
+  it('discovers global packages in an npm-style single global root', () => {
+    // npm (and pnpm <= 10) keep one global node_modules directory.
+    process.env.INTENT_GLOBAL_NODE_MODULES = globalRoot
+
+    const pkgDir = createDir(globalRoot, '@tanstack', 'cli')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/cli',
+      version: '0.70.0',
+      intent: { version: 1, repo: 'TanStack/cli', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(pkgDir, 'skills', 'scaffolding'), {
+      name: 'scaffolding',
+      description: 'Global scaffolding skill',
+    })
+
+    const result = scanForIntents(root, { scope: 'global' })
+
+    expect(result.nodeModules.global.paths).toEqual([globalRoot])
+    expect(result.nodeModules.global.scanned).toBe(true)
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('@tanstack/cli')
+    expect(result.packages[0]!.source).toBe('global')
+  })
+
+  it('dedupes global roots that alias the same directory', () => {
+    // A shared pnpm store can expose the same node_modules under two paths.
+    const realRoot = createDir(globalRoot, 'd74d-aaa', 'node_modules')
+    const aliasRoot = join(globalRoot, 'alias-node-modules')
+    symlinkSync(realRoot, aliasRoot, 'dir')
+    process.env.INTENT_GLOBAL_NODE_MODULES = `${realRoot}${delimiter}${aliasRoot}`
+
+    const pkgDir = createDir(realRoot, '@tanstack', 'cli')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@tanstack/cli',
+      version: '0.70.0',
+      intent: { version: 1, repo: 'TanStack/cli', docs: 'docs/' },
+    })
+    writeSkillMd(createDir(pkgDir, 'skills', 'scaffolding'), {
+      name: 'scaffolding',
+      description: 'Global scaffolding skill',
+    })
+
+    const result = scanForIntents(root, { scope: 'global' })
+
+    expect(result.nodeModules.global.paths).toEqual([realRoot, aliasRoot])
+    expect(result.packages).toHaveLength(1)
+    expect(result.packages[0]!.name).toBe('@tanstack/cli')
   })
 
   it('chooses the highest version when duplicate package names exist at the same depth', () => {
