@@ -371,7 +371,10 @@ export function buildMaintainerGuidanceBlock(
   packageManager: ScanResult['packageManager'] = 'unknown',
 ): IntentSkillsBlockResult {
   const command = formatIntentCommand(packageManager, 'meta generate-skill')
-  const reviewCommand = formatIntentCommand(packageManager, 'review --json')
+  const reviewCommand = formatIntentCommand(
+    packageManager,
+    'maintainer review --json',
+  )
   return {
     block: [
       '<!-- intent-maintainer:start -->',
@@ -382,6 +385,7 @@ export function buildMaintainerGuidanceBlock(
       `Before handing off a skill batch or library change, run \`${reviewCommand}\`. Follow the maintainer procedure to update affected guidance, run task checks, and record completed review outcomes. Report an evidence-backed no-op or missing evidence explicitly.`,
       'Create and incrementally maintain domain_map.yaml, skill_spec.md, and skill_tree.yaml in the established artifact location for every skill batch. Preserve prior tasks, maintainer decisions, and remaining work.',
       'Keep maintainer decisions and changes in the repository; do not require the user to repeat the procedure in later sessions.',
+      'Use intent maintainer setup to initialize missing records, maintainer add to register skills, maintainer status to identify work, and maintainer sync to update generated metadata. Finish with intent maintainer check.',
       '<!-- intent-maintainer:end -->',
       '',
     ].join('\n'),

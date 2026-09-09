@@ -75,7 +75,7 @@ it('runs the PR gate for maintainer instructions before any review state exists'
     jobs: { validate: { steps: Array<{ name: string; run?: string }> } }
   }
   const script = template.jobs.validate.steps.find(
-    (step) => step.name === 'Check recorded source reviews',
+    (step) => step.name === 'Check maintainer workflow',
   )!.run!
   mkdirSync('bin')
   writeFileSync(
@@ -96,7 +96,7 @@ it('runs the PR gate for maintainer instructions before any review state exists'
   writeFileSync('CLAUDE.md', '<!-- intent-maintainer:start -->\n')
   execFileSync('bash', ['-c', script], options)
   expect(readFileSync('checked-args', 'utf8')).toBe(
-    'review\n--base\nfixture-base\n--check\n',
+    'maintainer\ncheck\n--base\nfixture-base\n',
   )
   rmSync('CLAUDE.md')
   rmSync('checked-args')
