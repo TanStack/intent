@@ -4,6 +4,7 @@ import { applyEdits, modify, parse } from 'jsonc-parser'
 import { resolveProjectContext } from '../core/project-context.js'
 import { parseFrontmatter } from '../shared/utils.js'
 import { stringList } from './add.js'
+import { planDistribution } from './distribution.js'
 import {
   authoringMarker,
   isObject,
@@ -202,5 +203,8 @@ export function planMaintainerSync(project: MaintainerProject) {
   const spec = readFileSync(recordPath(project, 'skill_spec.md'), 'utf8')
   if (!spec.trim() || spec.includes(authoringMarker))
     problems.push('skill_spec.md still needs authored coverage and decisions.')
-  return { changes, problems, skills }
+  const distribution = planDistribution(project)
+  changes.push(...distribution.changes)
+  problems.push(...distribution.problems)
+  return { changes, problems, skills, distribution }
 }

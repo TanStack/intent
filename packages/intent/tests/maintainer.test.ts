@@ -57,7 +57,7 @@ beforeEach(() => {
 
 it('checks the authored workflow, rejects stale outcomes, and reopens after source edits', async () => {
   write('src/query.ts', 'export const query = () => 1\n')
-  expect(await main(['maintainer', 'setup'])).toBe(0)
+  expect(await main(['maintainer', 'setup', '--distribution', 'none'])).toBe(0)
   expect(
     await main([
       'maintainer',

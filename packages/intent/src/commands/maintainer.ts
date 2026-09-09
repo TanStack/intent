@@ -8,6 +8,11 @@ import { addSkill } from '../maintainer/add.js'
 import { planMaintainerSync } from '../maintainer/sync.js'
 import { withMaintainerLock, writeChanges } from '../maintainer/files.js'
 import { createReview } from '../review/review.js'
+import {
+  configureDistribution,
+  distributionChoice,
+  readDistribution,
+} from '../maintainer/distribution.js'
 import { detectIntentCommandPackageManager } from '../shared/command-runner.js'
 import {
   buildMaintainerGuidanceBlock,
@@ -15,8 +20,9 @@ import {
 } from './install/guidance.js'
 import { runReviewCommand } from './review.js'
 import { runValidateCommand } from './validate.js'
+import type { DistributionOptions } from '../maintainer/distribution.js'
 
-export interface MaintainerCommandOptions {
+export interface MaintainerCommandOptions extends DistributionOptions {
   artifacts?: string
   package?: string
   path?: string
@@ -35,7 +41,7 @@ export async function runMaintainerCommand(
   options: MaintainerCommandOptions,
 ): Promise<void> {
   const allowed: Record<string, Array<string>> = {
-    setup: ['artifacts'],
+    setup: ['artifacts', 'distribution', 'repository', 'pluginName', 'skill'],
     add: [
       'artifacts',
       'package',
@@ -69,6 +75,7 @@ export async function runMaintainerCommand(
     await withMaintainerLock(project.root, () => {
       if (action === 'setup') {
         const created = setupRecords(project)
+        configureDistribution(project, options)
         writeIntentSkillsBlock({
           ...buildMaintainerGuidanceBlock(
             detectIntentCommandPackageManager(project.root),
@@ -83,6 +90,11 @@ export async function runMaintainerCommand(
         console.log(
           'Next: intent maintainer add <name> --domain <domain> --description <activation> --source <path>. Use --package <directory> for a workspace package. Use intent meta generate-skill for the authoring procedure.',
         )
+        const distribution = readDistribution(project)
+        if (!distribution) console.log(distributionChoice)
+        console.log(
+          `Repository distribution: ${distribution?.mode ?? 'unconfigured'}. Run maintainer sync after authoring to update export metadata.`,
+        )
       } else if (action === 'add') {
         console.log(`Registered ${addSkill(project, name, options)}.`)
         console.log(
@@ -94,6 +106,7 @@ export async function runMaintainerCommand(
         console.log(`Synchronized ${plan.changes.length} file(s).`)
         for (const problem of plan.problems)
           console.log(`Remaining: ${problem}`)
+        for (const command of plan.distribution.commands) console.log(command)
       }
     })
     return
@@ -109,6 +122,10 @@ export async function runMaintainerCommand(
       relative(project.root, change.path),
     ),
     problems: plan.problems,
+    distribution: {
+      mode: plan.distribution.mode,
+      commands: plan.distribution.commands,
+    },
     review,
   }
   if (options.json) console.log(JSON.stringify(status, null, 2))
