@@ -16,61 +16,61 @@ For repository-wide maintenance, enable the maintainer workflow once:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest install --maintainer
-solid: @tanstack/intent@latest install --maintainer
-vue: @tanstack/intent@latest install --maintainer
-svelte: @tanstack/intent@latest install --maintainer
-angular: @tanstack/intent@latest install --maintainer
-lit: @tanstack/intent@latest install --maintainer
+react: @tanstack/intent@latest maintainer setup
+solid: @tanstack/intent@latest maintainer setup
+vue: @tanstack/intent@latest maintainer setup
+svelte: @tanstack/intent@latest maintainer setup
+angular: @tanstack/intent@latest maintainer setup
+lit: @tanstack/intent@latest maintainer setup
 
 <!-- ::end:tabs -->
 
-Then ask your coding agent for a useful batch of developer tasks. The installed instructions load the focused authoring procedure, maintain the shared planning record, and run source-aware review before handoff.
+Register agreed skills with `maintainer add`, then ask your coding agent to author the developer tasks they cover. The installed instructions load the focused authoring procedure, maintain the shared planning record, and run source-aware review before handoff.
 
 For a one-off authoring session, tell the agent to run:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest scaffold
-solid: @tanstack/intent@latest scaffold
-vue: @tanstack/intent@latest scaffold
-svelte: @tanstack/intent@latest scaffold
-angular: @tanstack/intent@latest scaffold
-lit: @tanstack/intent@latest scaffold
+react: @tanstack/intent@latest meta generate-skill
+solid: @tanstack/intent@latest meta generate-skill
+vue: @tanstack/intent@latest meta generate-skill
+svelte: @tanstack/intent@latest meta generate-skill
+angular: @tanstack/intent@latest meta generate-skill
+lit: @tanstack/intent@latest meta generate-skill
 
 <!-- ::end:tabs -->
 
-Give the agent a developer task or concrete code/docs change. The focused procedure creates or updates the relevant guidance and validates it for review; full-library discovery remains available when explicitly requested. Skills use the owning package's `skills/` directory or its existing custom root. See the [maintainer quick start](./getting-started/quick-start-maintainers).
+Give the agent a developer task or concrete code/docs change. The focused procedure creates or updates the relevant guidance and validates it for review; full-library discovery remains available when explicitly requested. Skills use the owning package's `skills/` directory or its existing custom root. Record the [repository distribution choice](./cli/intent-maintainer#choose-repository-distribution) during setup: select public skills or use `maintainer setup --distribution none` for the package-only workflow. See the [maintainer quick start](./getting-started/quick-start-maintainers).
 
-### 2. Validate
+### 2. Synchronize metadata
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest validate
-solid: @tanstack/intent@latest validate
-vue: @tanstack/intent@latest validate
-svelte: @tanstack/intent@latest validate
-angular: @tanstack/intent@latest validate
-lit: @tanstack/intent@latest validate
+react: @tanstack/intent@latest maintainer sync
+solid: @tanstack/intent@latest maintainer sync
+vue: @tanstack/intent@latest maintainer sync
+svelte: @tanstack/intent@latest maintainer sync
+angular: @tanstack/intent@latest maintainer sync
+lit: @tanstack/intent@latest maintainer sync
 
 <!-- ::end:tabs -->
 
-Catches structural issues in skill frontmatter and planning artifacts, and reports package configuration warnings before you publish.
+This adds the `tanstack-intent` keyword and registered skill directories to existing `files` allowlists. It preserves npm’s default contents when no allowlist exists. It also synchronizes selected repository exports. Review the diff and inspect the packed archive through the library’s release checks.
 
-### 3. Configure the package
+### 3. Review and check
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest edit-package-json
-solid: @tanstack/intent@latest edit-package-json
-vue: @tanstack/intent@latest edit-package-json
-svelte: @tanstack/intent@latest edit-package-json
-angular: @tanstack/intent@latest edit-package-json
-lit: @tanstack/intent@latest edit-package-json
+react: @tanstack/intent@latest maintainer review --json
+solid: @tanstack/intent@latest maintainer review --json
+vue: @tanstack/intent@latest maintainer review --json
+svelte: @tanstack/intent@latest maintainer review --json
+angular: @tanstack/intent@latest maintainer review --json
+lit: @tanstack/intent@latest maintainer review --json
 
 <!-- ::end:tabs -->
 
-This adds the `tanstack-intent` keyword used for registry discovery and the `files` entries needed to publish `skills/`. It excludes `skills/_artifacts` from a standalone package; monorepo artifacts live at the repository root, outside package tarballs. Review the resulting `package.json` diff before keeping it.
+Save the report under `.intent/`, assess the pending items, and annotate completed outcomes with their reasons and actual evidence. Record the report with `intent maintainer review --record <report.json>`, then run `intent maintainer check`. This checks skill structure, registration, generated files, and pending reviews together. See the [source-review reference](./cli/intent-review) for report fields and recording.
 
 ### 4. Publish
 
@@ -78,18 +78,20 @@ Publish through your library's normal release process.
 
 The registry discovers your package on its next sync cycle. Your skills, version history, and download stats appear on the registry automatically.
 
+A passing structural check alone does not establish that the consumer can complete the task. Include that task evidence in the library's release review.
+
 ## Keeping skills current
 
-Use `review` and `stale` as separate checks as the library changes. `setup` optionally installs their CI workflow:
+Use `maintainer review` and `stale` as separate checks as the library changes. `setup` optionally installs their CI workflow:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest review
-solid: @tanstack/intent@latest review
-vue: @tanstack/intent@latest review
-svelte: @tanstack/intent@latest review
-angular: @tanstack/intent@latest review
-lit: @tanstack/intent@latest review
+react: @tanstack/intent@latest maintainer review
+solid: @tanstack/intent@latest maintainer review
+vue: @tanstack/intent@latest maintainer review
+svelte: @tanstack/intent@latest maintainer review
+angular: @tanstack/intent@latest maintainer review
+lit: @tanstack/intent@latest maintainer review
 
 <!-- ::end:tabs -->
 
@@ -122,7 +124,7 @@ lit: @tanstack/intent@latest setup
 Copies the generated CI workflow into your repository. Pull requests validate skills and check recorded source reviews when maintainer guidance or review state exists. Release and manual runs use recorded review state when available, with conservative `stale` signals as the fallback.
 
 > [!NOTE]
-> Authoring, package publishing, and consumer setup are separate. `install --maintainer` writes repository instructions; `edit-package-json` configures the library package; consumers run their own `intent install` after installing the published library.
+> Maintainers use `maintainer setup`, `add`, `status`, `sync`, `review`, and `check` throughout the workflow. Consumers choose their installer: Intent for installed package guidance, or the generated GitHub/plugin commands for selected repository skills. See [repository distribution](./cli/intent-maintainer#choose-repository-distribution).
 
 ## Requesting a library
 

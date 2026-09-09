@@ -116,5 +116,5 @@ Warnings are informational; they are printed on both pass and fail paths.
 
 ## Related
 
-- [intent scaffold](./intent-scaffold)
+- [intent maintainer](./intent-maintainer)
 - [setup commands](./intent-setup)

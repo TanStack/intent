@@ -33,7 +33,7 @@ lit: @tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] 
 ## Behavior
 
 > [!NOTE]
-> `list` is the consumer catalog for skills shipped by project and workspace dependencies. Library maintainers load Intent's packaged authoring procedures through `intent meta`, `intent scaffold`, or the installed maintainer block.
+> `list` is the consumer catalog for skills shipped by project and workspace dependencies. Library maintainers load Intent's packaged authoring procedures through `intent meta` or the installed maintainer block; `intent maintainer` handles setup, registration, synchronization, and checks.
 
 ### Default list
 

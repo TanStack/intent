@@ -5,6 +5,8 @@ id: intent-review
 
 `intent review` shows which library skills and planning records need review after source changes. Completed reviews are remembered until their source or guidance changes again.
 
+For the full maintainer pipeline, use [`intent maintainer review`](./intent-maintainer) with `--base`, `--json`, or `--record`. It uses the same source-review implementation and report format described here. `intent maintainer check` combines review with registration, skill validation, distribution, and generated-file checks. The standalone command remains available for review-only checks and generated workflow reminders.
+
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
 ```text
@@ -18,7 +20,7 @@ lit: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--r
 
 <!-- ::end:tabs -->
 
-For the normal coding-agent workflow, enable [maintainer installation](./intent-install#maintainer-workflow) once. The installed guidance instructs the agent to review guidance and maintain the planning documents before handoff.
+For the normal coding-agent workflow, run [maintainer setup](./intent-maintainer#setup) once. The installed guidance instructs the agent to review guidance and maintain the planning documents before handoff.
 
 ## Quick start
 
@@ -113,15 +115,15 @@ When the previous stored baseline is unavailable, recording this fully resolved 
 
 ### Source mappings
 
-Discovery covers first-party `skills/**/SKILL.md` files in the repository and its packages. It excludes `node_modules`, even without a Git ignore rule.
+Discovery covers first-party `skills/**/SKILL.md` files in the repository and its packages, custom roots containing `_artifacts/`, exact paths declared in the skill tree, and previously reviewed skill paths. An unrelated `SKILL.md` elsewhere does not automatically become a library skill. Review excludes `node_modules`, even without a Git ignore rule.
 
 | Source entry | Resolution |
 | --- | --- |
-| `src/request.ts` | Relative to the package containing `skills/`. |
+| `src/request.ts` | Relative to the owning package, including skills in custom directories. |
 | `owner/repository:src/request.ts` | Relative to the Git root; the repository identity must match the origin or root package metadata. |
 | `src/**/*.ts` | Git glob syntax: `*`, `?`, character classes, and `**`. |
 
-Brace expansion and extglobs are unsupported. Custom skill roots, ignored files, submodules, external source repositories, and symbolic links require manual review. Missing or unsupported mappings remain unresolved.
+Brace expansion and extglobs are unsupported. Ignored files, submodules, external source repositories, and symbolic links require manual review. Missing or unsupported mappings remain unresolved.
 
 ### Required planning documents
 
@@ -133,9 +135,9 @@ The maintainer workflow keeps a cumulative record across batches:
 | `skill_spec.md` | Readable coverage, maintainer decisions, batch history, and remaining work. |
 | `skill_tree.yaml` | Skill identities, paths, package placement, prerequisites, and source mappings. |
 
-Review uses an existing `_artifacts/` or `skills/_artifacts/` location. Without one, installed maintainer guidance requires `_artifacts/` at a monorepo root or `skills/_artifacts/` for a standalone library. Previously recorded locations remain required if their files are deleted.
+Review finds existing planning locations from these filenames, including custom directories. Without one, installed maintainer guidance requires `_artifacts/` at a monorepo root or `skills/_artifacts/` for a standalone library. Previously recorded locations remain required if their files are deleted.
 
-All three files must be present, nonempty, readable, and visible to Git. Each YAML document must contain an object with a `skills` array. Custom artifact locations require manual checks.
+All three files must be present, nonempty, readable, and visible to Git. Each YAML document must contain an object with a `skills` array. Missing or invalid records remain unresolved.
 
 The planning snapshot includes the documents and the discovered skill/source evidence. Changes reopen planning review without reopening an otherwise unchanged individual skill. The check establishes file presence, YAML shape, and reviewed content hashes; the agent and maintainer still assess whether the written record is accurate and complete.
 
@@ -227,11 +229,11 @@ Text output shows the pending count and up to 20 items, with changed paths, unre
 
 ## Automated checks
 
-The optional version 4 [setup workflow](./intent-setup) connects review to PRs and releases:
+The optional version 5 [setup workflow](./intent-setup) connects review to PRs and releases:
 
 | Trigger | Check |
 | --- | --- |
-| Pull request with maintainer guidance or review state | `review --base <PR-base-sha> --check` |
+| Pull request with maintainer guidance or review state | `maintainer check --base <PR-base-sha>` |
 | Release/manual run with review state | `review --github-review` |
 | Release/manual run without review state | Existing `stale --github-review` fallback |
 

@@ -3,7 +3,7 @@ title: setup commands
 id: intent-setup
 ---
 
-Intent exposes publishing setup as two commands.
+For the complete authoring workflow, use [`intent maintainer setup` and `intent maintainer sync`](./intent-maintainer). These existing commands remain available for package configuration and optional CI installation.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -45,7 +45,7 @@ lit: @tanstack/intent@latest setup
 - Skips files that already exist at the destination
 
 > [!NOTE]
-> `setup` installs the generated repository workflow, not Intent's maintainer or consumer guidance. Run `install --maintainer` separately for persistent authoring and source-review instructions.
+> `setup` installs the generated repository workflow, not Intent's maintainer or consumer guidance. Run `maintainer setup` for persistent instructions and cumulative records.
 
 ## Required `files` entries
 
@@ -63,7 +63,7 @@ lit: @tanstack/intent@latest setup
 
 - `setup` skips existing files
 - On every pull request, `check-skills.yml` runs structural validation
-- On pull requests with `.intent/review-state.json` or an `intent-maintainer` block, it also runs `intent review --base <pull-request-base-sha> --check`
+- On pull requests with `.intent/review-state.json` or an `intent-maintainer` block, it also runs `intent maintainer check --base <pull-request-base-sha>`
 - On release and manual runs with review state, it runs `intent review --github-review`; without review state, it falls back to `intent stale --github-review`
 - Release and manual runs create or update one review-reminder pull request only when the selected check reports review work
 - To adopt updated workflow templates, delete or move the old generated workflow files first, then rerun `setup`
@@ -75,5 +75,5 @@ lit: @tanstack/intent@latest setup
 - [intent validate](./intent-validate)
 - [intent review](./intent-review)
 - [intent stale](./intent-stale)
-- [intent scaffold](./intent-scaffold)
+- [intent maintainer](./intent-maintainer)
 - [Maintainer quick start](../getting-started/quick-start-maintainers)

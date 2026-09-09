@@ -32,9 +32,9 @@ Intent provides tooling for two workflows:
 
 | Stage | Who runs it | Result |
 | --- | --- | --- |
-| Maintainer enablement | Library maintainer | `install --maintainer` writes an `intent-maintainer` block to repository agent instructions. |
-| Authoring and maintenance | Library maintainer and coding agent | `generate-skill` creates or updates a focused batch; `review` records evidence-backed outcomes for later source changes. |
-| Package publishing | Library release process | `edit-package-json` includes skills in the package and `setup` optionally adds the generated GitHub Actions workflow. |
+| Maintainer enablement | Library maintainer | `maintainer setup` creates missing records and installs persistent authoring instructions. |
+| Authoring and maintenance | Library maintainer and coding agent | `meta generate-skill` guides a focused batch; `maintainer review` records evidence-backed outcomes for later source changes. |
+| Package publishing | Library release process | `maintainer sync` updates package and selected repository exports; `setup` optionally adds CI. |
 | Consumer setup | Developer using the published library | Consumer `install` configures permitted skill sources and skill-loading guidance; `list` and `load` use skills from installed dependencies. |
 
 > [!NOTE]
@@ -100,55 +100,43 @@ Loads the matching `SKILL.md` content for the installed package version. Pass `-
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest install --maintainer
-solid: @tanstack/intent@latest install --maintainer
-vue: @tanstack/intent@latest install --maintainer
-svelte: @tanstack/intent@latest install --maintainer
-angular: @tanstack/intent@latest install --maintainer
-lit: @tanstack/intent@latest install --maintainer
+react: @tanstack/intent@latest maintainer setup
+solid: @tanstack/intent@latest maintainer setup
+vue: @tanstack/intent@latest maintainer setup
+svelte: @tanstack/intent@latest maintainer setup
+angular: @tanstack/intent@latest maintainer setup
+lit: @tanstack/intent@latest maintainer setup
 
 <!-- ::end:tabs -->
 
-Adds repository instructions that route substantial library changes through the packaged authoring procedure and `intent review`. It does not configure consumer permissions, hooks, publishing, or CI. See the [maintainer quick start](./getting-started/quick-start-maintainers).
+Creates missing planning records and installs the authoring procedure in repository instructions. It explains the distribution choice and remembers selected public skills or an opt-out. Skills stay in their owning packages. See the [maintainer quick start](./getting-started/quick-start-maintainers).
+
+Use `maintainer add` to create or register an agreed skill, then author its guidance and task evidence with your coding agent. During later library work:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest scaffold
-solid: @tanstack/intent@latest scaffold
-vue: @tanstack/intent@latest scaffold
-svelte: @tanstack/intent@latest scaffold
-angular: @tanstack/intent@latest scaffold
-lit: @tanstack/intent@latest scaffold
+react: @tanstack/intent@latest maintainer status
+react: @tanstack/intent@latest maintainer sync
+react: @tanstack/intent@latest maintainer review --json
+solid: @tanstack/intent@latest maintainer status
+solid: @tanstack/intent@latest maintainer sync
+solid: @tanstack/intent@latest maintainer review --json
+vue: @tanstack/intent@latest maintainer status
+vue: @tanstack/intent@latest maintainer sync
+vue: @tanstack/intent@latest maintainer review --json
+svelte: @tanstack/intent@latest maintainer status
+svelte: @tanstack/intent@latest maintainer sync
+svelte: @tanstack/intent@latest maintainer review --json
+angular: @tanstack/intent@latest maintainer status
+angular: @tanstack/intent@latest maintainer sync
+angular: @tanstack/intent@latest maintainer review --json
+lit: @tanstack/intent@latest maintainer status
+lit: @tanstack/intent@latest maintainer sync
+lit: @tanstack/intent@latest maintainer review --json
 
 <!-- ::end:tabs -->
 
-Prints the focused authoring entry point for a current agent conversation without installing persistent maintainer instructions. Full-library discovery and its maintainer interviews remain available when explicitly requested.
-
-<!-- ::start:tabs variant="package-manager" mode="local-install" -->
-
-react: @tanstack/intent@latest review
-solid: @tanstack/intent@latest review
-vue: @tanstack/intent@latest review
-svelte: @tanstack/intent@latest review
-angular: @tanstack/intent@latest review
-lit: @tanstack/intent@latest review
-
-<!-- ::end:tabs -->
-
-Reports skills, planning records, and changed source areas that need review. Completed outcomes are recorded in `.intent/review-state.json` and reopen when their tracked content changes. The agent and maintainer supply the semantic decision and evidence.
-
-<!-- ::start:tabs variant="package-manager" mode="local-install" -->
-
-react: @tanstack/intent@latest validate
-solid: @tanstack/intent@latest validate
-vue: @tanstack/intent@latest validate
-svelte: @tanstack/intent@latest validate
-angular: @tanstack/intent@latest validate
-lit: @tanstack/intent@latest validate
-
-<!-- ::end:tabs -->
-
-Checks SKILL.md format rules, validates `domain_map.yaml`, `skill_spec.md`, and `skill_tree.yaml` when `<dir>/_artifacts` exists, and reports packaging warnings before publish.
+The commands identify work, align generated metadata, and prepare source-review evidence. Record justified outcomes with `maintainer review --record <report.json>` and finish with `maintainer check`. Content changes reopen review. The [maintainer command reference](./cli/intent-maintainer) covers the full workflow, package ownership, and consumer installer choices. Full-library research remains available through the meta-skills when requested.
 
 ### Staleness tracking
 
