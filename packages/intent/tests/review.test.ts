@@ -16,6 +16,9 @@ import { main } from '../src/cli.js'
 import { createReview, recordReview } from '../src/review/review.js'
 import type * as NodeFs from 'node:fs'
 
+// These tests run complete review lifecycles against real Git repositories.
+vi.setConfig({ testTimeout: 30_000 })
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   return { ...actual, renameSync: vi.fn(actual.renameSync) }
