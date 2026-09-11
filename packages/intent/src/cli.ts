@@ -197,7 +197,7 @@ function createCli(
       'Set up, author, synchronize, and check library skills',
     )
     .usage(
-      'maintainer <setup|adopt|add|status|sync|review|check> [name] [options]',
+      'maintainer <setup|adopt|add|status|sync|review|check|verify-package> [name] [options]',
     )
     .option(
       '--artifacts <directory>',
@@ -260,6 +260,9 @@ function createCli(
     .example('maintainer review --json')
     .example('maintainer review --interactive')
     .example('maintainer check --base origin/main')
+    .example(
+      'maintainer verify-package library.tgz --package packages/client --json',
+    )
     .action(
       async (
         action: string,

@@ -255,7 +255,7 @@ describe('packed release', () => {
     expect(synced.status, synced.stderr).toBe(0)
     expect(run(['maintainer', 'check']).status).toBe(1)
     const packed = JSON.parse(
-      execFileSync('npm', ['pack', '--dry-run', '--ignore-scripts', '--json'], {
+      execFileSync('npm', ['pack', '--ignore-scripts', '--json'], {
         cwd,
         encoding: 'utf8',
         timeout,
@@ -268,6 +268,17 @@ describe('packed release', () => {
     expect(
       packed[0].files.map((file: { path: string }) => file.path),
     ).not.toContain('skills/_artifacts/skill_spec.md')
+    const verified = run([
+      'maintainer',
+      'verify-package',
+      join(cwd, packed[0].filename),
+      '--json',
+    ])
+    expect(verified.status, verified.stderr).toBe(0)
+    expect(JSON.parse(verified.stdout)).toMatchObject({
+      valid: true,
+      skills: ['skills/query/SKILL.md'],
+    })
   })
 
   it('validates a manually authored skill without maintainer setup', () => {

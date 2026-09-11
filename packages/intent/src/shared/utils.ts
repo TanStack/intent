@@ -403,6 +403,12 @@ export function parseFrontmatter(
 ): Record<string, unknown> | null {
   const content = readFrontmatterRegion(filePath, fs)
   if (content === null) return null
+  return parseFrontmatterText(content)
+}
+
+export function parseFrontmatterText(
+  content: string,
+): Record<string, unknown> | null {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
   if (!match?.[1]) return null
   try {

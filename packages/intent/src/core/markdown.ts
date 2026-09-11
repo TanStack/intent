@@ -197,11 +197,11 @@ function rewriteMarkdownDestination({
 }
 
 function rewriteMarkdownLineDestinations({
-  context,
   line,
+  rewrite,
 }: {
-  context: MarkdownDestinationRewriteContext
   line: string
+  rewrite: (destination: string) => string
 }): string {
   if (!line.includes('[')) return line
 
@@ -259,10 +259,7 @@ function rewriteMarkdownLineDestinations({
       continue
     }
 
-    const rewritten = rewriteMarkdownDestination({
-      context,
-      destination: destination.destination,
-    })
+    const rewritten = rewrite(destination.destination)
     output +=
       line.slice(linkStart, destination.destinationStart) +
       rewritten +
@@ -290,6 +287,24 @@ export function rewriteLoadedSkillMarkdownDestinations({
     skillDir: dirname(skillFilePath),
     rewrittenDestinations: new Map(),
   }
+  return mapMarkdownDestinations(content, (destination) =>
+    rewriteMarkdownDestination({ context, destination }),
+  )
+}
+
+export function collectMarkdownDestinations(content: string): Array<string> {
+  const destinations = new Set<string>()
+  mapMarkdownDestinations(content, (destination) => {
+    destinations.add(destination)
+    return destination
+  })
+  return [...destinations]
+}
+
+function mapMarkdownDestinations(
+  content: string,
+  rewrite: (destination: string) => string,
+): string {
   let inFence: '`' | '~' | null = null
   const parts = content.split(/(\r?\n)/)
   let output = ''
@@ -313,8 +328,8 @@ export function rewriteLoadedSkillMarkdownDestinations({
 
     output +=
       rewriteMarkdownLineDestinations({
-        context,
         line,
+        rewrite,
       }) + newline
   }
 

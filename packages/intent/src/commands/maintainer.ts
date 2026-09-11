@@ -71,12 +71,13 @@ export async function runMaintainerCommand(
     sync: ['artifacts'],
     review: ['base', 'json', 'record', 'interactive'],
     check: ['artifacts', 'base'],
+    'verify-package': ['artifacts', 'package', 'json'],
   }
   if (!allowed[action])
     fail(
-      `Unknown maintainer action: ${action}. Expected setup, adopt, add, status, sync, review, or check.`,
+      `Unknown maintainer action: ${action}. Expected setup, adopt, add, status, sync, review, check, or verify-package.`,
     )
-  if (name !== undefined && action !== 'add')
+  if (name !== undefined && !['add', 'verify-package'].includes(action))
     fail(`maintainer ${action} does not take a skill name.`)
   for (const key of Object.keys(options)) {
     if (key !== '--' && !allowed[action].includes(key))
@@ -104,6 +105,28 @@ export async function runMaintainerCommand(
     return
   }
   const project = resolveMaintainerProject(process.cwd(), options.artifacts)
+  if (action === 'verify-package') {
+    if (!name)
+      fail('Pass the package archive: maintainer verify-package <archive.tgz>.')
+    const { verifyPackageArchive } =
+      await import('../maintainer/verify-package.js')
+    const report = await verifyPackageArchive(project, name, options.package)
+    if (options.json) console.log(JSON.stringify(report, null, 2))
+    else {
+      console.log(
+        `${report.package.name}: ${report.skills.length} registered skill(s), ${report.problems.length} package problem(s).`,
+      )
+      for (const problem of report.problems)
+        console.log(
+          `  ${JSON.stringify(problem.file)}${problem.target ? ` -> ${JSON.stringify(problem.target)}` : ''}: ${problem.message}`,
+        )
+    }
+    if (!report.valid)
+      fail(
+        'Package verification failed. Fix the package contents and rebuild the archive.',
+      )
+    return
+  }
   if (action === 'adopt') {
     let input: unknown
     if (options.apply) {
