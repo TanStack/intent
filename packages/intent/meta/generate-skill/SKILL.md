@@ -1,7 +1,7 @@
 ---
 name: generate-skill
 description: >
-  Use when creating or extending library skill batches, updating guidance after library source or docs change, configuring repository skill distribution, or acting on an Intent review report, including when the maintainer asks only for the library change. For full-library discovery or taxonomy design, use domain-discovery; for generating an approved full-library tree, use tree-generator.
+  Use when creating, adopting, or extending library skill batches, updating guidance after library source or docs change, configuring repository skill distribution, or acting on an Intent review report, including when the maintainer asks only for the library change. For full-library discovery or taxonomy design, use domain-discovery; for generating an approved full-library tree, use tree-generator.
 metadata:
   purpose: >
     Author and maintain library skills when creating an initial skill batch, changing library source or docs, or acting on an Intent review report. Use the current task and source evidence to create useful guidance, verify it on representative tasks, and update affected skills.
