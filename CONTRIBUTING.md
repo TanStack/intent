@@ -30,26 +30,15 @@ Before proceeding with development, ensure you match one of the following criter
 - Fork this repository, we prefer the `feat-*` branch name style
 - Ensure you have `pnpm` installed
 - Install projects dependencies and linkages by running `pnpm install`
-- Auto-build and auto-test files as you edit by running `pnpm dev`
+- Auto-build files as you edit by running `pnpm dev`
+- Auto-test files as you edit by running `pnpm test:lib:dev` in a second terminal
 - Implement your changes and tests
-- To run examples, follow their individual directions. Usually this includes:
-  - cd into the example directory
-  - Do NOT install dependencies again or do any linking. Nx already handles this for you. Only run install from the project root.
-  - Starting the dev server with `pnpm dev` or `pnpm start` (from the example directory)
 - To test in your own projects:
   - Build/watch for changes with `pnpm build`/`pnpm dev`
 - Document your changes in the appropriate documentation website markdown pages
+- Run `pnpm test:lib` for the fast unit test loop
+- Run `pnpm build:all` before you run the integration tests in `packages/intent/tests/integration` directly. They run the built `dist/cli.mjs` against a local Verdaccio registry
 - Run `pnpm test` to ensure all tests pass before committing
 - Create a changeset (changelog entry) for your changes by running `pnpm changeset`
 - Commit your work and open a pull request
 - Submit PR for review
-
-## Adding a new example
-
-- Clone an existing example into the appropriate `examples` directory
-- Name it the example name in kebab-case
-- Update the new example's package.json to match the new example name and any other details
-- Check dependencies for unused packages
-- Install any additional packages to the example that you may need
-- Update the docs/config.json file to include the new example in the navigation sidebar
-- Commit the example eg. `docs: Add example-name`
