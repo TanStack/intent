@@ -224,6 +224,7 @@ function resolveFromPackageRoots(
     const scanned = scanIntentPackageAtRoot(packageRoot, {
       fallbackName: parsedUse.packageName,
       fsCache,
+      includeSkillMetadata: false,
       projectRoot: cwd,
       skillNameHint: parsedUse.skillName,
     })
