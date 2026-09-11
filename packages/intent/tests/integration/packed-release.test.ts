@@ -192,9 +192,17 @@ describe('packed release', () => {
       }
     }
     expect(run(['scaffold']).status).toBe(1)
-    expect(run(['maintainer', '--help']).stdout).toContain(
-      'setup|adopt|add|status|sync|review|check',
-    )
+    const overview = run(['maintainer', '--help']).stdout
+    for (const action of [
+      'setup',
+      'adopt',
+      'add',
+      'status',
+      'sync',
+      'review',
+      'check',
+    ])
+      expect(overview).toContain(`\n${action}: maintainer ${action}`)
   })
 
   it('keeps nested authoring references usable within the extracted package', () => {
