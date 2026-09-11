@@ -5,7 +5,7 @@
 ## ✅ Checklist
 
 - [ ] I have followed the steps in the [Contributing guide](https://github.com/TanStack/intent/blob/main/CONTRIBUTING.md).
-- [ ] I have tested this code locally with `pnpm run test:pr`.
+- [ ] I have tested this code locally with `pnpm run test:pr` (run `pnpm build:all` first).
 
 ## 🚀 Release Impact
 
