@@ -50,8 +50,8 @@ export function planAddSkills(
   initialChanges: Array<FileChange> = [],
 ) {
   const changes = [...initialChanges]
-  const entries = skillEntries(project, changes)
   const tree = readRecord(project, 'skill_tree.yaml', changes)
+  const entries = skillEntries(project, tree)
   const map = readRecord(project, 'domain_map.yaml', changes)
   const specPath = recordPath(project, 'skill_spec.md')
   const specChange = changes.find((change) => change.path === specPath)

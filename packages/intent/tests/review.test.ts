@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { main } from '../src/cli.js'
 import { createReview, recordReview } from '../src/review/review.js'
+import type * as NodeChildProcess from 'node:child_process'
 import type * as NodeFs from 'node:fs'
 
 // These tests run complete review lifecycles against real Git repositories.
@@ -21,7 +22,16 @@ vi.setConfig({ testTimeout: 30_000 })
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
-  return { ...actual, renameSync: vi.fn(actual.renameSync) }
+  return {
+    ...actual,
+    readFileSync: vi.fn(actual.readFileSync),
+    renameSync: vi.fn(actual.renameSync),
+  }
+})
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeChildProcess>()
+  return { ...actual, execFileSync: vi.fn(actual.execFileSync) }
 })
 
 let root: string
@@ -73,6 +83,45 @@ it('reviews an initial skill and remembers a justified no-op', () => {
   ])
   accept(report)
   expect(createReview(root).items).toEqual([])
+})
+
+it('reuses shared source matches and hashes within each review report', () => {
+  write(
+    'skills/retry/SKILL.md',
+    '---\nname: retry\ndescription: Retry safely\nsources: [acme/library:src/**/*.ts]\n---\nRetry the request.\n',
+  )
+  planningRecords('_artifacts')
+  vi.mocked(readFileSync).mockClear()
+  vi.mocked(execFileSync).mockClear()
+
+  const report = createReview(root)
+  expect(report.items.map((item) => item.id)).toEqual([
+    'skill:skills/request/SKILL.md',
+    'skill:skills/retry/SKILL.md',
+    'planning:_artifacts',
+  ])
+  expect({
+    sourceReads: vi
+      .mocked(readFileSync)
+      .mock.calls.filter(
+        ([file]) => file === join(report.root, 'src/request.ts'),
+      ).length,
+    sourceQueries: vi
+      .mocked(execFileSync)
+      .mock.calls.filter(
+        ([, args]) =>
+          Array.isArray(args) && args.includes(':(top,glob)src/**/*.ts'),
+      ).length,
+  }).toEqual({ sourceReads: 1, sourceQueries: 2 })
+
+  const updated = 'export const attempts = 4\n'
+  write('src/request.ts', updated)
+  const next = createReview(root)
+  const hash = createHash('sha256').update(updated).digest('hex')
+  for (const item of next.items) {
+    expect(item.snapshot['src/request.ts']).toBe(hash)
+    expect(item.changedFiles).toContain('src/request.ts')
+  }
 })
 
 it('does not classify shipped meta skills or unrelated agent instructions as library skills', () => {

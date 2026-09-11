@@ -12,7 +12,7 @@ import {
   skillPath,
 } from './project.js'
 import { writeChanges } from './files.js'
-import type { MaintainerProject } from './project.js'
+import type { MaintainerProject, SkillEntry } from './project.js'
 import type { FileChange } from './files.js'
 
 export interface DistributionOptions {
@@ -34,14 +34,9 @@ const repositoryPattern =
 const namePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 export function readDistribution(
-  project: MaintainerProject,
-  changes: ReadonlyArray<FileChange> = [],
+  tree: ReturnType<typeof readRecord>,
 ): Distribution | undefined {
-  const value: unknown = readRecord(
-    project,
-    'skill_tree.yaml',
-    changes,
-  ).document.toJS().distribution
+  const value: unknown = tree.document.toJS().distribution
   if (value === undefined) return undefined
   if (!isObject(value) || !['repo', 'none'].includes(String(value.mode)))
     throw new Error('skill_tree.yaml distribution.mode must be repo or none.')
@@ -108,7 +103,8 @@ export function planDistributionChoice(
   }
   if (!['repo', 'none'].includes(options.distribution))
     throw new Error('--distribution must be repo or none.')
-  const previous = readDistribution(project, changes)
+  const tree = readRecord(project, 'skill_tree.yaml', changes)
+  const previous = readDistribution(tree)
   let distribution: Distribution
   if (options.distribution === 'none') {
     if (options.repository || options.pluginName || options.skill)
@@ -154,7 +150,7 @@ export function planDistributionChoice(
       throw new Error(
         'Select public skills explicitly with --skill <name> (repeat for multiple skills).',
       )
-    const entries = skillEntries(project, changes)
+    const entries = skillEntries(project, tree)
     for (const selected of skills) {
       const entry = entries.find(
         (skill) => (skill.slug ?? skill.name) === selected,
@@ -168,7 +164,6 @@ export function planDistributionChoice(
     }
     distribution = { mode: 'repo', repository, name, skills }
   }
-  const tree = readRecord(project, 'skill_tree.yaml', changes)
   if (JSON.stringify(previous) === JSON.stringify(distribution)) return
   tree.document.set('distribution', distribution)
   return {
@@ -213,8 +208,12 @@ function shellCommand(args: Array<string>): string {
     .join(' ')
 }
 
-export function planDistribution(project: MaintainerProject) {
-  const config = readDistribution(project)
+export function planDistribution(
+  project: MaintainerProject,
+  tree: ReturnType<typeof readRecord>,
+  entries: ReadonlyArray<SkillEntry>,
+) {
+  const config = readDistribution(tree)
   const changes: Array<FileChange> = []
   const problems: Array<string> = []
   const commands: Array<string> = []
@@ -228,7 +227,6 @@ export function planDistribution(project: MaintainerProject) {
   if (config.mode === 'none' && !config.name)
     return { changes, problems, commands, mode: config.mode }
   const { name, repository } = config
-  const entries = skillEntries(project)
   const selected = config.mode === 'repo' ? config.skills! : []
   const exported: Array<{ name: string; path: string }> = []
   for (const selectedName of selected) {

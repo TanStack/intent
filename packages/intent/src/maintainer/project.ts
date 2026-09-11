@@ -121,13 +121,9 @@ export interface SkillEntry extends Record<string, unknown> {
 
 export function skillEntries(
   project: MaintainerProject,
-  changes: ReadonlyArray<FileChange> = [],
+  tree: ReturnType<typeof readRecord>,
 ): Array<SkillEntry> {
-  const entries: Array<unknown> = readRecord(
-    project,
-    'skill_tree.yaml',
-    changes,
-  ).document.toJS().skills
+  const entries: Array<unknown> = tree.document.toJS().skills
   const names = new Set<string>()
   const paths = new Set<string>()
   return entries.map((entry) => {
