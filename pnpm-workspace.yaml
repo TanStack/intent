@@ -24,3 +24,6 @@ allowBuilds:
   esbuild: true
   nx: false
   unrs-resolver: false
+minimumReleaseAgeExclude:
+  # Renovate security update: vitest@4.1.11
+  - vitest@4.1.11
