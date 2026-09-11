@@ -117,10 +117,9 @@ export function planDistributionChoice(
       options.repository ??
       previous?.repository ??
       inferDistributionRepository(project)
+    const missing: Array<string> = []
     if (!repositoryPattern.test(repository))
-      throw new Error(
-        'Choose a GitHub repository with --repository <owner/repo>.',
-      )
+      missing.push('a GitHub repository with --repository <owner/repo>')
     const existingManifest = projectPath(
       project.root,
       '.claude-plugin/plugin.json',
@@ -138,7 +137,7 @@ export function planDistributionChoice(
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/-$/, ''))
     if (!namePattern.test(name))
-      throw new Error('Choose a kebab-case name with --plugin-name <name>.')
+      missing.push('a kebab-case name with --plugin-name <name>')
     if (previous?.name && previous.name !== name)
       throw new Error(
         `Keep the existing plugin name ${previous.name}; renaming a published plugin requires a separate migration.`,
@@ -147,9 +146,11 @@ export function planDistributionChoice(
       ? stringList([options.skill].flat(), '--skill')
       : (previous?.skills ?? [])
     if (!skills.length)
-      throw new Error(
-        'Select public skills explicitly with --skill <name> (repeat for multiple skills).',
+      missing.push(
+        'the public skills with --skill <name> (repeat for multiple skills)',
       )
+    if (missing.length)
+      throw new Error(`Repository distribution needs: ${missing.join('; ')}.`)
     const entries = skillEntries(project, tree)
     for (const selected of skills) {
       const entry = entries.find(

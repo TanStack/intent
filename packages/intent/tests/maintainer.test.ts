@@ -694,3 +694,77 @@ it('does not ask for a review of the files setup and sync write', async () => {
       .sort(),
   ).toEqual(['planning:skills/_artifacts', 'skill:skills/query/SKILL.md'])
 })
+
+it('names written files, labels install commands, and explains unsupported options', async () => {
+  const logs = () => vi.mocked(console.log).mock.calls.flat().map(String)
+  const errors = () => vi.mocked(console.error).mock.calls.flat().map(String)
+  write('src/query.ts', 'export const query = () => 1\n')
+  expect(await main(['maintainer', 'setup', '--distribution', 'none'])).toBe(0)
+  vi.mocked(console.log).mockClear()
+  expect(
+    await main([
+      'maintainer',
+      'add',
+      'query',
+      '--domain',
+      'queries',
+      '--description',
+      'Use when querying with Library.',
+      '--source',
+      'src/query.ts',
+    ]),
+  ).toBe(0)
+  expect(logs()).toEqual([
+    'Registered skills/query/SKILL.md.',
+    'Updated: skills/query/SKILL.md, skills/_artifacts/skill_tree.yaml, skills/_artifacts/domain_map.yaml, skills/_artifacts/skill_spec.md',
+    expect.stringContaining('skills/_artifacts/domain_map.yaml'),
+  ])
+  vi.mocked(console.log).mockClear()
+  expect(await main(['maintainer', 'sync'])).toBe(0)
+  expect(logs()[0]).toBe('Synchronized package.json')
+  vi.mocked(console.log).mockClear()
+  expect(await main(['maintainer', 'sync'])).toBe(0)
+  expect(logs()[0]).toBe('Nothing to synchronize.')
+  expect(await main(['maintainer', 'sync', '--plugin-name', 'x'])).toBe(1)
+  expect(errors().at(-1)).toBe(
+    '--plugin-name is not supported by maintainer sync. Run intent maintainer sync --help for its options.',
+  )
+  vi.mocked(console.log).mockClear()
+  expect(await main(['maintainer', 'status'])).toBe(0)
+  expect(logs()).toContain(
+    '  Review skill skills/query/SKILL.md: changed skills/query/SKILL.md, src/query.ts',
+  )
+  expect(logs()).toContain(
+    '  Review planning records skills/_artifacts: changed skills/_artifacts/domain_map.yaml, skills/_artifacts/skill_spec.md, skills/_artifacts/skill_tree.yaml, skills/query/SKILL.md, src/query.ts',
+  )
+})
+
+it('reports every missing repository distribution input at once', async () => {
+  expect(await main(['maintainer', 'setup', '--distribution', 'repo'])).toBe(1)
+  expect(vi.mocked(console.error).mock.calls.flat().map(String).at(-1)).toBe(
+    'Repository distribution needs: a GitHub repository with --repository <owner/repo>; a kebab-case name with --plugin-name <name>; the public skills with --skill <name> (repeat for multiple skills).',
+  )
+})
+
+it('validates each skills root once during check', async () => {
+  write('src/query.ts', 'export const query = () => 1\n')
+  expect(await main(['maintainer', 'setup', '--distribution', 'none'])).toBe(0)
+  for (const name of ['one', 'two']) {
+    write(
+      `skills/${name}/SKILL.md`,
+      `---\nname: ${name}\ndescription: Use ${name}.\nsources: [src/query.ts]\n---\nGuidance.\n`,
+    )
+    expect(await main(['maintainer', 'add', name, '--domain', 'queries'])).toBe(
+      0,
+    )
+  }
+  vi.mocked(console.log).mockClear()
+  expect(await main(['maintainer', 'check'])).toBe(1)
+  expect(
+    vi
+      .mocked(console.log)
+      .mock.calls.flat()
+      .map(String)
+      .filter((line) => line.includes('Validated 2 skill files')),
+  ).toHaveLength(1)
+})
