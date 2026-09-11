@@ -1,6 +1,6 @@
 # Run the maintainer workflow
 
-Use the repository's Intent command for all six actions. These commands perform bookkeeping; the maintainer or coding agent still supplies task knowledge, source-backed guidance, and review conclusions.
+Use the repository's Intent commands for bookkeeping; the maintainer or coding agent supplies task knowledge, source-backed guidance, and review conclusions.
 
 1. Run `intent maintainer setup` once. It installs repository guidance and creates missing planning records, preserving existing documents. A monorepo uses one shared record and package-owned skill directories. If several record locations exist, select the established one with `--artifacts <repository-relative-directory>`; do not merge them by guessing. Read [repository distribution](distribution.md) and explain the option to the maintainer during setup. Save the selected skills or opt-out with the setup command; do not infer a public selection from directory placement or repeat a recorded decision.
 2. For a new task, run `intent maintainer add <name> --domain <slug> --description <activation-text> --source <path>`. In a monorepo, pass `--package packages/<owner>`. Repeat `--source` or `--requires` for multiple entries. Source paths are relative to the owning package; `owner/repo:path` is relative to the repository. Use `--path <package-relative-path>/SKILL.md` for an established custom layout. To register an existing skill, supply its name, domain, package, and path; its frontmatter supplies the other fields.
@@ -10,5 +10,12 @@ Use the repository's Intent command for all six actions. These commands perform 
 6. Follow [source review](source-review.md) with `intent maintainer review --json`, supply justified outcomes, and record them with `intent maintainer review --record .intent/review.json`. The command retains the existing revision and content-fingerprint checks. Run `intent maintainer check` after recording; it exits nonzero for incomplete authoring, stale generated metadata, invalid skills, missing local prerequisites, or pending reviews. Use the same check in CI, passing the actual PR base.
 
 Keep unimplemented future skills in the tree with `status: planned` and retired entries with `status: retired`. They remain part of the cumulative record but do not count as implemented skills or enter package publishing configuration. An active entry with a missing file is an error to resolve, not an invitation to delete the entry. Local prerequisite slugs are checked against implemented tree entries; verify external package prerequisites and the developer task through the task-quality procedure.
+
+## Adopt existing skills
+
+1. Preview registrations with `intent maintainer adopt --json`. For a custom directory outside `skills/`, add `--path <repository-relative-directory>`. Preserve the established planning location with `--artifacts` when several exist.
+2. Save the plan, mark chosen unregistered entries with `selected: true`, and supply their missing `domain`. Keep all identities and the fingerprint unchanged. Preserve authored descriptions, purposes, and skill contents.
+3. Record an explicit distribution selection or opt-out, or retain the current choice. Apply with `intent maintainer adopt --apply <plan.json>`; regenerate the plan if source or records changed. A human terminal can run `intent maintainer adopt` for the same choices and confirmation. CI stays noninteractive; use JSON reporting or an explicitly authorized apply.
+4. Complete task coverage and source review through the normal workflow. Adoption creates missing records and installs maintainer guidance, but does not author skills, approve content, synchronize, or publish. Use `maintainer check --base <available-commit>` as the read-only CI gate.
 
 The former `scaffold` command is removed. Use `maintainer setup` and `maintainer add` for file creation, and `meta generate-skill` for authoring guidance. Full-library research and taxonomy design remain available through `meta domain-discovery` and `meta tree-generator` when requested.

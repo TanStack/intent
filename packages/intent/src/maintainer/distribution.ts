@@ -22,7 +22,7 @@ export interface DistributionOptions {
   skill?: string | Array<string>
 }
 
-interface Distribution {
+export interface Distribution {
   mode: 'repo' | 'none'
   repository?: string
   name?: string
@@ -35,9 +35,13 @@ const namePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 export function readDistribution(
   project: MaintainerProject,
+  changes: ReadonlyArray<FileChange> = [],
 ): Distribution | undefined {
-  const value: unknown = readRecord(project, 'skill_tree.yaml').document.toJS()
-    .distribution
+  const value: unknown = readRecord(
+    project,
+    'skill_tree.yaml',
+    changes,
+  ).document.toJS().distribution
   if (value === undefined) return undefined
   if (!isObject(value) || !['repo', 'none'].includes(String(value.mode)))
     throw new Error('skill_tree.yaml distribution.mode must be repo or none.')
@@ -66,10 +70,35 @@ function readJson(path: string): Record<string, unknown> {
   return value
 }
 
+export function inferDistributionRepository(
+  project: MaintainerProject,
+): string {
+  const manifest = readJson(projectPath(project.root, 'package.json'))
+  const declared = isObject(manifest.repository)
+    ? manifest.repository.url
+    : manifest.repository
+  return typeof declared === 'string'
+    ? declared
+        .replace(/^git\+/, '')
+        .replace(/^https?:\/\/github\.com\//, '')
+        .replace(/^git@github\.com:/, '')
+        .replace(/\.git$/, '')
+    : ''
+}
+
 export function configureDistribution(
   project: MaintainerProject,
   options: DistributionOptions,
 ): void {
+  const change = planDistributionChoice(project, options)
+  if (change) writeChanges(project.root, [change])
+}
+
+export function planDistributionChoice(
+  project: MaintainerProject,
+  options: DistributionOptions,
+  changes: ReadonlyArray<FileChange> = [],
+): FileChange | undefined {
   if (!options.distribution) {
     if (options.repository || options.pluginName || options.skill)
       throw new Error(
@@ -79,7 +108,7 @@ export function configureDistribution(
   }
   if (!['repo', 'none'].includes(options.distribution))
     throw new Error('--distribution must be repo or none.')
-  const previous = readDistribution(project)
+  const previous = readDistribution(project, changes)
   let distribution: Distribution
   if (options.distribution === 'none') {
     if (options.repository || options.pluginName || options.skill)
@@ -88,21 +117,10 @@ export function configureDistribution(
       )
     distribution = { ...previous, mode: 'none' }
   } else {
-    const manifest = readJson(projectPath(project.root, 'package.json'))
-    const repositoryField = manifest.repository
-    const declared = isObject(repositoryField)
-      ? repositoryField.url
-      : repositoryField
     const repository =
       options.repository ??
       previous?.repository ??
-      (typeof declared === 'string'
-        ? declared
-            .replace(/^git\+/, '')
-            .replace(/^https?:\/\/github\.com\//, '')
-            .replace(/^git@github\.com:/, '')
-            .replace(/\.git$/, '')
-        : '')
+      inferDistributionRepository(project)
     if (!repositoryPattern.test(repository))
       throw new Error(
         'Choose a GitHub repository with --repository <owner/repo>.',
@@ -136,7 +154,7 @@ export function configureDistribution(
       throw new Error(
         'Select public skills explicitly with --skill <name> (repeat for multiple skills).',
       )
-    const entries = skillEntries(project)
+    const entries = skillEntries(project, changes)
     for (const selected of skills) {
       const entry = entries.find(
         (skill) => (skill.slug ?? skill.name) === selected,
@@ -150,12 +168,14 @@ export function configureDistribution(
     }
     distribution = { mode: 'repo', repository, name, skills }
   }
-  const tree = readRecord(project, 'skill_tree.yaml')
+  const tree = readRecord(project, 'skill_tree.yaml', changes)
   if (JSON.stringify(previous) === JSON.stringify(distribution)) return
   tree.document.set('distribution', distribution)
-  writeChanges(project.root, [
-    { path: tree.path, source: tree.source, content: tree.document.toString() },
-  ])
+  return {
+    path: tree.path,
+    source: tree.source,
+    content: tree.document.toString(),
+  }
 }
 
 function jsonChange(

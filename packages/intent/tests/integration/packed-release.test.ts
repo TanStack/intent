@@ -145,7 +145,7 @@ describe('packed release', () => {
     }
     expect(run(['scaffold']).status).toBe(1)
     expect(run(['maintainer', '--help']).stdout).toContain(
-      'setup|add|status|sync|review|check',
+      'setup|adopt|add|status|sync|review|check',
     )
   })
 
