@@ -45,7 +45,7 @@ Before proceeding with development, ensure you match one of the following criter
 
 ## Editing meta-skills
 
-- Follow [writing-for-agents](https://github.com/mattpocock/skills/blob/main/skills/productivity/writing-for-agents/SKILL.md) and the [Agent Skills authoring best practices](https://agentskills.io/skill-creation/best-practices). Apply their concepts in the shipped procedure rather than telling library maintainers to load another writing guide.
+- Follow the [Agent Skills authoring best practices](https://agentskills.io/skill-creation/best-practices). Apply their concepts in the shipped procedure rather than telling library maintainers to load another writing guide.
 - Put supported tasks, activation conditions, and adjacent-task boundaries in `description`. Start the body with the procedure; keep execution prerequisites and conditional reference pointers there instead of repeating skill-selection criteria.
 - Give each reference a reading condition and each workflow an observable completion check. Preserve necessary failure handling, complete examples, and source-backed constraints when removing repetition.
 - Keep the shared [Agent Skills format](https://agentskills.io/specification) separate from Intent extensions and host-specific controls. Verify packaged references and real task behavior; structural validation alone does not establish useful guidance.
