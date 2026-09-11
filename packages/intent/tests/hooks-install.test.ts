@@ -36,6 +36,56 @@ function readJson(filePath: string): Record<string, any> {
 }
 
 describe('hook installer', () => {
+  it.each(['claude', 'codex', 'copilot'] as const)(
+    'preserves invocation parsing in the standalone %s runner',
+    (agent) => {
+      const root = tempRoot(`intent-hooks-parser-${agent}-`)
+      const scriptPath = join(root, `intent-${agent}-gate.mjs`)
+      writeFileSync(scriptPath, buildHookRunnerScript(agent))
+      const denial =
+        agent === 'copilot'
+          ? { permissionDecision: 'deny' }
+          : { hookSpecificOutput: { permissionDecision: 'deny' } }
+      const commands = [
+        ['intent list', true],
+        ['pnpm exec intent load @tanstack/router#routing', true],
+        ['pnpm dlx @tanstack/intent@latest list --json', true],
+        ['npx @tanstack/intent@latest load @tanstack/router#routing', true],
+        ['yarn dlx @tanstack/intent list', true],
+        ['bunx @tanstack/intent list', true],
+        ['npm test || intent load @tanstack/router#routing', true],
+        ['echo intent load @tanstack/router#routing', false],
+        ['# intent list', false],
+        ['intent load', false],
+      ] as const
+      for (const [index, [command, checked]] of commands.entries()) {
+        const event = {
+          cwd: root,
+          hook_event_name: 'PreToolUse',
+          session_id: `parser-${index}`,
+        }
+        const edit = {
+          ...event,
+          tool_name: agent === 'codex' ? 'apply_patch' : 'Edit',
+        }
+        const before = runHookScript(scriptPath, edit)
+        expect(before.status).toBe(0)
+        expect(JSON.parse(before.stdout)).toMatchObject(denial)
+        const observation = runHookScript(scriptPath, {
+          ...event,
+          toolName: 'Bash',
+          toolArgs: JSON.stringify({ command }),
+        })
+        expect(observation.status).toBe(0)
+        expect(observation.stdout).toBe('')
+        const after = runHookScript(scriptPath, edit)
+        expect(after.status).toBe(0)
+        if (checked) expect(after.stdout).toBe('')
+        else expect(JSON.parse(after.stdout)).toMatchObject(denial)
+      }
+    },
+  )
+
   it('declares supported scopes in the adapter registry', () => {
     expect(HOOK_AGENT_ADAPTERS.claude.supportedScopes.has('project')).toBe(true)
     expect(HOOK_AGENT_ADAPTERS.codex.supportedScopes.has('project')).toBe(true)

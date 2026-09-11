@@ -5,7 +5,11 @@ import { detectPackageManager } from '../discovery/package-manager.js'
 import { fail } from '../shared/cli-error.js'
 import { formatIntentCommand } from '../shared/command-runner.js'
 import { ALL_HOOK_AGENTS, HOOK_AGENT_ADAPTERS } from './adapters.js'
-import { EDIT_TOOLS_BY_AGENT, GATE_DENY_REASON } from './policy.js'
+import {
+  EDIT_TOOLS_BY_AGENT,
+  GATE_DENY_REASON,
+  parseIntentInvocation,
+} from './policy.js'
 import type { HookAgent, HookInstallScope } from './types.js'
 
 type HookInstallStatus = 'created' | 'skipped' | 'unchanged' | 'updated'
@@ -85,7 +89,7 @@ const CATALOG_COMMAND = ${JSON.stringify(catalogCommand)}
 const LOAD_COMMAND = ${JSON.stringify(loadCommand)}
 const EDIT_TOOLS = new Set(${JSON.stringify(editTools)})
 const GATE_DENY_REASON = ${JSON.stringify(GATE_DENY_REASON)}
-const INTENT_COMMAND_PATTERN = /(?:^|&&|\\|\\||;|\\|)\\s*((?:bunx\\s+@tanstack\\/intent(?:@latest)?)|(?:pnpm\\s+exec\\s+intent)|(?:pnpm\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:npx\\s+@tanstack\\/intent(?:@latest)?)|(?:yarn\\s+dlx\\s+@tanstack\\/intent(?:@latest)?)|(?:intent))\\s+(list|load)(?:\\s+([^\\s|;&]+))?/i
+const parseIntentInvocation = ${parseIntentInvocation.toString()}
 
 try {
   await main()
@@ -242,17 +246,6 @@ function observationFromEvent(event) {
   const parsed = parseIntentInvocation(command)
   if (!parsed || typeof command !== 'string') return undefined
   return { action: parsed.action, skillUse: parsed.skillUse, raw: command }
-}
-
-function parseIntentInvocation(command) {
-  if (typeof command !== 'string') return undefined
-  const match = command.match(INTENT_COMMAND_PATTERN)
-  if (!match?.[1] || !match[2]) return undefined
-  const action = match[2].toLowerCase()
-  if (action !== 'list' && action !== 'load') return undefined
-  const skillUse = action === 'load' ? match[3] : undefined
-  if (action === 'load' && !skillUse) return undefined
-  return action === 'load' ? { action, skillUse } : { action }
 }
 
 function commandFromObject(value) {

@@ -6,9 +6,6 @@ import type {
   ToolEvent,
 } from './types.js'
 
-const INTENT_COMMAND_PATTERN =
-  /(?:^|&&|\|\||;|\|)\s*((?:bunx\s+@tanstack\/intent(?:@latest)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i
-
 export const EDIT_TOOLS_BY_AGENT: Record<HookAgent, ReadonlySet<string>> = {
   claude: new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']),
   codex: new Set(['apply_patch', 'Write', 'Edit']),
@@ -25,7 +22,9 @@ export function parseIntentInvocation(
     return undefined
   }
 
-  const match = command.match(INTENT_COMMAND_PATTERN)
+  const match = command.match(
+    /(?:^|&&|\|\||;|\|)\s*((?:bunx\s+@tanstack\/intent(?:@latest)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i,
+  )
 
   if (!match?.[1] || !match[2]) {
     return undefined
