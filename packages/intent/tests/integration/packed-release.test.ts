@@ -99,6 +99,54 @@ afterAll(() => {
 })
 
 describe('packed release', () => {
+  it('installs standalone hooks from the packed CLI', () => {
+    const installed = run([
+      'hooks',
+      'install',
+      '--agents',
+      'claude,codex',
+      '--scope',
+      'project',
+    ])
+    expect(installed.status, installed.stderr).toBe(0)
+    for (const agent of ['claude', 'codex']) {
+      const scriptPath = join(cwd, `standalone-${agent}.mjs`)
+      writeFileSync(
+        scriptPath,
+        readFileSync(join(cwd, '.intent', 'hooks', `intent-${agent}-gate.mjs`)),
+      )
+      const event = {
+        cwd,
+        hook_event_name: 'PreToolUse',
+        session_id: `packed-${agent}`,
+      }
+      const hook = (input: Record<string, unknown>) =>
+        spawnSync(process.execPath, [scriptPath], {
+          cwd,
+          encoding: 'utf8',
+          input: JSON.stringify({ ...event, ...input }),
+          timeout,
+        })
+      const edit = { tool_name: agent === 'codex' ? 'apply_patch' : 'Edit' }
+      const before = hook(edit)
+      expect(before.status, before.stderr).toBe(0)
+      expect(JSON.parse(before.stdout)).toMatchObject({
+        hookSpecificOutput: { permissionDecision: 'deny' },
+      })
+      const observed = hook({
+        tool_name: 'Bash',
+        tool_input: {
+          command: 'npm test || pnpm exec intent load release-fixture#core',
+        },
+      })
+      expect(observed.status, observed.stderr).toBe(0)
+      expect(observed.stdout).toBe('')
+      const after = hook(edit)
+      expect(after.status, after.stderr).toBe(0)
+      expect(after.stdout).toBe('')
+    }
+  })
+
   it('ships every meta resource and validates the extracted skills', () => {
     const meta = join(packageRoot, 'meta')
     for (const entry of readdirSync(meta, {
