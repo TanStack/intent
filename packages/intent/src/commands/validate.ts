@@ -91,14 +91,26 @@ function buildValidationFailure(
   return lines.join('\n')
 }
 
-function filesEntryCovers(entry: string, directory: string): boolean {
-  if (entry.startsWith('!')) return false
-  const prefix = entry.replace(/\/(?:\*\*|\*)?$/, '')
-  return directory === prefix || directory.startsWith(`${prefix}/`)
+// Positive `files` entries as directory prefixes: `skills`, `skills/`, and
+// `skills/**` all publish the whole directory.
+function filesPrefixes(files: ReadonlyArray<string>): Array<string> {
+  const prefixes: Array<string> = []
+  for (const entry of files) {
+    if (entry.startsWith('!')) continue
+    prefixes.push(entry.replace(/\/(?:\*\*|\*)?$/, ''))
+  }
+  return prefixes
+}
+
+function covered(prefixes: ReadonlyArray<string>, directory: string): boolean {
+  return prefixes.some(
+    (prefix) => directory === prefix || directory.startsWith(`${prefix}/`),
+  )
 }
 
 function collectPackagingWarnings(
   context: ProjectContext,
+  skillsDir: string,
   skillFiles: ReadonlyArray<string>,
 ): Array<string> {
   if (!context.packageRoot || !context.targetPackageJsonPath) return []
@@ -144,20 +156,20 @@ function collectPackagingWarnings(
   const files = pkgJson.files as Array<string> | undefined
   if (Array.isArray(files)) {
     const packageRoot = context.packageRoot
-    const skillDirs = [
-      ...new Set(
-        skillFiles.map((file) =>
-          relative(packageRoot, dirname(file)).replaceAll('\\', '/'),
-        ),
-      ),
-    ]
+    const prefixes = filesPrefixes(files)
+    const skillsRoot = relative(packageRoot, skillsDir).replaceAll('\\', '/')
     // Either the whole skills directory or each skill directory (as written
     // by `intent maintainer sync`) publishes the guidance.
-    for (const directory of skillDirs) {
-      if (!files.some((entry) => filesEntryCovers(entry, directory))) {
-        warnings.push(
-          `"${directory}" is not covered by the "files" array — this skill won't be published`,
-        )
+    if (!covered(prefixes, skillsRoot)) {
+      const seen = new Set<string>()
+      for (const file of skillFiles) {
+        const directory = `${skillsRoot}/${relative(skillsDir, dirname(file)).replaceAll('\\', '/')}`
+        if (seen.has(directory)) continue
+        seen.add(directory)
+        if (!covered(prefixes, directory))
+          warnings.push(
+            `"${directory}" is not covered by the "files" array — this skill won't be published`,
+          )
       }
     }
 
@@ -165,9 +177,9 @@ function collectPackagingWarnings(
     // the negation pattern is a no-op and shouldn't be added.
     if (
       !context.isMonorepo &&
-      existsSync(join(packageRoot, 'skills', '_artifacts')) &&
-      files.some((entry) => filesEntryCovers(entry, 'skills/_artifacts')) &&
-      !files.includes('!skills/_artifacts')
+      covered(prefixes, 'skills/_artifacts') &&
+      !files.includes('!skills/_artifacts') &&
+      existsSync(join(packageRoot, 'skills', '_artifacts'))
     ) {
       warnings.push(
         '"!skills/_artifacts" is not in the "files" array — artifacts will be published unnecessarily',
@@ -651,7 +663,9 @@ async function runValidateCommandInternal(
     }
 
     validatedCount += skillFiles.length
-    warnings.push(...collectPackagingWarnings(validateContext, skillFiles))
+    warnings.push(
+      ...collectPackagingWarnings(validateContext, skillsDir, skillFiles),
+    )
   }
 
   if (options.check) {

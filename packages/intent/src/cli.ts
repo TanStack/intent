@@ -197,7 +197,7 @@ function createCli(
       'Set up, author, synchronize, and check library skills',
     )
     .usage(
-      'maintainer <setup|adopt|add|status|sync|review|check> [name] [options]',
+      'maintainer <setup|adopt|add|remove|status|sync|review|check> [name] [options]',
     )
     .option(
       '--artifacts <directory>',
@@ -238,6 +238,10 @@ function createCli(
       '--requires <name>',
       'Prerequisite skill; repeat for multiple skills',
     )
+    .option(
+      '--task <text>',
+      'Developer task a new skill covers; repeat for multiple tasks',
+    )
     .option('--base <ref>', 'Git revision to review against')
     .option(
       '--interactive',
@@ -255,6 +259,7 @@ function createCli(
     .example(
       'maintainer add caching --domain queries --description "Use when caching queries." --source "src/**"',
     )
+    .example('maintainer remove caching')
     .example('maintainer status --json')
     .example('maintainer sync')
     .example('maintainer review --json')

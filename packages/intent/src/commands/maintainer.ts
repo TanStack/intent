@@ -9,6 +9,7 @@ import {
   setupRecords,
 } from '../maintainer/project.js'
 import { addSkill } from '../maintainer/add.js'
+import { retireSkill } from '../maintainer/remove.js'
 import { createAdoptionPlan, planAdoptionChanges } from '../maintainer/adopt.js'
 import { planMaintainerSync } from '../maintainer/sync.js'
 import { withMaintainerLock, writeChanges } from '../maintainer/files.js'
@@ -75,6 +76,7 @@ const optionHelp: Record<string, [flag: string, description: string]> = {
   ],
   source: ['--source <path>', 'Source evidence path; repeat for more'],
   requires: ['--requires <name>', 'Prerequisite skill; repeat for more'],
+  task: ['--task <text>', 'Developer task the skill covers; repeat for more'],
   base: ['--base <ref>', 'Git revision to review against'],
   interactive: ['--interactive', 'Inspect and record outcomes in a terminal'],
   json: ['--json', 'Print JSON instead of text'],
@@ -121,7 +123,15 @@ export const maintainerActions: Record<string, MaintainerAction> = {
       'description',
       'source',
       'requires',
+      'task',
     ].map((key) => optionHelp[key]!),
+  },
+  remove: {
+    usage: 'maintainer remove <name>',
+    summary: 'Retire a registered skill without deleting its guidance.',
+    writes:
+      'The entry status in skill_tree.yaml and a note in skill_spec.md. Delete the SKILL.md yourself once its guidance is no longer needed.',
+    options: ['artifacts'].map((key) => optionHelp[key]!),
   },
   status: {
     usage: 'maintainer status [--json] [--base <ref>]',
@@ -197,6 +207,7 @@ export interface MaintainerCommandOptions extends DistributionOptions {
   description?: string
   source?: string | Array<string>
   requires?: string | Array<string>
+  task?: string | Array<string>
   base?: string
   json?: boolean
   record?: string
@@ -236,7 +247,9 @@ export async function runMaintainerCommand(
       'description',
       'source',
       'requires',
+      'task',
     ],
+    remove: ['artifacts'],
     status: ['artifacts', 'base', 'json'],
     sync: ['artifacts'],
     review: ['base', 'json', 'record', 'interactive'],
@@ -244,9 +257,9 @@ export async function runMaintainerCommand(
   }
   if (!allowed[action])
     fail(
-      `Unknown maintainer action: ${action}. Expected setup, adopt, add, status, sync, review, or check.`,
+      `Unknown maintainer action: ${action}. Expected setup, adopt, add, remove, status, sync, review, or check.`,
     )
-  if (name !== undefined && action !== 'add')
+  if (name !== undefined && action !== 'add' && action !== 'remove')
     fail(`maintainer ${action} does not take a skill name.`)
   for (const key of Object.keys(options)) {
     if (key !== '--' && !allowed[action].includes(key))
@@ -336,7 +349,7 @@ export async function runMaintainerCommand(
     })
     return
   }
-  if (['setup', 'add', 'sync'].includes(action)) {
+  if (['setup', 'add', 'remove', 'sync'].includes(action)) {
     await withMaintainerLock(project.root, () => {
       if (action === 'setup') {
         const created = setupRecords(project)
@@ -372,6 +385,15 @@ export async function runMaintainerCommand(
         console.log(`Updated: ${added.files.join(', ')}`)
         console.log(
           `Next: author the guidance with intent meta generate-skill, record its developer tasks in ${project.artifacts}/domain_map.yaml, then run intent maintainer sync, intent maintainer review, and intent maintainer check.`,
+        )
+      } else if (action === 'remove') {
+        const retired = retireSkill(project, name)
+        console.log(`Retired ${name}.`)
+        console.log(`Updated: ${retired.files.join(', ')}`)
+        console.log(
+          retired.exists
+            ? `Delete ${retired.path} when its guidance is no longer needed, then run intent maintainer sync and intent maintainer review.`
+            : 'Run intent maintainer sync and intent maintainer review.',
         )
       } else {
         const plan = planMaintainerSync(project)

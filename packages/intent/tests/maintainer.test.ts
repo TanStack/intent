@@ -768,3 +768,107 @@ it('validates each skills root once during check', async () => {
       .filter((line) => line.includes('Validated 2 skill files')),
   ).toHaveLength(1)
 })
+
+it('records developer tasks at registration and retires a skill without deleting it', async () => {
+  const logs = () => vi.mocked(console.log).mock.calls.flat().map(String)
+  const errors = () => vi.mocked(console.error).mock.calls.flat().map(String)
+  write('src/query.ts', 'export const query = () => 1\n')
+  expect(await main(['maintainer', 'setup', '--distribution', 'none'])).toBe(0)
+  expect(
+    await main([
+      'maintainer',
+      'add',
+      'query',
+      '--domain',
+      'queries',
+      '--description',
+      'Use when querying with Library.',
+      '--source',
+      'src/query.ts',
+      '--task',
+      'Read the current value',
+      '--task',
+      'Subscribe to changes',
+    ]),
+  ).toBe(0)
+  expect(
+    parse(read('skills/_artifacts/domain_map.yaml')).skills[0].tasks,
+  ).toEqual(['Read the current value', 'Subscribe to changes'])
+  expect(read('skills/_artifacts/skill_spec.md')).toContain(
+    'Developer tasks: Read the current value; Subscribe to changes.',
+  )
+  vi.mocked(console.log).mockClear()
+  expect(await main(['maintainer', 'status'])).toBe(0)
+  expect(logs().join('\n')).not.toContain('record the assessed developer tasks')
+
+  expect(
+    await main([
+      'maintainer',
+      'add',
+      'dependent',
+      '--domain',
+      'queries',
+      '--description',
+      'Use after query.',
+      '--source',
+      'src/query.ts',
+      '--requires',
+      'query',
+    ]),
+  ).toBe(0)
+  expect(await main(['maintainer', 'remove', 'query'])).toBe(1)
+  expect(errors().at(-1)).toContain('is required by dependent')
+  expect(await main(['maintainer', 'remove', 'missing'])).toBe(1)
+  expect(errors().at(-1)).toBe('Skill missing is not registered.')
+
+  vi.mocked(console.log).mockClear()
+  expect(await main(['maintainer', 'remove', 'dependent'])).toBe(0)
+  expect(logs()).toEqual([
+    'Retired dependent.',
+    'Updated: skills/_artifacts/skill_tree.yaml, skills/_artifacts/skill_spec.md',
+    expect.stringContaining('Delete skills/dependent/SKILL.md'),
+  ])
+  const tree = parse(read('skills/_artifacts/skill_tree.yaml'))
+  expect(tree.skills[1]).toMatchObject({ name: 'dependent', status: 'retired' })
+  expect(existsSync(join(root, 'skills/dependent/SKILL.md'))).toBe(true)
+  expect(read('skills/_artifacts/skill_spec.md')).toContain(
+    'Retired `dependent`',
+  )
+  expect(await main(['maintainer', 'remove', 'dependent'])).toBe(1)
+  expect(errors().at(-1)).toBe('Skill dependent is already retired.')
+  expect(await main(['maintainer', 'sync'])).toBe(0)
+  expect(JSON.parse(read('package.json')).files).toBeUndefined()
+})
+
+it('refuses to retire a skill selected for repository distribution', async () => {
+  write('src/query.ts', 'export const query = () => 1\n')
+  write(
+    'package.json',
+    '{"name":"library","version":"1.0.0","repository":"https://github.com/acme/library"}\n',
+  )
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  write(
+    'skills/query/SKILL.md',
+    '---\nname: query\ndescription: Use when querying with Library.\nsources: [src/query.ts]\n---\nCall query().\n',
+  )
+  expect(
+    await main(['maintainer', 'add', 'query', '--domain', 'queries']),
+  ).toBe(0)
+  expect(
+    await main([
+      'maintainer',
+      'setup',
+      '--distribution',
+      'repo',
+      '--skill',
+      'query',
+    ]),
+  ).toBe(0)
+  expect(await main(['maintainer', 'remove', 'query'])).toBe(1)
+  expect(
+    vi.mocked(console.error).mock.calls.flat().map(String).at(-1),
+  ).toContain('selected for repository distribution')
+  expect(
+    parse(read('skills/_artifacts/skill_tree.yaml')).skills[0].status,
+  ).toBeUndefined()
+})

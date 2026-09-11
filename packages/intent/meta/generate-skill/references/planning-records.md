@@ -14,7 +14,28 @@ Run `intent maintainer setup` to create missing record skeletons without replaci
 
 ## Use the existing formats
 
-Read [the domain map and skill spec formats](../../domain-discovery/references/artifacts.md) for those two documents and [the skill tree format](../../tree-generator/SKILL.md#scaffold-flow-output) for the third. Use the formats without entering full-library discovery or its interviews. The batch’s existing source research supplies discoverable facts; ask only for unresolved maintainer decisions.
+Read [the domain map and skill spec formats](../../domain-discovery/references/artifacts.md) for those two documents. The skill tree uses the entry format below; `maintainer add` writes the required fields and `maintainer sync` keeps `description`, `purpose`, `sources`, and `requires` aligned with the skill's frontmatter. Read [the full tree format](../../tree-generator/SKILL.md#scaffold-flow-output) only for a full-library scaffold. Use the formats without entering full-library discovery or its interviews. The batch’s existing source research supplies discoverable facts; ask only for unresolved maintainer decisions.
+
+```yaml
+library: { name: '[package-name]', version: '[version]' }
+generated_from:
+  domain_map: skills/_artifacts/domain_map.yaml
+  skill_spec: skills/_artifacts/skill_spec.md
+review:
+  ignore: ['[git glob]'] # optional: paths never reported as unmapped changes
+distribution: { mode: none } # or { mode: repo, repository: owner/repo, name: plugin, skills: [slug] }
+skills:
+  - name: '[task-focused skill name]'
+    slug: '[kebab-case]'
+    domain: '[domain slug]'
+    package: '[package directory]' # monorepo only; path is then relative to it
+    path: skills/[slug]/SKILL.md
+    status: planned | retired # omit for an implemented skill
+    description: '[activation guidance; synchronized from SKILL.md]'
+    purpose: '[descriptive explanation; synchronized from metadata.purpose]'
+    requires: ['[other skill slugs]'] # omit if none
+    sources: ['src/[path].ts', 'owner/repo:docs/[path].md']
+```
 
 - `domain_map.yaml` owns the domain/task relationships, supported failure modes, cross-references, tensions, and knowledge gaps. Keep task slugs and package ownership aligned with the skills.
 - `skill_spec.md` is the human-readable coverage and decision record. Retain the existing inventories and add a **Coverage and batch history** section recording the assessed scope, each completed batch or behavior change, its source revision/version, consequential decisions and reasons, check outcomes, and remaining work. Keep entries concise; do not store transcripts. Distinguish implemented guidance from planned work and unassessed areas.

@@ -37,7 +37,22 @@ export interface ReviewReport {
   root: string
   head: string
   base: string
+  recording: {
+    outcomes: Array<Exclude<Outcome, 'unresolved'>>
+    planningOutcomes: Array<Exclude<Outcome, 'unresolved' | 'out-of-scope'>>
+    required: ['outcome', 'reason', 'evidence']
+    command: string
+  }
   items: Array<ReviewItem>
+}
+
+// Tells an agent reading the JSON what a completed item needs, so the
+// vocabulary does not live only in the packaged authoring procedure.
+const recording: ReviewReport['recording'] = {
+  outcomes: ['updated', 'no-change', 'out-of-scope'],
+  planningOutcomes: ['updated', 'no-change'],
+  required: ['outcome', 'reason', 'evidence'],
+  command: 'intent maintainer review --record <report.json>',
 }
 
 interface ReviewRecord {
@@ -494,7 +509,12 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       }
     }
   }
-  const ignored = new Set([...list(ignorePatterns), ...diff(ignorePatterns)])
+  // Query Git for ignored paths only when an uncovered change needs classifying.
+  let ignored: Set<string> | undefined
+  const isIgnored = (path: string) => {
+    ignored ??= new Set([...list(ignorePatterns), ...diff(ignorePatterns)])
+    return ignored.has(path)
+  }
   const skillFiles = files.filter(
     (path) =>
       basename(path) === 'SKILL.md' &&
@@ -635,7 +655,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     }
   }
   for (const path of changed) {
-    if (covered.has(path) || ignored.has(path)) continue
+    if (covered.has(path) || isIgnored(path)) continue
     add('source', path, [path], [])
   }
   for (const id of Object.keys(state?.items ?? {})) {
@@ -646,7 +666,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       add('source', path, [path], [])
     }
   }
-  return { schemaVersion: 1, root, head, base, items }
+  return { schemaVersion: 1, root, head, base, recording, items }
 }
 
 export function recordReview(cwd: string, input: unknown): number {
