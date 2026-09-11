@@ -60,7 +60,7 @@ A justified no-op is a completed review. Missing evidence remains pending.
 | --- | --- | --- |
 | Skill (`skill`) | No recorded review, changed source, or changed skill/reference content. | Compare the guidance with the source and update it when needed. |
 | Planning records (`planning`) | The domain map, spec, or tree needs initial review, or its source/skill evidence changed. | Reconcile all three documents, preserving earlier decisions and remaining work. |
-| Unmapped change (`source`) | A changed file is outside declared skill sources, or a skill was removed. | Decide whether existing guidance, a new skill, or an exclusion is appropriate. |
+| Unmapped change (`source`) | A changed file is outside declared skill sources and not an [ignored path](#ignored-paths), or a skill was removed. | Decide whether existing guidance, a new skill, or an exclusion is appropriate. |
 
 An unmapped file does not automatically require a new skill. A planning review can be needed even when nobody edited the planning documents.
 
@@ -125,6 +125,23 @@ Discovery covers first-party `skills/**/SKILL.md` files in the repository and it
 
 Brace expansion and extglobs are unsupported. Ignored files, submodules, external source repositories, and symbolic links require manual review. Missing or unsupported mappings remain unresolved.
 
+### Ignored paths
+
+Files that Intent writes or that carry no library guidance do not appear as unmapped changes. The default list covers the agent instruction files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`), `.claude-plugin/**`, `.cursor-plugin/**`, `.github/workflows/check-skills.yml`, `.intent/**`, `**/package.json`, and the lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock`, `bun.lock`).
+
+The list only stops these paths from surfacing as unmapped changes. A skill that lists one of them in `sources` still tracks it.
+
+Add repository-specific patterns under `review.ignore` in `skill_tree.yaml`:
+
+```yaml
+review:
+  ignore:
+    - "docs/**"
+    - "examples/**/package.json"
+```
+
+Entries use the same Git glob syntax as source mappings. An entry that is not a non-empty string fails review with the path of the tree file.
+
 ### Required planning documents
 
 The maintainer workflow keeps a cumulative record across batches:
@@ -162,11 +179,7 @@ Interactive review requires a terminal outside CI and cannot be combined with `-
 The installed maintainer procedure handles these steps. For manual use:
 
 1. Review the pending items, edit guidance and planning records as needed, and run the relevant checks.
-2. Regenerate the report after those edits. Save it outside source paths:
-
-   ```bash
-   mkdir -p .intent
-   ```
+2. Regenerate the report after those edits. Save it outside source paths, such as under `.intent/`, which the maintainer commands create:
 
    <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -181,7 +194,7 @@ The installed maintainer procedure handles these steps. For manual use:
 
    <!-- ::end:tabs -->
 
-3. Add an outcome, reason, and evidence to each item you completed. Preserve the report's identities, baseline, and fingerprints.
+3. Add an outcome, reason, and evidence to each item you completed. Preserve the report's identities, baseline, and fingerprints. The report's `recording` block lists the accepted values.
 4. Record the report and check remaining work:
 
    <!-- ::start:tabs variant="package-manager" mode="local-install" -->
@@ -223,9 +236,11 @@ For example, add these fields to an existing report item; this is not a complete
 
 For a planning item, the reason and evidence must cover all three documents. Preserve prior tasks, decisions, and future work when extending them with a new batch.
 
+`--record` rejects a report that annotates none of its items. The error names the required fields and points to `intent maintainer review --interactive`; a report with zero items still records its baseline.
+
 ### Saved state
 
-`--record` writes `.intent/review-state.json` containing the baseline, source/guidance hashes, reviewed revision, outcomes, reasons, and evidence. It does not commit, publish, or change skill versions. `.intent/` is reserved for review state and working reports and is excluded from unmapped-change items.
+`--record` writes `.intent/review-state.json` containing the baseline, source/guidance hashes, reviewed revision, outcomes, reasons, and evidence, creating the directory when it is missing. It does not commit, publish, or change skill versions. `.intent/` is reserved for Intent's working files and is excluded from unmapped-change items: review state and working reports, `.intent/skill-distribution.json` written by `maintainer sync`, and the temporary `.intent/maintainer.lock` and `.intent/review-state.json.lock` that serialize writes.
 
 Identical recorded content suppresses repeat reminders. Later edits reopen review. The saved state does not replace the planning documents, execute evidence strings, or verify the truth of a recorded conclusion.
 
@@ -237,6 +252,7 @@ Text output shows the pending count and up to 20 items, with changed paths, unre
 | --- | --- |
 | `schemaVersion` | Report format version; currently `1`. |
 | `root`, `head`, `base` | Working-tree identity and compared Git revisions. |
+| `recording` | Accepted `outcomes`, the narrower `planningOutcomes`, the `required` fields (`outcome`, `reason`, `evidence`), and the `command` that records the report. `--record` ignores this block. |
 | `items` | Pending skill, planning, and source review items. |
 | Item `id`, `kind`, `path` | Stable item identity, category, and location. |
 | Item `changedFiles` | Paths changed since the relevant comparison. Can be empty for initial review. |

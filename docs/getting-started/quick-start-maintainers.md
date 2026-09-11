@@ -50,16 +50,16 @@ Use `maintainer add` to create or register each agreed skill, keeping the file b
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
-solid: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
-vue: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
-svelte: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
-angular: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
-lit: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
+react: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
+solid: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
+vue: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
+svelte: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
+angular: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
+lit: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
 
 <!-- ::end:tabs -->
 
-Omit `--package` for a standalone library. For existing guidance, supply its name, domain, package, and path; the command preserves the file and reads its frontmatter. The [maintainer command reference](../cli/intent-maintainer) covers custom paths and prerequisites.
+Run it from the repository root and pass `--package` for a workspace package, or run it inside that package's directory and the command registers the skill there. Omit `--package` for a standalone library. Repeat `--task` for each developer task the skill covers; it records them in `domain_map.yaml` so `maintainer check` does not ask for them later. For existing guidance, supply its name, domain, package, and path; the command preserves the file and reads its frontmatter. The [maintainer command reference](../cli/intent-maintainer) covers custom paths, prerequisites, and retiring a skill with `maintainer remove`.
 
 Every skill batch also creates or incrementally updates three planning documents. These records preserve prior scope, maintainer decisions, exclusions, source mappings, and remaining work across later batches.
 
@@ -103,19 +103,13 @@ Review the resulting skills, planning documents, and checks as one batch:
 
 A missing runtime or independent run remains explicitly unverified. Structural validation alone does not establish task correctness, skill discovery, or fresh-consumer behavior.
 
-## Keep guidance current during library work
-
-Continue requesting library changes normally. Before handoff, the installed guidance instructs the agent to run `intent maintainer review --json`, examine affected skills, the planning record, and changed files outside existing source mappings, then record each completed decision with its evidence.
-
-`intent maintainer review` uses Git changes and content fingerprints to find work that has not been reviewed. Intent identifies candidates; the agent and maintainer decide whether the guidance should change. A new file does not automatically require a new skill. A justified `no-change` outcome records why accurate guidance stayed unchanged, while missing evidence remains pending.
-
-Completed outcomes are saved in `.intent/review-state.json`. Keep that file with the source, skill, and planning-record changes it describes. Run `intent maintainer sync` after authoring to align metadata, then regenerate the report with `intent maintainer review --json` so it covers the final files. Annotate the completed outcomes and record them with `intent maintainer review --record <report.json>`. Finish with `intent maintainer check` to check authoring gaps, generated files, and pending reviews together.
-
-See [`intent review`](../cli/intent-review) for comparison rules, report fields, recording, and failure recovery.
+For direct authoring guidance, load `meta generate-skill`. Explicitly requested full-library design still uses `meta domain-discovery`, then `meta tree-generator`, then `meta generate-skill`.
 
 ## Choose how consumers install the skills
 
-Setup explains repository distribution until you record a choice. Select the public skills explicitly:
+Setup explains repository distribution until you record a choice, and `maintainer check` fails until one is recorded. Record the choice before the first check.
+
+Selecting skills for repository distribution requires registered, authored skills: `maintainer sync` refuses to generate exports while a selected skill still carries the `intent:needs-authoring` marker. On a brand-new library, record `--distribution none` first, author the batch, then rerun setup with the selection. Select the public skills explicitly:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -128,9 +122,9 @@ lit: @tanstack/intent@latest maintainer setup --distribution repo --skill discov
 
 <!-- ::end:tabs -->
 
-Use the actual registered names. This records the selection in the skill tree. `maintainer sync` generates plugin metadata pointing to the existing package directories and prints consumer commands for `npx skills add` and `gh skill add`. Consumers can also use the native Claude or Cursor plugin flow. No second copy of the skill text is created, and later skills are not added automatically.
+Use the actual registered names; each must be a tree entry whose `SKILL.md` exists. When the repository, plugin name, or selection cannot be resolved, setup reports every missing input in one error. This records the selection in the skill tree. `maintainer sync` generates plugin metadata pointing to the existing package directories and prints consumer commands for `npx skills add` and `gh skill add`. Consumers can also use the native Claude or Cursor plugin flow. No second copy of the skill text is created, and later skills are not added automatically.
 
-To keep the package-only workflow, record the opt-out once:
+To keep the package-only workflow, or to unblock `maintainer check` before the skills are authored, record the opt-out:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -145,7 +139,42 @@ lit: @tanstack/intent@latest maintainer setup --distribution none
 
 A repository discovery skill can help developers decide whether the library fits before installation. Respect their existing stack and hand implementation to the installed package's version of the guidance. Repository skills can be installed at project or user scope; those are consumer choices, separate from where the source files live. See [repository distribution](../cli/intent-maintainer#choose-repository-distribution).
 
-For direct authoring guidance, load `meta generate-skill`. Explicitly requested full-library design still uses `meta domain-discovery`, then `meta tree-generator`, then `meta generate-skill`.
+## Keep guidance current during library work
+
+Continue requesting library changes normally. `intent maintainer review` uses Git changes and content fingerprints to find work that has not been reviewed. Intent identifies candidates; the agent and maintainer decide whether the guidance should change. A new file does not automatically require a new skill. A justified `no-change` outcome records why accurate guidance stayed unchanged, while missing evidence remains pending.
+
+Before handoff, run sync so the metadata matches the final files, review the pending items in your terminal, then run the combined check:
+
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest maintainer sync
+react: @tanstack/intent@latest maintainer review --interactive
+react: @tanstack/intent@latest maintainer check
+solid: @tanstack/intent@latest maintainer sync
+solid: @tanstack/intent@latest maintainer review --interactive
+solid: @tanstack/intent@latest maintainer check
+vue: @tanstack/intent@latest maintainer sync
+vue: @tanstack/intent@latest maintainer review --interactive
+vue: @tanstack/intent@latest maintainer check
+svelte: @tanstack/intent@latest maintainer sync
+svelte: @tanstack/intent@latest maintainer review --interactive
+svelte: @tanstack/intent@latest maintainer check
+angular: @tanstack/intent@latest maintainer sync
+angular: @tanstack/intent@latest maintainer review --interactive
+angular: @tanstack/intent@latest maintainer check
+lit: @tanstack/intent@latest maintainer sync
+lit: @tanstack/intent@latest maintainer review --interactive
+lit: @tanstack/intent@latest maintainer check
+
+<!-- ::end:tabs -->
+
+Interactive review shows each item's current guidance and changed files, asks for an outcome, and records the reason and evidence you supply. `maintainer check` then reports authoring gaps, generated files, and pending reviews together.
+
+Coding agents follow the same steps without a terminal. The installed guidance instructs the agent to run `intent maintainer review --json`, examine affected skills, the planning record, and changed files outside existing source mappings, annotate each completed item with an outcome, reason, and evidence, then record the report with `intent maintainer review --record <report.json>`. The report's `recording` block lists the accepted outcomes and required fields; recording a report that annotates nothing fails.
+
+Completed outcomes are saved in `.intent/review-state.json`. Keep that file with the source, skill, and planning-record changes it describes. Files Intent writes for you, such as the agent instruction block, plugin manifests, `package.json`, and lockfiles, do not appear as unmapped changes.
+
+See [`intent review`](../cli/intent-review) for comparison rules, report fields, ignored paths, recording, and failure recovery.
 
 ## Configure publishing
 

@@ -3,7 +3,7 @@ title: setup commands
 id: intent-setup
 ---
 
-For the complete authoring workflow, use [`intent maintainer setup` and `intent maintainer sync`](./intent-maintainer). These existing commands remain available for package configuration and optional CI installation.
+These commands configure a package for publishing skills and install the optional CI workflow. Repositories that use the [maintainer workflow](./intent-maintainer) keep `package.json` current with `intent maintainer sync` and only need `setup` from this page; `edit-package-json` is for repositories that publish skills without the maintainer workflow.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -24,7 +24,7 @@ lit: @tanstack/intent@latest setup
 
 ## Commands
 
-- `edit-package-json`: add or normalize `package.json` entries needed to publish skills
+- `edit-package-json`: add or normalize `package.json` entries needed to publish skills in a repository that does not use the maintainer workflow
 - `setup`: copy workflow templates to `.github/workflows`
 - `setup-github-actions`: legacy alias for `setup`
 
@@ -53,6 +53,8 @@ lit: @tanstack/intent@latest setup
 
 - Monorepo package: `skills`
 - Non-monorepo package: `skills`, `!skills/_artifacts`
+
+`intent maintainer sync` instead adds one `skills/<name>` entry per registered skill to an existing `files` allowlist and leaves an absent allowlist absent. [`intent validate`](./intent-validate#packaging-warnings) accepts either layout. Do not run `edit-package-json` on a repository maintained by `sync`; the two write different entries.
 
 ## Common errors
 
