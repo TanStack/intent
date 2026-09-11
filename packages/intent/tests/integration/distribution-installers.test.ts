@@ -16,7 +16,13 @@ import { parseFrontmatter } from '../../src/shared/utils.js'
 const gh = process.env.INTENT_GH_SKILL_BIN
 const skills = process.env.INTENT_SKILLS_BIN
 const claude = process.env.INTENT_CLAUDE_BIN
+const releaseCheck = process.env.npm_lifecycle_event === 'test:distribution'
 const cli = join(dirname(fileURLToPath(import.meta.url)), '../../dist/cli.mjs')
+
+if (releaseCheck && (!gh || !skills || !claude))
+  throw new Error(
+    'test:distribution requires INTENT_GH_SKILL_BIN, INTENT_SKILLS_BIN, and INTENT_CLAUDE_BIN pointing to installed executables. No compatibility checks were run.',
+  )
 
 it.skipIf(!gh || !skills)(
   'installs selected skills and prerequisites from multiple packages with real external installers',
@@ -300,9 +306,15 @@ it.skipIf(!gh || !skills)(
   60_000,
 )
 
-it.skipIf(!gh || !skills || process.env.INTENT_DISTRIBUTION_REMOTE !== '1')(
-  'installs real TanStack AI package skills using the generated remote commands',
-  async () => {
+it
+  .skipIf(
+    !gh ||
+      !skills ||
+      (!releaseCheck && process.env.INTENT_DISTRIBUTION_REMOTE !== '1'),
+  )
+  .each(['default', 'pinned'] as const)(
+  'installs real TanStack AI package skills using the generated remote commands (%s revision)',
+  async (versionMode) => {
     const root = mkdtempSync(join(tmpdir(), 'intent-distribution-remote-'))
     const source = join(root, 'source')
     const repository = 'TanStack/ai'
@@ -385,22 +397,26 @@ it.skipIf(!gh || !skills || process.env.INTENT_DISTRIBUTION_REMOTE !== '1')(
         mkdirSync(consumer)
         run('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], consumer)
         if (installer === 'skills') {
+          const args: Array<string> = instructions.install.skills.slice(2)
+          if (versionMode === 'pinned')
+            args[1] = `https://github.com/${repository}/tree/${revision}`
           run(
             skills!,
-            [
-              ...instructions.install.skills.slice(2),
-              '--agent',
-              'codex',
-              '--copy',
-              '--yes',
-            ],
+            [...args, '--agent', 'codex', '--copy', '--yes'],
             consumer,
           )
         } else {
           for (const command of instructions.install.github)
             run(
               gh!,
-              [...command.slice(1), '--agent', 'codex', '--scope', 'project'],
+              [
+                ...command.slice(1),
+                ...(versionMode === 'pinned' ? ['--pin', revision] : []),
+                '--agent',
+                'codex',
+                '--scope',
+                'project',
+              ],
               consumer,
             )
         }
@@ -412,6 +428,12 @@ it.skipIf(!gh || !skills || process.env.INTENT_DISTRIBUTION_REMOTE !== '1')(
           ).toMatchObject({
             name,
           })
+        if (versionMode === 'pinned') {
+          for (const skill of instructions.skills)
+            expect(
+              parseFrontmatter(join(installed, skill.name, 'SKILL.md')),
+            ).toMatchObject(parseFrontmatter(join(source, skill.path))!)
+        }
         expect(
           readFileSync(
             join(installed, 'ai-core/tool-calling/SKILL.md'),
