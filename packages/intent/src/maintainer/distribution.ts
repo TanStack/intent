@@ -310,6 +310,14 @@ export function planDistribution(project: MaintainerProject) {
           throw new Error(
             `Plugin ${name} in ${marketplacePath} uses a different source.`,
           )
+        if (
+          config.mode === 'repo' &&
+          directory === '.claude-plugin' &&
+          existing[0]?.strict === false
+        )
+          throw new Error(
+            `Plugin ${name} in ${marketplacePath} uses strict: false, which conflicts with the generated plugin.json components. Use strict: true or omit strict before syncing.`,
+          )
         const next = plugins.filter((plugin) => plugin.name !== name)
         if (config.mode === 'repo')
           next.push({ ...existing[0], name, source: './', skills: paths })

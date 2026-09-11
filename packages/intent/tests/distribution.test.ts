@@ -257,6 +257,54 @@ it('requires prerequisites to be selected and refuses foreign plugin ownership b
   expect(existsSync(join(root, '.claude-plugin'))).toBe(false)
 })
 
+it('refuses a conflicting Claude marketplace definition before any sync writes', async () => {
+  expect(
+    await main([
+      'maintainer',
+      'setup',
+      '--distribution',
+      'repo',
+      '--skill',
+      'query',
+    ]),
+  ).toBe(0)
+  const marketplace = {
+    name: 'acme-marketplace',
+    owner: { name: 'acme' },
+    plugins: [
+      {
+        name: 'acme-library',
+        source: './',
+        strict: false,
+        description: 'Keep this description',
+      },
+    ],
+  }
+  write('.claude-plugin/marketplace.json', JSON.stringify(marketplace))
+  const manifest = read('packages/client/package.json')
+  const tree = read('_artifacts/skill_tree.yaml')
+  expect(await main(['maintainer', 'sync'])).toBe(1)
+  expect(vi.mocked(console.error).mock.calls.flat().join('\n')).toContain(
+    'strict: false',
+  )
+  expect(read('packages/client/package.json')).toBe(manifest)
+  expect(read('_artifacts/skill_tree.yaml')).toBe(tree)
+  expect(readJson('.claude-plugin/marketplace.json')).toEqual(marketplace)
+  expect(existsSync(join(root, '.claude-plugin/plugin.json'))).toBe(false)
+  expect(existsSync(join(root, '.cursor-plugin'))).toBe(false)
+  expect(existsSync(join(root, '.intent/skill-distribution.json'))).toBe(false)
+
+  marketplace.plugins[0]!.strict = true
+  write('.claude-plugin/marketplace.json', JSON.stringify(marketplace))
+  expect(await main(['maintainer', 'sync'])).toBe(0)
+  expect(readJson('.claude-plugin/marketplace.json').plugins).toEqual([
+    {
+      ...marketplace.plugins[0],
+      skills: ['./packages/client/skills/query'],
+    },
+  ])
+})
+
 it.each(['.claude-plugin', '.cursor-plugin'])(
   'refuses a prefixed %s marketplace source before any sync writes',
   async (directory) => {
