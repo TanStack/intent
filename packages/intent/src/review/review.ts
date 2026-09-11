@@ -509,7 +509,12 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       }
     }
   }
-  const ignored = new Set([...list(ignorePatterns), ...diff(ignorePatterns)])
+  // Query Git for ignored paths only when an uncovered change needs classifying.
+  let ignored: Set<string> | undefined
+  const isIgnored = (path: string) => {
+    ignored ??= new Set([...list(ignorePatterns), ...diff(ignorePatterns)])
+    return ignored.has(path)
+  }
   const skillFiles = files.filter(
     (path) =>
       basename(path) === 'SKILL.md' &&
@@ -650,7 +655,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     }
   }
   for (const path of changed) {
-    if (covered.has(path) || ignored.has(path)) continue
+    if (covered.has(path) || isIgnored(path)) continue
     add('source', path, [path], [])
   }
   for (const id of Object.keys(state?.items ?? {})) {
