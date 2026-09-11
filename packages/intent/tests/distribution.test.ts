@@ -133,6 +133,7 @@ it('generates selected package paths, preserves plugin fields, and leaves skill 
     'skills',
     'add',
     'acme/library',
+    '--full-depth',
     '--skill',
     'query',
   ])

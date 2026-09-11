@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
+import { parseFrontmatter } from '../../src/shared/utils.js'
 
 const gh = process.env.INTENT_GH_SKILL_BIN
 const skills = process.env.INTENT_SKILLS_BIN
@@ -297,4 +298,130 @@ it.skipIf(!gh || !skills)(
     }
   },
   60_000,
+)
+
+it.skipIf(!gh || !skills || process.env.INTENT_DISTRIBUTION_REMOTE !== '1')(
+  'installs real TanStack AI package skills using the generated remote commands',
+  async () => {
+    const root = mkdtempSync(join(tmpdir(), 'intent-distribution-remote-'))
+    const source = join(root, 'source')
+    const repository = 'TanStack/ai'
+    const revision = 'f554b5e2515f2872137ac4abe1c6efefa2078301'
+    function write(path: string, content: string) {
+      mkdirSync(dirname(join(source, path)), { recursive: true })
+      writeFileSync(join(source, path), content)
+    }
+    function run(command: string, args: Array<string>, cwd: string) {
+      const result = spawnSync(command, args, {
+        cwd,
+        encoding: 'utf8',
+        timeout: 120_000,
+        env: {
+          ...process.env,
+          DISABLE_TELEMETRY: '1',
+          DO_NOT_TRACK: '1',
+          GH_PROMPT_DISABLED: '1',
+          GIT_TERMINAL_PROMPT: '0',
+        },
+      })
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+    }
+    try {
+      write('package.json', JSON.stringify({ name: 'ai', repository }))
+      write('pnpm-workspace.yaml', 'packages: [packages/*]\n')
+      run('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], source)
+      run(process.execPath, [cli, 'maintainer', 'setup'], source)
+      for (const [packageName, name] of [
+        ['ai', 'ai-core'],
+        ['ai-mcp', 'ai-mcp'],
+      ] as const) {
+        const path = `packages/${packageName}/skills/${name}/SKILL.md`
+        const response = await fetch(
+          `https://raw.githubusercontent.com/${repository}/${revision}/${path}`,
+          { signal: AbortSignal.timeout(30_000) },
+        )
+        expect(response.ok, `${path}: HTTP ${response.status}`).toBe(true)
+        write(path, await response.text())
+        write(
+          `packages/${packageName}/package.json`,
+          JSON.stringify({ name: `@tanstack/${packageName}` }),
+        )
+        run(
+          process.execPath,
+          [
+            cli,
+            'maintainer',
+            'add',
+            name,
+            '--package',
+            `packages/${packageName}`,
+            '--domain',
+            'ai',
+          ],
+          source,
+        )
+      }
+      run(
+        process.execPath,
+        [
+          cli,
+          'maintainer',
+          'setup',
+          '--distribution',
+          'repo',
+          '--skill',
+          'ai-core',
+          '--skill',
+          'ai-mcp',
+        ],
+        source,
+      )
+      run(process.execPath, [cli, 'maintainer', 'sync'], source)
+      const instructions = JSON.parse(
+        readFileSync(join(source, '.intent/skill-distribution.json'), 'utf8'),
+      )
+      for (const installer of ['skills', 'gh'] as const) {
+        const consumer = join(root, installer)
+        mkdirSync(consumer)
+        run('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], consumer)
+        if (installer === 'skills') {
+          run(
+            skills!,
+            [
+              ...instructions.install.skills.slice(2),
+              '--agent',
+              'codex',
+              '--copy',
+              '--yes',
+            ],
+            consumer,
+          )
+        } else {
+          for (const command of instructions.install.github)
+            run(
+              gh!,
+              [...command.slice(1), '--agent', 'codex', '--scope', 'project'],
+              consumer,
+            )
+        }
+        const installed = join(consumer, '.agents/skills')
+        expect(readdirSync(installed).sort()).toEqual(['ai-core', 'ai-mcp'])
+        for (const name of ['ai-core', 'ai-mcp'])
+          expect(
+            parseFrontmatter(join(installed, name, 'SKILL.md')),
+          ).toMatchObject({
+            name,
+          })
+        expect(
+          readFileSync(
+            join(installed, 'ai-core/tool-calling/SKILL.md'),
+            'utf8',
+          ),
+        ).not.toBe('')
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  },
+  300_000,
 )
