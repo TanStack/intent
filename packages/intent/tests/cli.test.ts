@@ -3197,6 +3197,62 @@ describe('cli commands', () => {
     expect(output).toContain('Framework skills must have a "requires" field')
   })
 
+  it.each(['package.json', 'pnpm-workspace.yaml'])(
+    'recognizes Intent at the workspace root declared by %s',
+    async (workspaceFile) => {
+      const root = mkdtempSync(
+        join(realTmpdir, 'intent-cli-validate-root-dep-'),
+      )
+      tempDirs.push(root)
+      const manifest = {
+        private: true,
+        ...(workspaceFile === 'package.json'
+          ? { workspaces: ['packages/*'] }
+          : {}),
+        devDependencies: { '@tanstack/intent': '^0.4.0' },
+      }
+      writeJson(join(root, 'package.json'), manifest)
+      if (workspaceFile === 'pnpm-workspace.yaml')
+        writeFileSync(
+          join(root, 'pnpm-workspace.yaml'),
+          'packages:\n  - packages/*\n',
+        )
+      const packageDir = join(root, 'packages', 'client')
+      writeJson(join(packageDir, 'package.json'), {
+        name: 'client',
+        keywords: ['tanstack-intent'],
+        files: ['skills'],
+      })
+      writeSkillMd(join(packageDir, 'skills', 'query'), {
+        name: 'query',
+        description: 'Query the client.',
+      })
+
+      for (const cwd of [root, packageDir]) {
+        process.chdir(cwd)
+        logSpy.mockClear()
+        expect(await main(['validate'])).toBe(0)
+        expect(logSpy.mock.calls.flat().join('\n')).not.toContain(
+          '@tanstack/intent is not in devDependencies',
+        )
+      }
+
+      writeJson(join(root, 'package.json'), {
+        ...manifest,
+        devDependencies: {},
+      })
+      writeJson(join(root, 'packages', 'tooling', 'package.json'), {
+        name: 'tooling',
+        devDependencies: { '@tanstack/intent': '^0.4.0' },
+      })
+      logSpy.mockClear()
+      expect(await main(['validate'])).toBe(0)
+      expect(logSpy.mock.calls.flat().join('\n')).toContain(
+        '@tanstack/intent is not in devDependencies',
+      )
+    },
+  )
+
   it('validates package skills from repo root without root packaging warnings', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-mono-'))
     tempDirs.push(root)

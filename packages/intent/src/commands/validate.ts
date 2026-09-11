@@ -98,8 +98,24 @@ function collectPackagingWarnings(context: ProjectContext): Array<string> {
   if (!existsSync(pkgJsonPath)) return []
 
   let pkgJson: Record<string, unknown>
+  let devDeps: Record<string, string> | undefined
   try {
     pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8'))
+    devDeps = pkgJson.devDependencies as Record<string, string> | undefined
+    if (
+      !devDeps?.['@tanstack/intent'] &&
+      context.workspaceRoot &&
+      context.workspaceRoot !== context.packageRoot
+    ) {
+      const workspaceManifestPath = join(context.workspaceRoot, 'package.json')
+      if (existsSync(workspaceManifestPath)) {
+        const workspaceManifest = JSON.parse(
+          readFileSync(workspaceManifestPath, 'utf8'),
+        ) as Record<string, unknown>
+        devDeps = workspaceManifest.devDependencies as
+          Record<string, string> | undefined
+      }
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return [`Could not parse package.json: ${msg}`]
@@ -107,7 +123,6 @@ function collectPackagingWarnings(context: ProjectContext): Array<string> {
 
   const warnings: Array<string> = []
 
-  const devDeps = pkgJson.devDependencies as Record<string, string> | undefined
   if (!devDeps?.['@tanstack/intent']) {
     warnings.push('@tanstack/intent is not in devDependencies')
   }
