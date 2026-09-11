@@ -25,11 +25,13 @@ import { runReviewCommand } from './review.js'
 import { runValidateCommand } from './validate.js'
 import type { DistributionOptions } from '../maintainer/distribution.js'
 import type { AdoptionPrompts } from '../maintainer/adopt.js'
+import type { ReviewPrompts } from '../review/interactive.js'
 
 export interface MaintainerCommandRuntime {
   isTTY?: boolean
   isCI?: boolean
   adoptionPrompts?: AdoptionPrompts
+  reviewPrompts?: ReviewPrompts
 }
 
 export interface MaintainerCommandOptions extends DistributionOptions {
@@ -44,6 +46,7 @@ export interface MaintainerCommandOptions extends DistributionOptions {
   json?: boolean
   record?: string
   apply?: string
+  interactive?: boolean
 }
 
 export async function runMaintainerCommand(
@@ -66,7 +69,7 @@ export async function runMaintainerCommand(
     ],
     status: ['artifacts', 'base', 'json'],
     sync: ['artifacts'],
-    review: ['base', 'json', 'record'],
+    review: ['base', 'json', 'record', 'interactive'],
     check: ['artifacts', 'base'],
   }
   if (!allowed[action])
@@ -80,6 +83,23 @@ export async function runMaintainerCommand(
       fail(`--${key} is not supported by maintainer ${action}.`)
   }
   if (action === 'review') {
+    if (options.interactive) {
+      if (options.json || options.record)
+        fail('--interactive cannot be combined with --json or --record.')
+      if (
+        (runtime.isCI ?? isCI) ||
+        !(runtime.isTTY ?? (process.stdin.isTTY && process.stdout.isTTY))
+      )
+        fail(
+          'Interactive review requires a human terminal outside CI. Use --json for a report or maintainer check for a CI gate.',
+        )
+      const { runInteractiveReview } = await import('../review/interactive.js')
+      const prompts =
+        runtime.reviewPrompts ??
+        (await import('../review/prompts.js')).createReviewPrompts()
+      await runInteractiveReview(process.cwd(), options.base, prompts)
+      return
+    }
     runReviewCommand(undefined, options)
     return
   }
