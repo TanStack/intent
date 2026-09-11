@@ -76,6 +76,8 @@ Save the report under `.intent/`, assess the pending items, and annotate complet
 
 Publish through your library's normal release process.
 
+For repository exports, complete the [distribution acceptance checks](./cli/intent-maintainer#verify-distribution) and follow the [release and update contract](./cli/intent-maintainer#releases-and-updates). Publishing an npm version alone does not update plugin versions or consumer installations.
+
 The registry discovers your package on its next sync cycle. Your skills, version history, and download stats appear on the registry automatically.
 
 A passing structural check alone does not establish that the consumer can complete the task. Include that task evidence in the library's release review.

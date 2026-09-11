@@ -98,17 +98,27 @@ Setup remembers this choice. `maintainer check` reports an unconfigured choice u
 
 After authoring, `maintainer sync` updates Claude and Cursor plugin manifests and marketplace entries that point to the existing skill directories. It preserves unrelated plugin fields and other marketplace entries. It writes `.intent/skill-distribution.json` with source paths and install arguments, and prints commands consumers can copy. Conflicting plugin identities or source roots require resolution before synchronization writes anything.
 
+An existing Claude marketplace entry with `strict: false` conflicts with the generated component manifest. Sync rejects it before writing. Keep the existing policy until the maintainer decides to use `strict: true` or omit the field.
+
 Opting out after exports exist clears the selected paths and Intent's marketplace entry on the next sync. Other plugin features and source skills remain. This does not revoke installed copies or hide public GitHub files.
 
 ### Consumer choices
 
-- Use the generated `npx skills add owner/library --skill <names>` command for a selected set, or `gh skill add owner/library <exact-SKILL.md-path>` for an individual skill.
+- Use the generated `npx skills add owner/library --full-depth --skill <names>` command for a selected set, or `gh skill add owner/library <exact-SKILL.md-path>` for an individual skill. Full-depth discovery finds package skills even when the repository has root or agent-directory skills; the named selection still limits what is installed.
 - Install the generated marketplace through Claude Code or Cursor's native plugin flow.
 - Install the npm package and use Intent's existing `list`, `install`, and `load` commands for its bundled version of the guidance.
 
 Repository location and installation scope are separate choices. The skill installers default to project scope; consumers can explicitly choose user scope with `--global` for `skills` or `--scope user` for `gh`. Third-party tools retain their own discovery behavior: a full scan or `--all` may expose other public skills. Use the generated selection or exact paths for a curated subset.
 
 A discovery skill can help someone decide whether a library fits before they install it. Keep that guidance about supported tasks and setup choices, respect the project's chosen stack, and hand API implementation to the installed package's skills and source. Avoid maintaining another copy of version-sensitive API instructions in the discovery skill.
+
+### Releases and updates
+
+Generated commands do not pin a revision or match the application's installed dependency versions. Each installer resolves its own default source. For a specific release, add `--pin <tag-or-sha>` to the generated GitHub command, use `https://github.com/owner/library/tree/<ref>` as the `skills add` source, or add a Claude marketplace from `owner/library@<tag>`. Verify that the selected paths exist at that revision.
+
+Intent preserves existing plugin version fields. Claude uses an explicit plugin version to decide whether an update is available: bump the authoritative plugin version when releasing changed content. Without a version in either the plugin or its marketplace entry, Git-based Claude installs use the source commit. Updating an npm package version alone does not update plugin metadata.
+
+Publish through the library's normal release process. Repository exports do not submit marketplace listings, publish releases, or update consumer installations. State the supported package versions in implementation skills and check them against the consumer's dependencies. Consumers manage updates and removal through their chosen installer.
 
 ## Maintain and check
 
@@ -159,6 +169,16 @@ lit: @tanstack/intent@latest maintainer check
 The [source-review reference](./intent-review) describes the report format, fingerprints, and baseline recovery. `maintainer review` supports its `--base`, `--json`, and `--record` options. The standalone `review` command also remains available for workflow reminder output and review-only checks.
 
 `maintainer check --base <pull-request-base>` runs the same maintainer checks in CI. It does not publish, install consumer skills, or certify that an agent's recorded conclusion is correct. Missing task evidence remains a review responsibility.
+
+## Verify distribution
+
+Before releasing a library's exports, install the selected skills in disposable consumer projects through every advertised route. Check the installed names, bundled references and scripts, supported package versions, update behavior, and removal. Opting out in the source repository must not be described as removing consumer copies.
+
+Use each host's native plugin flow, including [Cursor](https://cursor.com/docs/reference/plugins). Inspect all loaded components: the repository root becomes the plugin root, so preserved or automatically discovered commands, agents, hooks, and MCP configuration are not limited by the skill selection. Run a real consumer task; valid metadata does not establish correct guidance.
+
+When changing Intent's distribution implementation, run the [contributor compatibility gate](https://github.com/TanStack/intent/blob/main/CONTRIBUTING.md#distribution-compatibility). That guide owns the required tools, verified versions, and automated checks.
+
+Cursor acceptance and agent task quality remain separate checks. Record an unavailable host or missing task evidence as incomplete, even when the automated gate passes.
 
 ## Related
 
