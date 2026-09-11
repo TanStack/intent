@@ -239,6 +239,10 @@ function createCli(
       'Prerequisite skill; repeat for multiple skills',
     )
     .option('--base <ref>', 'Git revision to review against')
+    .option(
+      '--interactive',
+      'Inspect and record maintainer review outcomes in a terminal',
+    )
     .option('--json', 'Output an adoption plan, status, or review as JSON')
     .option(
       '--record <file>',
@@ -254,6 +258,7 @@ function createCli(
     .example('maintainer status --json')
     .example('maintainer sync')
     .example('maintainer review --json')
+    .example('maintainer review --interactive')
     .example('maintainer check --base origin/main')
     .action(
       async (
