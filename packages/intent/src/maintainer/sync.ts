@@ -20,8 +20,9 @@ import type { FileChange } from './files.js'
 
 export function planMaintainerSync(project: MaintainerProject) {
   const tree = readRecord(project, 'skill_tree.yaml')
+  const originalTree = JSON.stringify(tree.document.toJS())
   const map = readRecord(project, 'domain_map.yaml').document.toJS()
-  const entries = skillEntries(project)
+  const entries = skillEntries(project, tree)
   const changes: Array<FileChange> = []
   const problems: Array<string> = []
   const packages = new Map<string, Array<string>>()
@@ -195,15 +196,12 @@ export function planMaintainerSync(project: MaintainerProject) {
     if (source !== content) changes.push({ path, source, content })
   }
   const nextTree = tree.document.toString()
-  if (
-    JSON.stringify(tree.document.toJS()) !==
-    JSON.stringify(readRecord(project, 'skill_tree.yaml').document.toJS())
-  )
+  if (JSON.stringify(tree.document.toJS()) !== originalTree)
     changes.push({ path: tree.path, source: tree.source, content: nextTree })
   const spec = readFileSync(recordPath(project, 'skill_spec.md'), 'utf8')
   if (!spec.trim() || spec.includes(authoringMarker))
     problems.push('skill_spec.md still needs authored coverage and decisions.')
-  const distribution = planDistribution(project)
+  const distribution = planDistribution(project, tree, entries)
   changes.push(...distribution.changes)
   problems.push(...distribution.problems)
   return { changes, problems, skills, distribution }

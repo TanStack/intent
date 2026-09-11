@@ -67,8 +67,10 @@ export function createAdoptionPlan(
       return [path, existsSync(path) ? readFileSync(path, 'utf8') : null]
     },
   )
-  const hasTree = existsSync(recordPath(project, 'skill_tree.yaml'))
-  const entries = hasTree ? skillEntries(project) : []
+  const tree = existsSync(recordPath(project, 'skill_tree.yaml'))
+    ? readRecord(project, 'skill_tree.yaml')
+    : undefined
+  const entries = tree ? skillEntries(project, tree) : []
   const registered = new Map(
     entries.map((entry) => [
       relative(project.root, skillPath(project, entry)).replaceAll('\\', '/'),
@@ -232,7 +234,7 @@ export function createAdoptionPlan(
     fingerprint: createHash('sha256')
       .update(JSON.stringify([project, directory, snapshot, skills]))
       .digest('hex'),
-    distribution: (hasTree ? readDistribution(project) : undefined) ?? {
+    distribution: (tree ? readDistribution(tree) : undefined) ?? {
       mode: 'unconfigured' as const,
       repository: inferDistributionRepository(project),
     },

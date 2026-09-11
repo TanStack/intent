@@ -3,6 +3,7 @@ import { dirname, relative, resolve } from 'node:path'
 import { isCI } from 'std-env'
 import { fail } from '../shared/cli-error.js'
 import {
+  readRecord,
   resolveMaintainerProject,
   setupRecords,
 } from '../maintainer/project.js'
@@ -186,7 +187,9 @@ export async function runMaintainerCommand(
         console.log(
           'For existing skills, run intent maintainer adopt to review registrations.',
         )
-        const distribution = readDistribution(project)
+        const distribution = readDistribution(
+          readRecord(project, 'skill_tree.yaml'),
+        )
         if (!distribution) console.log(distributionChoice)
         console.log(
           `Repository distribution: ${distribution?.mode ?? 'unconfigured'}. Run maintainer sync after authoring to update export metadata.`,

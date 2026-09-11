@@ -146,18 +146,6 @@ function safePath(root: string, path: string): string {
   return current
 }
 
-function fileHash(root: string, path: string): string | null {
-  const absolute = safePath(root, path)
-  try {
-    if (!lstatSync(absolute).isFile())
-      throw new Error(`Cannot review non-file: ${JSON.stringify(path)}`)
-    return digest(readFileSync(absolute))
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
-    throw error
-  }
-}
-
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
@@ -307,23 +295,6 @@ function sourcePattern(
   return `:(top,glob)${path}`
 }
 
-function snapshot(
-  root: string,
-  paths: Array<string>,
-  problems: Array<string>,
-): Snapshot {
-  return Object.fromEntries(
-    sorted(paths).map((path) => {
-      try {
-        return [path, fileHash(root, path)]
-      } catch (error) {
-        problems.push(error instanceof Error ? error.message : String(error))
-        return [path, null]
-      }
-    }),
-  )
-}
-
 export function createReview(cwd: string, baseRef?: string): ReviewReport {
   let root: string
   try {
@@ -383,6 +354,23 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
   const names = repositoryNames(root)
   const covered = new Set<string>()
   const items: Array<ReviewItem> = []
+  const hashes = new Map<string, string | null>()
+  const sourceMatches = new Map<string, Array<string>>()
+  function fileHash(path: string): string | null {
+    const cached = hashes.get(path)
+    if (cached !== undefined) return cached
+    const absolute = safePath(root, path)
+    let hash: string | null = null
+    try {
+      if (!lstatSync(absolute).isFile())
+        throw new Error(`Cannot review non-file: ${JSON.stringify(path)}`)
+      hash = digest(readFileSync(absolute))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    hashes.set(path, hash)
+    return hash
+  }
   function add(
     kind: ReviewItem['kind'],
     path: string,
@@ -390,7 +378,16 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     problems: Array<string>,
   ) {
     const id = `${kind}:${path}`
-    const current = snapshot(root, paths, problems)
+    const current: Snapshot = Object.fromEntries(
+      sorted(paths).map((file) => {
+        try {
+          return [file, fileHash(file)]
+        } catch (error) {
+          problems.push(error instanceof Error ? error.message : String(error))
+          return [file, null]
+        }
+      }),
+    )
     const previous = state?.items[id]
     const fingerprint = reviewFingerprint(id, current, problems)
     if (
@@ -471,7 +468,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     let frontmatter: Record<string, unknown> | null
     let skillHash: string | null
     try {
-      skillHash = fileHash(root, file)
+      skillHash = fileHash(file)
       if (skillHash === null) continue
       frontmatter = parseFrontmatter(safePath(root, file))
     } catch (error) {
@@ -505,7 +502,11 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
           if (typeof source !== 'string')
             throw new Error('Source entries must be strings.')
           const pattern = sourcePattern(source, packageDir, names)
-          const matches = sorted([...list([pattern]), ...diff([pattern])])
+          let matches = sourceMatches.get(pattern)
+          if (matches === undefined) {
+            matches = sorted([...list([pattern]), ...diff([pattern])])
+            sourceMatches.set(pattern, matches)
+          }
           if (matches.length === 0 && !sourceMappingWasRecorded)
             throw new Error(`Source matched no available files: ${source}`)
           sourceFiles.push(...matches)
@@ -525,7 +526,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
   ].some(
     (path) =>
       files.includes(path) &&
-      fileHash(root, path) !== null &&
+      fileHash(path) !== null &&
       readFileSync(safePath(root, path), 'utf8').includes(
         '<!-- intent-maintainer:start -->',
       ),
@@ -553,7 +554,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
             )
             continue
           }
-          if (fileHash(root, path) === null) {
+          if (fileHash(path) === null) {
             problems.push(`Missing required planning record: ${path}`)
             continue
           }
@@ -595,7 +596,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     if (!id.startsWith('skill:')) continue
     const path = id.slice('skill:'.length)
     if (files.includes(path)) continue
-    if (fileHash(root, path) === null && !changed.includes(path)) {
+    if (fileHash(path) === null && !changed.includes(path)) {
       add('source', path, [path], [])
     }
   }

@@ -10,8 +10,14 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { parse, stringify } from 'yaml'
+import { parse, parseDocument, stringify } from 'yaml'
 import { main } from '../src/cli.js'
+import type * as Yaml from 'yaml'
+
+vi.mock('yaml', async (importOriginal) => {
+  const actual = await importOriginal<typeof Yaml>()
+  return { ...actual, parseDocument: vi.fn(actual.parseDocument) }
+})
 
 let root: string
 let previousCwd: string
@@ -83,6 +89,29 @@ afterEach(() => {
   process.chdir(previousCwd)
   vi.restoreAllMocks()
   rmSync(root, { recursive: true, force: true })
+})
+
+it('plans selected distribution from one parsed skill tree', async () => {
+  expect(
+    await main([
+      'maintainer',
+      'setup',
+      '--distribution',
+      'repo',
+      '--skill',
+      'query',
+    ]),
+  ).toBe(0)
+  const tree = read('_artifacts/skill_tree.yaml')
+  vi.mocked(parseDocument).mockClear()
+
+  expect(await main(['maintainer', 'sync'])).toBe(0)
+  expect(
+    vi.mocked(parseDocument).mock.calls.filter(([source]) => source === tree),
+  ).toHaveLength(1)
+  expect(readJson('.claude-plugin/plugin.json').skills).toEqual([
+    './packages/client/skills/query',
+  ])
 })
 
 it('explains the missing choice, remembers an opt-out, and does not ask again', async () => {
