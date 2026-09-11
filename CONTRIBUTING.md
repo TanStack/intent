@@ -67,13 +67,3 @@ The gate rebuilds Intent, requires all three executables, and runs all cases in 
 Ordinary tests keep external checks optional. When running the test file directly, set both installer variables for the local fixture, `INTENT_CLAUDE_BIN` for native Claude checks, and `INTENT_DISTRIBUTION_REMOTE=1` for remote cases. Use `test:distribution` for a release result that cannot omit these cases.
 
 Cursor acceptance and agent task quality remain separate gates. In a disposable Cursor profile, check selected components, references, updates, and removal through its native plugin flow. Run a real consumer task against supported dependency versions, and record unavailable hosts or missing task evidence as incomplete. The automated gate does not establish cross-host task correctness.
-
-## Adding a new example
-
-- Clone an existing example into the appropriate `examples` directory
-- Name it the example name in kebab-case
-- Update the new example's package.json to match the new example name and any other details
-- Check dependencies for unused packages
-- Install any additional packages to the example that you may need
-- Update the docs/config.json file to include the new example in the navigation sidebar
-- Commit the example eg. `docs: Add example-name`
