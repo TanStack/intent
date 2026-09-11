@@ -612,3 +612,85 @@ it('registers a package-owned skill and synchronizes metadata without replacing 
   expect(await main(['maintainer', 'sync'])).toBe(0)
   for (const [path, content] of snapshot) expect(read(path)).toBe(content)
 })
+
+it('registers a skill with the workspace package that owns the current directory', async () => {
+  write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n')
+  write('packages/client/package.json', '{"name":"@library/client"}\n')
+  write('packages/client/src/query.ts', 'export const query = () => 1\n')
+  expect(await main(['maintainer', 'setup', '--distribution', 'none'])).toBe(0)
+  process.chdir(join(root, 'packages/client'))
+  expect(
+    await main([
+      'maintainer',
+      'add',
+      'query',
+      '--domain',
+      'queries',
+      '--description',
+      'Use when querying with Library.',
+      '--source',
+      'src/query.ts',
+    ]),
+  ).toBe(0)
+  expect(existsSync(join(root, 'packages/client/skills/query/SKILL.md'))).toBe(
+    true,
+  )
+  expect(existsSync(join(root, 'skills'))).toBe(false)
+  expect(parse(read('_artifacts/skill_tree.yaml')).skills[0]).toMatchObject({
+    name: 'query',
+    package: 'packages/client',
+    path: 'skills/query/SKILL.md',
+  })
+  expect(
+    vi
+      .mocked(console.log)
+      .mock.calls.flat()
+      .some((line) =>
+        String(line).includes(
+          'Registered packages/client/skills/query/SKILL.md',
+        ),
+      ),
+  ).toBe(true)
+  // An explicit --package remains repository-relative from any directory.
+  expect(
+    await main([
+      'maintainer',
+      'add',
+      'root-only',
+      '--package',
+      '.',
+      '--domain',
+      'setup',
+      '--description',
+      'Use when configuring the workspace.',
+      '--source',
+      'pnpm-workspace.yaml',
+    ]),
+  ).toBe(0)
+  expect(existsSync(join(root, 'skills/root-only/SKILL.md'))).toBe(true)
+})
+
+it('does not ask for a review of the files setup and sync write', async () => {
+  write('src/query.ts', 'export const query = () => 1\n')
+  write('pnpm-lock.yaml', 'lockfileVersion: 9\n')
+  expect(await main(['maintainer', 'setup', '--distribution', 'none'])).toBe(0)
+  expect(
+    await main([
+      'maintainer',
+      'add',
+      'query',
+      '--domain',
+      'queries',
+      '--description',
+      'Use when querying with Library.',
+      '--source',
+      'src/query.ts',
+    ]),
+  ).toBe(0)
+  expect(await main(['maintainer', 'sync'])).toBe(0)
+  expect(
+    createReview(root)
+      .items.map((item) => item.id)
+      .sort(),
+  ).toEqual(['planning:skills/_artifacts', 'skill:skills/query/SKILL.md'])
+})

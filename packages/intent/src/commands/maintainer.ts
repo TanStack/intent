@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
 import { isCI } from 'std-env'
+import { resolveProjectContext } from '../core/project-context.js'
 import { fail } from '../shared/cli-error.js'
 import {
   readRecord,
@@ -48,6 +49,21 @@ export interface MaintainerCommandOptions extends DistributionOptions {
   record?: string
   apply?: string
   interactive?: boolean
+}
+
+// An explicit --package is repository-relative. Without one, a command run from
+// inside a workspace member registers the skill with that member instead of
+// silently placing it at the repository root.
+function inferOwningPackage(
+  root: string,
+  explicit: string | undefined,
+): string | undefined {
+  if (explicit !== undefined) return explicit
+  const { packageRoot } = resolveProjectContext({ cwd: process.cwd() })
+  if (!packageRoot || packageRoot === root) return undefined
+  const owner = relative(root, packageRoot).replaceAll('\\', '/')
+  if (!owner || owner.startsWith('..')) return undefined
+  return owner
 }
 
 export async function runMaintainerCommand(
@@ -195,7 +211,10 @@ export async function runMaintainerCommand(
           `Repository distribution: ${distribution?.mode ?? 'unconfigured'}. Run maintainer sync after authoring to update export metadata.`,
         )
       } else if (action === 'add') {
-        console.log(`Registered ${addSkill(project, name, options)}.`)
+        const owner = inferOwningPackage(project.root, options.package)
+        console.log(
+          `Registered ${addSkill(project, name, { ...options, package: owner })}.`,
+        )
         console.log(
           'Next: author the skill and its task coverage, then run intent maintainer sync, maintainer review, and maintainer check.',
         )
@@ -245,7 +264,7 @@ export async function runMaintainerCommand(
       await runValidateCommand(dir)
     if (plan.problems.length || plan.changes.length || review.items.length)
       fail(
-        'Maintainer check failed. Resolve the authoring issues, run maintainer sync, and record review outcomes with maintainer review --record <report.json>.',
+        'Maintainer check failed. Resolve the authoring issues, run intent maintainer sync, and record review outcomes with intent maintainer review --interactive, or annotate a --json report and pass it to --record <report.json>.',
       )
     console.log(
       'Maintainer checks passed. Recorded conclusions still depend on the supplied review evidence.',

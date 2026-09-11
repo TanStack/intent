@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -674,3 +675,71 @@ it.each(['skills/_artifacts', '.agents/knowledge/_artifacts'])(
     ).toContain('must be visible to Git')
   },
 )
+
+it('ignores Intent-owned files and lockfiles unless a skill maps them, and honors review.ignore', () => {
+  accept()
+  write('AGENTS.md', '# Agents\n')
+  write('.claude-plugin/plugin.json', '{"name":"library"}\n')
+  write('.github/workflows/check-skills.yml', 'name: Check Skills\n')
+  write('pnpm-lock.yaml', 'lockfileVersion: 9\n')
+  write('packages/client/package.json', '{"name":"client"}\n')
+  write(
+    'package.json',
+    '{"name":"library","repository":"https://github.com/acme/library","keywords":["tanstack-intent"]}\n',
+  )
+  expect(createReview(root).items).toEqual([])
+
+  write('docs/guide.md', 'Guide\n')
+  write('lib/other.ts', 'export const other = 1\n')
+  expect(createReview(root).items.map((item) => item.id)).toEqual([
+    'source:docs/guide.md',
+    'source:lib/other.ts',
+  ])
+
+  planningRecords('_artifacts')
+  write(
+    '_artifacts/skill_tree.yaml',
+    'library: { name: library }\nreview:\n  ignore: [docs/**]\nskills: []\n',
+  )
+  expect(
+    createReview(root)
+      .items.map((item) => item.id)
+      .filter((id) => id.startsWith('source:')),
+  ).toEqual(['source:lib/other.ts'])
+
+  write(
+    '_artifacts/skill_tree.yaml',
+    'library: { name: library }\nreview:\n  ignore: [{ bad: true }]\nskills: []\n',
+  )
+  expect(() => createReview(root)).toThrow(/Invalid review.ignore/)
+  write(
+    '_artifacts/skill_tree.yaml',
+    'library: { name: library }\nreview:\n  ignore: ["../outside/**"]\nskills: []\n',
+  )
+  expect(() => createReview(root)).toThrow(/Unsupported review.ignore path/)
+})
+
+it('still tracks an ignored path when a skill maps it as a source', () => {
+  skill(['acme/library:package.json'])
+  git('add', '.')
+  git('commit', '-qm', 'map the manifest')
+  accept()
+  write('package.json', '{"name":"library","version":"2.0.0"}\n')
+  const report = createReview(root)
+  expect(report.items.map((item) => item.id)).toEqual([
+    'skill:skills/request/SKILL.md',
+  ])
+  expect(report.items[0]?.changedFiles).toEqual(['package.json'])
+})
+
+it('rejects a review record that annotates nothing instead of silently recording zero outcomes', async () => {
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const report = join(root, '.intent/review.json')
+  write('.intent/review.json', JSON.stringify(createReview(root)))
+  expect(await main(['review', root, '--record', report])).toBe(1)
+  expect(errorSpy.mock.calls.flat().join('\n')).toMatch(
+    /annotates none of its 1 review item\(s\).*--interactive/,
+  )
+  expect(existsSync(join(root, '.intent/review-state.json'))).toBe(false)
+  errorSpy.mockRestore()
+})

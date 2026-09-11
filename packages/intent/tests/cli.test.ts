@@ -3439,6 +3439,67 @@ describe('cli commands', () => {
     )
   })
 
+  it('accepts per-skill files entries and names an unpublished skill directory', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-files-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      name: '@acme/library',
+      devDependencies: { '@tanstack/intent': '^0.0.18' },
+      keywords: ['tanstack-intent'],
+      files: ['dist', 'skills/covered'],
+    })
+    writeSkillMd(join(root, 'skills', 'covered'), {
+      name: 'covered',
+      description: 'Published through its own files entry',
+    })
+    writeSkillMd(join(root, 'skills', 'missing'), {
+      name: 'missing',
+      description: 'Not published',
+    })
+
+    process.chdir(root)
+
+    expect(await main(['validate'])).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).not.toContain('"skills" is not')
+    expect(output).not.toContain('"skills/covered"')
+    expect(output).toContain(
+      '"skills/missing" is not covered by the "files" array',
+    )
+    expect(output).not.toContain('"!skills/_artifacts"')
+  })
+
+  it('still asks to exclude skills/_artifacts when the whole skills directory is published', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-artifacts-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      name: '@acme/library',
+      devDependencies: { '@tanstack/intent': '^0.0.18' },
+      keywords: ['tanstack-intent'],
+      files: ['skills'],
+    })
+    writeSkillMd(join(root, 'skills', 'core'), {
+      name: 'core',
+      description: 'Core guidance',
+    })
+    mkdirSync(join(root, 'skills', '_artifacts'), { recursive: true })
+    for (const name of ['domain_map.yaml', 'skill_tree.yaml']) {
+      writeFileSync(join(root, 'skills', '_artifacts', name), 'skills: []\n')
+    }
+    writeFileSync(
+      join(root, 'skills', '_artifacts', 'skill_spec.md'),
+      '# Spec\n',
+    )
+
+    process.chdir(root)
+
+    expect(await main(['validate'])).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('"!skills/_artifacts" is not in the "files" array')
+  })
+
   it('skips cleanly when validate is run without a skills directory', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-missing-skills-'))
     tempDirs.push(root)

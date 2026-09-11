@@ -91,7 +91,16 @@ function buildValidationFailure(
   return lines.join('\n')
 }
 
-function collectPackagingWarnings(context: ProjectContext): Array<string> {
+function filesEntryCovers(entry: string, directory: string): boolean {
+  if (entry.startsWith('!')) return false
+  const prefix = entry.replace(/\/(?:\*\*|\*)?$/, '')
+  return directory === prefix || directory.startsWith(`${prefix}/`)
+}
+
+function collectPackagingWarnings(
+  context: ProjectContext,
+  skillFiles: ReadonlyArray<string>,
+): Array<string> {
   if (!context.packageRoot || !context.targetPackageJsonPath) return []
 
   const pkgJsonPath = context.targetPackageJsonPath
@@ -134,15 +143,32 @@ function collectPackagingWarnings(context: ProjectContext): Array<string> {
 
   const files = pkgJson.files as Array<string> | undefined
   if (Array.isArray(files)) {
-    if (!files.includes('skills')) {
-      warnings.push(
-        '"skills" is not in the "files" array — skills won\'t be published',
-      )
+    const packageRoot = context.packageRoot
+    const skillDirs = [
+      ...new Set(
+        skillFiles.map((file) =>
+          relative(packageRoot, dirname(file)).replaceAll('\\', '/'),
+        ),
+      ),
+    ]
+    // Either the whole skills directory or each skill directory (as written
+    // by `intent maintainer sync`) publishes the guidance.
+    for (const directory of skillDirs) {
+      if (!files.some((entry) => filesEntryCovers(entry, directory))) {
+        warnings.push(
+          `"${directory}" is not covered by the "files" array — this skill won't be published`,
+        )
+      }
     }
 
     // In monorepos, _artifacts lives at repo root, not under packages —
     // the negation pattern is a no-op and shouldn't be added.
-    if (!context.isMonorepo && !files.includes('!skills/_artifacts')) {
+    if (
+      !context.isMonorepo &&
+      existsSync(join(packageRoot, 'skills', '_artifacts')) &&
+      files.some((entry) => filesEntryCovers(entry, 'skills/_artifacts')) &&
+      !files.includes('!skills/_artifacts')
+    ) {
       warnings.push(
         '"!skills/_artifacts" is not in the "files" array — artifacts will be published unnecessarily',
       )
@@ -625,7 +651,7 @@ async function runValidateCommandInternal(
     }
 
     validatedCount += skillFiles.length
-    warnings.push(...collectPackagingWarnings(validateContext))
+    warnings.push(...collectPackagingWarnings(validateContext, skillFiles))
   }
 
   if (options.check) {
