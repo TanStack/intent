@@ -10,11 +10,13 @@ id: intent-maintainer
 | Command | What it does |
 | --- | --- |
 | `maintainer setup` | Install repository guidance, create missing planning records, and save the distribution choice. |
+| `maintainer adopt` | Review and register existing package-owned skills with interactive confirmation or an explicit JSON plan. |
 | `maintainer add <name>` | Create a skill skeleton or register an existing skill in the cumulative record. |
 | `maintainer status` | Show authoring gaps, stale generated files, and pending source reviews. |
 | `maintainer sync` | Align tree metadata, package publishing entries, plugin manifests, and consumer install commands. |
 | `maintainer review` | Inspect Git changes and record supplied outcomes against content fingerprints. |
 | `maintainer check` | Check skill structure, registration, generated metadata, and recorded reviews locally or in CI. |
+| `maintainer verify-package <archive.tgz>` | Check registered skills and resources in the supplied package archive without extracting or executing it. |
 
 The former `scaffold` command is removed. Use `maintainer setup` and `maintainer add` for file creation, and `meta generate-skill` for the authoring procedure.
 
@@ -44,6 +46,8 @@ The three records have separate jobs:
 | `skill_tree.yaml` | Skill identities, owning packages, paths, source mappings, prerequisites, and the distribution choice. |
 
 Generated skeletons remain unfinished. Author their contents and remove the `intent:needs-authoring` marker after completing that work. A successful setup command does not mean the skills are ready to publish.
+
+For an existing library, use [guided adoption](./intent-adopt) to register its current skills without rewriting their content. Reviewers can use [interactive review](./intent-review#interactive-review) in a human terminal; CI uses the noninteractive checks.
 
 ## Add a skill
 
@@ -169,6 +173,8 @@ lit: @tanstack/intent@latest maintainer check
 The [source-review reference](./intent-review) describes the report format, fingerprints, and baseline recovery. `maintainer review` supports its `--base`, `--json`, and `--record` options. The standalone `review` command also remains available for workflow reminder output and review-only checks.
 
 `maintainer check --base <pull-request-base>` runs the same maintainer checks in CI. It does not publish, install consumer skills, or certify that an agent's recorded conclusion is correct. Missing task evidence remains a review responsibility.
+
+After the normal package build, use [archive verification](./intent-verify-package) against the actual release tarball. Repository validation and archive verification protect different stages; neither executes an authoring model in CI.
 
 ## Verify distribution
 

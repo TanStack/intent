@@ -76,6 +76,10 @@
           "to": "cli/intent-adopt"
         },
         {
+          "label": "intent maintainer verify-package",
+          "to": "cli/intent-verify-package"
+        },
+        {
           "label": "intent validate",
           "to": "cli/intent-validate"
         },
