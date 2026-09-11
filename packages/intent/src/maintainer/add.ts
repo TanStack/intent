@@ -23,6 +23,7 @@ export interface AddSkillOptions {
   description?: string
   source?: string | Array<string>
   requires?: string | Array<string>
+  task?: string | Array<string>
 }
 
 export function stringList(value: unknown, label: string): Array<string> {
@@ -153,6 +154,10 @@ export function planAddSkills(
       entry.purpose = frontmatter.metadata.purpose
     tree.document.addIn(['skills'], entry)
     entries.push(entry)
+    const tasks = stringList(
+      options.task === undefined ? [] : [options.task].flat(),
+      'tasks',
+    )
     const mapSkills: Array<Record<string, unknown>> = map.document.toJS().skills
     if (!mapSkills.some((skill) => skill.slug === name)) {
       map.document.addIn(['skills'], {
@@ -161,11 +166,11 @@ export function planAddSkills(
         domain: options.domain,
         description: entry.purpose ?? entry.description,
         ...(packageDir ? { packages: [manifest.name] } : {}),
-        tasks: [],
+        tasks,
         covers: [],
       })
     }
-    nextSpec = `${nextSpec.trimEnd()}\n\n- Registered \`${name}\` in \`${packageDir ?? '.'}\` (domain \`${options.domain}\`). Task coverage, decisions, and checks still need to be recorded.\n`
+    nextSpec = `${nextSpec.trimEnd()}\n\n- Registered \`${name}\` in \`${packageDir ?? '.'}\` (domain \`${options.domain}\`).${tasks.length ? ` Developer tasks: ${tasks.join('; ')}.` : ''} ${tasks.length ? 'Decisions and checks' : 'Task coverage, decisions, and checks'} still need to be recorded.\n`
     paths.push(join(packageDir ?? '', entry.path))
   }
   if (additions.length) {

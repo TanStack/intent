@@ -743,3 +743,12 @@ it('rejects a review record that annotates nothing instead of silently recording
   expect(existsSync(join(root, '.intent/review-state.json'))).toBe(false)
   errorSpy.mockRestore()
 })
+
+it('tells report readers which outcomes and fields a recording needs', () => {
+  expect(createReview(root).recording).toEqual({
+    outcomes: ['updated', 'no-change', 'out-of-scope'],
+    planningOutcomes: ['updated', 'no-change'],
+    required: ['outcome', 'reason', 'evidence'],
+    command: 'intent maintainer review --record <report.json>',
+  })
+})
