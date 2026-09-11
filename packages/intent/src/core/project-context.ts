@@ -1,9 +1,11 @@
 import { existsSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
   findWorkspaceRoot,
   readWorkspacePatterns,
 } from '../setup/workspace-patterns.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 
 export type ProjectContext = {
   cwd: string
@@ -23,18 +25,23 @@ export type ProjectContext = {
 export function resolveProjectContext({
   cwd,
   targetPath,
+  fsCache = createIntentFsCache(),
 }: {
   cwd: string
   targetPath?: string
+  fsCache?: IntentFsCache
 }): ProjectContext {
   const resolvedCwd = resolve(cwd)
   const resolvedTargetPath = targetPath
     ? resolve(resolvedCwd, targetPath)
     : resolvedCwd
   const packageRoot = findOwningPackageRoot(resolvedTargetPath)
-  const workspaceRoot = findWorkspaceRoot(packageRoot ?? resolvedTargetPath)
+  const workspaceRoot = findWorkspaceRoot(
+    packageRoot ?? resolvedTargetPath,
+    fsCache,
+  )
   const workspacePatterns = workspaceRoot
-    ? (readWorkspacePatterns(workspaceRoot) ?? [])
+    ? (readWorkspacePatterns(workspaceRoot, fsCache) ?? [])
     : []
 
   return {

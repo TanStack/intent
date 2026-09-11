@@ -110,7 +110,7 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   }
 
   function walkWorkspacePackages(): void {
-    for (const wsDir of findWorkspacePackages(opts.projectRoot)) {
+    for (const wsDir of findWorkspacePackages(opts.projectRoot, opts.fsCache)) {
       opts.scanNodeModulesDir(join(wsDir, 'node_modules'))
 
       const wsPkg = readPkgJsonWithWarning(wsDir, 'workspace')

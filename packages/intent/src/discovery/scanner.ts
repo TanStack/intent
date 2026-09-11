@@ -24,6 +24,7 @@ import {
 import {
   findWorkspacePackages,
   findWorkspaceRoot,
+  readWorkspacePatterns,
 } from '../setup/workspace-patterns.js'
 import { createIntentFsCache } from './fs-cache.js'
 import { detectPackageManager } from './package-manager.js'
@@ -325,6 +326,7 @@ function discoverSkillByNameHint(
   packageName: string,
   skillNameHint: string,
   readFs: ReadFs = nodeReadFs,
+  includeMetadata = true,
 ): Array<SkillEntry> {
   const skills: Array<SkillEntry> = []
   const seen = new Set<string>()
@@ -339,7 +341,9 @@ function discoverSkillByNameHint(
 
     // Keep the hinted identity so loading can report its existing path error,
     // without reading metadata from an unreadable or escaping target.
-    const skill = readSkillEntry(skillsDir, childDir, skillFile, readFs) ?? {
+    const skill = (includeMetadata
+      ? readSkillEntry(skillsDir, childDir, skillFile, readFs)
+      : null) ?? {
       name: hint,
       path: skillFile,
       description: '',
@@ -517,11 +521,44 @@ function getScanScope(options: ScanOptions): ScanScope {
 function createWorkspacePackageKeySet(
   workspaceRoot: string | null,
   fsCache: IntentFsCache,
+  candidateRoot?: string,
 ): Set<string> {
   if (!workspaceRoot) return new Set()
 
+  if (candidateRoot) {
+    const patterns = readWorkspacePatterns(workspaceRoot, fsCache) ?? []
+    const couldMatch = patterns.some((pattern) => {
+      if (pattern.startsWith('!')) return false
+      const segments = pattern.split('/')
+      const wildcard = segments.findIndex(
+        (segment) => segment === '*' || segment === '**',
+      )
+      if (
+        wildcard < 0 ||
+        segments
+          .slice(wildcard)
+          .some((segment) => !['*', '**'].includes(segment))
+      )
+        return true
+      try {
+        const readFs = fsCache.getReadFs()
+        const prefix = readFs.realpathSync(
+          join(workspaceRoot, ...segments.slice(0, wildcard)),
+        )
+        const candidate = readFs.realpathSync(candidateRoot)
+        const path = relative(prefix, candidate)
+        return (
+          path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path)
+        )
+      } catch {
+        return true
+      }
+    })
+    if (!couldMatch) return new Set()
+  }
+
   const packagesByParent = new Map<string, Array<string>>()
-  for (const dir of findWorkspacePackages(workspaceRoot)) {
+  for (const dir of findWorkspacePackages(workspaceRoot, fsCache)) {
     const parent = dirname(dir)
     const dirs = packagesByParent.get(parent)
     if (dirs) dirs.push(dir)
@@ -576,7 +613,7 @@ export function scanForIntents(
   const scanScope = getScanScope(options)
   const fsCache =
     (options as ScanOptionsWithFsCache).fsCache ?? createIntentFsCache()
-  const workspaceRoot = findWorkspaceRoot(projectRoot)
+  const workspaceRoot = findWorkspaceRoot(projectRoot, fsCache)
   const packageManager = detectPackageManager(
     projectRoot,
     [workspaceRoot],
@@ -835,6 +872,7 @@ export function scanForIntents(
 export interface ScanIntentPackageAtRootOptions {
   fallbackName?: string
   fsCache?: IntentFsCache
+  includeSkillMetadata?: boolean
   projectRoot?: string
   source?: IntentPackage['source']
   skillNameHint?: string
@@ -855,7 +893,11 @@ export function scanIntentPackageAtRoot(
   const packageIndexes = new Map<string, number>()
   const fsCache = options.fsCache ?? createIntentFsCache()
   const getPackageKind = createPackageKindResolver(
-    createWorkspacePackageKeySet(findWorkspaceRoot(projectRoot), fsCache),
+    createWorkspacePackageKeySet(
+      findWorkspaceRoot(projectRoot, fsCache),
+      fsCache,
+      packageRoot,
+    ),
     fsCache.getFsIdentity,
   )
 
@@ -873,6 +915,7 @@ export function scanIntentPackageAtRoot(
             packageName,
             options.skillNameHint!,
             fsCache.getReadFs(),
+            options.includeSkillMetadata !== false,
           )
       : (skillsDir, packageName) =>
           discoverSkills(skillsDir, packageName, fsCache, warnings),
