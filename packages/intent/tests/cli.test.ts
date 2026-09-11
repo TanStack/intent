@@ -207,9 +207,12 @@ describe('intent meta', () => {
       'for generating an approved full-library tree, use tree-generator.',
     )
     const format = join('generate-skill', 'references', 'skill-format.md')
+    const distribution = join('generate-skill', 'references', 'distribution.md')
     expect(output).toContain(`](${join(metaDir, format)})`)
+    expect(output).toContain(`](${join(metaDir, distribution)})`)
     for (const path of [
       format,
+      distribution,
       join('domain-discovery', 'SKILL.md'),
       join('tree-generator', 'SKILL.md'),
     ])

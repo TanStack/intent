@@ -1,6 +1,6 @@
 # Offer skills from the repository
 
-Read this when setting up maintainer workflow or preparing skills for consumers who use GitHub skill installers or plugins. Keep the authoritative skills beside their owning package's code. Repository distribution generates metadata pointing to those directories; it does not copy the skill text into a second tree.
+Keep authoritative skills beside their owning package's code. Generate distribution metadata for those directories instead of maintaining another copy of the guidance.
 
 ## Record the maintainer's choice
 
@@ -20,7 +20,7 @@ The choice lives under `distribution` in `skill_tree.yaml`. Repeated setup prese
 
 ## Generate and check
 
-After authoring, run `intent maintainer sync`. It updates `skills` paths in `.claude-plugin/plugin.json` and `.cursor-plugin/plugin.json`, and the matching root-source entry in each `marketplace.json`. It preserves unrelated plugin fields and other marketplace entries, and rejects conflicting plugin identities or source roots. It also writes `.intent/skill-distribution.json` with the selected source paths and install arguments, and prints copyable consumer commands. Commit the generated metadata alongside the tree and skills through the repository's normal review process.
+Run `intent maintainer sync` after authoring. Inspect `skills` paths in `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, and the matching root-source marketplace entries. They must match the saved selection; unrelated plugin fields and marketplace entries must survive. Resolve conflicting plugin identities or source roots before syncing. Inspect `.intent/skill-distribution.json` and the printed consumer commands, then keep the generated metadata alongside the tree and skills for repository review.
 
 `intent maintainer status` reports stale generated files; `--json` also includes the saved distribution choice and consumer commands. `intent maintainer check` requires a recorded choice and synchronized exports alongside the existing authoring and source-review checks. Rerun source review after synchronization so the report covers the final files. Opting out after generating exports clears Intent's selected paths and its marketplace entry on the next sync, retaining unrelated plugin features. It does not revoke already installed copies or make public GitHub files private.
 
@@ -35,8 +35,20 @@ The generated selection controls Intent's exported metadata and suggested instal
 
 Publish through the library's normal npm/GitHub release process. `gh skill publish --dry-run` can validate a GitHub skill release without publishing it; actual releases remain a maintainer action. skills.sh indexes public GitHub skills through real installation usage; there is no submission API used by Intent. Do not simulate installations to create a listing.
 
-## Verify installer compatibility
+## Versions and updates
 
-The repository's optional `tests/integration/distribution-installers.test.ts` exercises generated metadata with real CLIs. Build Intent, then set `INTENT_GH_SKILL_BIN` and `INTENT_SKILLS_BIN` to installed executables and run that test. It installs only a selected nested package skill into temporary consumer projects, checks its bundled reference, and runs `gh skill publish --dry-run`. Telemetry is disabled. It does not install user-level skills, publish a release, or prove native plugin activation or agent task quality.
+- Generated commands do not pin a release. Each installer resolves its own default source; the selected skill names do not select the application's installed package version.
+- For release-specific installs, use `gh skill add owner/repo <exact-SKILL.md-path> --pin <tag-or-sha>`, a GitHub `https://github.com/owner/repo/tree/<ref>` source for `skills add`, or a Claude marketplace source such as `owner/repo@<tag>`. Verify that the selected paths exist at that revision before sharing the command.
+- Intent preserves existing plugin `version` fields. If a Claude plugin declares a version, bump its authoritative version on each plugin release; unchanged versions keep consumers on the cached content. If neither the plugin nor its marketplace entry declares a version, Git-based Claude installs use the source commit. An npm package version change does not update plugin metadata.
+- Check externally installed implementation guidance against the application's dependencies. Record supported package versions in the skill; do not present repository distribution as automatic package-version matching. Consumers own their installer updates and removal. Maintainer opt-out does not remove their installed copies.
+- A Claude marketplace entry with `strict: false` conflicts with the generated component manifest. Resolve it with the maintainer before syncing: use `strict: true` or omit the field. Intent rejects the conflict without changing the existing policy.
 
-Primary format references: [skills CLI](https://github.com/vercel-labs/skills), [GitHub skill install](https://cli.github.com/manual/gh_skill_install), [Claude plugin paths](https://code.claude.com/docs/en/plugins-reference#path-behavior-rules), and [Cursor plugins](https://cursor.com/docs/reference/plugins).
+## Verify and hand off
+
+1. Install the selected skills in disposable consumer projects through each advertised installer and host. Check selected names and exclusion of unselected skills. For plugins, inspect all loaded components: the repository root is the plugin root, so preserved or automatically discovered commands, agents, hooks, and MCP configuration are not limited by the skill selection.
+2. Resolve required references from the installed skill directory and execute bundled helpers with valid and invalid inputs. Check runtime requirements against the consumer environment. Proceed when the required files and tools work outside the source checkout.
+3. Test updates and removal through the chosen installer. Use the native [Claude](https://code.claude.com/docs/en/plugin-marketplaces#validation-and-testing) or [Cursor](https://cursor.com/docs/reference/plugins) flow to check plugin activation and changed versions. Verify that source opt-out clears generated exports without removing existing consumer copies.
+4. Run an actual consumer task against the supported package version using the [task quality checks](task-quality.md). File copying and valid manifests establish packaging, not task correctness.
+5. After the final sync, record supported outcomes through [source review](source-review.md) and run `intent maintainer check`. Report paths, revisions, host versions, check results, and missing evidence. The diff is ready for review when these checks pass; mark unavailable hosts or task evidence as incomplete. Publishing and commits require the maintainer's request.
+
+For changed installer syntax or host formats, verify matching versions against the [skills CLI](https://github.com/vercel-labs/skills), [GitHub skill install](https://cli.github.com/manual/gh_skill_install), [Claude plugin paths](https://code.claude.com/docs/en/plugins-reference#path-behavior-rules), and [Cursor plugins](https://cursor.com/docs/reference/plugins) before changing consumer instructions.

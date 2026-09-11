@@ -1,7 +1,7 @@
 ---
 name: generate-skill
 description: >
-  Use when creating or extending library skill batches, updating guidance after library source or docs change, or acting on an Intent review report, including when the maintainer asks only for the library change. For full-library discovery or taxonomy design, use domain-discovery; for generating an approved full-library tree, use tree-generator.
+  Use when creating or extending library skill batches, updating guidance after library source or docs change, configuring repository skill distribution, or acting on an Intent review report, including when the maintainer asks only for the library change. For full-library discovery or taxonomy design, use domain-discovery; for generating an approved full-library tree, use tree-generator.
 metadata:
   purpose: >
     Author and maintain library skills when creating an initial skill batch, changing library source or docs, or acting on an Intent review report. Use the current task and source evidence to create useful guidance, verify it on representative tasks, and update affected skills.
@@ -15,13 +15,13 @@ metadata:
 
 Work in the maintainer's library repository with their existing coding agent. Produce a source-grounded skill batch or focused update with task checks, a cumulative planning record, and a compact review. Intent supplies the procedure and deterministic evidence; your agent performs the authoring work.
 
-Use [Agent Skills](https://agentskills.io/home) as the shared format and authoring guidance. The rules below apply its [best practices](https://agentskills.io/skill-creation/best-practices) to library maintenance; Intent adds source mappings, planning records, and revision-bound review.
-
 ## 1. Recover the task and choose the workflow
 
 Use the current conversation, supplied diff, identified code/docs change, review report, or selected skill tree entry. Reuse the task, decisions, and evidence already established in this session; do not ask the maintainer to paste them again. Identify what developers need help doing and which package owns that task. If there is no usable task or review input, ask one question: “What do developers need help doing with this library?” Wait for the answer.
 
 Check repository instructions and Git status before edits; preserve unrelated changes. Read [maintainer commands](references/maintainer-commands.md) when setting up the repository, adding a skill, or preparing a batch for review. Use those commands for registration, metadata synchronization, and completion checks. Discover the package name, version, repository, skill root, and vocabulary from the repository. Use an established custom root; otherwise use `skills/` inside the owning package, including in monorepos.
+
+Before choosing or changing repository exports, follow [repository distribution](references/distribution.md). For an export-only change, complete that procedure against existing skill records; use the authoring steps below only if guidance must change.
 
 For an initial skill set or a request spanning several developer tasks, read [initial batches](references/initial-batches.md). Reuse scope already approved in the conversation. For one concrete task, proceed directly below. During ordinary library work, keep the code change as the primary task. Read [source review](references/source-review.md) to identify affected guidance from actual changes and record completed reviews before handing off any of these workflows.
 
@@ -53,16 +53,16 @@ For an **update**, preserve established names, layout, terminology, and scope un
 
 ### Writing rules
 
-- Write `description` as self-contained “Use when…” activation guidance: concrete developer tasks, library/framework context, and relevant boundaries. Include requests that omit API names. Other agents must be able to select the skill from this standard field alone; exact wording is not a validation rule.
+- Write `description` as self-contained activation guidance: concrete developer tasks, library/framework context, and relevant boundaries. Name each distinct task once instead of listing synonymous triggers. Include requests that omit API names. Other agents must be able to select the skill from this standard field alone; exact wording is not a validation rule.
 - Put the descriptive explanation of what the skill is for in `metadata.purpose`. For an existing skill without that field, copy its pre-edit description text unchanged before writing the activation description. Preserve an existing purpose; never replace it with a later activation description. Read [the field contract](references/skill-format.md#purpose-and-activation) before this migration or when creating either field.
 - Start the body with the task procedure. Keep skill-selection criteria in `description`; retain execution prerequisites, conditional reference pointers, and downstream handoffs in the body.
 - Each independent skill enables an independently useful developer task. Keep common, necessary guidance accessible from its entry point.
 - Put conditional detail behind a Markdown link that says **when to read it**. Choose reference boundaries by relevance, not proximity to 500 lines.
 - Group features used in the same developer task under one skill. Use references for conditional detail within that task; create a separate skill only for a task worth discovering independently. API exports and feature counts do not determine skill boundaries.
-- Give shared rules one authoritative home. Every affected entry point must route to that home with the required reading condition; preserve genuine prerequisites and failure handling when removing duplication.
+- Give shared rules one authoritative home, keeping each rule beside its exceptions and failure conditions. Every affected entry point must route to that home with the required reading condition; preserve genuine prerequisites and failure handling when removing duplication.
 - Use source, types, and docs for readily discoverable facts. Capture the decisions, constraints, and pitfalls they do not make obvious. Include the API detail necessary to make the task's examples usable.
 - Keep necessary, complete examples with real imports and concrete values. Ground pitfalls in evidence; do not manufacture mistakes to meet a quota.
-- State observable completion and failure conditions for the developer's task. A shorter file that omits required behavior is not an improvement.
+- End each workflow step with a checkable result or failure condition. Complete the task only when all required results are verified; report missing evidence explicitly. A shorter file that omits required behavior is not an improvement.
 - Give one supported default, with alternatives only for a concrete condition. Specify exact steps for fragile operations and allow judgment where approaches are equivalent. Keep non-obvious failure constraints at the entry point when the agent could miss a conditional reference.
 - When adding commands or reusable automation, follow [script guidance](references/skill-format.md#commands-and-bundled-scripts). Bundle tested logic only when it prevents repeated reinvention or fragile command construction.
 
