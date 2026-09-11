@@ -14,6 +14,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { main } from '../src/cli.js'
 import { createReview } from '../src/review/review.js'
+import type { AdoptionPlan } from '../src/maintainer/adopt.js'
 
 let root: string
 let previousCwd: string
@@ -221,6 +222,295 @@ it('preserves a planning record located directly at the repository root', async 
   expect(parse(read('skill_tree.yaml')).generated_from.domain_map).toBe(
     'domain_map.yaml',
   )
+})
+
+it('previews existing library skills without writing or including agent and dependency skills', async () => {
+  write('pnpm-workspace.yaml', 'packages: [packages/*]\n')
+  write('packages/client/package.json', '{"name":"@library/client"}\n')
+  for (const directory of [
+    'skills/root-task',
+    'packages/client/skills/query',
+    '.agents/skills/agent-only',
+    '.github/skills/review',
+    'node_modules/dependency/skills/dependency',
+  ]) {
+    const name = directory.split('/').at(-1)
+    write(
+      `${directory}/SKILL.md`,
+      `---\nname: ${name}\ndescription: Use for ${name}.\nsources: [package.json]\n---\nExisting guidance.\n`,
+    )
+  }
+  expect(await main(['maintainer', 'adopt', '--json'])).toBe(0)
+  const plan = JSON.parse(String(vi.mocked(console.log).mock.calls[0]![0]))
+  expect(plan.skills).toEqual([
+    expect.objectContaining({
+      name: 'query',
+      package: 'packages/client',
+      path: 'skills/query/SKILL.md',
+      status: 'unregistered',
+      selected: false,
+    }),
+    expect.objectContaining({
+      name: 'root-task',
+      package: '',
+      path: 'skills/root-task/SKILL.md',
+      status: 'unregistered',
+      selected: false,
+    }),
+  ])
+  expect(existsSync(join(root, '_artifacts'))).toBe(false)
+  expect(existsSync(join(root, '.intent'))).toBe(false)
+  expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+})
+
+it('excludes nested fixture packages unless their directory is explicitly requested', async () => {
+  write('pnpm-workspace.yaml', 'packages: [packages/*]\n')
+  for (const directory of ['packages/client', 'tests/fixtures/client']) {
+    write(`${directory}/package.json`, '{"name":"client"}\n')
+    write(
+      `${directory}/skills/query/SKILL.md`,
+      '---\nname: query\ndescription: Query\n---\nGuidance.\n',
+    )
+  }
+  expect(await main(['maintainer', 'adopt', '--json'])).toBe(0)
+  const plan = JSON.parse(String(vi.mocked(console.log).mock.calls[0]![0]))
+  expect(plan.skills.map((skill: { id: string }) => skill.id)).toEqual([
+    'packages/client/skills/query/SKILL.md',
+  ])
+  vi.mocked(console.log).mockClear()
+  expect(
+    await main([
+      'maintainer',
+      'adopt',
+      '--path',
+      'tests/fixtures/client/skills',
+      '--json',
+    ]),
+  ).toBe(0)
+  const explicit = JSON.parse(String(vi.mocked(console.log).mock.calls[0]![0]))
+  expect(explicit.skills).toHaveLength(2)
+})
+
+it('adopts a confirmed batch without rewriting skills or approving their content', async () => {
+  const guidance =
+    '---\nname: query\ndescription: Use when querying.\nmetadata:\n  purpose: Preserve this purpose.\nsources: [package.json]\n---\nAuthored guidance.\n'
+  write('skills/query/SKILL.md', guidance)
+  expect(await main(['maintainer', 'adopt', '--json'])).toBe(0)
+  const plan = JSON.parse(String(vi.mocked(console.log).mock.calls[0]![0]))
+  plan.skills[0].selected = true
+  plan.skills[0].domain = 'queries'
+  plan.distribution = { mode: 'none' }
+  write('adoption.json', JSON.stringify(plan))
+  expect(await main(['maintainer', 'adopt', '--apply', 'adoption.json'])).toBe(
+    0,
+  )
+  expect(read('skills/query/SKILL.md')).toBe(guidance)
+  expect(
+    parse(read('skills/_artifacts/skill_tree.yaml')).skills[0],
+  ).toMatchObject({
+    name: 'query',
+    domain: 'queries',
+    purpose: 'Preserve this purpose.',
+  })
+  expect(
+    parse(read('skills/_artifacts/domain_map.yaml')).skills[0].tasks,
+  ).toEqual([])
+  expect(read('skills/_artifacts/skill_spec.md')).toContain(
+    'intent:needs-authoring',
+  )
+  expect(read('AGENTS.md')).toContain('maintainer check')
+  expect(existsSync(join(root, '.intent/review-state.json'))).toBe(false)
+  expect(await main(['maintainer', 'check'])).toBe(1)
+  const before = ['skill_tree.yaml', 'domain_map.yaml', 'skill_spec.md'].map(
+    (name) => read(`skills/_artifacts/${name}`),
+  )
+  vi.mocked(console.log).mockClear()
+  expect(await main(['maintainer', 'adopt', '--json'])).toBe(0)
+  const repeated = JSON.parse(String(vi.mocked(console.log).mock.calls[0]![0]))
+  expect(repeated.skills[0].status).toBe('registered')
+  write('adoption.json', JSON.stringify(repeated))
+  expect(await main(['maintainer', 'adopt', '--apply', 'adoption.json'])).toBe(
+    0,
+  )
+  expect(
+    ['skill_tree.yaml', 'domain_map.yaml', 'skill_spec.md'].map((name) =>
+      read(`skills/_artifacts/${name}`),
+    ),
+  ).toEqual(before)
+})
+
+it('rejects invalid batch choices and stale adoption plans before creating records', async () => {
+  for (const name of ['query', 'cache'])
+    write(
+      `skills/${name}/SKILL.md`,
+      `---\nname: ${name}\ndescription: ${name}\n---\nGuidance.\n`,
+    )
+  expect(await main(['maintainer', 'adopt', '--json'])).toBe(0)
+  const plan = JSON.parse(String(vi.mocked(console.log).mock.calls[0]![0]))
+  for (const candidate of plan.skills) candidate.selected = true
+  plan.skills[0].domain = 'queries'
+  write('adoption.json', JSON.stringify(plan))
+  expect(await main(['maintainer', 'adopt', '--apply', 'adoption.json'])).toBe(
+    1,
+  )
+  expect(existsSync(join(root, 'skills/_artifacts'))).toBe(false)
+  plan.skills[1].domain = 'queries'
+  write('adoption.json', JSON.stringify(plan))
+  write(
+    'skills/query/SKILL.md',
+    read('skills/query/SKILL.md') + 'Later change.\n',
+  )
+  expect(await main(['maintainer', 'adopt', '--apply', 'adoption.json'])).toBe(
+    1,
+  )
+  expect(vi.mocked(console.error).mock.calls.flat().join('\n')).toContain(
+    'changed',
+  )
+  expect(existsSync(join(root, 'skills/_artifacts'))).toBe(false)
+  expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+})
+
+it('requires interactive confirmation and keeps cancellation read-only', async () => {
+  write(
+    'skills/query/SKILL.md',
+    '---\nname: query\ndescription: Query\n---\nGuidance.\n',
+  )
+  const choose = vi.fn((plan: AdoptionPlan) => {
+    plan.skills[0]!.selected = true
+    plan.skills[0]!.domain = 'queries'
+    plan.distribution = { mode: 'none' }
+    return Promise.resolve(plan)
+  })
+  const confirm = vi.fn(() => Promise.resolve(false))
+  const runtime = {
+    isTTY: true,
+    isCI: false,
+    adoptionPrompts: { choose, confirm },
+  }
+  expect(await main(['maintainer', 'adopt'], runtime)).toBe(0)
+  expect(confirm).toHaveBeenCalledOnce()
+  expect(existsSync(join(root, 'skills/_artifacts'))).toBe(false)
+  expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+  confirm.mockResolvedValue(true)
+  expect(await main(['maintainer', 'adopt'], runtime)).toBe(0)
+  expect(parse(read('skills/_artifacts/skill_tree.yaml')).skills[0].name).toBe(
+    'query',
+  )
+})
+
+it('requires explicit noninteractive adoption and reports custom-root conflicts', async () => {
+  write(
+    'guidance/query/SKILL.md',
+    '---\nname: query\ndescription: Query\n---\nGuidance.\n',
+  )
+  expect(await main(['maintainer', 'adopt'], { isTTY: false })).toBe(1)
+  expect(existsSync(join(root, '.intent'))).toBe(false)
+  vi.mocked(console.log).mockClear()
+  expect(
+    await main(['maintainer', 'adopt', '--path', 'guidance', '--json']),
+  ).toBe(0)
+  const plan = JSON.parse(String(vi.mocked(console.log).mock.calls[0]![0]))
+  expect(plan.skills[0].id).toBe('guidance/query/SKILL.md')
+  write('skills/query/SKILL.md', read('guidance/query/SKILL.md'))
+  vi.mocked(console.log).mockClear()
+  expect(
+    await main(['maintainer', 'adopt', '--path', 'guidance', '--json']),
+  ).toBe(0)
+  const conflicts = JSON.parse(String(vi.mocked(console.log).mock.calls[0]![0]))
+  expect(
+    conflicts.skills.map((skill: { status: string }) => skill.status),
+  ).toEqual(['conflict', 'conflict'])
+})
+
+it('never prompts in CI even when a terminal is attached', async () => {
+  const choose = vi.fn(() => Promise.resolve(null))
+  const confirm = vi.fn(() => Promise.resolve(false))
+  const runtime = {
+    isTTY: true,
+    isCI: true,
+    adoptionPrompts: { choose, confirm },
+  }
+  expect(await main(['maintainer', 'adopt'], runtime)).toBe(1)
+  expect(await main(['maintainer', 'adopt', '--json'], runtime)).toBe(0)
+  expect(choose).not.toHaveBeenCalled()
+  expect(confirm).not.toHaveBeenCalled()
+  expect(existsSync(join(root, '.intent'))).toBe(false)
+  expect(existsSync(join(root, 'skills/_artifacts'))).toBe(false)
+})
+
+it('keeps planned and retired entries separate from missing active skills', async () => {
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  write(
+    'skills/_artifacts/skill_tree.yaml',
+    'skills:\n  - name: future\n    path: skills/future/SKILL.md\n    status: planned\n  - name: old\n    path: skills/old/SKILL.md\n    status: retired\n  - name: missing\n    path: skills/missing/SKILL.md\n',
+  )
+  vi.mocked(console.log).mockClear()
+  expect(await main(['maintainer', 'adopt', '--json'])).toBe(0)
+  const plan = JSON.parse(String(vi.mocked(console.log).mock.calls[0]![0]))
+  expect(plan.skills.map((skill: { status: string }) => skill.status)).toEqual([
+    'planned',
+    'missing',
+    'retired',
+  ])
+})
+
+it('rejects adoption after repository instructions change', async () => {
+  write(
+    'skills/query/SKILL.md',
+    '---\nname: query\ndescription: Query\n---\nGuidance.\n',
+  )
+  expect(await main(['maintainer', 'adopt', '--json'])).toBe(0)
+  const plan = JSON.parse(String(vi.mocked(console.log).mock.calls[0]![0]))
+  plan.skills[0].selected = true
+  plan.skills[0].domain = 'queries'
+  write('adoption.json', JSON.stringify(plan))
+  write('AGENTS.md', 'New maintainer instructions.\n')
+  expect(await main(['maintainer', 'adopt', '--apply', 'adoption.json'])).toBe(
+    1,
+  )
+  expect(read('AGENTS.md')).toBe('New maintainer instructions.\n')
+  expect(existsSync(join(root, 'skills/_artifacts'))).toBe(false)
+})
+
+it('adopts two packages and saves an explicit distribution selection', async () => {
+  write(
+    'package.json',
+    '{"name":"library","repository":"https://github.com/acme/library"}\n',
+  )
+  write('pnpm-workspace.yaml', 'packages: [packages/*]\n')
+  for (const name of ['query', 'cache']) {
+    write(`packages/${name}/package.json`, `{"name":"@library/${name}"}\n`)
+    write(
+      `packages/${name}/skills/${name}/SKILL.md`,
+      `---\nname: ${name}\ndescription: Use for ${name}.\nsources: [package.json]\n---\nAuthored ${name} guidance.\n`,
+    )
+  }
+  expect(await main(['maintainer', 'adopt', '--json'])).toBe(0)
+  const plan = JSON.parse(String(vi.mocked(console.log).mock.calls[0]![0]))
+  for (const candidate of plan.skills) {
+    candidate.selected = true
+    candidate.domain = 'queries'
+  }
+  plan.distribution = {
+    mode: 'repo',
+    repository: 'acme/library',
+    skills: ['query'],
+  }
+  write('adoption.json', JSON.stringify(plan))
+  expect(await main(['maintainer', 'adopt', '--apply', 'adoption.json'])).toBe(
+    0,
+  )
+  const tree = parse(read('_artifacts/skill_tree.yaml'))
+  expect(
+    tree.skills.map((skill: { package: string }) => skill.package),
+  ).toEqual(['packages/cache', 'packages/query'])
+  expect(tree.distribution).toEqual({
+    mode: 'repo',
+    repository: 'acme/library',
+    name: 'acme-library',
+    skills: ['query'],
+  })
+  expect(existsSync(join(root, '.claude-plugin'))).toBe(false)
 })
 
 afterEach(() => {

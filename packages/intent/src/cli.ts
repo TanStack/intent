@@ -14,11 +14,16 @@ import type {
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
 import type { StaleCommandOptions } from './commands/stale.js'
-import type { MaintainerCommandOptions } from './commands/maintainer.js'
+import type {
+  MaintainerCommandOptions,
+  MaintainerCommandRuntime,
+} from './commands/maintainer.js'
 import type { ReviewCommandOptions } from './commands/review.js'
 import type { ValidateCommandOptions } from './commands/validate.js'
 
-function createCli(runtime: InstallCommandRuntime = {}): CAC {
+function createCli(
+  runtime: InstallCommandRuntime & MaintainerCommandRuntime = {},
+): CAC {
   const cli = cac('intent')
   cli.usage('<command> [options]')
 
@@ -191,7 +196,9 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
       'maintainer <action> [name]',
       'Set up, author, synchronize, and check library skills',
     )
-    .usage('maintainer <setup|add|status|sync|review|check> [name] [options]')
+    .usage(
+      'maintainer <setup|adopt|add|status|sync|review|check> [name] [options]',
+    )
     .option(
       '--artifacts <directory>',
       'Established planning directory, relative to the repository root',
@@ -200,7 +207,14 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
       '--package <directory>',
       'Owning package directory, relative to the repository root',
     )
-    .option('--path <path>', 'SKILL.md path, relative to the owning package')
+    .option(
+      '--path <path>',
+      'Skill path for add, or repository-relative custom directory for adopt',
+    )
+    .option(
+      '--apply <file>',
+      'Apply reviewed adoption choices from a JSON plan',
+    )
     .option('--domain <slug>', 'Domain for a new skill')
     .option(
       '--distribution <mode>',
@@ -225,12 +239,15 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
       'Prerequisite skill; repeat for multiple skills',
     )
     .option('--base <ref>', 'Git revision to review against')
-    .option('--json', 'Output status or review as JSON')
+    .option('--json', 'Output an adoption plan, status, or review as JSON')
     .option(
       '--record <file>',
       'Record outcomes from an annotated review report',
     )
     .example('maintainer setup')
+    .example('maintainer adopt')
+    .example('maintainer adopt --json')
+    .example('maintainer adopt --apply adoption.json')
     .example(
       'maintainer add caching --domain queries --description "Use when caching queries." --source "src/**"',
     )
@@ -246,7 +263,7 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
       ) => {
         const { runMaintainerCommand } =
           await import('./commands/maintainer.js')
-        await runMaintainerCommand(action, name, options)
+        await runMaintainerCommand(action, name, options, runtime)
       },
     )
 
@@ -366,7 +383,7 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
 
 export async function main(
   argv: Array<string> = process.argv.slice(2),
-  runtime: InstallCommandRuntime = {},
+  runtime: InstallCommandRuntime & MaintainerCommandRuntime = {},
 ) {
   try {
     const cli = createCli(runtime)

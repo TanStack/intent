@@ -1,14 +1,10 @@
 import { execFileSync } from 'node:child_process'
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
 import { parseDocument, stringify } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
+import { writeChanges } from './files.js'
+import type { FileChange } from './files.js'
 
 export const authoringMarker = '<!-- intent:needs-authoring -->'
 const recordNames = ['domain_map.yaml', 'skill_spec.md', 'skill_tree.yaml']
@@ -89,12 +85,18 @@ export function recordPath(project: MaintainerProject, name: string): string {
   )
 }
 
-export function readRecord(project: MaintainerProject, name: string) {
+export function readRecord(
+  project: MaintainerProject,
+  name: string,
+  changes: ReadonlyArray<FileChange> = [],
+) {
   const path = recordPath(project, name)
-  if (!existsSync(path))
+  const pending = changes.find((change) => change.path === path)
+  const source = existsSync(path) ? readFileSync(path, 'utf8') : null
+  const content = pending?.content ?? source
+  if (content === null)
     throw new Error(`Missing ${name}. Run intent maintainer setup.`)
-  const source = readFileSync(path, 'utf8')
-  const document = parseDocument(source)
+  const document = parseDocument(content)
   const parsed: unknown = document.toJS()
   if (
     document.errors.length ||
@@ -117,10 +119,14 @@ export interface SkillEntry extends Record<string, unknown> {
   package?: string
 }
 
-export function skillEntries(project: MaintainerProject): Array<SkillEntry> {
+export function skillEntries(
+  project: MaintainerProject,
+  changes: ReadonlyArray<FileChange> = [],
+): Array<SkillEntry> {
   const entries: Array<unknown> = readRecord(
     project,
     'skill_tree.yaml',
+    changes,
   ).document.toJS().skills
   const names = new Set<string>()
   const paths = new Set<string>()
@@ -160,6 +166,14 @@ export function skillPath(
 }
 
 export function setupRecords(project: MaintainerProject): Array<string> {
+  const changes = planSetupRecords(project)
+  writeChanges(project.root, changes)
+  return changes.map((change) => relative(project.root, change.path))
+}
+
+export function planSetupRecords(
+  project: MaintainerProject,
+): Array<FileChange> {
   const { root } = project
   const context = resolveProjectContext({ cwd: root })
   if (!context.packageRoot)
@@ -201,13 +215,11 @@ export function setupRecords(project: MaintainerProject): Array<string> {
     if (name.endsWith('.yaml') && existsSync(recordPath(project, name)))
       readRecord(project, name)
   }
-  const created: Array<string> = []
+  const changes: Array<FileChange> = []
   for (const [name, content] of Object.entries(defaults)) {
     const path = recordPath(project, name)
     if (existsSync(path)) continue
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, content, { flag: 'wx' })
-    created.push(relative(root, path))
+    changes.push({ path, source: null, content })
   }
-  return created
+  return changes
 }
