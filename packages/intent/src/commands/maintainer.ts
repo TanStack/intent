@@ -36,6 +36,159 @@ export interface MaintainerCommandRuntime {
   reviewPrompts?: ReviewPrompts
 }
 
+interface MaintainerAction {
+  usage: string
+  summary: string
+  writes: string
+  options: Array<[flag: string, description: string]>
+}
+
+const optionHelp: Record<string, [flag: string, description: string]> = {
+  artifacts: [
+    '--artifacts <directory>',
+    'Planning record directory, relative to the repository root',
+  ],
+  package: [
+    '--package <directory>',
+    'Owning package directory, relative to the repository root (default: the package that owns the current directory)',
+  ],
+  path: ['--path <path>', 'Skill path relative to the owning package'],
+  adoptPath: [
+    '--path <directory>',
+    'Repository-relative custom skill directory to scan',
+  ],
+  apply: ['--apply <file>', 'Apply reviewed adoption choices from a JSON plan'],
+  domain: ['--domain <slug>', 'Task domain for the skill'],
+  distribution: [
+    '--distribution <mode>',
+    'repo to distribute selected skills from the repository, none to opt out',
+  ],
+  repository: [
+    '--repository <owner/repo>',
+    'GitHub repository for distribution',
+  ],
+  pluginName: ['--plugin-name <name>', 'Name for the generated skill plugin'],
+  skill: ['--skill <name>', 'Skill to distribute; repeat to select more'],
+  description: [
+    '--description <text>',
+    'Activation description for a new skill',
+  ],
+  source: ['--source <path>', 'Source evidence path; repeat for more'],
+  requires: ['--requires <name>', 'Prerequisite skill; repeat for more'],
+  base: ['--base <ref>', 'Git revision to review against'],
+  interactive: ['--interactive', 'Inspect and record outcomes in a terminal'],
+  json: ['--json', 'Print JSON instead of text'],
+  record: ['--record <file>', 'Record outcomes from an annotated JSON report'],
+}
+
+// Ordered as a maintainer runs them. `maintainer --help` prints this table and
+// `maintainer <action> --help` prints one entry.
+export const maintainerActions: Record<string, MaintainerAction> = {
+  setup: {
+    usage: 'maintainer setup [--distribution repo|none] [options]',
+    summary: 'Initialize planning records and agent instructions.',
+    writes:
+      'skill_tree.yaml, domain_map.yaml, skill_spec.md, and the intent-maintainer block in AGENTS.md (or the existing agent instruction file).',
+    options: [
+      'artifacts',
+      'distribution',
+      'repository',
+      'pluginName',
+      'skill',
+    ].map((key) => optionHelp[key]!),
+  },
+  adopt: {
+    usage:
+      'maintainer adopt [--json | --apply <plan.json>] [--path <directory>]',
+    summary: 'Register existing skills from a reviewed plan.',
+    writes:
+      'The three planning records and the agent instruction block. Skill contents stay as authored.',
+    options: ['artifacts', 'json', 'adoptPath', 'apply'].map(
+      (key) => optionHelp[key]!,
+    ),
+  },
+  add: {
+    usage:
+      'maintainer add <name> --domain <slug> [--description <text> --source <path>...] [options]',
+    summary: 'Create a skill skeleton or register an existing SKILL.md.',
+    writes:
+      'skills/<name>/SKILL.md beside the owning package, plus its entries in skill_tree.yaml, domain_map.yaml, and skill_spec.md.',
+    options: [
+      'artifacts',
+      'package',
+      'path',
+      'domain',
+      'description',
+      'source',
+      'requires',
+    ].map((key) => optionHelp[key]!),
+  },
+  status: {
+    usage: 'maintainer status [--json] [--base <ref>]',
+    summary: 'Report authoring gaps, files to sync, and pending reviews.',
+    writes: 'Nothing.',
+    options: ['artifacts', 'base', 'json'].map((key) => optionHelp[key]!),
+  },
+  sync: {
+    usage: 'maintainer sync',
+    summary:
+      'Align the skill tree and package metadata with SKILL.md frontmatter.',
+    writes:
+      'skill_tree.yaml, package.json keywords and files, and generated distribution files when repository distribution is selected.',
+    options: ['artifacts'].map((key) => optionHelp[key]!),
+  },
+  review: {
+    usage:
+      'maintainer review [--json | --interactive | --record <report.json>] [--base <ref>]',
+    summary: 'Find guidance affected by Git changes and record outcomes.',
+    writes: '.intent/review-state.json when recording; nothing otherwise.',
+    options: ['base', 'json', 'record', 'interactive'].map(
+      (key) => optionHelp[key]!,
+    ),
+  },
+  check: {
+    usage: 'maintainer check [--base <ref>]',
+    summary:
+      'Fail when authoring issues, stale generated files, or pending reviews remain.',
+    writes: 'Nothing. Use it as the CI gate.',
+    options: ['artifacts', 'base'].map((key) => optionHelp[key]!),
+  },
+}
+
+export function maintainerHelp(action?: string): string {
+  const lines: Array<string> = []
+  const entries = action
+    ? [[action, maintainerActions[action]!] as const]
+    : Object.entries(maintainerActions)
+  if (!action) {
+    lines.push(
+      'Usage: intent maintainer <action> [options]',
+      '',
+      'Run the actions in this order. Each one is safe to rerun.',
+      '',
+    )
+  }
+  for (const [name, entry] of entries) {
+    lines.push(`${action ? 'Usage: intent ' : `${name}: `}${entry.usage}`)
+    lines.push(`  ${entry.summary}`)
+    lines.push(`  Writes: ${entry.writes}`)
+    if (action) {
+      lines.push('', 'Options:')
+      for (const [flag, description] of entry.options)
+        lines.push(`  ${flag.padEnd(28)} ${description}`)
+    } else lines.push('')
+  }
+  if (!action)
+    lines.push(
+      'Run intent maintainer <action> --help for the options of one action.',
+    )
+  return lines.join('\n')
+}
+
+function kebab(key: string): string {
+  return key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
+}
+
 export interface MaintainerCommandOptions extends DistributionOptions {
   artifacts?: string
   package?: string
@@ -97,7 +250,9 @@ export async function runMaintainerCommand(
     fail(`maintainer ${action} does not take a skill name.`)
   for (const key of Object.keys(options)) {
     if (key !== '--' && !allowed[action].includes(key))
-      fail(`--${key} is not supported by maintainer ${action}.`)
+      fail(
+        `--${kebab(key)} is not supported by maintainer ${action}. Run intent maintainer ${action} --help for its options.`,
+      )
   }
   if (action === 'review') {
     if (options.interactive) {
@@ -212,19 +367,26 @@ export async function runMaintainerCommand(
         )
       } else if (action === 'add') {
         const owner = inferOwningPackage(project.root, options.package)
+        const added = addSkill(project, name, { ...options, package: owner })
+        console.log(`Registered ${added.path}.`)
+        console.log(`Updated: ${added.files.join(', ')}`)
         console.log(
-          `Registered ${addSkill(project, name, { ...options, package: owner })}.`,
-        )
-        console.log(
-          'Next: author the skill and its task coverage, then run intent maintainer sync, maintainer review, and maintainer check.',
+          `Next: author the guidance with intent meta generate-skill, record its developer tasks in ${project.artifacts}/domain_map.yaml, then run intent maintainer sync, intent maintainer review, and intent maintainer check.`,
         )
       } else {
         const plan = planMaintainerSync(project)
         writeChanges(project.root, plan.changes)
-        console.log(`Synchronized ${plan.changes.length} file(s).`)
+        if (plan.changes.length === 0) console.log('Nothing to synchronize.')
+        for (const change of plan.changes)
+          console.log(
+            `Synchronized ${relative(project.root, change.path).replaceAll('\\', '/')}`,
+          )
         for (const problem of plan.problems)
           console.log(`Remaining: ${problem}`)
-        for (const command of plan.distribution.commands) console.log(command)
+        if (plan.distribution.commands.length)
+          console.log('Consumers install the selected repository skills with:')
+        for (const command of plan.distribution.commands)
+          console.log(`  ${command}`)
       }
     })
     return
@@ -254,13 +416,26 @@ export async function runMaintainerCommand(
     for (const problem of status.problems) console.log(`  ${problem}`)
     for (const path of status.staleFiles)
       console.log(`  Run intent maintainer sync: ${path}`)
-    for (const item of review.items)
-      console.log(
-        `  Review ${item.path}${item.problems.length ? `: ${item.problems.join('; ')}` : ''}`,
-      )
+    for (const item of review.items) {
+      const label =
+        item.kind === 'skill'
+          ? 'Review skill'
+          : item.kind === 'planning'
+            ? 'Review planning records'
+            : 'Review unmapped change'
+      const detail = item.problems.length
+        ? item.problems.join('; ')
+        : item.changedFiles.length
+          ? `changed ${item.changedFiles.join(', ')}`
+          : 'no recorded review'
+      console.log(`  ${label} ${item.path}: ${detail}`)
+    }
   }
   if (action === 'check') {
-    for (const dir of new Set(plan.skills.map(dirname)))
+    // Validate each skills root once instead of once per skill directory.
+    for (const dir of new Set(
+      plan.skills.map((path) => dirname(dirname(path))),
+    ))
       await runValidateCommand(dir)
     if (plan.problems.length || plan.changes.length || review.items.length)
       fail(

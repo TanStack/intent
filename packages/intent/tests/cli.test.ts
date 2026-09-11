@@ -281,6 +281,24 @@ describe('cli commands', () => {
     expect(errorSpy).toHaveBeenCalledWith('Unknown command: wat')
   })
 
+  it('prints an ordered maintainer overview and per-action options', async () => {
+    expect(await main(['maintainer', '--help'])).toBe(0)
+    const overview = getHelpOutput()
+    expect(overview).toContain('Run the actions in this order.')
+    expect(overview.indexOf('setup:')).toBeLessThan(overview.indexOf('check:'))
+    expect(overview).toContain('Writes: Nothing. Use it as the CI gate.')
+
+    logSpy.mockClear()
+    expect(await main(['maintainer', 'add', '--help'])).toBe(0)
+    const add = getHelpOutput()
+    expect(add).toContain('--domain <slug>')
+    expect(add).not.toContain('--record')
+
+    logSpy.mockClear()
+    expect(await main(['maintainer'])).toBe(1)
+    expect(getHelpOutput()).toContain('Usage: intent maintainer <action>')
+  })
+
   it('prints command help when --help is passed after a subcommand', async () => {
     const exitCode = await main(['list', '--help'])
     const output = getHelpOutput()

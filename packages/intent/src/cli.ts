@@ -398,6 +398,25 @@ export async function main(
       return 0
     }
 
+    if (argv[0] === 'maintainer') {
+      const { maintainerActions, maintainerHelp } =
+        await import('./commands/maintainer.js')
+      const action = argv[1]
+      const wantsHelp = argv
+        .slice(1)
+        .some((arg) => arg === '--help' || arg === '-h')
+      if (action === undefined) {
+        console.log(maintainerHelp())
+        return 1
+      }
+      if (wantsHelp) {
+        console.log(
+          maintainerHelp(action in maintainerActions ? action : undefined),
+        )
+        return 0
+      }
+    }
+
     // cac expects process.argv format: first two entries (binary + script) are ignored
     cli.parse(['intent', 'intent', ...argv], { run: false })
 

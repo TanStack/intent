@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { stringify } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
 import { parseFrontmatter } from '../shared/utils.js'
@@ -38,10 +38,15 @@ export function addSkill(
   project: MaintainerProject,
   name: string | undefined,
   options: AddSkillOptions,
-): string {
+): { path: string; files: Array<string> } {
   const plan = planAddSkills(project, [{ name, options }])
   writeChanges(project.root, plan.changes)
-  return plan.paths[0]!
+  return {
+    path: plan.paths[0]!,
+    files: plan.changes.map((change) =>
+      relative(project.root, change.path).replaceAll('\\', '/'),
+    ),
+  }
 }
 
 export function planAddSkills(
