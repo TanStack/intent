@@ -62,13 +62,14 @@ npx @tanstack/intent@latest load @tanstack/query#fetching
 
 ### For library maintainers
 
-Generate skills for your library by telling your AI coding agent to run:
+Set up the maintainer workflow, then register each skill beside the package that owns it:
 
 ```bash
-npx @tanstack/intent@latest scaffold
+npx @tanstack/intent@latest maintainer setup
+npx @tanstack/intent@latest maintainer add caching --domain queries --description "Use when caching queries." --source "src/**"
 ```
 
-This walks the agent through domain discovery, skill tree generation, and skill creation — one step at a time with your review at each stage.
+Your coding agent authors the guidance with `intent meta generate-skill`. `maintainer status`, `sync`, `review`, and `check` keep the planning records, package metadata, and source reviews consistent.
 
 Validate your skill files:
 
@@ -119,17 +120,17 @@ The real risk with any derived artifact is staleness. `npx @tanstack/intent@late
 
 ## CLI Commands
 
-| Command                                            | Description                                         |
-| -------------------------------------------------- | --------------------------------------------------- |
-| `npx @tanstack/intent@latest install`              | Set up skill loading guidance in agent config files |
-| `npx @tanstack/intent@latest hooks install`        | Install hook enforcement for supported agents       |
-| `npx @tanstack/intent@latest list [--json]`        | Discover local intent-enabled packages              |
-| `npx @tanstack/intent@latest load <use>`           | Load `<package>#<skill>` SKILL.md content           |
-| `npx @tanstack/intent@latest meta`                 | List meta-skills for library maintainers            |
-| `npx @tanstack/intent@latest scaffold`             | Print the guided skill generation prompt            |
-| `npx @tanstack/intent@latest validate [dir]`       | Validate SKILL.md files                             |
-| `npx @tanstack/intent@latest setup`                | Copy CI templates into your repo                    |
-| `npx @tanstack/intent@latest stale [dir] [--json]` | Check skills for version drift                      |
+| Command                                            | Description                                           |
+| -------------------------------------------------- | ----------------------------------------------------- |
+| `npx @tanstack/intent@latest install`              | Set up skill loading guidance in agent config files   |
+| `npx @tanstack/intent@latest hooks install`        | Install hook enforcement for supported agents         |
+| `npx @tanstack/intent@latest list [--json]`        | Discover local intent-enabled packages                |
+| `npx @tanstack/intent@latest load <use>`           | Load `<package>#<skill>` SKILL.md content             |
+| `npx @tanstack/intent@latest meta`                 | List meta-skills for library maintainers              |
+| `npx @tanstack/intent@latest maintainer <action>`  | Set up, author, synchronize, review, and check skills |
+| `npx @tanstack/intent@latest validate [dir]`       | Validate SKILL.md files                               |
+| `npx @tanstack/intent@latest setup`                | Copy CI templates into your repo                      |
+| `npx @tanstack/intent@latest stale [dir] [--json]` | Check skills for version drift                        |
 
 ## License
 

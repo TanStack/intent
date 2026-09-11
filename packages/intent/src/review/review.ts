@@ -57,6 +57,26 @@ interface ReviewState {
 
 const statePath = '.intent/review-state.json'
 const dependencyExclude = ':(top,exclude,glob)**/node_modules/**'
+// Files Intent writes or that never carry library guidance. Skills that map
+// one of these paths in `sources` still track it; the list only stops the
+// paths from surfacing as unmapped changes.
+const defaultReviewIgnore = [
+  '.intent/**',
+  'AGENTS.md',
+  'CLAUDE.md',
+  '.cursorrules',
+  '.github/copilot-instructions.md',
+  '.github/workflows/check-skills.yml',
+  '.claude-plugin/**',
+  '.cursor-plugin/**',
+  '**/package.json',
+  'pnpm-lock.yaml',
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'yarn.lock',
+  'bun.lock',
+  'bun.lockb',
+]
 const digest = (value: string | Buffer) =>
   createHash('sha256').update(value).digest('hex')
 const sorted = (values: Iterable<string>) => [...new Set(values)].sort()
@@ -277,6 +297,10 @@ function sourcePattern(
   } else if (packageDir) {
     path = `${packageDir}/${source}`
   }
+  return globPattern(path, source, 'source')
+}
+
+function globPattern(path: string, label: string, kind: string): string {
   if (
     !path ||
     path.startsWith('/') ||
@@ -285,14 +309,31 @@ function sourcePattern(
     path.includes(':') ||
     path.split('/').some((part) => part === '..' || part === '.' || part === '')
   ) {
-    throw new Error(`Unsupported source path: ${source}`)
+    throw new Error(`Unsupported ${kind} path: ${label}`)
   }
   // Git owns glob matching; braces and extglobs are not Git pathspec syntax.
   if (/[{}]/.test(path) || /[!+@?*]\(/.test(path))
     throw new Error(
-      `Unsupported source glob: ${source}. Use Git glob syntax (*, ?, [], **).`,
+      `Unsupported ${kind} glob: ${label}. Use Git glob syntax (*, ?, [], **).`,
     )
   return `:(top,glob)${path}`
+}
+
+function reviewIgnorePatterns(tree: Record<string, unknown>, path: string) {
+  if (tree.review === undefined) return []
+  const ignore = isObject(tree.review) ? tree.review.ignore : undefined
+  if (
+    !isObject(tree.review) ||
+    (ignore !== undefined &&
+      (!Array.isArray(ignore) ||
+        ignore.some((entry) => typeof entry !== 'string' || !entry.trim())))
+  )
+    throw new Error(
+      `Invalid review.ignore in ${path}: expected an array of Git glob patterns.`,
+    )
+  return ((ignore ?? []) as Array<string>).map((pattern) =>
+    globPattern(pattern, pattern, 'review.ignore'),
+  )
 }
 
 export function createReview(cwd: string, baseRef?: string): ReviewReport {
@@ -428,15 +469,21 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     .map((dir) => dirname(dir))
     .filter((dir) => dir !== '.' && !files.includes(`${dir}/package.json`))
   const declaredSkills = new Set<string>()
+  const ignorePatterns = defaultReviewIgnore.map((pattern) =>
+    globPattern(pattern, pattern, 'review.ignore'),
+  )
   for (const dir of existingArtifactDirs) {
+    const treePath = join(dir, 'skill_tree.yaml').replaceAll('\\', '/')
+    let tree: unknown
     try {
-      const tree: unknown = parseYaml(
-        readFileSync(
-          safePath(root, join(dir, 'skill_tree.yaml').replaceAll('\\', '/')),
-          'utf8',
-        ),
-      )
-      if (!isObject(tree) || !Array.isArray(tree.skills)) continue
+      tree = parseYaml(readFileSync(safePath(root, treePath), 'utf8'))
+    } catch {
+      // Missing or invalid trees remain unresolved in planning validation below.
+      continue
+    }
+    if (!isObject(tree)) continue
+    ignorePatterns.push(...reviewIgnorePatterns(tree, treePath))
+    if (Array.isArray(tree.skills)) {
       for (const entry of tree.skills) {
         if (!isObject(entry) || typeof entry.path !== 'string') continue
         declaredSkills.add(
@@ -445,10 +492,9 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
             : entry.path,
         )
       }
-    } catch {
-      // Missing or invalid trees remain unresolved in planning validation below.
     }
   }
+  const ignored = new Set([...list(ignorePatterns), ...diff(ignorePatterns)])
   const skillFiles = files.filter(
     (path) =>
       basename(path) === 'SKILL.md' &&
@@ -589,7 +635,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     }
   }
   for (const path of changed) {
-    if (covered.has(path) || path.startsWith('.intent/')) continue
+    if (covered.has(path) || ignored.has(path)) continue
     add('source', path, [path], [])
   }
   for (const id of Object.keys(state?.items ?? {})) {

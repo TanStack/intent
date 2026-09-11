@@ -31,10 +31,29 @@ export function runReviewCommand(
         throw new Error(
           '--record cannot be combined with --base, --json or --check.',
         )
-      const count = recordReview(
-        cwd,
-        JSON.parse(readFileSync(resolve(options.record), 'utf8')),
+      const input: unknown = JSON.parse(
+        readFileSync(resolve(options.record), 'utf8'),
       )
+      if (
+        typeof input === 'object' &&
+        input !== null &&
+        Array.isArray((input as { items?: unknown }).items)
+      ) {
+        const items = (input as { items: Array<unknown> }).items
+        const annotated = items.filter(
+          (item) =>
+            typeof item === 'object' &&
+            item !== null &&
+            'outcome' in item &&
+            item.outcome !== undefined &&
+            item.outcome !== 'unresolved',
+        )
+        if (items.length > 0 && annotated.length === 0)
+          throw new Error(
+            `${options.record} annotates none of its ${items.length} review item(s). Set outcome (updated, no-change, or out-of-scope), reason, and a non-empty evidence array on each completed item, or use intent maintainer review --interactive in a terminal.`,
+          )
+      }
+      const count = recordReview(cwd, input)
       console.log(`Recorded ${count} review outcome(s).`)
       return
     }
@@ -80,7 +99,7 @@ export function runReviewCommand(
         console.log('  Use --json for all review items.')
       if (report.items.length)
         console.log(
-          'Next: run intent meta generate-skill in your coding agent. Review the evidence, run task checks, and record justified outcomes with intent review --record <report.json>.',
+          'Next: run intent meta generate-skill in your coding agent. Review the evidence, run task checks, and record justified outcomes with intent maintainer review --interactive, or annotate intent review --json output and pass it to intent review --record <report.json>.',
         )
       else
         console.log(
