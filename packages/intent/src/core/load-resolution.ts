@@ -32,7 +32,7 @@ function readWorkspacePackageInfos(
   if (context.workspaceRoot) {
     dirs.add(context.workspaceRoot)
 
-    for (const dir of findWorkspacePackages(context.workspaceRoot)) {
+    for (const dir of findWorkspacePackages(context.workspaceRoot, fsCache)) {
       dirs.add(dir)
     }
   }

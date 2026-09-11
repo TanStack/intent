@@ -8,7 +8,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   IntentCoreError,
   listIntentSkills,
@@ -92,6 +92,87 @@ afterEach(() => {
 })
 
 describe('listIntentSkills', () => {
+  it.each(['package.json', 'pnpm-workspace.yaml'])(
+    'refreshes workspace members and patterns from %s between core operations',
+    async (workspaceFile) => {
+      const manifest = {
+        name: 'consumer',
+        private: true,
+      }
+      writeJson(join(root, 'package.json'), manifest)
+      const setPatterns = (patterns: Array<string>) => {
+        if (workspaceFile === 'package.json') {
+          writeJson(join(root, 'package.json'), {
+            ...manifest,
+            workspaces: patterns,
+          })
+        } else {
+          writeFileSync(
+            join(root, workspaceFile),
+            `packages: ${JSON.stringify(patterns)}\n`,
+          )
+        }
+      }
+      const addMember = (member: string, dependency: string) => {
+        const memberDir = join(root, member)
+        writeJson(join(memberDir, 'package.json'), {
+          name: member,
+          dependencies: { [dependency]: '1.0.0' },
+        })
+        writeInstalledIntentPackage(memberDir, {
+          name: dependency,
+          version: '1.0.0',
+          skillName: 'core',
+          description: `Use ${dependency}.`,
+        })
+      }
+      addMember('packages/first', 'first-library')
+      expect(listIntentSkills({ cwd: root }).skills).toEqual([])
+      setPatterns(['packages/*'])
+      expect(
+        listIntentSkills({ cwd: root }).skills.map((skill) => skill.use),
+      ).toEqual(['first-library#core'])
+
+      addMember('packages/second', 'second-library')
+      const added = listIntentSkills({ cwd: root })
+      vi.resetModules()
+      const freshCore = await import('../src/core/index.js')
+      expect(added.skills).toEqual(
+        freshCore.listIntentSkills({ cwd: root }).skills,
+      )
+      expect(added.skills.map((skill) => skill.use).sort()).toEqual([
+        'first-library#core',
+        'second-library#core',
+      ])
+      expect(loadIntentSkill('second-library#core', { cwd: root }).source).toBe(
+        'local',
+      )
+
+      rmSync(join(root, 'packages/first'), { recursive: true })
+      expect(
+        listIntentSkills({ cwd: root }).skills.map((skill) => skill.use),
+      ).toEqual(['second-library#core'])
+
+      addMember('tools/third', 'third-library')
+      setPatterns(['tools/*'])
+      const changed = listIntentSkills({ cwd: root })
+      vi.resetModules()
+      const refreshedCore = await import('../src/core/index.js')
+      expect(changed.skills).toEqual(
+        refreshedCore.listIntentSkills({ cwd: root }).skills,
+      )
+      expect(changed.skills.map((skill) => skill.use)).toEqual([
+        'third-library#core',
+      ])
+      expect(loadIntentSkill('third-library#core', { cwd: root }).source).toBe(
+        'local',
+      )
+      expect(() =>
+        loadIntentSkill('second-library#core', { cwd: root }),
+      ).toThrow()
+    },
+  )
+
   it('exposes purpose separately while keeping activation descriptions and older skills usable', () => {
     writeInstalledIntentPackage(root, {
       name: 'client',
@@ -1130,6 +1211,53 @@ describe('loadIntentSkill — kind-mismatch late gate', () => {
     expect((thrown as Error).message).toBe(
       'Cannot load skill use "@tanstack/query#fetching": package "@tanstack/query" is not listed in intent.skills.',
     )
+  })
+
+  it('refreshes source kind when workspace membership changes', () => {
+    const routerDir = join(root, 'packages', 'router-core')
+    const manifest = {
+      name: 'consumer',
+      private: true,
+      workspaces: ['packages/*'],
+      dependencies: { '@tanstack/router-core': '1.0.0' },
+      intent: { skills: ['workspace:@tanstack/router-core'] },
+    }
+    writeJson(join(root, 'package.json'), manifest)
+    writeJson(join(routerDir, 'package.json'), {
+      name: '@tanstack/router-core',
+      version: '1.0.0',
+      intent: { version: 1, repo: 'TanStack/router', docs: 'docs/' },
+    })
+    writeSkillMd({
+      dir: join(routerDir, 'skills', 'core'),
+      frontmatter: { name: 'core', description: 'Router core' },
+    })
+    mkdirSync(join(root, 'node_modules', '@tanstack'), { recursive: true })
+    symlinkSync(
+      routerDir,
+      join(root, 'node_modules', '@tanstack', 'router-core'),
+      'dir',
+    )
+    expect(listIntentSkills({ cwd: root }).skills).toHaveLength(1)
+    expect(
+      loadIntentSkill('@tanstack/router-core#core', { cwd: root }).packageName,
+    ).toBe('@tanstack/router-core')
+
+    writeJson(join(root, 'package.json'), { ...manifest, workspaces: [] })
+    expect(listIntentSkills({ cwd: root }).skills).toEqual([])
+    expect(() =>
+      loadIntentSkill('@tanstack/router-core#core', { cwd: root }),
+    ).toThrow('not listed in intent.skills')
+
+    writeJson(join(root, 'package.json'), {
+      ...manifest,
+      workspaces: [],
+      intent: { skills: ['@tanstack/router-core'] },
+    })
+    expect(listIntentSkills({ cwd: root }).skills).toHaveLength(1)
+    expect(
+      loadIntentSkill('@tanstack/router-core#core', { cwd: root }).packageName,
+    ).toBe('@tanstack/router-core')
   })
 
   it('allows a workspace member listed as workspace:<name>', () => {

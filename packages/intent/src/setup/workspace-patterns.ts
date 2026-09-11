@@ -1,10 +1,11 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { parse as parseJsonc } from 'jsonc-parser'
 import { parse as parseYaml } from 'yaml'
 import { hasAnySkillFile } from '../shared/utils.js'
 import { readPackageJson } from '../core/package-json.js'
 import type { ParseError } from 'jsonc-parser'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 
 function normalizeWorkspacePattern(pattern: string): string {
   return pattern.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
@@ -105,7 +106,7 @@ function warnConfigError(path: string, err: unknown): void {
 
 type WorkspacePatternSource = {
   fileName: string
-  read: (path: string) => unknown
+  read: (path: string, fsCache?: IntentFsCache) => unknown
   getPatterns: (config: unknown) => Array<string> | null
 }
 
@@ -128,7 +129,7 @@ const workspacePatternSources: Array<WorkspacePatternSource> = [
   },
   {
     fileName: 'package.json',
-    read: (path) => readPackageJson(dirname(path)),
+    read: (path, fsCache) => readPackageJson(dirname(path), fsCache),
     getPatterns: (config) =>
       parseWorkspacePatternField(
         isRecord(config) ? config.workspaces : undefined,
@@ -158,25 +159,41 @@ const workspacePatternSources: Array<WorkspacePatternSource> = [
   },
 ]
 
-const workspacePatternsCache = new Map<string, Array<string> | null>()
-const workspaceRootCache = new Map<string, string | null>()
-const workspacePackageDirsCache = new Map<string, Array<string> | null>()
-const workspaceInfoCache = new Map<string, WorkspaceInfo | null>()
-
-export function readWorkspacePatterns(root: string): Array<string> | null {
-  if (workspacePatternsCache.has(root)) {
-    return workspacePatternsCache.get(root) ?? null
+const workspaceCaches = new WeakMap<
+  IntentFsCache,
+  {
+    patterns: Map<string, Array<string> | null>
+    roots: Map<string, string | null>
+    packageDirs: Map<string, Array<string>>
   }
+>()
 
-  const patterns = readWorkspacePatternsUncached(root)
-  workspacePatternsCache.set(root, patterns)
-  return patterns
+function workspaceCache(fsCache?: IntentFsCache) {
+  if (!fsCache) return undefined
+  let cache = workspaceCaches.get(fsCache)
+  if (!cache) {
+    cache = { patterns: new Map(), roots: new Map(), packageDirs: new Map() }
+    workspaceCaches.set(fsCache, cache)
+  }
+  return cache
 }
 
-function readWorkspacePatternsUncached(root: string): Array<string> | null {
+export function readWorkspacePatterns(
+  root: string,
+  fsCache?: IntentFsCache,
+): Array<string> | null {
+  const cache = workspaceCache(fsCache)?.patterns
+  const cached = cache?.get(root)
+  if (cached !== undefined) return cached
   for (const source of workspacePatternSources) {
     const path = join(root, source.fileName)
 
+    if (
+      source.fileName === 'package.json' &&
+      !lstatSync(path, { throwIfNoEntry: false })
+    ) {
+      continue
+    }
     if (source.fileName !== 'package.json' && !existsSync(path)) {
       continue
     }
@@ -184,12 +201,17 @@ function readWorkspacePatternsUncached(root: string): Array<string> | null {
     // An unreadable ancestor may own inherited policy. Never turn it into
     // a cached "no workspace" result, even when a child has its own allowlist.
     const packageJson =
-      source.fileName === 'package.json' ? source.read(path) : undefined
+      source.fileName === 'package.json'
+        ? source.read(path, fsCache)
+        : undefined
     try {
       const patterns = source.getPatterns(
-        source.fileName === 'package.json' ? packageJson : source.read(path),
+        source.fileName === 'package.json'
+          ? packageJson
+          : source.read(path, fsCache),
       )
       if (patterns) {
+        cache?.set(root, patterns)
         return patterns
       }
     } catch (err: unknown) {
@@ -197,50 +219,38 @@ function readWorkspacePatternsUncached(root: string): Array<string> | null {
     }
   }
 
+  cache?.set(root, null)
   return null
 }
 
-function readWorkspacePackageDirs(root: string): Array<string> | null {
-  if (workspacePackageDirsCache.has(root)) {
-    return workspacePackageDirsCache.get(root) ?? null
-  }
-
-  const patterns = readWorkspacePatterns(root)
-  if (!patterns) {
-    workspacePackageDirsCache.set(root, null)
-    return null
-  }
-
-  const packageDirs = resolveWorkspacePackages(root, patterns)
-  workspacePackageDirsCache.set(root, packageDirs)
+export function findWorkspacePackages(
+  root: string,
+  fsCache?: IntentFsCache,
+): Array<string> {
+  const cache = workspaceCache(fsCache)?.packageDirs
+  const cached = cache?.get(root)
+  if (cached !== undefined) return cached
+  const patterns = readWorkspacePatterns(root, fsCache)
+  const packageDirs = patterns ? resolveWorkspacePackages(root, patterns) : []
+  cache?.set(root, packageDirs)
   return packageDirs
 }
 
 export function getWorkspaceInfo(root: string): WorkspaceInfo | null {
-  if (workspaceInfoCache.has(root)) {
-    return workspaceInfoCache.get(root) ?? null
-  }
-
   const patterns = readWorkspacePatterns(root)
-  if (!patterns) {
-    workspaceInfoCache.set(root, null)
-    return null
-  }
+  if (!patterns) return null
 
-  const packageDirs = readWorkspacePackageDirs(root) ?? []
+  const packageDirs = resolveWorkspacePackages(root, patterns)
   const packageDirsWithSkills = packageDirs.filter((dir) => {
     const skillsDir = join(dir, 'skills')
     return existsSync(skillsDir) && hasAnySkillFile(skillsDir)
   })
-  const info = {
+  return {
     root,
     patterns,
     packageDirs,
     packageDirsWithSkills,
   }
-
-  workspaceInfoCache.set(root, info)
-  return info
 }
 
 export function resolveWorkspacePackages(
@@ -325,26 +335,24 @@ function readChildDirectories(dir: string): Array<string> {
   }
 }
 
-export function findWorkspaceRoot(start: string): string | null {
+export function findWorkspaceRoot(
+  start: string,
+  fsCache?: IntentFsCache,
+): string | null {
+  const cache = workspaceCache(fsCache)?.roots
   let dir = start
   let prev: string | undefined
   const visited: Array<string> = []
 
   while (dir !== prev) {
-    const cached = workspaceRootCache.get(dir)
+    const cached = cache?.get(dir)
     if (cached !== undefined) {
-      for (const visitedDir of visited) {
-        workspaceRootCache.set(visitedDir, cached)
-      }
+      for (const visitedDir of visited) cache?.set(visitedDir, cached)
       return cached
     }
-
     visited.push(dir)
-
-    if (readWorkspacePatterns(dir)) {
-      for (const visitedDir of visited) {
-        workspaceRootCache.set(visitedDir, dir)
-      }
+    if (readWorkspacePatterns(dir, fsCache)) {
+      for (const visitedDir of visited) cache?.set(visitedDir, dir)
       return dir
     }
 
@@ -356,16 +364,10 @@ export function findWorkspaceRoot(start: string): string | null {
     dir = dirname(dir)
   }
 
-  for (const visitedDir of visited) {
-    workspaceRootCache.set(visitedDir, null)
-  }
+  for (const visitedDir of visited) cache?.set(visitedDir, null)
   return null
 }
 
 export function findPackagesWithSkills(root: string): Array<string> {
   return getWorkspaceInfo(root)?.packageDirsWithSkills ?? []
-}
-
-export function findWorkspacePackages(root: string): Array<string> {
-  return readWorkspacePackageDirs(root) ?? []
 }

@@ -521,7 +521,7 @@ function createWorkspacePackageKeySet(
   if (!workspaceRoot) return new Set()
 
   const packagesByParent = new Map<string, Array<string>>()
-  for (const dir of findWorkspacePackages(workspaceRoot)) {
+  for (const dir of findWorkspacePackages(workspaceRoot, fsCache)) {
     const parent = dirname(dir)
     const dirs = packagesByParent.get(parent)
     if (dirs) dirs.push(dir)
@@ -576,7 +576,7 @@ export function scanForIntents(
   const scanScope = getScanScope(options)
   const fsCache =
     (options as ScanOptionsWithFsCache).fsCache ?? createIntentFsCache()
-  const workspaceRoot = findWorkspaceRoot(projectRoot)
+  const workspaceRoot = findWorkspaceRoot(projectRoot, fsCache)
   const packageManager = detectPackageManager(
     projectRoot,
     [workspaceRoot],
@@ -855,7 +855,10 @@ export function scanIntentPackageAtRoot(
   const packageIndexes = new Map<string, number>()
   const fsCache = options.fsCache ?? createIntentFsCache()
   const getPackageKind = createPackageKindResolver(
-    createWorkspacePackageKeySet(findWorkspaceRoot(projectRoot), fsCache),
+    createWorkspacePackageKeySet(
+      findWorkspaceRoot(projectRoot, fsCache),
+      fsCache,
+    ),
     fsCache.getFsIdentity,
   )
 
