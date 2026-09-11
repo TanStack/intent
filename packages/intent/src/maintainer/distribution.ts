@@ -333,7 +333,15 @@ export function planDistribution(project: MaintainerProject) {
   const install =
     config.mode === 'repo'
       ? {
-          skills: ['npx', 'skills', 'add', repository!, '--skill', ...selected],
+          skills: [
+            'npx',
+            'skills',
+            'add',
+            repository!,
+            '--full-depth',
+            '--skill',
+            ...selected,
+          ],
           github: exported.map((skill) => [
             'gh',
             'skill',
