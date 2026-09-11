@@ -143,6 +143,22 @@ The planning snapshot includes the documents and the discovered skill/source evi
 
 ## Record a completed review
 
+### Interactive review
+
+For a human terminal, use the repository's installed Intent command:
+
+```sh
+intent maintainer review --interactive
+```
+
+Inspect each item's current guidance and changed files, choose an outcome, and supply the reason and actual evidence. The changes view compares tracked files with the displayed Git base and includes untracked content. Use `--base <available-commit>` for a specific comparison. Edit and test guidance before starting; changes during review invalidate the affected outcomes.
+
+Choose **Leave pending** when more work is needed. Items with unresolved source mappings or planning problems cannot be completed. The final preview lists the proposed outcomes and evidence. Confirmation records through the same fingerprint checks as `--record`; cancellation records nothing. Evidence text is stored, not executed or independently verified.
+
+Interactive review requires a terminal outside CI and cannot be combined with `--json` or `--record`. A zero exit status means the interaction completed, not that all review items were resolved. Use `intent maintainer check --base <available-commit>` as the read-only CI gate. JSON reports and the manual procedure below remain available to agents and scripts.
+
+### JSON review
+
 The installed maintainer procedure handles these steps. For manual use:
 
 1. Review the pending items, edit guidance and planning records as needed, and run the relevant checks.

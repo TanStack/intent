@@ -72,6 +72,10 @@
           "to": "cli/intent-maintainer"
         },
         {
+          "label": "intent maintainer adopt",
+          "to": "cli/intent-adopt"
+        },
+        {
           "label": "intent validate",
           "to": "cli/intent-validate"
         },
