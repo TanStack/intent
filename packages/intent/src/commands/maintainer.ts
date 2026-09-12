@@ -467,15 +467,17 @@ export async function runMaintainerCommand(
     for (const line of lines) console.log(`  ${line}`)
   }
   if (action === 'check') {
-    // Validate each skills root once instead of once per skill directory.
+    // Validate each skills root once instead of once per skill directory, and
+    // every root even after one fails, so the report covers all of them.
     let validation: unknown
-    try {
-      for (const dir of new Set(
-        plan.skills.map((path) => dirname(dirname(path))),
-      ))
+    for (const dir of new Set(
+      plan.skills.map((path) => dirname(dirname(path))),
+    )) {
+      try {
         await runValidateCommand(dir, { githubSummary: options.githubSummary })
-    } catch (err) {
-      validation = err
+      } catch (err) {
+        validation ??= err
+      }
     }
     if (options.githubSummary)
       writeGithubCheckSummary({

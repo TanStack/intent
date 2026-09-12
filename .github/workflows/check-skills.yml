@@ -116,19 +116,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git fetch origin "$BRANCH" || true
-          if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-          else
-            git checkout -b "$BRANCH"
-            git commit --allow-empty -m "chore: review intent skills for ${VERSION}"
-            git push origin "$BRANCH"
-          fi
-
           PR_URL="$(gh pr list --head "$BRANCH" --json url --jq '.[0].url')"
           if [ -n "$PR_URL" ]; then
             gh pr edit "$PR_URL" --body-file pr-body.md
           else
+            # A remote branch left from an earlier, merged review PR has no
+            # commits ahead of the base, so it is recreated from the base.
+            git checkout -B "$BRANCH"
+            git commit --allow-empty -m "chore: review intent skills for ${VERSION}"
+            git push --force origin "$BRANCH"
             gh pr create \
               --title "Review intent skills (${VERSION})" \
               --body-file pr-body.md \
