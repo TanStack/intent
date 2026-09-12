@@ -21,8 +21,9 @@ vi.setConfig({ testTimeout: 30_000 })
 
 let root: string
 let cwd: string
-const templatePath = fileURLToPath(
-  new URL('../meta/templates/workflows/check-skills.yml', import.meta.url),
+// The copied caller delegates to this reusable workflow, which holds the steps.
+const workflowPath = fileURLToPath(
+  new URL('../../../.github/workflows/check-skills.yml', import.meta.url),
 )
 beforeEach(() => {
   cwd = process.cwd()
@@ -210,7 +211,7 @@ it('keeps corrupt state visible as a release check failure', async () => {
 })
 
 it('runs the PR gate for maintainer instructions before any review state exists', () => {
-  const template = parse(readFileSync(templatePath, 'utf8')) as {
+  const template = parse(readFileSync(workflowPath, 'utf8')) as {
     jobs: { validate: { steps: Array<{ name: string; run?: string }> } }
   }
   const script = template.jobs.validate.steps.find(
@@ -235,7 +236,7 @@ it('runs the PR gate for maintainer instructions before any review state exists'
   writeFileSync('CLAUDE.md', '<!-- intent-maintainer:start -->\n')
   execFileSync('bash', ['-c', script], options)
   expect(readFileSync('checked-args', 'utf8')).toBe(
-    'maintainer\ncheck\n--base\nfixture-base\n',
+    'maintainer\ncheck\n--base\nfixture-base\n--github-summary\n',
   )
   rmSync('CLAUDE.md')
   rmSync('checked-args')

@@ -1,0 +1,137 @@
+# Reusable workflow behind a library repository's check-skills.yml.
+#
+# `intent maintainer setup` copies a caller that references this file by major
+# tag, so a change here reaches every maintainer on the next Intent release
+# without an edit to the caller. The release workflow moves the tag.
+#
+# On pull requests: validates skills and runs the maintainer check gate. On a
+# published release or a manual run: opens or updates one review PR when
+# skills, artifact coverage, or workspace package coverage need review.
+
+name: Check Skills
+
+on:
+  workflow_call:
+    inputs:
+      package-label:
+        description: Package label shown in review reminders, e.g. @tanstack/query
+        type: string
+        default: ''
+      intent-version:
+        description: npm dist-tag or version of @tanstack/intent to run
+        type: string
+        default: latest
+      node-version:
+        description: Node.js version for the checks
+        type: string
+        default: '22'
+
+permissions: {}
+
+jobs:
+  validate:
+    name: Validate intent skills
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Install intent
+        env:
+          INTENT_VERSION: ${{ inputs.intent-version }}
+        run: npm install -g "@tanstack/intent@${INTENT_VERSION}"
+
+      - name: Validate skills
+        run: intent validate --github-summary
+
+      - name: Check maintainer workflow
+        env:
+          INTENT_REVIEW_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -f .intent/review-state.json ] || grep -q -- '<!-- intent-maintainer:start -->' AGENTS.md CLAUDE.md .cursorrules .github/copilot-instructions.md 2>/dev/null; then
+            intent maintainer check --base "$INTENT_REVIEW_BASE" --github-summary
+          fi
+
+  review:
+    name: Check intent skill coverage
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true # the review branch is pushed below
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Install intent
+        env:
+          INTENT_VERSION: ${{ inputs.intent-version }}
+        run: npm install -g "@tanstack/intent@${INTENT_VERSION}"
+
+      - name: Check skills
+        id: stale
+        env:
+          PACKAGE_LABEL: ${{ inputs.package-label }}
+        run: |
+          LABEL=()
+          if [ -n "$PACKAGE_LABEL" ]; then
+            LABEL=(--package-label "$PACKAGE_LABEL")
+          fi
+          if [ -f .intent/review-state.json ]; then
+            intent review --github-review "${LABEL[@]}"
+          else
+            intent stale --github-review "${LABEL[@]}"
+          fi
+
+      - name: Open or update review PR
+        if: steps.stale.outputs.has_review == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ github.event.release.tag_name || 'manual' }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          BRANCH="skills/review-${VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin "$BRANCH" || true
+          if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+          else
+            git checkout -b "$BRANCH"
+            git commit --allow-empty -m "chore: review intent skills for ${VERSION}"
+            git push origin "$BRANCH"
+          fi
+
+          PR_URL="$(gh pr list --head "$BRANCH" --json url --jq '.[0].url')"
+          if [ -n "$PR_URL" ]; then
+            gh pr edit "$PR_URL" --body-file pr-body.md
+          else
+            gh pr create \
+              --title "Review intent skills (${VERSION})" \
+              --body-file pr-body.md \
+              --head "$BRANCH" \
+              --base "$BASE_BRANCH"
+          fi

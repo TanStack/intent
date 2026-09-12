@@ -257,7 +257,7 @@ describe('workflow review helpers', () => {
   })
 
   it('keeps the generated workflow short and delegated to CLI helpers', () => {
-    const template = readFileSync(
+    const caller = readFileSync(
       join(
         repoRoot,
         'packages',
@@ -269,11 +269,18 @@ describe('workflow review helpers', () => {
       ),
       'utf8',
     )
+    // The caller carries no steps; the reusable workflow holds them.
+    expect(caller).not.toContain('steps:')
+    expect(caller).toContain(
+      'uses: TanStack/intent/.github/workflows/check-skills.yml@v',
+    )
+    const template = readFileSync(
+      join(repoRoot, '.github', 'workflows', 'check-skills.yml'),
+      'utf8',
+    )
 
     expect(template).toContain('intent validate --github-summary')
-    expect(template).toContain(
-      'intent stale --github-review --package-label "{{PACKAGE_LABEL}}"',
-    )
+    expect(template).toContain('intent stale --github-review "${LABEL[@]}"')
     expect(template).not.toContain('const reports = JSON.parse')
     expect(template).not.toContain('for (const skill of report.skills ?? [])')
     expect(template).not.toContain('for (const signal of report.signals ?? [])')

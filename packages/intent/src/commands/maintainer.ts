@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { appendFileSync, readFileSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
 import { isCI } from 'std-env'
 import { resolveProjectContext } from '../core/project-context.js'
@@ -82,6 +82,10 @@ const optionHelp: Record<string, [flag: string, description: string]> = {
   interactive: ['--interactive', 'Inspect and record outcomes in a terminal'],
   json: ['--json', 'Print JSON instead of text'],
   record: ['--record <file>', 'Record outcomes from an annotated JSON report'],
+  githubSummary: [
+    '--github-summary',
+    'Write a GitHub Actions step summary when GITHUB_STEP_SUMMARY is set',
+  ],
 }
 
 // Ordered as a maintainer runs them. `maintainer --help` prints this table and
@@ -158,11 +162,13 @@ export const maintainerActions: Record<string, MaintainerAction> = {
     ),
   },
   check: {
-    usage: 'maintainer check [--base <ref>]',
+    usage: 'maintainer check [--base <ref>] [--github-summary]',
     summary:
       'Fail when authoring issues, stale generated files, or pending reviews remain.',
     writes: 'Nothing. Use it as the CI gate.',
-    options: ['artifacts', 'base'].map((key) => optionHelp[key]!),
+    options: ['artifacts', 'base', 'githubSummary'].map(
+      (key) => optionHelp[key]!,
+    ),
   },
 }
 
@@ -214,6 +220,7 @@ export interface MaintainerCommandOptions extends DistributionOptions {
   record?: string
   apply?: string
   interactive?: boolean
+  githubSummary?: boolean
 }
 
 // An explicit --package is repository-relative. Without one, a command run from
@@ -254,7 +261,7 @@ export async function runMaintainerCommand(
     status: ['artifacts', 'base', 'json'],
     sync: ['artifacts'],
     review: ['base', 'json', 'record', 'interactive'],
-    check: ['artifacts', 'base'],
+    check: ['artifacts', 'base', 'githubSummary'],
   }
   if (!allowed[action])
     fail(
@@ -435,15 +442,11 @@ export async function runMaintainerCommand(
     },
     review,
   }
-  if (options.json) console.log(JSON.stringify(status, null, 2))
-  else {
-    console.log(
-      `${status.skills.length} skill(s), ${status.staleFiles.length} file(s) to sync, ${status.problems.length} authoring issue(s), ${review.items.length} pending review item(s).`,
-    )
-    for (const problem of status.problems) console.log(`  ${problem}`)
-    for (const path of status.staleFiles)
-      console.log(`  Run intent maintainer sync: ${path}`)
-    for (const item of review.items) {
+  const headline = `${status.skills.length} skill(s), ${status.staleFiles.length} file(s) to sync, ${status.problems.length} authoring issue(s), ${review.items.length} pending review item(s).`
+  const lines = [
+    ...status.problems,
+    ...status.staleFiles.map((path) => `Run intent maintainer sync: ${path}`),
+    ...review.items.map((item) => {
       const label =
         item.kind === 'skill'
           ? 'Review skill'
@@ -455,16 +458,33 @@ export async function runMaintainerCommand(
         : item.changedFiles.length
           ? `changed ${item.changedFiles.join(', ')}`
           : 'no recorded review'
-      console.log(`  ${label} ${item.path}: ${detail}`)
-    }
+      return `${label} ${item.path}: ${detail}`
+    }),
+  ]
+  if (options.json) console.log(JSON.stringify(status, null, 2))
+  else {
+    console.log(headline)
+    for (const line of lines) console.log(`  ${line}`)
   }
   if (action === 'check') {
     // Validate each skills root once instead of once per skill directory.
-    for (const dir of new Set(
-      plan.skills.map((path) => dirname(dirname(path))),
-    ))
-      await runValidateCommand(dir)
-    if (plan.problems.length || plan.changes.length || review.items.length)
+    let validation: unknown
+    try {
+      for (const dir of new Set(
+        plan.skills.map((path) => dirname(dirname(path))),
+      ))
+        await runValidateCommand(dir, { githubSummary: options.githubSummary })
+    } catch (err) {
+      validation = err
+    }
+    if (options.githubSummary)
+      writeGithubCheckSummary({
+        headline,
+        lines,
+        validationFailed: validation !== undefined,
+      })
+    if (validation !== undefined) throw validation
+    if (lines.length)
       fail(
         'Maintainer check failed. Resolve the authoring issues, run intent maintainer sync, and record review outcomes with intent maintainer review --interactive, or annotate a --json report and pass it to --record <report.json>.',
       )
@@ -472,4 +492,38 @@ export async function runMaintainerCommand(
       'Maintainer checks passed. Recorded conclusions still depend on the supplied review evidence.',
     )
   }
+}
+
+// The step summary repeats the console report, so a failing gate is readable
+// from the PR checks tab without opening the job log. Validation writes its
+// own section first when it runs with the same flag.
+function writeGithubCheckSummary({
+  headline,
+  lines,
+  validationFailed,
+}: {
+  headline: string
+  lines: Array<string>
+  validationFailed: boolean
+}): void {
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY
+  if (!summaryPath) return
+  const ok = lines.length === 0 && !validationFailed
+  appendFileSync(
+    summaryPath,
+    [
+      '### Intent maintainer check',
+      '',
+      ok ? 'Maintainer check passed.' : 'Maintainer check failed.',
+      '',
+      '```text',
+      headline,
+      ...lines.map((line) => `  ${line}`),
+      ...(validationFailed
+        ? ['Skill validation failed; see the validation summary above.']
+        : []),
+      '```',
+      '',
+    ].join('\n'),
+  )
 }

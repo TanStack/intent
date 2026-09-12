@@ -304,7 +304,7 @@ describe('runSetupGithubActions', () => {
     expect(checkContent).not.toContain("      - 'docs/**'\n      - 'src/**'")
   })
 
-  it('ships one workflow that validates skills through the CLI', () => {
+  it('ships one caller workflow whose reusable workflow validates skills through the CLI', () => {
     const checkContent = readFileSync(
       join(
         repoRoot,
@@ -317,16 +317,25 @@ describe('runSetupGithubActions', () => {
       ),
       'utf8',
     )
+    const reusable = readFileSync(
+      join(repoRoot, '.github', 'workflows', 'check-skills.yml'),
+      'utf8',
+    )
 
     expect(checkContent).toContain('pull_request:')
-    expect(checkContent).toContain('intent validate --github-summary')
     expect(checkContent).toContain(
-      'intent stale --github-review --package-label "{{PACKAGE_LABEL}}"',
+      'uses: TanStack/intent/.github/workflows/check-skills.yml@v',
     )
-    expect(checkContent).not.toContain('-type d -name skills -print')
-    expect(checkContent).not.toContain('packages/*/skills')
-    expect(checkContent).not.toContain('JSON.parse')
-    expect(checkContent).not.toContain('node <<')
+    expect(checkContent).toContain("package-label: '{{PACKAGE_LABEL}}'")
+    expect(checkContent).not.toContain('npm install')
+    expect(reusable).toContain('workflow_call:')
+    expect(reusable).toContain('intent validate --github-summary')
+    expect(reusable).toContain('intent maintainer check --base')
+    expect(reusable).toContain('intent stale --github-review')
+    expect(reusable).not.toContain('-type d -name skills -print')
+    expect(reusable).not.toContain('packages/*/skills')
+    expect(reusable).not.toContain('JSON.parse')
+    expect(reusable).not.toContain('node <<')
   })
 
   it('copies templates with defaults when no package.json', () => {
