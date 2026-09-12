@@ -756,6 +756,7 @@ export function scanForIntents(
   } = createDependencyWalker({
     fsCache,
     getFsIdentity: fsCache.getFsIdentity,
+    primeFsIdentity: fsCache.primeFsIdentity,
     packages,
     projectRoot,
     readPkgJson,

@@ -9,7 +9,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { resolveDepDir } from '../src/shared/utils.js'
+import { createDepDirCache, resolveDepDir } from '../src/shared/utils.js'
 
 let root: string
 
@@ -71,5 +71,46 @@ describe('resolveDepDir', () => {
 
     expect(resolveDepDir('dep', parent)).toBeNull()
     expect(resolveDepDir('missing', parent)).toBeNull()
+  })
+
+  it('collapses a chain of symlinks to the final real directory', () => {
+    const real = createPackage(root, 'store', 'dep')
+    mkdirSync(join(root, 'hop'), { recursive: true })
+    symlinkSync(real, join(root, 'hop', 'dep'), 'junction')
+    mkdirSync(join(root, 'node_modules'), { recursive: true })
+    symlinkSync(
+      join(root, 'hop', 'dep'),
+      join(root, 'node_modules', 'dep'),
+      'junction',
+    )
+    const parent = createPackage(root, 'node_modules', 'parent')
+
+    expect(resolveDepDir('dep', parent)).toBe(real)
+  })
+
+  it('treats a dangling symlink as not installed', () => {
+    mkdirSync(join(root, 'node_modules'), { recursive: true })
+    symlinkSync(
+      join(root, 'missing'),
+      join(root, 'node_modules', 'dep'),
+      'junction',
+    )
+    const parent = createPackage(root, 'node_modules', 'parent')
+
+    expect(resolveDepDir('dep', parent)).toBeNull()
+  })
+
+  it('reuses a shared cache across parents and keeps answering correctly', () => {
+    const hoisted = createPackage(root, 'node_modules', 'dep')
+    const parentA = createPackage(root, 'node_modules', 'a')
+    const parentB = createPackage(root, 'node_modules', 'b')
+    const nested = createPackage(parentB, 'node_modules', 'dep')
+    const cache = createDepDirCache()
+
+    expect(resolveDepDir('dep', parentA, cache)).toBe(hoisted)
+    expect(resolveDepDir('dep', parentB, cache)).toBe(nested)
+    expect(resolveDepDir('dep', parentA, cache)).toBe(hoisted)
+    expect(resolveDepDir('other', parentA, cache)).toBeNull()
+    expect(cache.candidates.size).toBeGreaterThan(0)
   })
 })

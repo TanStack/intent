@@ -11,10 +11,19 @@ function normalizeWorkspacePattern(pattern: string): string {
   return pattern.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
 }
 
+/**
+ * Plain code-unit order. `localeCompare` would initialize the ICU collator
+ * (~7ms on first use, on every CLI run) and its order depends on the process
+ * locale; code-unit order is free and identical on every machine.
+ */
+function compareCodeUnits(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
 function normalizeWorkspacePatterns(patterns: Array<string>): Array<string> {
   return [
     ...new Set(patterns.map(normalizeWorkspacePattern).filter(Boolean)),
-  ].sort((a, b) => a.localeCompare(b))
+  ].sort(compareCodeUnits)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -275,7 +284,7 @@ export function resolveWorkspacePackages(
 
   return [...includedDirs]
     .filter((dir) => !excludedDirs.has(dir))
-    .sort((a, b) => a.localeCompare(b))
+    .sort(compareCodeUnits)
 }
 
 /** Recursively matches path segments: `*` matches one level, `**` matches zero or more levels. */
