@@ -20,8 +20,7 @@ npx @tanstack/intent@latest hooks install [--scope project|user] [--agents copil
 
 - Installs hook behavior without writing an `intent-skills` guidance block.
 - Returns a session-start skill catalog as agent context with available `skill-id: description` entries.
-- Builds that catalog with the project's installed `@tanstack/intent` CLI when one is resolvable from `node_modules`. When that same installation has a `node_modules/.bin/intent` shim, the catalog suggests `node_modules/.bin/intent load <skill-id>` for loads; without a shim, or without a local install, it suggests the package-manager runner (`npx @tanstack/intent@latest`, `pnpm dlx`, ...), which resolves the package against the registry on every run. Without a local install the catalog itself is also built through that runner.
-- Blocks supported edit tools until the hook observes a recognized `intent list` or `intent load <skill-id>` command, including the `node_modules/.bin/intent` form. If no listed skill matches the task, the agent can continue without loading one.
+- Blocks supported edit tools until the hook observes a recognized `intent list` or `intent load <skill-id>` command. If no listed skill matches the task, the agent can continue without loading one.
 - Uses `package.json#intent.skills` and `package.json#intent.exclude` to control which skills appear in the session catalog.
 
 ### Installation behavior
@@ -44,13 +43,13 @@ Hook output is an edit gate and observation signal, not proof of activation or c
 
 ## Hook support
 
-| Agent                      | Project scope                                                                         | User scope                                                        | Hooks installed                                                                                                       |
-| -------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Claude Code                | `.claude/settings.json`                                                               | `~/.claude/settings.json`                                         | `SessionStart` skill catalog plus `PreToolUse` edit gate                                                              |
-| Codex                      | `.codex/hooks.json`                                                                   | `~/.codex/hooks.json`                                             | `SessionStart` skill catalog plus `PreToolUse` edit gate; Codex hook interception is not a complete security boundary |
-| GitHub Copilot CLI         | Guidance via `.github/copilot-instructions.md`; blocking hooks are not project-scoped | `$COPILOT_HOME/hooks/hooks.json` or `~/.copilot/hooks/hooks.json` | `SessionStart` skill catalog plus `PreToolUse` edit gate in user scope                                                |
-| Cursor                     | Guidance only                                                                         | Guidance only                                                     | Use `AGENTS.md` or Cursor rules; no blocking hook is installed                                                        |
-| Generic `AGENTS.md` agents | Guidance only                                                                         | Guidance only                                                     | Use the `intent-skills` guidance block; no blocking hook is installed                                                 |
+| Agent | Project scope | User scope | Hooks installed |
+| --- | --- | --- | --- |
+| Claude Code | `.claude/settings.json` | `~/.claude/settings.json` | `SessionStart` skill catalog plus `PreToolUse` edit gate |
+| Codex | `.codex/hooks.json` | `~/.codex/hooks.json` | `SessionStart` skill catalog plus `PreToolUse` edit gate; Codex hook interception is not a complete security boundary |
+| GitHub Copilot CLI | Guidance via `.github/copilot-instructions.md`; blocking hooks are not project-scoped | `$COPILOT_HOME/hooks/hooks.json` or `~/.copilot/hooks/hooks.json` | `SessionStart` skill catalog plus `PreToolUse` edit gate in user scope |
+| Cursor | Guidance only | Guidance only | Use `AGENTS.md` or Cursor rules; no blocking hook is installed |
+| Generic `AGENTS.md` agents | Guidance only | Guidance only | Use the `intent-skills` guidance block; no blocking hook is installed |
 
 `.github/copilot-instructions.md` is a supported project guidance target for `intent install`. GitHub Copilot CLI hook enforcement uses the user-scoped Copilot hooks directory because that is the supported hook location.
 
