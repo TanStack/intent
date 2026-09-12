@@ -20,7 +20,7 @@ npx @tanstack/intent@latest hooks install [--scope project|user] [--agents copil
 
 - Installs hook behavior without writing an `intent-skills` guidance block.
 - Returns a session-start skill catalog as agent context with available `skill-id: description` entries.
-- Builds that catalog with the project's installed `@tanstack/intent` CLI when one is resolvable from `node_modules`, and suggests `node_modules/.bin/intent load <skill-id>` for loads. Without a local install it falls back to the package-manager runner (`npx @tanstack/intent@latest`, `pnpm dlx`, ...), which resolves the package against the registry on every run.
+- Builds that catalog with the project's installed `@tanstack/intent` CLI when one is resolvable from `node_modules`. When that same installation has a `node_modules/.bin/intent` shim, the catalog suggests `node_modules/.bin/intent load <skill-id>` for loads; without a shim, or without a local install, it suggests the package-manager runner (`npx @tanstack/intent@latest`, `pnpm dlx`, ...), which resolves the package against the registry on every run. Without a local install the catalog itself is also built through that runner.
 - Blocks supported edit tools until the hook observes a recognized `intent list` or `intent load <skill-id>` command, including the `node_modules/.bin/intent` form. If no listed skill matches the task, the agent can continue without loading one.
 - Uses `package.json#intent.skills` and `package.json#intent.exclude` to control which skills appear in the session catalog.
 

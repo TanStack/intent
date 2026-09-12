@@ -143,12 +143,13 @@ function rootForEvent(event) {
 async function createSessionCatalogContext(root) {
   try {
     const start = performance.now()
-    const result = readIntentList(root)
+    const localCli = resolveLocalIntentCli(root)
+    const result = readIntentList(root, localCli)
     const durationMs = performance.now() - start
     console.error(
       \`[intent-\${AGENT}-session-catalog] listIntentSkills found \${result.skills.length} skills from \${result.packages.length} packages in \${formatDuration(durationMs)} (packageJsonReadCount=\${result.debug?.scan.packageJsonReadCount ?? 'unknown'})\`,
     )
-    return formatSessionCatalog(result, loadCommandForRoot(root))
+    return formatSessionCatalog(result, loadCommandForLocalCli(root, localCli))
   } catch {
     return ''
   }
@@ -157,19 +158,21 @@ async function createSessionCatalogContext(root) {
 // The package-manager runner in CATALOG_COMMAND (npx, pnpm dlx, ...) resolves
 // @tanstack/intent@latest against the registry on every run, which costs one
 // to four seconds per session start. When the project has the package
-// installed, run its CLI directly with this Node binary instead.
+// installed, run its CLI directly with this Node binary instead. Returns the
+// CLI path and the node_modules directory it was found in, or null.
 function resolveLocalIntentCli(root) {
   let dir = root
   let prev
   while (dir !== prev) {
-    const packageJsonPath = join(dir, 'node_modules', '@tanstack', 'intent', 'package.json')
+    const nodeModulesDir = join(dir, 'node_modules')
+    const packageJsonPath = join(nodeModulesDir, '@tanstack', 'intent', 'package.json')
     if (existsSync(packageJsonPath)) {
       try {
         const bin = JSON.parse(readFileSync(packageJsonPath, 'utf8')).bin
         const relativeBin = typeof bin === 'string' ? bin : bin && bin.intent
         if (typeof relativeBin === 'string') {
           const cli = join(dirname(packageJsonPath), relativeBin)
-          if (existsSync(cli)) return cli
+          if (existsSync(cli)) return { cli, nodeModulesDir }
         }
       } catch {
       }
@@ -181,23 +184,17 @@ function resolveLocalIntentCli(root) {
   return null
 }
 
-// The load command shown to the agent: the project's own bin shim when there
-// is one (no registry lookup), otherwise the package-manager runner.
-function loadCommandForRoot(root) {
-  let dir = root
-  let prev
-  while (dir !== prev) {
-    const bin = join(dir, 'node_modules', '.bin', 'intent')
-    if (existsSync(bin)) {
-      return relative(root, bin).split(sep).join('/') + ' load <package>#<skill>'
-    }
-    prev = dir
-    dir = dirname(dir)
-  }
-  return LOAD_COMMAND
+// The load command shown to the agent. When the catalog came from a local
+// install that also has a bin shim, suggest that shim (same installation, no
+// registry lookup); otherwise suggest the package-manager runner.
+function loadCommandForLocalCli(root, localCli) {
+  if (!localCli) return LOAD_COMMAND
+  const bin = join(localCli.nodeModulesDir, '.bin', 'intent')
+  if (!existsSync(bin)) return LOAD_COMMAND
+  return relative(root, bin).split(sep).join('/') + ' load <package>#<skill>'
 }
 
-function readIntentList(root) {
+function readIntentList(root, localCli) {
   const options = {
     cwd: root,
     encoding: 'utf8',
@@ -206,9 +203,8 @@ function readIntentList(root) {
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 9000,
   }
-  const localCli = resolveLocalIntentCli(root)
   const output = localCli
-    ? execFileSync(process.execPath, [localCli, 'list', '--json', '--no-notices'], options)
+    ? execFileSync(process.execPath, [localCli.cli, 'list', '--json', '--no-notices'], options)
     : execFileSync(CATALOG_COMMAND, { ...options, shell: true })
   return JSON.parse(output)
 }

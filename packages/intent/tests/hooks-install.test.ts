@@ -631,6 +631,70 @@ describe('hook installer', () => {
     )
   })
 
+  it('suggests the shim beside the resolved install, not a nearer stray shim', () => {
+    const root = tempRoot('intent-hooks-nested-workspace-')
+    writeFakeLocalIntentCli(root)
+    // The event cwd is a nested workspace package with its own .bin shim but
+    // no @tanstack/intent of its own; the catalog resolves from the root.
+    const app = join(root, 'packages', 'app')
+    mkdirSync(join(app, 'node_modules', '.bin'), { recursive: true })
+    writeFileSync(join(app, 'node_modules', '.bin', 'intent'), '')
+    const scriptPath = join(root, '.intent', 'hooks', 'intent-claude-gate.mjs')
+    mkdirSync(join(root, '.intent', 'hooks'), { recursive: true })
+    writeFileSync(
+      scriptPath,
+      buildHookRunnerScript(
+        'claude',
+        `${quoteShell(process.execPath)} ${quoteShell(join(root, 'missing.mjs'))}`,
+      ),
+    )
+
+    const result = runHookScript(scriptPath, {
+      cwd: app,
+      hook_event_name: 'SessionStart',
+      session_id: 'session-a',
+      source: 'startup',
+    })
+
+    expect(result.status).toBe(0)
+    const context = JSON.parse(result.stdout).hookSpecificOutput
+      .additionalContext as string
+    expect(context).toContain(
+      'Load a matching skill with: `../../node_modules/.bin/intent load <package>#<skill>`.',
+    )
+  })
+
+  it('keeps the runner load command when the local install has no bin shim', () => {
+    const root = tempRoot('intent-hooks-local-cli-no-shim-')
+    writeFakeLocalIntentCli(root)
+    rmSync(join(root, 'node_modules', '.bin'), { recursive: true })
+    const loadCommand =
+      'pnpm dlx @tanstack/intent@latest load <package>#<skill>'
+    const scriptPath = join(root, '.intent', 'hooks', 'intent-claude-gate.mjs')
+    mkdirSync(join(root, '.intent', 'hooks'), { recursive: true })
+    writeFileSync(
+      scriptPath,
+      buildHookRunnerScript(
+        'claude',
+        `${quoteShell(process.execPath)} ${quoteShell(join(root, 'missing.mjs'))}`,
+        loadCommand,
+      ),
+    )
+
+    const result = runHookScript(scriptPath, {
+      cwd: root,
+      hook_event_name: 'SessionStart',
+      session_id: 'session-a',
+      source: 'startup',
+    })
+
+    expect(result.status).toBe(0)
+    const context = JSON.parse(result.stdout).hookSpecificOutput
+      .additionalContext as string
+    expect(context).toContain('- @tanstack/router#routing')
+    expect(context).toContain(`Load a matching skill with: \`${loadCommand}\`.`)
+  })
+
   it('formats skipped install results', () => {
     expect(
       formatHookInstallResult({
