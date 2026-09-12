@@ -316,6 +316,41 @@ it('writes the check report to the GitHub step summary', async () => {
   }
 })
 
+it('validates every skills root in one run so check reports all of their errors', async () => {
+  write('pnpm-workspace.yaml', 'packages: [packages/*]\n')
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  for (const name of ['query', 'cache']) {
+    write(`packages/${name}/package.json`, `{"name":"@library/${name}"}\n`)
+    expect(
+      await main([
+        'maintainer',
+        'add',
+        name,
+        '--package',
+        `packages/${name}`,
+        '--domain',
+        'queries',
+        '--description',
+        `Use for ${name}.`,
+        '--source',
+        'package.json',
+      ]),
+    ).toBe(0)
+    // Valid for the planning records, over the line limit for validate.
+    write(
+      `packages/${name}/skills/${name}/SKILL.md`,
+      `---\nname: ${name}\ndescription: Use for ${name}.\n---\n${'Guidance.\n'.repeat(500)}`,
+    )
+  }
+  expect(await main(['maintainer', 'check'])).toBe(1)
+  const output = vi.mocked(console.error).mock.calls.flat().join('\n')
+  expect(output.match(/Validation failed with 2 error/g)).toHaveLength(1)
+  for (const name of ['query', 'cache'])
+    expect(output).toContain(
+      `${join('packages', name, 'skills', name, 'SKILL.md')}: Exceeds 500 line limit`,
+    )
+})
+
 it('preserves a planning record located directly at the repository root', async () => {
   write('domain_map.yaml', '# Prior scope\nskills: []\n')
   expect(await main(['maintainer', 'setup'])).toBe(0)
