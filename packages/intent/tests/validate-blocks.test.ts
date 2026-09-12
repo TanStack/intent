@@ -171,6 +171,59 @@ it('uses tracked hand-written declarations and maps build output back to source'
   ])
 })
 
+it('checks imports from sibling workspace packages against their own source', () => {
+  write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n')
+  write('packages/client/package.json', '{"name":"@acme/client"}\n')
+  write(
+    'packages/client/src/index.ts',
+    "import type { Adapter } from '@acme/adapter'\nexport function run<A extends Adapter>(options: { adapter: A; model: A['models'][number] }): void {}\n",
+  )
+  write('packages/adapter/package.json', '{"name":"@acme/adapter"}\n')
+  write(
+    'packages/adapter/src/index.ts',
+    "export interface Adapter { models: ReadonlyArray<string> }\nexport function openai(): { models: readonly ['gpt-5'] } { return { models: ['gpt-5'] } }\n",
+  )
+  write(
+    'packages/client/skills/run/SKILL.md',
+    [
+      '---',
+      'name: run',
+      'description: Use when running.',
+      '---',
+      '```ts',
+      "import { run } from '@acme/client'",
+      "import { openai, anthropic } from '@acme/adapter'",
+      "run({ adapter: openai(), model: 'gpt-9000' })",
+      '```',
+      '',
+    ].join('\n'),
+  )
+  const findings = checkSkillBlocks({
+    root,
+    packageDir: join(root, 'packages/client'),
+    library: '@acme/client',
+    skills: [
+      {
+        file: 'packages/client/skills/run/SKILL.md',
+        content: readFileSync(
+          join(root, 'packages/client/skills/run/SKILL.md'),
+          'utf8',
+        ),
+      },
+    ],
+  }).findings
+  expect(findings).toEqual([
+    expect.objectContaining({
+      line: 7,
+      message: expect.stringMatching(/TS2305: .*'anthropic'/),
+    }),
+    expect.objectContaining({
+      line: 8,
+      message: expect.stringMatching(/TS2322: .*gpt-9000/),
+    }),
+  ])
+})
+
 it('skips typechecking with a reason when TypeScript or a type entry is unavailable', () => {
   skill("```ts\nimport { retry } from '@acme/client'\n```\n")
   expect(

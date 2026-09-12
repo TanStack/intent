@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import { resolveProjectContext } from '../core/project-context.js'
+import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
 import { parseFrontmatter, readScalarField } from '../shared/utils.js'
 import type TS from 'typescript'
 
@@ -138,6 +139,35 @@ export function libraryEntry(packageDir: string): string | null {
   return null
 }
 
+// Every workspace package mapped to its own entry, so an example that imports
+// a sibling package (an adapter, a framework binding) is checked against it
+// instead of silently resolving to nothing.
+const workspaceEntries = new Map<string, Record<string, Array<string>>>()
+function workspacePaths(root: string): Record<string, Array<string>> {
+  const context = resolveProjectContext({ cwd: root })
+  const workspaceRoot = context.workspaceRoot ?? root
+  const cached = workspaceEntries.get(workspaceRoot)
+  if (cached) return cached
+  const paths: Record<string, Array<string>> = {}
+  for (const dir of resolveWorkspacePackages(
+    workspaceRoot,
+    context.workspacePatterns,
+  )) {
+    let name: unknown
+    try {
+      name = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name
+    } catch {
+      continue
+    }
+    const entry = typeof name === 'string' ? libraryEntry(dir) : null
+    if (!entry) continue
+    paths[name as string] = [entry]
+    paths[`${name}/*`] = [join(dir, '*')]
+  }
+  workspaceEntries.set(workspaceRoot, paths)
+  return paths
+}
+
 function isTracked(packageDir: string, path: string): boolean {
   try {
     execFileSync(
@@ -206,7 +236,11 @@ export function checkSkillBlocks(
     jsx: ts.JsxEmit.Preserve,
     lib: ['lib.esnext.d.ts', 'lib.dom.d.ts'],
     baseUrl: root,
-    paths: { [library]: [entry], [`${library}/*`]: [join(packageDir, '*')] },
+    paths: {
+      ...workspacePaths(root),
+      [library]: [entry],
+      [`${library}/*`]: [join(packageDir, '*')],
+    },
     types: [],
   }
   const host = ts.createCompilerHost(compilerOptions, true)
