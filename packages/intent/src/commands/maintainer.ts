@@ -20,6 +20,7 @@ import {
 } from '../maintainer/distribution.js'
 import { runSetupGithubActions } from '../setup/index.js'
 import { detectIntentCommandPackageManager } from '../shared/command-runner.js'
+import { describeSkillExamples } from '../validate/blocks.js'
 import { getMetaDir } from './support.js'
 import {
   buildMaintainerGuidanceBlock,
@@ -455,7 +456,13 @@ export async function runMaintainerCommand(
         : item.changedFiles.length
           ? `changed ${item.changedFiles.join(', ')}`
           : 'no recorded review'
-      console.log(`  ${label} ${item.path}: ${detail}`)
+      const examples =
+        item.kind === 'skill' && !item.problems.length
+          ? describeSkillExamples(project.root, item.path)
+          : null
+      console.log(
+        `  ${label} ${item.path}: ${detail}${examples ? `; ${examples}` : ''}`,
+      )
     }
   }
   if (action === 'check') {

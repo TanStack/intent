@@ -9,6 +9,7 @@ import { fail, isCliFailure } from '../shared/cli-error.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
+import { checkSkillBlocks } from '../validate/blocks.js'
 import { printWarnings } from './support.js'
 import type { ProjectContext } from '../core/project-context.js'
 
@@ -462,6 +463,7 @@ async function runValidateCommandInternal(
 
   const errors: Array<ValidationError> = []
   const warnings: Array<string> = []
+  const skippedBlockChecks = new Set<string>()
   const fixPlans: Array<FrontmatterFixPlan> = []
   const setVersionPlans: Array<SetVersionPlan> = []
   let validatedCount = 0
@@ -482,6 +484,11 @@ async function runValidateCommandInternal(
       targetPath: skillsDir,
     })
 
+    const checkedSkills: Array<{
+      file: string
+      content: string
+      library: string | undefined
+    }> = []
     for (const filePath of skillFiles) {
       const rel = relative(process.cwd(), filePath)
       const content = readFileSync(filePath, 'utf8')
@@ -611,12 +618,55 @@ async function runValidateCommandInternal(
         ...collectAgentSkillSpecWarnings({ fm, rel }).map(formatWarning),
       )
 
+      checkedSkills.push({
+        file: rel,
+        content,
+        library: readScalarField(fm, 'library'),
+      })
+
       const lineCount = content.split(/\r?\n/).length
       if (lineCount > 500) {
         errors.push({
           file: rel,
           message: `Exceeds 500 line limit (${lineCount} lines). Rewrite for conciseness: move API tables to references/, trim verbose examples, and remove content an agent already knows. Do not simply raise the limit.`,
         })
+      }
+    }
+
+    // Code blocks and links are checked against the owning package's own
+    // source, so a renamed export or option fails here with a skill line.
+    if (validateContext.packageRoot && checkedSkills.length) {
+      let packageName: string | undefined
+      try {
+        packageName = JSON.parse(
+          readFileSync(validateContext.targetPackageJsonPath!, 'utf8'),
+        ).name
+      } catch {
+        packageName = undefined
+      }
+      const byLibrary = new Map<string, typeof checkedSkills>()
+      for (const skill of checkedSkills) {
+        const library = skill.library ?? packageName
+        if (!library) continue
+        byLibrary.set(library, [...(byLibrary.get(library) ?? []), skill])
+      }
+      for (const [library, skills] of byLibrary) {
+        const result = checkSkillBlocks({
+          root: process.cwd(),
+          packageDir: validateContext.packageRoot,
+          library,
+          skills,
+        })
+        if (result.skipped) skippedBlockChecks.add(result.skipped)
+        for (const finding of result.findings) {
+          if (finding.severity === 'error')
+            errors.push({
+              file: `${finding.file}:${finding.line}`,
+              message: finding.message,
+            })
+          else
+            warnings.push(`${finding.file}:${finding.line}: ${finding.message}`)
+        }
       }
     }
 
@@ -667,6 +717,9 @@ async function runValidateCommandInternal(
       ...collectPackagingWarnings(validateContext, skillsDir, skillFiles),
     )
   }
+
+  for (const reason of skippedBlockChecks)
+    warnings.push(`Skill code blocks were not typechecked: ${reason}`)
 
   if (options.check) {
     for (const plan of fixPlans) {
