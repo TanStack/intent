@@ -81,7 +81,11 @@ export function checkSkillLinks(
 ): Array<SkillBlockFinding> {
   const findings: Array<SkillBlockFinding> = []
   const absolute = resolve(root, file)
-  for (const match of content.matchAll(markdownLink)) {
+  // Blank out fenced examples, keeping newlines so line numbers still match.
+  const prose = content.replace(codeFence, (block) =>
+    block.replace(/[^\n]/g, ' '),
+  )
+  for (const match of prose.matchAll(markdownLink)) {
     const target = match[1]!
     if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) continue
     const path = target.replace(/[#?].*$/, '')
@@ -163,7 +167,7 @@ function workspacePaths(root: string): Record<string, Array<string>> {
     const entry = typeof name === 'string' ? libraryEntry(dir) : null
     if (!entry) continue
     paths[name as string] = [entry]
-    paths[`${name}/*`] = [join(dir, '*')]
+    paths[`${name}/*`] = [join(dirname(entry), '*'), join(dir, '*')]
   }
   workspaceEntries.set(workspaceRoot, paths)
   return paths
@@ -179,6 +183,17 @@ function isTracked(packageDir: string, path: string): boolean {
     return true
   } catch {
     return false
+  }
+}
+
+function packageName(packageDir: string): string | undefined {
+  try {
+    const name: unknown = JSON.parse(
+      readFileSync(join(packageDir, 'package.json'), 'utf8'),
+    ).name
+    return typeof name === 'string' ? name : undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -234,7 +249,12 @@ export function checkSkillBlocks(
   }
   if (blocks.length === 0) return remember()
   if (!ts) return remember('TypeScript is not installed in this repository')
-  if (!entry)
+  if (Number(ts.versionMajorMinor.split('.')[0]) < 5)
+    return remember(
+      `TypeScript ${ts.version} is installed; 5.0 or newer is required`,
+    )
+  const ownsLibrary = packageName(packageDir) === library
+  if (ownsLibrary && !entry)
     return remember(
       `no type entry found for ${library} in ${relative(root, packageDir) || '.'}`,
     )
@@ -261,8 +281,17 @@ export function checkSkillBlocks(
     baseUrl: root,
     paths: {
       ...workspacePaths(root),
-      [library]: [entry],
-      [`${library}/*`]: [join(packageDir, '*')],
+      // A skill documenting another package (metadata.library) resolves that
+      // package through the workspace or node_modules, not this package's entry.
+      ...(ownsLibrary
+        ? {
+            [library]: [entry!],
+            [`${library}/*`]: [
+              join(dirname(entry!), '*'),
+              join(packageDir, '*'),
+            ],
+          }
+        : {}),
     },
     types: [],
   }

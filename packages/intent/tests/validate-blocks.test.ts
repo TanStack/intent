@@ -224,6 +224,52 @@ it('checks imports from sibling workspace packages against their own source', ()
   ])
 })
 
+it('ignores links inside fenced examples and checks a skill that documents a sibling package', () => {
+  write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n')
+  write('packages/client/package.json', '{"name":"@acme/client"}\n')
+  write('packages/client/src/index.ts', 'export const client = 1\n')
+  write('packages/adapter/package.json', '{"name":"@acme/adapter"}\n')
+  write('packages/adapter/src/index.ts', 'export function openai(): void {}\n')
+  write(
+    'packages/client/skills/adapters/SKILL.md',
+    [
+      '---',
+      'name: adapters',
+      'description: Use when choosing an adapter.',
+      'metadata:',
+      '  library: "@acme/adapter"',
+      '---',
+      '```md',
+      'A [link inside an example](does-not-exist.md) is not checked.',
+      '```',
+      '```ts',
+      "import { openai, gemini } from '@acme/adapter'",
+      '```',
+      '',
+    ].join('\n'),
+  )
+  const findings = checkSkillBlocks({
+    root,
+    packageDir: join(root, 'packages/client'),
+    library: '@acme/adapter',
+    skills: [
+      {
+        file: 'packages/client/skills/adapters/SKILL.md',
+        content: readFileSync(
+          join(root, 'packages/client/skills/adapters/SKILL.md'),
+          'utf8',
+        ),
+      },
+    ],
+  }).findings
+  expect(findings).toEqual([
+    expect.objectContaining({
+      line: 11,
+      message: expect.stringMatching(/TS2305: .*'gemini'/),
+    }),
+  ])
+})
+
 it('skips typechecking with a reason when TypeScript or a type entry is unavailable', () => {
   skill("```ts\nimport { retry } from '@acme/client'\n```\n")
   expect(
@@ -245,6 +291,22 @@ it('skips typechecking with a reason when TypeScript or a type entry is unavaila
       null,
     ).skipped,
   ).toMatch(/TypeScript is not installed/)
+  expect(
+    checkSkillBlocks(
+      {
+        root,
+        packageDir: root,
+        library: '@acme/client',
+        skills: [
+          {
+            file: 'skills/retries/SKILL.md',
+            content: read('skills/retries/SKILL.md'),
+          },
+        ],
+      },
+      { version: '4.9.5', versionMajorMinor: '4.9' } as never,
+    ).skipped,
+  ).toMatch(/TypeScript 4\.9\.5 is installed; 5\.0 or newer/)
   rmSync(join(root, 'src'), { recursive: true })
   expect(check().skipped).toMatch(/no type entry found for @acme\/client/)
 })
