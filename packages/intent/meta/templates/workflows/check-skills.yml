@@ -7,7 +7,7 @@
 # The checks live in TanStack/intent's reusable workflow, pinned to a major
 # tag, so they update with Intent releases without an edit here.
 #
-# intent-workflow-version: 5
+# intent-workflow-version: 4
 #
 # Template variables (replaced by `intent setup`):
 #   {{PACKAGE_LABEL}} — e.g. @tanstack/query or my-workspace workspace
