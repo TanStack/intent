@@ -9,7 +9,11 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createDepDirCache, resolveDepDir } from '../src/shared/utils.js'
+import {
+  createDepDirCache,
+  normalizeReadlinkTarget,
+  resolveDepDir,
+} from '../src/shared/utils.js'
 
 let root: string
 
@@ -112,5 +116,28 @@ describe('resolveDepDir', () => {
     expect(resolveDepDir('dep', parentA, cache)).toBe(hoisted)
     expect(resolveDepDir('other', parentA, cache)).toBeNull()
     expect(cache.candidates.size).toBeGreaterThan(0)
+  })
+})
+
+describe('normalizeReadlinkTarget', () => {
+  it('strips the extended-length prefix from drive paths', () => {
+    expect(normalizeReadlinkTarget('\\\\?\\C:\\store\\dep')).toBe(
+      'C:\\store\\dep',
+    )
+  })
+
+  it('keeps UNC targets absolute', () => {
+    expect(normalizeReadlinkTarget('\\\\?\\UNC\\server\\share\\dep')).toBe(
+      '\\\\server\\share\\dep',
+    )
+  })
+
+  it('leaves other targets alone', () => {
+    expect(normalizeReadlinkTarget('../../dep@1.0.0/node_modules/dep')).toBe(
+      '../../dep@1.0.0/node_modules/dep',
+    )
+    expect(normalizeReadlinkTarget('\\\\server\\share\\dep')).toBe(
+      '\\\\server\\share\\dep',
+    )
   })
 })

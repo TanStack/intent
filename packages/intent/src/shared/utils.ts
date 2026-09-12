@@ -430,9 +430,10 @@ function resolveCandidateDir(
     return existsSync(join(candidate, 'package.json')) ? candidate : null
   }
 
-  // Windows can report junction targets with the extended-length prefix.
-  if (target.startsWith('\\\\?\\')) target = target.slice(4)
-  const resolvedTarget = resolve(dirname(candidate), target)
+  const resolvedTarget = resolve(
+    dirname(candidate),
+    normalizeReadlinkTarget(target),
+  )
   let real = cache.targets.get(resolvedTarget)
   if (real === undefined) {
     real = existsSync(join(resolvedTarget, 'package.json'))
@@ -441,6 +442,20 @@ function resolveCandidateDir(
     cache.targets.set(resolvedTarget, real)
   }
   return real
+}
+
+/**
+ * Strip the Windows extended-length prefix that `readlink` can report for
+ * junction targets. `\\?\C:\dir` becomes `C:\dir`; `\\?\UNC\server\share`
+ * becomes `\\server\share` so the UNC root stays absolute. Other targets,
+ * including relative POSIX links, are returned unchanged.
+ */
+export function normalizeReadlinkTarget(target: string): string {
+  if (target.startsWith('\\\\?\\UNC\\')) {
+    return `\\\\${target.slice(8)}`
+  }
+  if (target.startsWith('\\\\?\\')) return target.slice(4)
+  return target
 }
 
 /**
