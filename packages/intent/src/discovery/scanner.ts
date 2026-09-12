@@ -13,7 +13,6 @@ import {
   resolve,
   sep,
 } from 'node:path'
-import semver from 'semver'
 import {
   detectGlobalNodeModules,
   nodeReadFs,
@@ -26,6 +25,7 @@ import {
   findWorkspaceRoot,
   readWorkspacePatterns,
 } from '../setup/workspace-patterns.js'
+import { compareVersions, normalizeVersion } from '../shared/version.js'
 import { createIntentFsCache } from './fs-cache.js'
 import { detectPackageManager } from './package-manager.js'
 import { createDependencyWalker, createPackageRegistrar } from './index.js'
@@ -491,13 +491,6 @@ function getPackageDepth(packageRoot: string, projectRoot: string): number {
   return relative(projectRoot, packageRoot).split(sep).length
 }
 
-function normalizeVersion(version: string): string | null {
-  const validVersion = semver.valid(version)
-  if (validVersion) return validVersion
-
-  return semver.coerce(version)?.version ?? null
-}
-
 function comparePackageVersions(a: string, b: string): number {
   const versionA = normalizeVersion(a)
   const versionB = normalizeVersion(b)
@@ -508,7 +501,7 @@ function comparePackageVersions(a: string, b: string): number {
     return 0
   }
 
-  return semver.compare(versionA, versionB)
+  return compareVersions(versionA, versionB)
 }
 
 function formatVariantWarning(

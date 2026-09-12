@@ -20,7 +20,6 @@ import {
   writeIntentSkillsBlock,
 } from './guidance.js'
 import { setupInitialPermissions } from './permissions.js'
-import { createPermissionPrompts } from './permission-prompts.js'
 import type { GlobalScanFlags } from '../support.js'
 import type { IntentCoreOptions } from '../../core/index.js'
 import type { ScanResult } from '../../shared/types.js'
@@ -308,7 +307,12 @@ export async function runInstallCommand(
           review: options.review,
           root: process.cwd(),
           runtime: {
-            prompts: runtime.permissionPrompts ?? createPermissionPrompts(),
+            // Loaded on demand: @clack/prompts is only needed when prompting.
+            prompts:
+              runtime.permissionPrompts ??
+              (
+                await import('./permission-prompts.js')
+              ).createPermissionPrompts(),
           },
         })
       } catch (error) {
