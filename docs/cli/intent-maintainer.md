@@ -212,7 +212,7 @@ lit: @tanstack/intent@latest maintainer check
 
 The report's `recording` block lists the allowed outcomes, the narrower planning outcomes, the required fields, and the record command. `--record` rejects a report that annotates none of its items. The [source-review reference](./intent-review) describes the report format, fingerprints, baseline recovery, and the [Intent-owned paths](./intent-review#ignored-paths) that unmapped-change review skips by default. `maintainer review` supports its `--base`, `--json`, `--record`, and `--interactive` options. The standalone `review` command also remains available for workflow reminder output and review-only checks.
 
-`maintainer check --base <pull-request-base>` runs the same maintainer checks in CI. It does not publish, install consumer skills, or certify that an agent's recorded conclusion is correct. Missing task evidence remains a review responsibility. Repository validation protects the source tree; it does not execute an authoring model in CI.
+`maintainer check --base <pull-request-base>` runs the same maintainer checks in CI. Add `--github-summary` to write the headline, authoring issues, files to sync, and pending review items to the GitHub Actions step summary after the validation section; the generated workflow passes it. The flag belongs to `check` alone. It does not publish, install consumer skills, or certify that an agent's recorded conclusion is correct. Missing task evidence remains a review responsibility. Repository validation protects the source tree; it does not execute an authoring model in CI.
 
 ## Verify distribution
 

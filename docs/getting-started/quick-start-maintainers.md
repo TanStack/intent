@@ -199,7 +199,7 @@ lit: @tanstack/intent@latest setup
 
 `maintainer sync` aligns the tree, adds the `tanstack-intent` keyword, updates existing package `files` allowlists, and generates selected repository exports. It preserves authored decisions and an absent npm allowlist. Inspect the packed archive as part of the library’s release checks, including whether planning records should be excluded.
 
-`setup` copies `check-skills.yml` to the workspace root's `.github/workflows/` directory and skips an existing destination file. The workflow validates skills and recorded source reviews on pull requests. After a release or manual run, it creates or updates a review-reminder pull request when recorded review state or conservative staleness signals require attention. See [setup commands](../cli/intent-setup).
+`setup` copies `check-skills.yml` to the workspace root's `.github/workflows/` directory and skips an existing destination file. The copy is a short caller for Intent's reusable workflow, pinned to Intent's major tag, so the checks update with Intent releases without an edit on your side. The workflow validates skills and recorded source reviews on pull requests. After a release or manual run, it creates or updates a review-reminder pull request when recorded review state or conservative staleness signals require attention. See [setup commands](../cli/intent-setup).
 
 > [!NOTE]
 > `intent setup` copies CI templates; `intent maintainer setup` initializes the maintainer workflow. To replace an older generated workflow, move or delete it before rerunning `setup`; Intent skips existing files.
