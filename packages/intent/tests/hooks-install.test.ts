@@ -601,6 +601,100 @@ describe('hook installer', () => {
     expect(afterLoad.stdout).toBe('')
   })
 
+  it('runs the locally installed CLI directly and suggests its bin shim', () => {
+    const root = tempRoot('intent-hooks-local-cli-')
+    writeFakeLocalIntentCli(root)
+    // A catalog command that cannot succeed proves the local CLI was used.
+    const failingCatalogCommand = `${quoteShell(process.execPath)} ${quoteShell(join(root, 'missing.mjs'))}`
+    const scriptPath = join(root, '.intent', 'hooks', 'intent-claude-gate.mjs')
+    mkdirSync(join(root, '.intent', 'hooks'), { recursive: true })
+    writeFileSync(
+      scriptPath,
+      buildHookRunnerScript('claude', failingCatalogCommand),
+    )
+
+    const result = runHookScript(scriptPath, {
+      cwd: root,
+      hook_event_name: 'SessionStart',
+      session_id: 'session-a',
+      source: 'startup',
+    })
+
+    expect(result.status).toBe(0)
+    const output = JSON.parse(result.stdout)
+    const context = output.hookSpecificOutput.additionalContext as string
+    expect(context).toContain(
+      '- @tanstack/router#routing: Router routing guidance',
+    )
+    expect(context).toContain(
+      'Load a matching skill with: `node_modules/.bin/intent load <package>#<skill>`.',
+    )
+  })
+
+  it('suggests the shim beside the resolved install, not a nearer stray shim', () => {
+    const root = tempRoot('intent-hooks-nested-workspace-')
+    writeFakeLocalIntentCli(root)
+    // The event cwd is a nested workspace package with its own .bin shim but
+    // no @tanstack/intent of its own; the catalog resolves from the root.
+    const app = join(root, 'packages', 'app')
+    mkdirSync(join(app, 'node_modules', '.bin'), { recursive: true })
+    writeFileSync(join(app, 'node_modules', '.bin', 'intent'), '')
+    const scriptPath = join(root, '.intent', 'hooks', 'intent-claude-gate.mjs')
+    mkdirSync(join(root, '.intent', 'hooks'), { recursive: true })
+    writeFileSync(
+      scriptPath,
+      buildHookRunnerScript(
+        'claude',
+        `${quoteShell(process.execPath)} ${quoteShell(join(root, 'missing.mjs'))}`,
+      ),
+    )
+
+    const result = runHookScript(scriptPath, {
+      cwd: app,
+      hook_event_name: 'SessionStart',
+      session_id: 'session-a',
+      source: 'startup',
+    })
+
+    expect(result.status).toBe(0)
+    const context = JSON.parse(result.stdout).hookSpecificOutput
+      .additionalContext as string
+    expect(context).toContain(
+      'Load a matching skill with: `../../node_modules/.bin/intent load <package>#<skill>`.',
+    )
+  })
+
+  it('keeps the runner load command when the local install has no bin shim', () => {
+    const root = tempRoot('intent-hooks-local-cli-no-shim-')
+    writeFakeLocalIntentCli(root)
+    rmSync(join(root, 'node_modules', '.bin'), { recursive: true })
+    const loadCommand =
+      'pnpm dlx @tanstack/intent@latest load <package>#<skill>'
+    const scriptPath = join(root, '.intent', 'hooks', 'intent-claude-gate.mjs')
+    mkdirSync(join(root, '.intent', 'hooks'), { recursive: true })
+    writeFileSync(
+      scriptPath,
+      buildHookRunnerScript(
+        'claude',
+        `${quoteShell(process.execPath)} ${quoteShell(join(root, 'missing.mjs'))}`,
+        loadCommand,
+      ),
+    )
+
+    const result = runHookScript(scriptPath, {
+      cwd: root,
+      hook_event_name: 'SessionStart',
+      session_id: 'session-a',
+      source: 'startup',
+    })
+
+    expect(result.status).toBe(0)
+    const context = JSON.parse(result.stdout).hookSpecificOutput
+      .additionalContext as string
+    expect(context).toContain('- @tanstack/router#routing')
+    expect(context).toContain(`Load a matching skill with: \`${loadCommand}\`.`)
+  })
+
   it('formats skipped install results', () => {
     expect(
       formatHookInstallResult({
@@ -647,6 +741,45 @@ console.log(JSON.stringify({
 `,
   )
   return `${quoteShell(process.execPath)} ${quoteShell(scriptPath)}`
+}
+
+// A project-local @tanstack/intent whose CLI only answers the exact catalog
+// invocation the hook runner is expected to make.
+function writeFakeLocalIntentCli(root: string): void {
+  const packageDir = join(root, 'node_modules', '@tanstack', 'intent')
+  mkdirSync(join(packageDir, 'dist'), { recursive: true })
+  writeFileSync(
+    join(packageDir, 'package.json'),
+    JSON.stringify({
+      name: '@tanstack/intent',
+      version: '0.0.0-local',
+      bin: { intent: 'dist/cli.mjs' },
+    }),
+  )
+  writeFileSync(
+    join(packageDir, 'dist', 'cli.mjs'),
+    `if (
+  process.env.INTENT_AUDIENCE !== 'agent' ||
+  process.argv.slice(2).join(' ') !== 'list --json --no-notices'
+) {
+  process.exit(1)
+}
+
+console.log(JSON.stringify({
+    conflicts: [],
+    packages: [{ name: '@tanstack/router' }],
+    skills: [
+      {
+        description: 'Router routing guidance',
+        use: '@tanstack/router#routing',
+      },
+    ],
+    warnings: [],
+  }))
+`,
+  )
+  mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true })
+  writeFileSync(join(root, 'node_modules', '.bin', 'intent'), '')
 }
 
 // The hook runner executes the catalog command with `shell: true`, which is

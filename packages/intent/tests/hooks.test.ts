@@ -27,6 +27,26 @@ describe('intent hook policy', () => {
     ).toEqual({ action: 'load', skillUse: '@tanstack/x#y' })
   })
 
+  it('parses the project bin shim the session catalog suggests', () => {
+    expect(
+      parseIntentInvocation('node_modules/.bin/intent load @tanstack/x#y'),
+    ).toEqual({ action: 'load', skillUse: '@tanstack/x#y' })
+    expect(parseIntentInvocation('./node_modules/.bin/intent list')).toEqual({
+      action: 'list',
+    })
+    expect(
+      parseIntentInvocation(
+        'cd packages/app && ../../node_modules/.bin/intent load @tanstack/x#y',
+      ),
+    ).toEqual({ action: 'load', skillUse: '@tanstack/x#y' })
+    expect(
+      parseIntentInvocation('node_modules\\.bin\\intent load @tanstack/x#y'),
+    ).toEqual({ action: 'load', skillUse: '@tanstack/x#y' })
+    expect(
+      parseIntentInvocation('my-intent load @tanstack/x#y'),
+    ).toBeUndefined()
+  })
+
   it('ignores non-intent commands and incomplete load commands', () => {
     expect(parseIntentInvocation('npm run build')).toBeUndefined()
     expect(
