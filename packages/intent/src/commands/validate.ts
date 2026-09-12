@@ -644,13 +644,12 @@ async function runValidateCommandInternal(
       } catch {
         packageName = undefined
       }
-      const byLibrary = new Map<string, typeof checkedSkills>()
+      const byLibrary: Record<string, typeof checkedSkills> = {}
       for (const skill of checkedSkills) {
         const library = skill.library ?? packageName
-        if (!library) continue
-        byLibrary.set(library, [...(byLibrary.get(library) ?? []), skill])
+        if (library) (byLibrary[library] ??= []).push(skill)
       }
-      for (const [library, skills] of byLibrary) {
+      for (const [library, skills] of Object.entries(byLibrary)) {
         const result = checkSkillBlocks({
           root: process.cwd(),
           packageDir: validateContext.packageRoot,
