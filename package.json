@@ -52,7 +52,7 @@
   },
   "sherif": {
     "ignoreDependency": [
-      "vitest@4.1.8"
+      "vitest"
     ]
   },
   "devDependencies": {
