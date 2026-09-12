@@ -173,7 +173,7 @@ export function setupRecords(project: MaintainerProject): Array<string> {
   )
 }
 
-export function planSetupRecords(
+function planSetupRecords(
   project: MaintainerProject,
 ): Array<FileChange> {
   const { root } = project
