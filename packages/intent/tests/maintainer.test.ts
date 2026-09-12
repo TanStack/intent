@@ -16,6 +16,9 @@ import { main } from '../src/cli.js'
 import { createReview } from '../src/review/review.js'
 import type { AdoptionPlan } from '../src/maintainer/adopt.js'
 
+// These tests run maintainer commands against real Git repositories.
+vi.setConfig({ testTimeout: 30_000 })
+
 let root: string
 let previousCwd: string
 
@@ -213,6 +216,25 @@ it('rejects cyclic prerequisites without applying an otherwise valid package upd
   )
   expect(read('package.json')).toBe(manifest)
   expect(read('skills/_artifacts/skill_tree.yaml')).toBe(tree)
+})
+
+it('copies the CI workflow once and passes check without a recorded distribution choice', async () => {
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  const workflow = '.github/workflows/check-skills.yml'
+  expect(read(workflow)).toContain('intent maintainer check')
+  write(workflow, '# customized\n')
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  expect(read(workflow)).toBe('# customized\n')
+  expect(parse(read('skills/_artifacts/skill_tree.yaml')).distribution).toBe(
+    undefined,
+  )
+  vi.mocked(console.log).mockClear()
+  expect(await main(['maintainer', 'status', '--json'])).toBe(0)
+  const status = JSON.parse(String(vi.mocked(console.log).mock.calls[0]![0]))
+  expect(status.distribution.mode).toBe('none')
+  expect(status.problems).not.toContainEqual(
+    expect.stringContaining('distribution'),
+  )
 })
 
 it('preserves a planning record located directly at the repository root', async () => {

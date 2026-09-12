@@ -16,10 +16,11 @@ import { withMaintainerLock, writeChanges } from '../maintainer/files.js'
 import { createReview } from '../review/review.js'
 import {
   configureDistribution,
-  distributionChoice,
   readDistribution,
 } from '../maintainer/distribution.js'
+import { runSetupGithubActions } from '../setup/index.js'
 import { detectIntentCommandPackageManager } from '../shared/command-runner.js'
+import { getMetaDir } from './support.js'
 import {
   buildMaintainerGuidanceBlock,
   writeIntentSkillsBlock,
@@ -88,9 +89,9 @@ const optionHelp: Record<string, [flag: string, description: string]> = {
 export const maintainerActions: Record<string, MaintainerAction> = {
   setup: {
     usage: 'maintainer setup [--distribution repo|none] [options]',
-    summary: 'Initialize planning records and agent instructions.',
+    summary: 'Initialize planning records, agent instructions, and CI.',
     writes:
-      'skill_tree.yaml, domain_map.yaml, skill_spec.md, and the intent-maintainer block in AGENTS.md (or the existing agent instruction file).',
+      'skill_tree.yaml, domain_map.yaml, skill_spec.md, the intent-maintainer block in AGENTS.md (or the existing agent instruction file), and .github/workflows/check-skills.yml when it does not exist.',
     options: [
       'artifacts',
       'distribution',
@@ -354,6 +355,7 @@ export async function runMaintainerCommand(
       if (action === 'setup') {
         const created = setupRecords(project)
         configureDistribution(project, options)
+        runSetupGithubActions(project.root, getMetaDir())
         writeIntentSkillsBlock({
           ...buildMaintainerGuidanceBlock(
             detectIntentCommandPackageManager(project.root),
@@ -374,9 +376,10 @@ export async function runMaintainerCommand(
         const distribution = readDistribution(
           readRecord(project, 'skill_tree.yaml'),
         )
-        if (!distribution) console.log(distributionChoice)
         console.log(
-          `Repository distribution: ${distribution?.mode ?? 'unconfigured'}. Run maintainer sync after authoring to update export metadata.`,
+          distribution
+            ? `Repository distribution: ${distribution.mode}. Run maintainer sync after authoring to update export metadata.`
+            : 'Repository distribution: none (default). To also offer selected skills from the repository, run maintainer setup --distribution repo --skill <name> after authoring.',
         )
       } else if (action === 'add') {
         const owner = inferOwningPackage(project.root, options.package)

@@ -16,6 +16,9 @@ import { main } from '../src/cli.js'
 import { createReview, recordReview } from '../src/review/review.js'
 import type { ReviewPrompts } from '../src/review/interactive.js'
 
+// These tests run maintainer commands against real Git repositories.
+vi.setConfig({ testTimeout: 30_000 })
+
 let root: string
 let cwd: string
 const templatePath = fileURLToPath(

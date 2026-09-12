@@ -52,7 +52,7 @@ const recording: ReviewReport['recording'] = {
   outcomes: ['updated', 'no-change', 'out-of-scope'],
   planningOutcomes: ['updated', 'no-change'],
   required: ['outcome', 'reason', 'evidence'],
-  command: 'intent maintainer review --record <report.json>',
+  command: 'intent maintainer review --record .intent/review.json',
 }
 
 interface ReviewRecord {
@@ -154,6 +154,33 @@ function hasRevision(root: string, ref: string): boolean {
   }
 }
 
+// The commit that first added each path, in one Git call. Uncommitted paths
+// are absent from the result.
+function introducingCommits(
+  root: string,
+  paths: Array<string>,
+): Map<string, string> {
+  const introduced = new Map<string, string>()
+  if (paths.length === 0) return introduced
+  let commit = ''
+  for (const line of git(root, [
+    'log',
+    '--diff-filter=A',
+    '--format=%H',
+    '--name-only',
+    '-z',
+    '--',
+    ...paths,
+  ]).split('\0')) {
+    // With -z, each commit hash is followed by a newline and then its paths.
+    for (const entry of line.split('\n').filter(Boolean)) {
+      if (/^[a-f0-9]{40,64}$/.test(entry)) commit = entry
+      else introduced.set(entry, commit) // later lines are older; the last write wins
+    }
+  }
+  return introduced
+}
+
 function validatePath(path: string): void {
   const parts = path.split('/')
   if (
@@ -190,6 +217,7 @@ function isHash(value: unknown): value is string {
 }
 
 function hasEvidence(value: Record<string, unknown>): boolean {
+  if (typeof value.evidence === 'string') value.evidence = [value.evidence]
   return (
     typeof value.reason === 'string' &&
     value.reason.trim().length > 0 &&
@@ -380,7 +408,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
         dependencyExclude,
       ]),
     )
-  const diff = (patterns: Array<string> = []) =>
+  const diff = (patterns: Array<string> = [], from = base) =>
     splitPaths(
       git(root, [
         'diff',
@@ -389,29 +417,28 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
         '--no-renames',
         '--name-only',
         '-z',
-        base,
+        from,
         '--',
         ...patterns,
         dependencyExclude,
       ]),
     )
   const files = sorted(list())
-  const changed = sorted([
-    ...diff(),
-    ...splitPaths(
-      git(root, [
-        'ls-files',
-        '--others',
-        '--exclude-standard',
-        '-z',
-        '--',
-        dependencyExclude,
-      ]),
-    ),
-  ])
+  const untracked = splitPaths(
+    git(root, [
+      'ls-files',
+      '--others',
+      '--exclude-standard',
+      '-z',
+      '--',
+      dependencyExclude,
+    ]),
+  )
+  const changed = sorted([...diff(), ...untracked])
   const names = repositoryNames(root)
   const covered = new Set<string>()
   const items: Array<ReviewItem> = []
+  let introduced: Map<string, string> | undefined
   const hashes = new Map<string, string | null>()
   const sourceMatches = new Map<string, Array<string>>()
   function fileHash(path: string): string | null {
@@ -454,13 +481,31 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       problems.length === 0
     )
       return
+    // An item without a recorded review has no baseline of its own, and the
+    // repository baseline (HEAD when none is recorded) hides source changes
+    // made since its guidance was written. Compare it with the commit that
+    // introduced the guidance instead, unless the caller chose a base.
+    let changedSinceIntroduced: Set<string> | undefined
+    if (!previous && baseRef === undefined && kind !== 'source') {
+      const anchor = kind === 'planning' ? `${path}/skill_tree.yaml` : path
+      introduced ??= introducingCommits(root, [
+        ...skillFiles,
+        ...existingArtifactDirs.map((dir) => `${dir}/skill_tree.yaml`),
+      ])
+      const introducedAt = introduced.get(anchor)
+      if (introducedAt !== undefined && introducedAt !== base)
+        changedSinceIntroduced = new Set([
+          ...diff(Object.keys(current), introducedAt),
+          ...untracked,
+        ])
+    }
     const changedFiles = sorted([
       ...Object.keys(current),
       ...Object.keys(previous?.snapshot ?? {}),
     ]).filter((file) =>
       previous
         ? (current[file] ?? null) !== (previous.snapshot[file] ?? null)
-        : changed.includes(file),
+        : (changedSinceIntroduced?.has(file) ?? changed.includes(file)),
     )
     items.push({
       id,

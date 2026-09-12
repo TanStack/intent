@@ -56,9 +56,6 @@ export function readDistribution(
   return value as unknown as Distribution
 }
 
-export const distributionChoice =
-  'Choose repository skill distribution with maintainer setup --distribution repo --skill <name>, or record an opt-out with --distribution none.'
-
 function readJson(path: string): Record<string, unknown> {
   const value: unknown = JSON.parse(readFileSync(path, 'utf8'))
   if (!isObject(value)) throw new Error(`Expected a JSON object: ${path}`)
@@ -214,17 +211,12 @@ export function planDistribution(
   tree: ReturnType<typeof readRecord>,
   entries: ReadonlyArray<SkillEntry>,
 ) {
-  const config = readDistribution(tree)
+  // Package-only distribution is the default; repository distribution is an
+  // explicit opt-in through maintainer setup --distribution repo.
+  const config = readDistribution(tree) ?? { mode: 'none' as const }
   const changes: Array<FileChange> = []
   const problems: Array<string> = []
   const commands: Array<string> = []
-  if (!config)
-    return {
-      changes,
-      problems: [distributionChoice],
-      commands,
-      mode: 'unconfigured',
-    }
   if (config.mode === 'none' && !config.name)
     return { changes, problems, commands, mode: config.mode }
   const { name, repository } = config

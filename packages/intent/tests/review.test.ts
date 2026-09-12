@@ -752,6 +752,30 @@ it('tells report readers which outcomes and fields a recording needs', () => {
     outcomes: ['updated', 'no-change', 'out-of-scope'],
     planningOutcomes: ['updated', 'no-change'],
     required: ['outcome', 'reason', 'evidence'],
-    command: 'intent maintainer review --record <report.json>',
+    command: 'intent maintainer review --record .intent/review.json',
   })
+})
+
+it('reports source changes since a skill was introduced when no review is recorded', () => {
+  write('src/request.ts', 'export const attempts = 5\n')
+  git('commit', '-qam', 'change attempts')
+  expect(createReview(root).items[0]!.changedFiles).toEqual(['src/request.ts'])
+  expect(createReview(root, 'HEAD').items[0]!.changedFiles).toEqual([])
+  accept()
+  write('src/request.ts', 'export const attempts = 7\n')
+  expect(createReview(root).items[0]!.changedFiles).toEqual(['src/request.ts'])
+})
+
+it('accepts a single evidence string when recording', () => {
+  const report = createReview(root)
+  for (const item of report.items) {
+    item.outcome = 'no-change'
+    item.reason = 'Compared the source with the documented request behavior.'
+    ;(item as { evidence: unknown }).evidence = 'src/request.ts'
+  }
+  expect(recordReview(root, report)).toBe(1)
+  expect(
+    JSON.parse(readFileSync(join(root, '.intent/review-state.json'), 'utf8'))
+      .items['skill:skills/request/SKILL.md'].evidence,
+  ).toEqual(['src/request.ts'])
 })

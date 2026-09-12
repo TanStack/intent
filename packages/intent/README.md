@@ -62,7 +62,7 @@ npx @tanstack/intent@latest load @tanstack/query#fetching
 
 ### For library maintainers
 
-Set up the maintainer workflow, then register each skill beside the package that owns it:
+Set up the maintainer workflow, which also copies the CI workflow, then register each skill beside the package that owns it:
 
 ```bash
 npx @tanstack/intent@latest maintainer setup

@@ -114,7 +114,7 @@ it('plans selected distribution from one parsed skill tree', async () => {
   ])
 })
 
-it('explains the missing choice, remembers an opt-out, and does not ask again', async () => {
+it('defaults to package-only distribution, remembers an opt-out, and does not ask again', async () => {
   expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
     '--distribution',
   )
