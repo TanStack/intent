@@ -121,7 +121,7 @@ it('warns on deprecated imports and fails broken relative links', () => {
   write('skills/retries/references/backoff.md', '# Backoff\n')
   skill(
     [
-      'See [backoff](references/backoff.md) and [missing](references/missing.md#top).',
+      'See [backoff](<references/backoff.md#top>), [again](<../retries/references/backoff.md>), and [missing](references/missing.md#top).',
       'External [docs](https://example.com/x) are not checked.',
       '',
       '```ts',

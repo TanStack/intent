@@ -38,7 +38,8 @@ const checkedLanguages = new Set([
   'jsx',
   'javascript',
 ])
-const markdownLink = /\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+// A destination is either <...>, which may contain spaces, or a bare path.
+const markdownLink = /\[[^\]]*\]\((?:<([^>]*)>|([^)\s]+))(?:\s+"[^"]*")?\)/g
 
 // Diagnostics that a deliberately partial example produces: names, modules,
 // and globals the snippet leaves out. Everything else describes the library
@@ -86,7 +87,7 @@ export function checkSkillLinks(
     block.replace(/[^\n]/g, ' '),
   )
   for (const match of prose.matchAll(markdownLink)) {
-    const target = match[1]!
+    const target = match[1] ?? match[2]!
     if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) continue
     const path = target.replace(/[#?].*$/, '')
     if (!path) continue
