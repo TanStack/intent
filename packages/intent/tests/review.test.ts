@@ -64,6 +64,9 @@ function accept(report = createReview(root)) {
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'intent-review-'))
   git('init', '-q')
+  // Keep the fixture independent of the developer's global excludes file,
+  // which may ignore files these tests rely on (for example CLAUDE.md).
+  git('config', 'core.excludesFile', join(root, '.no-global-excludes'))
   git('config', 'user.name', 'Fixture')
   git('config', 'user.email', 'fixture@example.invalid')
   write(
