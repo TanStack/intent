@@ -145,6 +145,32 @@ it('warns on deprecated imports and fails broken relative links', () => {
   ])
 })
 
+it('uses tracked hand-written declarations and maps build output back to source', () => {
+  execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], {
+    cwd: root,
+  })
+  write('.gitignore', 'dist/\n')
+  write('dist/index.d.ts', 'export declare function retry(): void\n')
+  write('package.json', '{"name":"@acme/client","types":"dist/index.d.ts"}\n')
+  skill(
+    "```ts\nimport { retry } from '@acme/client'\nawait retry(() => Promise.resolve(), { max: 3 })\n```\n",
+  )
+  // dist/ is ignored, so src/index.ts stands in and the call typechecks.
+  expect(check().findings).toEqual([])
+  write('types/index.d.ts', 'export declare function retry(): void\n')
+  write('package.json', '{"name":"@acme/client","types":"types/index.d.ts"}\n')
+  execFileSync('git', ['-c', 'core.fsmonitor=false', 'add', 'types'], {
+    cwd: root,
+  })
+  // A tracked declaration file is the public surface, and the call no longer fits it.
+  expect(check().findings).toEqual([
+    expect.objectContaining({
+      line: 10,
+      message: expect.stringMatching(/TS2554/),
+    }),
+  ])
+})
+
 it('skips typechecking with a reason when TypeScript or a type entry is unavailable', () => {
   skill("```ts\nimport { retry } from '@acme/client'\n```\n")
   expect(

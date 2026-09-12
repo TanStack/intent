@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
@@ -94,40 +95,60 @@ export function checkSkillLinks(
   return findings
 }
 
-// The file that declares the library's public types: the conventional source
-// entry, then package metadata.
+// The file that declares the library's public types. A declared entry that
+// Git tracks is hand-written and used as-is; a missing or ignored one is
+// build output, so the matching source file stands in for it.
 export function libraryEntry(packageDir: string): string | null {
-  let manifest: Record<string, unknown>
+  let manifest: Record<string, unknown> = {}
   try {
     manifest = JSON.parse(
       readFileSync(join(packageDir, 'package.json'), 'utf8'),
     )
   } catch {
-    return null
+    // Fall through to the conventional source entry.
   }
   const exportsRoot = isRecord(manifest.exports)
     ? (manifest.exports['.'] ?? manifest.exports)
     : manifest.exports
-  // Source first: a maintainer's build output can be stale or absent.
-  const candidates = [
-    'src/index.ts',
-    'src/index.tsx',
+  const declared = [
     manifest.types,
     manifest.typings,
-    typeof exportsRoot === 'string' ? exportsRoot : undefined,
     isRecord(exportsRoot) ? exportsRoot.types : undefined,
     isRecord(exportsRoot) && isRecord(exportsRoot.import)
       ? exportsRoot.import.types
       : undefined,
-    'index.ts',
-    'index.d.ts',
-  ]
+    typeof exportsRoot === 'string' ? exportsRoot : undefined,
+  ].find((value): value is string => typeof value === 'string')
+  const candidates: Array<string> = []
+  if (declared) {
+    const path = resolve(packageDir, declared)
+    if (existsSync(path) && isTracked(packageDir, path)) return path
+    const name = declared
+      .split('/')
+      .at(-1)!
+      .replace(/\.d\.(c|m)?ts$/, '')
+      .replace(/\.(c|m)?[jt]sx?$/, '')
+    candidates.push(`src/${name}.ts`, `src/${name}.tsx`)
+  }
+  candidates.push('src/index.ts', 'src/index.tsx', 'index.ts', 'index.d.ts')
   for (const candidate of candidates) {
-    if (typeof candidate !== 'string') continue
     const path = resolve(packageDir, candidate)
     if (existsSync(path)) return path
   }
   return null
+}
+
+function isTracked(packageDir: string, path: string): boolean {
+  try {
+    execFileSync(
+      'git',
+      ['-c', 'core.fsmonitor=false', 'ls-files', '--error-unmatch', '--', path],
+      { cwd: packageDir, stdio: 'ignore' },
+    )
+    return true
+  } catch {
+    return false
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
