@@ -269,18 +269,35 @@ function deriveIntentConfig(
 // Skill discovery within a package
 // ---------------------------------------------------------------------------
 
+/**
+ * Real path of the package root that owns `skillsDir`, or null when it cannot
+ * be resolved. Computed once per package: every skill entry is checked against
+ * the same root, so resolving it per skill only repeated the same syscalls.
+ */
+function resolveRealPackageRoot(
+  skillsDir: string,
+  readFs: ReadFs,
+): string | null {
+  try {
+    return readFs.realpathSync.native(dirname(skillsDir))
+  } catch {
+    return null
+  }
+}
+
 function readSkillEntry(
   skillsDir: string,
+  realPackageRoot: string | null,
   childDir: string,
   skillFile: string,
   readFs: ReadFs = nodeReadFs,
 ): SkillEntry | null {
   if (!readFs.openSync || !readFs.fstatSync || !readFs.closeSync) return null
+  if (realPackageRoot === null) return null
   let fd: number | undefined
   let fm: Record<string, unknown> | null
   try {
     const realSkillFile = readFs.realpathSync.native(skillFile)
-    const realPackageRoot = readFs.realpathSync.native(dirname(skillsDir))
     if (!isWithinOrEqual(realSkillFile, realPackageRoot)) return null
     const expected = readFs.lstatSync(realSkillFile)
     if (!expected.isFile()) return null
@@ -331,6 +348,7 @@ function discoverSkillByNameHint(
   const skills: Array<SkillEntry> = []
   const seen = new Set<string>()
   const skillNameHints = getSkillNameHints(packageName, skillNameHint)
+  let realPackageRoot: string | null | undefined
 
   for (const hint of skillNameHints) {
     const resolvedHint = resolveSkillNameHintPath(skillsDir, hint)
@@ -339,10 +357,19 @@ function discoverSkillByNameHint(
     const { childDir, skillFile } = resolvedHint
     if (!readFs.existsSync(skillFile)) continue
 
+    if (includeMetadata) {
+      realPackageRoot ??= resolveRealPackageRoot(skillsDir, readFs)
+    }
     // Keep the hinted identity so loading can report its existing path error,
     // without reading metadata from an unreadable or escaping target.
     const skill = (includeMetadata
-      ? readSkillEntry(skillsDir, childDir, skillFile, readFs)
+      ? readSkillEntry(
+          skillsDir,
+          realPackageRoot ?? null,
+          childDir,
+          skillFile,
+          readFs,
+        )
       : null) ?? {
       name: hint,
       path: skillFile,
@@ -364,20 +391,27 @@ function discoverSkills(
   warnings: Array<string>,
 ): Array<SkillEntry> {
   const readFs = fsCache.getReadFs()
-  return fsCache
-    .findSkillFiles(skillsDir)
-    .flatMap((skillFile): Array<SkillEntry> => {
-      const childDir = dirname(skillFile)
-      if (childDir === skillsDir) return []
-      const skill = readSkillEntry(skillsDir, childDir, skillFile, readFs)
-      if (!skill) {
-        warnings.push(
-          `Skipped unreadable or out-of-package skill metadata for "${packageName}".`,
-        )
-        return []
-      }
-      return [skill]
-    })
+  const skillFiles = fsCache.findSkillFiles(skillsDir)
+  const realPackageRoot =
+    skillFiles.length > 0 ? resolveRealPackageRoot(skillsDir, readFs) : null
+  return skillFiles.flatMap((skillFile): Array<SkillEntry> => {
+    const childDir = dirname(skillFile)
+    if (childDir === skillsDir) return []
+    const skill = readSkillEntry(
+      skillsDir,
+      realPackageRoot,
+      childDir,
+      skillFile,
+      readFs,
+    )
+    if (!skill) {
+      warnings.push(
+        `Skipped unreadable or out-of-package skill metadata for "${packageName}".`,
+      )
+      return []
+    }
+    return [skill]
+  })
 }
 
 function getPackageShortName(packageName: string): string {
