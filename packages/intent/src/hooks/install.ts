@@ -80,7 +80,7 @@ export function buildHookRunnerScript(
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative, sep } from 'node:path'
 import { createHash } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 
@@ -137,7 +137,7 @@ function isSessionStartEvent(event) {
 }
 
 function rootForEvent(event) {
-  return typeof event?.cwd === 'string' ? event.cwd : process.cwd()
+  return typeof event?.cwd === 'string' && event.cwd ? event.cwd : process.cwd()
 }
 
 async function createSessionCatalogContext(root) {
@@ -148,22 +148,68 @@ async function createSessionCatalogContext(root) {
     console.error(
       \`[intent-\${AGENT}-session-catalog] listIntentSkills found \${result.skills.length} skills from \${result.packages.length} packages in \${formatDuration(durationMs)} (packageJsonReadCount=\${result.debug?.scan.packageJsonReadCount ?? 'unknown'})\`,
     )
-    return formatSessionCatalog(result)
+    return formatSessionCatalog(result, loadCommandForRoot(root))
   } catch {
     return ''
   }
 }
 
+// The package-manager runner in CATALOG_COMMAND (npx, pnpm dlx, ...) resolves
+// @tanstack/intent@latest against the registry on every run, which costs one
+// to four seconds per session start. When the project has the package
+// installed, run its CLI directly with this Node binary instead.
+function resolveLocalIntentCli(root) {
+  let dir = root
+  let prev
+  while (dir !== prev) {
+    const packageJsonPath = join(dir, 'node_modules', '@tanstack', 'intent', 'package.json')
+    if (existsSync(packageJsonPath)) {
+      try {
+        const bin = JSON.parse(readFileSync(packageJsonPath, 'utf8')).bin
+        const relativeBin = typeof bin === 'string' ? bin : bin && bin.intent
+        if (typeof relativeBin === 'string') {
+          const cli = join(dirname(packageJsonPath), relativeBin)
+          if (existsSync(cli)) return cli
+        }
+      } catch {
+      }
+      return null
+    }
+    prev = dir
+    dir = dirname(dir)
+  }
+  return null
+}
+
+// The load command shown to the agent: the project's own bin shim when there
+// is one (no registry lookup), otherwise the package-manager runner.
+function loadCommandForRoot(root) {
+  let dir = root
+  let prev
+  while (dir !== prev) {
+    const bin = join(dir, 'node_modules', '.bin', 'intent')
+    if (existsSync(bin)) {
+      return relative(root, bin).split(sep).join('/') + ' load <package>#<skill>'
+    }
+    prev = dir
+    dir = dirname(dir)
+  }
+  return LOAD_COMMAND
+}
+
 function readIntentList(root) {
-  const output = execFileSync(CATALOG_COMMAND, {
+  const options = {
     cwd: root,
     encoding: 'utf8',
     env: { ...process.env, INTENT_AUDIENCE: 'agent' },
     maxBuffer: 1024 * 1024,
-    shell: true,
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 9000,
-  })
+  }
+  const localCli = resolveLocalIntentCli(root)
+  const output = localCli
+    ? execFileSync(process.execPath, [localCli, 'list', '--json', '--no-notices'], options)
+    : execFileSync(CATALOG_COMMAND, { ...options, shell: true })
   return JSON.parse(output)
 }
 
@@ -171,14 +217,14 @@ function formatDuration(durationMs) {
   return \`\${durationMs.toFixed(1)}ms\`
 }
 
-function formatSessionCatalog(result) {
+function formatSessionCatalog(result, loadCommand) {
   if (!Array.isArray(result.skills) || result.skills.length === 0) return ''
 
   return [
     'TanStack Intent skills are available in this repository.',
     '',
     'These are Intent skills, not native agent skills.',
-    'Load a matching skill with: \`' + LOAD_COMMAND + '\`.',
+    'Load a matching skill with: \`' + loadCommand + '\`.',
     '',
     'Before substantial work, check whether one listed skill clearly matches the user task. If one clearly matches, load that full skill guidance with the Intent CLI before proceeding.',
     '',
