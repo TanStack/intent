@@ -132,7 +132,13 @@ function libraryEntry(packageDir: string): string | null {
       .at(-1)!
       .replace(/\.d\.(c|m)?ts$/, '')
       .replace(/\.(c|m)?[jt]sx?$/, '')
-    candidates.push(`src/${name}.ts`, `src/${name}.tsx`)
+    candidates.push(
+      `src/${name}.ts`,
+      `src/${name}.tsx`,
+      `src/${name}.d.ts`,
+      `src/${name}.d.cts`,
+      `src/${name}.d.mts`,
+    )
   }
   candidates.push('src/index.ts', 'src/index.tsx', 'index.ts', 'index.d.ts')
   for (const candidate of candidates) {
@@ -164,8 +170,11 @@ function workspacePaths(root: string): Record<string, Array<string>> {
     }
     const entry = typeof name === 'string' ? libraryEntry(dir) : null
     if (!entry) continue
-    paths[name as string] = [entry]
-    paths[`${name}/*`] = [join(dirname(entry), '*'), join(dir, '*')]
+    paths[name as string] = [slash(entry)]
+    paths[`${name}/*`] = [
+      slash(join(dirname(entry), '*')),
+      slash(join(dir, '*')),
+    ]
   }
   workspaceEntries.set(workspaceRoot, paths)
   return paths
@@ -194,6 +203,10 @@ function packageName(packageDir: string): string | undefined {
     return undefined
   }
 }
+
+// TypeScript normalizes every path it hands back to forward slashes, so the
+// virtual files and path mappings are keyed the same way on Windows.
+const slash = (path: string) => path.replace(/\\/g, '/')
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -257,10 +270,10 @@ export function checkSkillBlocks(
       `no type entry found for ${library} in ${relative(root, packageDir) || '.'}`,
     )
 
-  const virtualDir = join(root, '.intent', 'skill-examples')
+  const virtualDir = slash(join(root, '.intent', 'skill-examples'))
   const virtual = new Map<string, CodeBlock>()
   blocks.forEach((block, index) =>
-    virtual.set(join(virtualDir, `block-${index}.tsx`), block),
+    virtual.set(`${virtualDir}/block-${index}.tsx`, block),
   )
   const compilerOptions: TS.CompilerOptions = {
     noEmit: true,
@@ -276,17 +289,16 @@ export function checkSkillBlocks(
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     jsx: ts.JsxEmit.Preserve,
     lib: ['lib.esnext.d.ts', 'lib.dom.d.ts'],
-    baseUrl: root,
     paths: {
       ...workspacePaths(root),
       // A skill documenting another package (metadata.library) resolves that
       // package through the workspace or node_modules, not this package's entry.
       ...(ownsLibrary
         ? {
-            [library]: [entry!],
+            [library]: [slash(entry!)],
             [`${library}/*`]: [
-              join(dirname(entry!), '*'),
-              join(packageDir, '*'),
+              slash(join(dirname(entry!), '*')),
+              slash(join(packageDir, '*')),
             ],
           }
         : {}),
@@ -314,7 +326,10 @@ export function checkSkillBlocks(
     if (!source) continue
     const at = (position: number) =>
       block.line + source.getLineAndCharacterOfPosition(position).line
-    for (const diagnostic of program.getSemanticDiagnostics(source)) {
+    for (const diagnostic of [
+      ...program.getSyntacticDiagnostics(source),
+      ...program.getSemanticDiagnostics(source),
+    ]) {
       if (partialSnippetCodes.has(diagnostic.code)) continue
       const message = ts.flattenDiagnosticMessageText(
         diagnostic.messageText,

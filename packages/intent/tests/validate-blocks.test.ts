@@ -95,6 +95,10 @@ it('reports a removed option, a missing export, and a broken example with the sk
       'const count: number = "three"',
       '```',
       '',
+      '```ts',
+      'const broken = {',
+      '```',
+      '',
     ].join('\n'),
   )
   const findings = check().findings
@@ -113,6 +117,12 @@ it('reports a removed option, a missing export, and a broken example with the sk
       line: 17,
       severity: 'error',
       message: expect.stringMatching(/TS2322/),
+    }),
+    // An example that does not parse is reported instead of passing unchecked.
+    expect.objectContaining({
+      line: 21,
+      severity: 'error',
+      message: expect.stringMatching(/TS1005/),
     }),
   ])
 })
@@ -316,8 +326,8 @@ it('fails validate on a broken example and reports compile status on pending rev
     "```ts\nimport { retry } from '@acme/client'\nawait retry(() => Promise.resolve(), { max: 'many' })\n```\n",
   )
   expect(await main(['validate'])).toBe(1)
-  expect(vi.mocked(console.error).mock.calls.flat().join('\n')).toMatch(
-    /skills\/retries\/SKILL\.md:10: TS2322/,
+  expect(vi.mocked(console.error).mock.calls.flat().join('\n')).toContain(
+    `${join('skills', 'retries', 'SKILL.md')}:10: TS2322`,
   )
   skill(
     "```ts\nimport { retry } from '@acme/client'\nawait retry(() => Promise.resolve(), { max: 3 })\n```\n",
