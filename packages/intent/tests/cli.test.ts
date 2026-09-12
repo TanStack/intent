@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as discovery from '../src/discovery/scanner.js'
@@ -163,21 +163,24 @@ describe('intent meta', () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-meta-reference-'))
     tempDirs.push(root)
     process.chdir(root)
+    // Rewritten destinations always use forward slashes, on every platform.
+    const referencePath = (name: string) =>
+      join(metaDir, 'domain-discovery', 'references', name).split(sep).join('/')
     const expected = readFileSync(
       join(metaDir, 'domain-discovery', 'SKILL.md'),
       'utf8',
     )
       .replaceAll(
         '(references/deep-read.md)',
-        `(${join(metaDir, 'domain-discovery', 'references', 'deep-read.md')})`,
+        `(${referencePath('deep-read.md')})`,
       )
       .replaceAll(
         '(references/deep-read.md#reading-order)',
-        `(${join(metaDir, 'domain-discovery', 'references', 'deep-read.md')}#reading-order)`,
+        `(${referencePath('deep-read.md')}#reading-order)`,
       )
       .replaceAll(
         '(references/artifacts.md)',
-        `(${join(metaDir, 'domain-discovery', 'references', 'artifacts.md')})`,
+        `(${referencePath('artifacts.md')})`,
       )
       .replaceAll(
         '(../generate-skill/SKILL.md)',

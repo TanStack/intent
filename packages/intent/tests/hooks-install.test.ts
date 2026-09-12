@@ -649,6 +649,11 @@ console.log(JSON.stringify({
   return `${quoteShell(process.execPath)} ${quoteShell(scriptPath)}`
 }
 
+// The hook runner executes the catalog command with `shell: true`, which is
+// cmd.exe on Windows: it understands double quotes, never single quotes.
 function quoteShell(value: string): string {
+  if (process.platform === 'win32') {
+    return `"${value.replace(/"/g, '""')}"`
+  }
   return `'${value.replace(/'/g, `'\\''`)}'`
 }

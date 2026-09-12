@@ -1,6 +1,9 @@
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import { toPosixPath } from '../shared/utils.js'
 
+/** Private-use character that no path function treats as a separator. */
+const BACKSLASH_PLACEHOLDER = '\uE000'
+
 function resolveFromCwd(path: string): string {
   return resolve(process.cwd(), path)
 }
@@ -171,7 +174,13 @@ function rewriteMarkdownDestination({
   const { pathPart, suffix } = splitDestinationSuffix(destination)
   if (isExternalOrAbsoluteDestination(pathPart)) return destination
 
-  const resolvedDestinationPath = resolve(context.skillDir, pathPart)
+  // A backslash in a Markdown destination is an escape (`\)`), never a path
+  // separator. Hide it from the path functions, which on Windows would
+  // otherwise normalize it into `/`, and restore it in the rewritten output.
+  const resolvedDestinationPath = resolve(
+    context.skillDir,
+    pathPart.replaceAll('\\', BACKSLASH_PLACEHOLDER),
+  )
   const relativeToPackageRoot = relative(
     context.resolvedPackageRoot,
     resolvedDestinationPath,
@@ -191,7 +200,7 @@ function rewriteMarkdownDestination({
       ? relativeToCwd
       : resolvedDestinationPath
 
-  const rewritten = `${toPosixPath(rewrittenPath)}${suffix}`
+  const rewritten = `${toPosixPath(rewrittenPath).replaceAll(BACKSLASH_PLACEHOLDER, '\\')}${suffix}`
   context.rewrittenDestinations.set(destination, rewritten)
   return rewritten
 }
