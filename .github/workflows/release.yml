@@ -82,11 +82,3 @@ jobs:
           LATEST_ARG: ${{ steps.dist-tag.outputs.latest == 'true' && '--latest' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Library repositories call .github/workflows/check-skills.yml by major
-      # tag, so the tag follows the latest release.
-      - name: Move the reusable workflow tag
-        if: steps.changesets-action.outputs.published == 'true' && steps.dist-tag.outputs.latest == 'true'
-        run: |
-          MAJOR="v$(node -p "require('./packages/intent/package.json').version.split('.')[0]")"
-          git tag --force "$MAJOR"
-          git push --force origin "refs/tags/$MAJOR"

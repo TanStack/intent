@@ -4,13 +4,18 @@
 # release or manual run, opens or updates one review PR when skills, artifact
 # coverage, or workspace package coverage need review.
 #
-# The checks live in TanStack/intent's reusable workflow, pinned to a major
-# tag, so they update with Intent releases without an edit here.
+# The steps live in TanStack/intent's reusable workflows, pinned below to the
+# commit of the Intent release that copied this file. Dependabot and Renovate
+# bump the pin like any other action reference; a `github-actions` entry in
+# .github/dependabot.yml is enough. Each job grants only the permissions its
+# workflow needs, and Intent runs from this repository's own lockfile-pinned
+# copy of @tanstack/intent.
 #
 # intent-workflow-version: 4
 #
 # Template variables (replaced by `intent setup`):
 #   {{PACKAGE_LABEL}} — e.g. @tanstack/query or my-workspace workspace
+#   {{INTENT_WORKFLOW_REF}} — the release commit, or its tag when unresolved
 
 name: Check Skills
 
@@ -20,12 +25,20 @@ on:
     types: [published]
   workflow_dispatch: {}
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 
 jobs:
-  skills:
-    uses: TanStack/intent/.github/workflows/check-skills.yml@v0
+  validate:
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    uses: TanStack/intent/.github/workflows/check-skills.yml@{{INTENT_WORKFLOW_REF}}
+
+  review:
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: TanStack/intent/.github/workflows/review-skills.yml@{{INTENT_WORKFLOW_REF}}
     with:
       package-label: '{{PACKAGE_LABEL}}'

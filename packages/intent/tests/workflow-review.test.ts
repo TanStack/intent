@@ -269,17 +269,16 @@ describe('workflow review helpers', () => {
       ),
       'utf8',
     )
-    // The caller carries no steps; the reusable workflow holds them.
+    // The caller carries no steps; the reusable workflows hold them.
     expect(caller).not.toContain('steps:')
     expect(caller).toContain(
-      'uses: TanStack/intent/.github/workflows/check-skills.yml@v',
+      'uses: TanStack/intent/.github/workflows/review-skills.yml@{{INTENT_WORKFLOW_REF}}',
     )
     const template = readFileSync(
-      join(repoRoot, '.github', 'workflows', 'check-skills.yml'),
+      join(repoRoot, '.github', 'workflows', 'review-skills.yml'),
       'utf8',
     )
 
-    expect(template).toContain('intent validate --github-summary')
     expect(template).toContain('intent stale --github-review "${LABEL[@]}"')
     expect(template).not.toContain('const reports = JSON.parse')
     expect(template).not.toContain('for (const skill of report.skills ?? [])')

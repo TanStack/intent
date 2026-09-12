@@ -35,6 +35,9 @@ beforeEach(() => {
   previousCwd = process.cwd()
   root = mkdtempSync(join(tmpdir(), 'intent-maintainer-'))
   process.chdir(root)
+  // Setup copies a workflow that pins Intent's release commit; keep the
+  // resolver off the network here.
+  process.env.INTENT_WORKFLOW_REF = 'abc123 # v9.9.9'
   vi.spyOn(console, 'log').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
   execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], {
@@ -221,15 +224,11 @@ it('rejects cyclic prerequisites without applying an otherwise valid package upd
 it('copies the CI workflow once and passes check without a recorded distribution choice', async () => {
   expect(await main(['maintainer', 'setup'])).toBe(0)
   const workflow = '.github/workflows/check-skills.yml'
-  // The caller pins the reusable workflow to Intent's current major version.
-  const major = (
-    JSON.parse(
-      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-    ).version as string
-  ).split('.')[0]
-  expect(read(workflow)).toContain(
-    `uses: TanStack/intent/.github/workflows/check-skills.yml@v${major}`,
-  )
+  // The caller pins both reusable workflows to the resolved release commit.
+  for (const name of ['check-skills', 'review-skills'])
+    expect(read(workflow)).toContain(
+      `uses: TanStack/intent/.github/workflows/${name}.yml@abc123 # v9.9.9`,
+    )
   expect(read(workflow)).toContain("package-label: 'library'")
   write(workflow, '# customized\n')
   expect(await main(['maintainer', 'setup'])).toBe(0)
@@ -651,6 +650,7 @@ it('adopts two packages and saves an explicit distribution selection', async () 
 
 afterEach(() => {
   process.chdir(previousCwd)
+  delete process.env.INTENT_WORKFLOW_REF
   vi.restoreAllMocks()
   rmSync(root, { recursive: true, force: true })
 })
