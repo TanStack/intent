@@ -10,8 +10,7 @@ import {
   readdirSync,
   realpathSync,
 } from 'node:fs'
-import { createRequire } from 'node:module'
-import { dirname, join, resolve, sep } from 'node:path'
+import { basename, dirname, join, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import type { Dirent } from 'node:fs'
 
@@ -313,67 +312,50 @@ export function detectGlobalNodeModules(packageManager: string): {
 }
 
 /**
- * Resolve the directory of a dependency by name. Tries createRequire first
- * (handles pnpm symlinks), then falls back to walking up node_modules
- * directories (handles packages with export maps that block ./package.json).
+ * Resolve the directory of a dependency by name by walking up from
+ * `parentDir` and checking `node_modules/<depName>/package.json` at each
+ * ancestor, the same lookup order Node uses. A symlinked match (pnpm's
+ * virtual store, workspace links) is collapsed to its real directory so
+ * callers see one identity per installed package.
+ *
+ * This deliberately avoids `createRequire().resolve`: Node's resolver
+ * evaluates export maps, reads the nearest package.json, and realpaths every
+ * path segment on each call. In a pnpm monorepo that dominated scan time, and
+ * the walk below already covers every layout the resolver handled (nested,
+ * hoisted, and virtual-store siblings) without executing package code.
  */
-/**
- * `createRequire` builds a full module-resolution context; constructing it is
- * non-trivial and `resolveDepDir` is called once per dependency, often many
- * times from the same `parentDir` (every sibling dep of one package). Cache the
- * require function by its base `package.json` path. `req.resolve` still hits the
- * live filesystem on each call, so cached entries never go stale.
- */
-const requireForBaseCache = new Map<string, ReturnType<typeof createRequire>>()
-
-function getRequireForBase(
-  basePackageJson: string,
-): ReturnType<typeof createRequire> {
-  let req = requireForBaseCache.get(basePackageJson)
-  if (!req) {
-    req = createRequire(basePackageJson)
-    requireForBaseCache.set(basePackageJson, req)
-  }
-  return req
-}
-
 export function resolveDepDir(
   depName: string,
   parentDir: string,
 ): string | null {
-  // Try createRequire — works for most packages including pnpm virtual store
-  try {
-    const req = getRequireForBase(join(parentDir, 'package.json'))
-    const pkgJsonPath = req.resolve(join(depName, 'package.json'))
-    return dirname(pkgJsonPath)
-  } catch (err: unknown) {
-    const code =
-      err && typeof err === 'object' && 'code' in err
-        ? (err as NodeJS.ErrnoException).code
-        : undefined
-    if (
-      code &&
-      code !== 'MODULE_NOT_FOUND' &&
-      code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED'
-    ) {
-      console.warn(
-        `Warning: could not resolve ${depName} from ${parentDir}: ${err instanceof Error ? err.message : String(err)}`,
-      )
-    }
-  }
-
-  // Fallback: walk up from parentDir checking node_modules/<depName>.
-  // Handles packages with exports maps that don't expose ./package.json.
   let dir = parentDir
   let prev: string | undefined
   while (dir !== prev) {
-    const candidate = join(dir, 'node_modules', depName)
-    if (existsSync(join(candidate, 'package.json'))) return candidate
+    // Node skips ancestors that are themselves node_modules directories
+    // (`.../node_modules/node_modules/<dep>` is never a valid location).
+    if (basename(dir) !== 'node_modules') {
+      const candidate = join(dir, 'node_modules', depName)
+      if (existsSync(join(candidate, 'package.json'))) {
+        return resolveRealDir(candidate)
+      }
+    }
     prev = dir
     dir = dirname(dir)
   }
 
   return null
+}
+
+/**
+ * Collapse a symlinked directory to its real path with one `lstat` and, only
+ * when needed, one native `realpath` call. Non-links are returned as-is.
+ */
+function resolveRealDir(dir: string): string {
+  try {
+    return lstatSync(dir).isSymbolicLink() ? realpathSync.native(dir) : dir
+  } catch {
+    return dir
+  }
 }
 
 /**
