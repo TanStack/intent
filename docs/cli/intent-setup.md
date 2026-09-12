@@ -28,7 +28,6 @@ npx @tanstack/intent@latest setup
 ### `setup`
 
 - Copies the `check-skills.yml` workflow template from `@tanstack/intent/meta/templates/workflows` to `.github/workflows`
-- The copied workflow is a short caller for `TanStack/intent/.github/workflows/check-skills.yml`, pinned to Intent's major tag, so the checks update with Intent releases without an edit to the copy
 - Applies variable substitution (`PACKAGE_NAME`, `PACKAGE_LABEL`, `PAYLOAD_PACKAGE`, `REPO`, `DOCS_PATH`, `SRC_PATH`, `WATCH_PATHS`)
 - Detects the workspace root in monorepos and writes repo-level workflows there
 - Skips files that already exist at the destination
@@ -48,9 +47,8 @@ npx @tanstack/intent@latest setup
 ## Notes
 
 - `setup` skips existing files
-- `check-skills.yml` validates skills and runs `maintainer check --github-summary` on PRs, and opens review PRs from release/manual runs
-- The reusable workflow accepts `package-label`, `intent-version` (default `latest`), and `node-version` (default `22`) inputs; edit the copied caller's `with:` block to change them
-- A copy from an earlier Intent version that inlined the steps still works; `intent stale` prints a reminder when it is behind. Delete or move it and rerun `setup` to switch to the caller
+- `check-skills.yml` validates skills on PRs and opens review PRs from release/manual runs
+- To adopt updated workflow templates, delete or move the old generated workflow files first, then rerun `setup`
 - If your repo has an older generated `validate-skills.yml`, remove it after adopting the current `check-skills.yml`; PR validation now lives in `check-skills.yml`
 - In monorepos, run `setup` from either the repo root or a package directory; Intent writes workflows to the workspace root
 

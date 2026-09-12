@@ -115,7 +115,7 @@ npx @tanstack/intent@latest setup
   - `files` array entries for `skills/`
   - For single packages: also adds `!skills/_artifacts` to exclude artifacts from npm
   - For monorepos: skips the artifacts exclusion (artifacts live at repo root)
-- `setup` copies `check-skills.yml` to `.github/workflows/` for automated validation and staleness checking. The copy is a short caller for Intent's reusable workflow, pinned to Intent's major tag, so the checks update with Intent releases without an edit on your side
+- `setup` copies `check-skills.yml` to `.github/workflows/` for automated validation and staleness checking
 
 `setup` does not overwrite existing workflow files. To pick up newer generated workflows, delete or move the old generated files in `.github/workflows/`, then rerun `npx @tanstack/intent@latest setup`.
 
@@ -150,7 +150,6 @@ Validation:
 
 - Validates SKILL.md frontmatter and structure
 - Ensures files stay under 500 lines
-- Runs `intent maintainer check` against the PR base once maintainer guidance or review state exists, and writes the authoring issues, files to sync, and pending review items to the job's step summary
 - Automatically detects stale skills and coverage gaps after you publish a new release
 
 Review handoff:
