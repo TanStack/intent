@@ -359,10 +359,18 @@ it('fails validate on a broken example and reports compile status on pending rev
   )
   execFileSync(
     'git',
-    ['-c', 'core.fsmonitor=false', 'commit', '-qam', 'add delay'],
-    {
-      cwd: root,
-    },
+    [
+      '-c',
+      'core.fsmonitor=false',
+      '-c',
+      'user.name=T',
+      '-c',
+      'user.email=t@e',
+      'commit',
+      '-qam',
+      'add delay',
+    ],
+    { cwd: root },
   )
   vi.mocked(console.log).mockClear()
   expect(await main(['maintainer', 'status'])).toBe(0)
