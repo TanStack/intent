@@ -62,9 +62,7 @@ function readJson(path: string): Record<string, unknown> {
   return value
 }
 
-export function inferDistributionRepository(
-  project: MaintainerProject,
-): string {
+function inferDistributionRepository(project: MaintainerProject): string {
   const manifest = readJson(projectPath(project.root, 'package.json'))
   const declared = isObject(manifest.repository)
     ? manifest.repository.url
@@ -86,7 +84,7 @@ export function configureDistribution(
   if (change) writeChanges(project.root, [change])
 }
 
-export function planDistributionChoice(
+function planDistributionChoice(
   project: MaintainerProject,
   options: DistributionOptions,
   changes: ReadonlyArray<FileChange> = [],

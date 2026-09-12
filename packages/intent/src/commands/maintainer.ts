@@ -1,5 +1,4 @@
-import { readFileSync } from 'node:fs'
-import { dirname, relative, resolve } from 'node:path'
+import { dirname, relative } from 'node:path'
 import { isCI } from 'std-env'
 import { resolveProjectContext } from '../core/project-context.js'
 import { fail } from '../shared/cli-error.js'
@@ -8,9 +7,9 @@ import {
   resolveMaintainerProject,
   setupRecords,
 } from '../maintainer/project.js'
-import { addSkill } from '../maintainer/add.js'
+import { addSkill, planAddSkills } from '../maintainer/add.js'
+import { findExistingSkills } from '../maintainer/existing.js'
 import { retireSkill } from '../maintainer/remove.js'
-import { createAdoptionPlan, planAdoptionChanges } from '../maintainer/adopt.js'
 import { planMaintainerSync } from '../maintainer/sync.js'
 import { withMaintainerLock, writeChanges } from '../maintainer/files.js'
 import { createReview } from '../review/review.js'
@@ -28,13 +27,11 @@ import {
 import { runReviewCommand } from './review.js'
 import { runValidateCommand } from './validate.js'
 import type { DistributionOptions } from '../maintainer/distribution.js'
-import type { AdoptionPrompts } from '../maintainer/adopt.js'
 import type { ReviewPrompts } from '../review/interactive.js'
 
 export interface MaintainerCommandRuntime {
   isTTY?: boolean
   isCI?: boolean
-  adoptionPrompts?: AdoptionPrompts
   reviewPrompts?: ReviewPrompts
 }
 
@@ -55,11 +52,6 @@ const optionHelp: Record<string, [flag: string, description: string]> = {
     'Owning package directory, relative to the repository root (default: the package that owns the current directory)',
   ],
   path: ['--path <path>', 'Skill path relative to the owning package'],
-  adoptPath: [
-    '--path <directory>',
-    'Repository-relative custom skill directory to scan',
-  ],
-  apply: ['--apply <file>', 'Apply reviewed adoption choices from a JSON plan'],
   domain: ['--domain <slug>', 'Task domain for the skill'],
   distribution: [
     '--distribution <mode>',
@@ -89,9 +81,10 @@ const optionHelp: Record<string, [flag: string, description: string]> = {
 export const maintainerActions: Record<string, MaintainerAction> = {
   setup: {
     usage: 'maintainer setup [--distribution repo|none] [options]',
-    summary: 'Initialize planning records, agent instructions, and CI.',
+    summary:
+      'Initialize planning records, register existing skills, install agent instructions and CI.',
     writes:
-      'skill_tree.yaml, domain_map.yaml, skill_spec.md, the intent-maintainer block in AGENTS.md (or the existing agent instruction file), and .github/workflows/check-skills.yml when it does not exist.',
+      'skill_tree.yaml, domain_map.yaml, skill_spec.md (registering any SKILL.md under skills/ that is not yet recorded), the intent-maintainer block in AGENTS.md (or the existing agent instruction file), and .github/workflows/check-skills.yml when it does not exist.',
     options: [
       'artifacts',
       'distribution',
@@ -99,16 +92,6 @@ export const maintainerActions: Record<string, MaintainerAction> = {
       'pluginName',
       'skill',
     ].map((key) => optionHelp[key]!),
-  },
-  adopt: {
-    usage:
-      'maintainer adopt [--json | --apply <plan.json>] [--path <directory>]',
-    summary: 'Register existing skills from a reviewed plan.',
-    writes:
-      'The three planning records and the agent instruction block. Skill contents stay as authored.',
-    options: ['artifacts', 'json', 'adoptPath', 'apply'].map(
-      (key) => optionHelp[key]!,
-    ),
   },
   add: {
     usage:
@@ -212,7 +195,6 @@ export interface MaintainerCommandOptions extends DistributionOptions {
   base?: string
   json?: boolean
   record?: string
-  apply?: string
   interactive?: boolean
 }
 
@@ -239,7 +221,6 @@ export async function runMaintainerCommand(
 ): Promise<void> {
   const allowed: Record<string, Array<string>> = {
     setup: ['artifacts', 'distribution', 'repository', 'pluginName', 'skill'],
-    adopt: ['artifacts', 'json', 'path', 'apply'],
     add: [
       'artifacts',
       'package',
@@ -258,7 +239,7 @@ export async function runMaintainerCommand(
   }
   if (!allowed[action])
     fail(
-      `Unknown maintainer action: ${action}. Expected setup, adopt, add, remove, status, sync, review, or check.`,
+      `Unknown maintainer action: ${action}. Expected setup, add, remove, status, sync, review, or check.`,
     )
   if (name !== undefined && action !== 'add' && action !== 'remove')
     fail(`maintainer ${action} does not take a skill name.`)
@@ -290,71 +271,42 @@ export async function runMaintainerCommand(
     return
   }
   const project = resolveMaintainerProject(process.cwd(), options.artifacts)
-  if (action === 'adopt') {
-    let input: unknown
-    if (options.apply) {
-      if (options.json || options.path)
-        fail('--apply cannot be combined with --json or --path.')
-      input = JSON.parse(readFileSync(resolve(options.apply), 'utf8'))
-    } else {
-      const plan = createAdoptionPlan(project, options.path)
-      if (options.json) {
-        console.log(JSON.stringify(plan, null, 2))
-        return
-      }
-      if (
-        (runtime.isCI ?? isCI) ||
-        !(runtime.isTTY ?? (process.stdin.isTTY && process.stdout.isTTY))
-      )
-        fail(
-          'Use maintainer adopt --json to preview, then --apply <plan.json> with explicit choices in noninteractive sessions.',
-        )
-      for (const skill of plan.skills)
-        console.log(
-          `${JSON.stringify(skill.id)}: ${skill.status}${skill.problems.length ? ` (${skill.problems.join('; ')})` : ''}`,
-        )
-      const prompts =
-        runtime.adoptionPrompts ??
-        (
-          await import('../maintainer/adoption-prompts.js')
-        ).createAdoptionPrompts()
-      const chosen = await prompts.choose(plan)
-      if (chosen === null) {
-        console.log('Adoption canceled. No files changed.')
-        return
-      }
-      const preview = planAdoptionChanges(project, chosen)
-      const files = preview.changes.map((change) =>
-        relative(project.root, change.path).replaceAll('\\', '/'),
-      )
-      if (!(await prompts.confirm(chosen, files))) {
-        console.log('Adoption canceled. No files changed.')
-        return
-      }
-      input = chosen
-    }
-    await withMaintainerLock(project.root, () => {
-      const plan = planAdoptionChanges(project, input)
-      writeChanges(project.root, plan.changes)
-      writeIntentSkillsBlock({
-        ...buildMaintainerGuidanceBlock(
-          detectIntentCommandPackageManager(project.root),
-        ),
-        root: project.root,
-        namespace: 'intent-maintainer',
-        skipWhenEmpty: false,
-      })
-      console.log(
-        `Registered ${plan.paths.length} skill(s). Authored task coverage and source review remain required.`,
-      )
-    })
-    return
-  }
   if (['setup', 'add', 'remove', 'sync'].includes(action)) {
     await withMaintainerLock(project.root, () => {
       if (action === 'setup') {
         const created = setupRecords(project)
         configureDistribution(project, options)
+        const existing = findExistingSkills(project)
+        // Register one skill at a time so a candidate the planner rejects is
+        // reported as skipped instead of aborting the others.
+        let registered: ReturnType<typeof planAddSkills> = {
+          changes: [],
+          paths: [],
+        }
+        for (const skill of existing) {
+          if (skill.problems.length) continue
+          try {
+            registered = planAddSkills(
+              project,
+              [
+                {
+                  name: skill.name,
+                  options: {
+                    package: skill.package || undefined,
+                    path: skill.path,
+                    domain: skill.domain,
+                  },
+                },
+              ],
+              registered.changes,
+            )
+          } catch (error) {
+            skill.problems.push(
+              error instanceof Error ? error.message : String(error),
+            )
+          }
+        }
+        writeChanges(project.root, registered.changes)
         runSetupGithubActions(project.root, getMetaDir())
         writeIntentSkillsBlock({
           ...buildMaintainerGuidanceBlock(
@@ -370,9 +322,16 @@ export async function runMaintainerCommand(
         console.log(
           'Next: intent maintainer add <name> --domain <domain> --description <activation> --source <path>. Use --package <directory> for a workspace package. Use intent meta generate-skill for the authoring procedure.',
         )
-        console.log(
-          'For existing skills, run intent maintainer adopt to review registrations.',
-        )
+        for (const skill of existing)
+          console.log(
+            skill.problems.length
+              ? `Skipped ${skill.id}: ${skill.problems.join(' ')}`
+              : `Registered ${skill.id} (domain ${skill.domain}).`,
+          )
+        if (existing.some((skill) => skill.domain === 'uncategorized'))
+          console.log(
+            `Set a domain for uncategorized skills in ${project.artifacts}/skill_tree.yaml and domain_map.yaml.`,
+          )
         const distribution = readDistribution(
           readRecord(project, 'skill_tree.yaml'),
         )

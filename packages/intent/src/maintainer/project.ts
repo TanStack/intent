@@ -173,9 +173,7 @@ export function setupRecords(project: MaintainerProject): Array<string> {
   )
 }
 
-export function planSetupRecords(
-  project: MaintainerProject,
-): Array<FileChange> {
+function planSetupRecords(project: MaintainerProject): Array<FileChange> {
   const { root } = project
   const context = resolveProjectContext({ cwd: root })
   if (!context.packageRoot)
