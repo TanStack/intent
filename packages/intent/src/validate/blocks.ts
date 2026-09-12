@@ -61,10 +61,7 @@ function loadTypeScript(root: string): typeof TS | null {
   return null
 }
 
-function extractCodeBlocks(
-  file: string,
-  content: string,
-): Array<CodeBlock> {
+function extractCodeBlocks(file: string, content: string): Array<CodeBlock> {
   const blocks: Array<CodeBlock> = []
   for (const match of content.matchAll(codeFence)) {
     const language = match[2]!.toLowerCase()
