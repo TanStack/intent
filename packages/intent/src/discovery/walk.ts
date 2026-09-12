@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import {
+  createDepDirCache,
   getDeps,
   listNestedNodeModulesPackageDirs,
   resolveDepDir,
@@ -15,6 +16,8 @@ export interface CreateDependencyWalkerOptions {
   projectRoot: string
   readPkgJson: (dirPath: string) => PackageJson | null
   getFsIdentity: (path: string) => string
+  /** Marks a directory `resolveDepDir` returned as its own identity. */
+  primeFsIdentity?: (realPath: string) => void
   scanNodeModulesDir: (nodeModulesDir: string) => void
   tryRegister: (dirPath: string, fallbackName: string) => boolean
   packages: Array<IntentPackage>
@@ -24,6 +27,7 @@ export interface CreateDependencyWalkerOptions {
 export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
   const walkVisited = new Set<string>()
   const depDirCache = new Map<string, Map<string, string | null>>()
+  const depDirResolution = createDepDirCache()
 
   function resolveDepDirCached(
     depName: string,
@@ -36,11 +40,15 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
       depDirCache.set(fromKey, byDepName)
     }
 
-    if (!byDepName.has(depName)) {
-      byDepName.set(depName, resolveDepDir(depName, fromDir))
+    let depDir = byDepName.get(depName)
+    if (depDir === undefined) {
+      depDir = resolveDepDir(depName, fromDir, depDirResolution)
+      byDepName.set(depName, depDir)
+      // The result is already a real directory, so its identity is itself.
+      if (depDir) opts.primeFsIdentity?.(depDir)
     }
 
-    return byDepName.get(depName) ?? null
+    return depDir
   }
 
   function walkDepsOf(

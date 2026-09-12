@@ -8,6 +8,7 @@ import {
   readFileSync,
   readSync,
   readdirSync,
+  readlinkSync,
   realpathSync,
 } from 'node:fs'
 import { basename, dirname, join, resolve, sep } from 'node:path'
@@ -57,12 +58,22 @@ export function toPosixPath(p: string): string {
   return p.split(sep).join('/')
 }
 
+export interface FsIdentityResolver {
+  (path: string): string
+  /**
+   * Record that `realPath` is already an identity (not a symlink), so a later
+   * lookup returns it without an `lstat`. Callers use this for directories
+   * they have just resolved through `resolveDepDir`.
+   */
+  prime: (realPath: string) => void
+}
+
 export function createFsIdentityCache(
   getFs: () => ReadFs = () => nodeReadFs,
-): (path: string) => string {
+): FsIdentityResolver {
   const cache = new Map<string, string>()
 
-  return (path: string): string => {
+  const getIdentity = ((path: string): string => {
     const resolved = resolve(path)
     const cached = cache.get(resolved)
     if (cached) return cached
@@ -79,7 +90,14 @@ export function createFsIdentityCache(
 
     cache.set(resolved, identity)
     return identity
+  }) as FsIdentityResolver
+
+  getIdentity.prime = (realPath: string): void => {
+    const resolved = resolve(realPath)
+    if (!cache.has(resolved)) cache.set(resolved, resolved)
   }
+
+  return getIdentity
 }
 
 /**
@@ -207,7 +225,7 @@ export function listNodeModulesPackageDirs(
 
 export function listNestedNodeModulesPackageDirs(
   nodeModulesDir: string,
-  getFsIdentity = createFsIdentityCache(),
+  getFsIdentity: (path: string) => string = createFsIdentityCache(),
 ): Array<string> {
   const packageDirs: Array<string> = []
   const visitedNodeModulesDirs = new Set<string>()
@@ -327,6 +345,7 @@ export function detectGlobalNodeModules(packageManager: string): {
 export function resolveDepDir(
   depName: string,
   parentDir: string,
+  cache: DepDirCache = createDepDirCache(),
 ): string | null {
   let dir = parentDir
   let prev: string | undefined
@@ -334,9 +353,15 @@ export function resolveDepDir(
     // Node skips ancestors that are themselves node_modules directories
     // (`.../node_modules/node_modules/<dep>` is never a valid location).
     if (basename(dir) !== 'node_modules') {
-      const candidate = join(dir, 'node_modules', depName)
-      if (existsSync(join(candidate, 'package.json'))) {
-        return resolveRealDir(candidate)
+      const nodeModulesDir = join(dir, 'node_modules')
+      if (hasNodeModulesDir(nodeModulesDir, cache)) {
+        const candidate = join(nodeModulesDir, depName)
+        let resolved = cache.candidates.get(candidate)
+        if (resolved === undefined) {
+          resolved = resolveCandidateDir(candidate, cache)
+          cache.candidates.set(candidate, resolved)
+        }
+        if (resolved) return resolved
       }
     }
     prev = dir
@@ -344,6 +369,93 @@ export function resolveDepDir(
   }
 
   return null
+}
+
+/**
+ * Memo for `resolveDepDir` across one scan. A dependency graph revisits the
+ * same `node_modules` directories, candidate paths, and symlink targets many
+ * times (every package that depends on `semver` resolves it again), so the
+ * cache turns those repeats into map hits. It is never refreshed, so create
+ * one per scan rather than sharing it across runs.
+ */
+export interface DepDirCache {
+  /** `existsSync` result per `node_modules` directory. */
+  nodeModulesDirs: Map<string, boolean>
+  /** Resolution result per `node_modules/<dep>` candidate path. */
+  candidates: Map<string, string | null>
+  /** Real directory per resolved symlink target, shared by every link to it. */
+  targets: Map<string, string | null>
+}
+
+export function createDepDirCache(): DepDirCache {
+  return {
+    nodeModulesDirs: new Map(),
+    candidates: new Map(),
+    targets: new Map(),
+  }
+}
+
+function hasNodeModulesDir(dir: string, cache: DepDirCache): boolean {
+  let exists = cache.nodeModulesDirs.get(dir)
+  if (exists === undefined) {
+    exists = existsSync(dir)
+    cache.nodeModulesDirs.set(dir, exists)
+  }
+  return exists
+}
+
+/**
+ * Resolve one `node_modules/<dep>` candidate to its real directory, or null
+ * when no package is installed there.
+ *
+ * `readlink` is the first probe because it is the cheapest call that also
+ * tells symlinks apart: a stat that traverses a pnpm virtual-store link costs
+ * several times more than reading the link. Real directories (npm and Yarn
+ * hoisting) make it fail with EINVAL and are then checked directly; a missing
+ * entry fails with ENOENT.
+ */
+function resolveCandidateDir(
+  candidate: string,
+  cache: DepDirCache,
+): string | null {
+  let target: string | null
+  try {
+    target = readlinkSync(candidate)
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
+    target = null
+  }
+
+  if (target === null) {
+    return existsSync(join(candidate, 'package.json')) ? candidate : null
+  }
+
+  const resolvedTarget = resolve(
+    dirname(candidate),
+    normalizeReadlinkTarget(target),
+  )
+  let real = cache.targets.get(resolvedTarget)
+  if (real === undefined) {
+    real = existsSync(join(resolvedTarget, 'package.json'))
+      ? resolveRealDir(resolvedTarget)
+      : null
+    cache.targets.set(resolvedTarget, real)
+  }
+  return real
+}
+
+/**
+ * Strip the Windows extended-length prefix that `readlink` can report for
+ * junction targets. `\\?\C:\dir` becomes `C:\dir`; `\\?\UNC\server\share`
+ * becomes `\\server\share` so the UNC root stays absolute. Other targets,
+ * including relative POSIX links, are returned unchanged.
+ */
+export function normalizeReadlinkTarget(target: string): string {
+  if (target.startsWith('\\\\?\\UNC\\')) {
+    return `\\\\${target.slice(8)}`
+  }
+  if (target.startsWith('\\\\?\\')) return target.slice(4)
+  return target
 }
 
 /**
