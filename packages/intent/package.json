@@ -28,22 +28,20 @@
     "dist",
     "meta"
   ],
-  "dependencies": {
+  "devDependencies": {
     "@clack/prompts": "1.7.0",
+    "@types/semver": "^7.7.1",
     "cac": "^7.0.0",
     "jsonc-parser": "^3.3.1",
     "semver": "^7.8.4",
     "std-env": "^4.1.0",
-    "yaml": "2.9.0"
-  },
-  "devDependencies": {
-    "@types/semver": "^7.7.1",
     "tsdown": "^0.22.2",
-    "verdaccio": "^6.7.2"
+    "verdaccio": "^6.7.2",
+    "yaml": "2.9.0"
   },
   "scripts": {
     "prepack": "npm run build",
-    "build": "tsdown src/index.ts src/cli.ts src/core.ts --format esm --dts",
+    "build": "tsdown",
     "test:smoke": "pnpm run build && node dist/cli.mjs --help > /dev/null && node dist/cli.mjs load --help > /dev/null",
     "test:lib": "vitest run --exclude 'tests/integration/**'",
     "test:integration": "vitest run tests/integration/",

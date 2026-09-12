@@ -73,10 +73,13 @@ importers:
         version: 4.1.11(@types/node@25.9.5)(vite@8.2.2(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/intent:
-    dependencies:
+    devDependencies:
       '@clack/prompts':
         specifier: 1.7.0
         version: 1.7.0
+      '@types/semver':
+        specifier: ^7.7.1
+        version: 7.8.0
       cac:
         specifier: ^7.0.0
         version: 7.0.0
@@ -89,19 +92,15 @@ importers:
       std-env:
         specifier: ^4.1.0
         version: 4.2.0
-      yaml:
-        specifier: 2.9.0
-        version: 2.9.0
-    devDependencies:
-      '@types/semver':
-        specifier: ^7.7.1
-        version: 7.8.0
       tsdown:
         specifier: ^0.22.2
         version: 0.22.14(oxc-resolver@11.24.2)(typescript@6.0.3)
       verdaccio:
         specifier: ^6.7.2
         version: 6.10.1(supports-color@7.2.0)(typanion@3.14.0)
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
 packages:
 
