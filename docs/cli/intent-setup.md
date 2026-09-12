@@ -40,7 +40,7 @@ lit: @tanstack/intent@latest setup
 ### `setup`
 
 - Copies the `check-skills.yml` workflow template from `@tanstack/intent/meta/templates/workflows` to `.github/workflows`
-- The copied workflow is a short caller for `TanStack/intent/.github/workflows/check-skills.yml`, pinned to Intent's major tag, so the checks update with Intent releases without an edit to the copy
+- The copied workflow is a short caller with two jobs: pull requests call `TanStack/intent/.github/workflows/check-skills.yml` with `contents: read`, and release or manual runs call `review-skills.yml` with `contents: write` and `pull-requests: write`. Both are pinned to the commit of the Intent release that copied the file, written as `@<sha> # v<version>` so Dependabot and Renovate bump the pin; add a `github-actions` entry to `.github/dependabot.yml` if the repository has none
 - Applies variable substitution (`PACKAGE_NAME`, `PACKAGE_LABEL`, `PAYLOAD_PACKAGE`, `REPO`, `DOCS_PATH`, `SRC_PATH`, `WATCH_PATHS`)
 - Detects the workspace root in monorepos and writes repo-level workflows there
 - Skips files that already exist at the destination
@@ -69,7 +69,8 @@ lit: @tanstack/intent@latest setup
 - On pull requests with `.intent/review-state.json` or an `intent-maintainer` block, it also runs `intent maintainer check --base <pull-request-base-sha> --github-summary`, so the failure reasons appear in the job's step summary
 - On release and manual runs with review state, it runs `intent review --github-review`; without review state, it falls back to `intent stale --github-review`
 - Release and manual runs create or update one review-reminder pull request only when the selected check reports review work
-- The reusable workflow accepts `package-label`, `intent-version` (default `latest`), and `node-version` (default `22`) inputs; edit the copied caller's `with:` block to change them
+- Both reusable workflows run the repository's own lockfile-pinned copy of `@tanstack/intent`, installed with the frozen lockfile and scripts disabled, so a new Intent version runs in CI only after its dependency bump merges. A repository without Intent in `devDependencies` fails with instructions; set the `intent-version` input (for example `latest`) on the caller's `with:` block to install from npm instead
+- The workflows also accept `node-version` (default `22`), and the review workflow accepts `package-label`; edit the copied caller's `with:` block to change them
 - A copy from an earlier Intent version that inlined the steps still works; `intent stale` prints a reminder when it is behind. Delete or move it and rerun `setup` to switch to the caller
 - If your repo has an older generated `validate-skills.yml`, remove it after adopting the current `check-skills.yml`; PR validation now lives in `check-skills.yml`
 - In monorepos, run `setup` from either the repo root or a package directory; Intent writes workflows to the workspace root
