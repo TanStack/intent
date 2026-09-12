@@ -4,13 +4,13 @@ Keep authoritative skills beside their owning package's code. Generate distribut
 
 ## Record the maintainer's choice
 
-`intent maintainer setup` explains repository distribution until a choice is saved. For selected repository skills, run:
+Package-only distribution is the default; `intent maintainer setup` mentions repository distribution until a choice is saved, and nothing requires one. For selected repository skills, run:
 
 ```sh
 intent maintainer setup --distribution repo --skill discover-library --skill query
 ```
 
-Use the actual registered skill names. The repository is read from package metadata; supply `--repository owner/repo` when it cannot be established. `--plugin-name` chooses an initial plugin name when the default is unsuitable. To keep only the existing package distribution workflow, run:
+Use the actual registered skill names. The repository is read from package metadata; supply `--repository owner/repo` when it cannot be established. `--plugin-name` chooses an initial plugin name when the default is unsuitable. To record the package-only default explicitly, so later sessions do not raise the option again, run:
 
 ```sh
 intent maintainer setup --distribution none
@@ -22,7 +22,7 @@ The choice lives under `distribution` in `skill_tree.yaml`. Repeated setup prese
 
 Run `intent maintainer sync` after authoring. Inspect `skills` paths in `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, and the matching root-source marketplace entries. They must match the saved selection; unrelated plugin fields and marketplace entries must survive. Resolve conflicting plugin identities or source roots before syncing. Inspect `.intent/skill-distribution.json` and the printed consumer commands, then keep the generated metadata alongside the tree and skills for repository review.
 
-`intent maintainer status` reports stale generated files; `--json` also includes the saved distribution choice and consumer commands. `intent maintainer check` requires a recorded choice and synchronized exports alongside the existing authoring and source-review checks. Rerun source review after synchronization so the report covers the final files. Opting out after generating exports clears Intent's selected paths and its marketplace entry on the next sync, retaining unrelated plugin features. It does not revoke already installed copies or make public GitHub files private.
+`intent maintainer status` reports stale generated files; `--json` also includes the saved distribution choice and consumer commands. `intent maintainer check` requires synchronized exports for a recorded repository selection alongside the existing authoring and source-review checks. Rerun source review after synchronization so the report covers the final files. Opting out after generating exports clears Intent's selected paths and its marketplace entry on the next sync, retaining unrelated plugin features. It does not revoke already installed copies or make public GitHub files private.
 
 ## Explain the consumer options
 
