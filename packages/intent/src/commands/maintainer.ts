@@ -13,7 +13,7 @@ import { retireSkill } from '../maintainer/remove.js'
 import { createAdoptionPlan, planAdoptionChanges } from '../maintainer/adopt.js'
 import { planMaintainerSync } from '../maintainer/sync.js'
 import { withMaintainerLock, writeChanges } from '../maintainer/files.js'
-import { createReview } from '../review/review.js'
+import { createReview, recordPendingReview } from '../review/review.js'
 import {
   configureDistribution,
   readDistribution,
@@ -80,6 +80,14 @@ const optionHelp: Record<string, [flag: string, description: string]> = {
   task: ['--task <text>', 'Developer task the skill covers; repeat for more'],
   base: ['--base <ref>', 'Git revision to review against'],
   interactive: ['--interactive', 'Inspect and record outcomes in a terminal'],
+  unchanged: [
+    '--unchanged <reason>',
+    'Record every pending item as reviewed with no guidance change',
+  ],
+  updated: [
+    '--updated <reason>',
+    'Record every pending item as reviewed with updated guidance',
+  ],
   json: ['--json', 'Print JSON instead of text'],
   record: ['--record <file>', 'Record outcomes from an annotated JSON report'],
 }
@@ -150,12 +158,17 @@ export const maintainerActions: Record<string, MaintainerAction> = {
   },
   review: {
     usage:
-      'maintainer review [--json | --interactive | --record <report.json>] [--base <ref>]',
+      'maintainer review [--unchanged <reason> | --updated <reason> | --json | --interactive | --record <report.json>] [--base <ref>]',
     summary: 'Find guidance affected by Git changes and record outcomes.',
     writes: '.intent/review-state.json when recording; nothing otherwise.',
-    options: ['base', 'json', 'record', 'interactive'].map(
-      (key) => optionHelp[key]!,
-    ),
+    options: [
+      'base',
+      'unchanged',
+      'updated',
+      'json',
+      'record',
+      'interactive',
+    ].map((key) => optionHelp[key]!),
   },
   check: {
     usage: 'maintainer check [--base <ref>]',
@@ -214,6 +227,8 @@ export interface MaintainerCommandOptions extends DistributionOptions {
   record?: string
   apply?: string
   interactive?: boolean
+  unchanged?: string
+  updated?: string
 }
 
 // An explicit --package is repository-relative. Without one, a command run from
@@ -253,7 +268,7 @@ export async function runMaintainerCommand(
     remove: ['artifacts'],
     status: ['artifacts', 'base', 'json'],
     sync: ['artifacts'],
-    review: ['base', 'json', 'record', 'interactive'],
+    review: ['base', 'json', 'record', 'interactive', 'unchanged', 'updated'],
     check: ['artifacts', 'base'],
   }
   if (!allowed[action])
@@ -269,6 +284,40 @@ export async function runMaintainerCommand(
       )
   }
   if (action === 'review') {
+    const oneShot =
+      options.unchanged !== undefined
+        ? ('no-change' as const)
+        : options.updated !== undefined
+          ? ('updated' as const)
+          : undefined
+    if (oneShot) {
+      if (
+        (options.unchanged !== undefined && options.updated !== undefined) ||
+        options.interactive ||
+        options.json ||
+        options.record
+      )
+        fail(
+          '--unchanged and --updated record every pending item at once and cannot be combined with each other, --interactive, --json, or --record.',
+        )
+      const reason = options.unchanged ?? options.updated
+      if (typeof reason !== 'string' || !reason.trim())
+        fail(
+          `--${oneShot === 'no-change' ? 'unchanged' : 'updated'} needs a reason.`,
+        )
+      try {
+        const count = recordPendingReview(
+          process.cwd(),
+          options.base,
+          oneShot,
+          reason,
+        )
+        console.log(`Recorded ${count} review outcome(s) as ${oneShot}.`)
+      } catch (error) {
+        fail(error instanceof Error ? error.message : String(error))
+      }
+      return
+    }
     if (options.interactive) {
       if (options.json || options.record)
         fail('--interactive cannot be combined with --json or --record.')
@@ -466,7 +515,7 @@ export async function runMaintainerCommand(
       await runValidateCommand(dir)
     if (plan.problems.length || plan.changes.length || review.items.length)
       fail(
-        'Maintainer check failed. Resolve the authoring issues, run intent maintainer sync, and record review outcomes with intent maintainer review --interactive, or annotate a --json report and pass it to --record <report.json>.',
+        'Maintainer check failed. Resolve the authoring issues, run intent maintainer sync, and record review outcomes with intent maintainer review --unchanged <reason> or --updated <reason>, with --interactive, or by annotating a --json report and passing it to --record <report.json>.',
       )
     console.log(
       'Maintainer checks passed. Recorded conclusions still depend on the supplied review evidence.',

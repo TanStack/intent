@@ -716,6 +716,28 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
   return { schemaVersion: 1, root, head, base, recording, items }
 }
 
+// Record one outcome for every pending item in a single command. The
+// evidence is the reviewed revision and the files each item changed, so the
+// record says what was looked at without asking the maintainer to type it.
+export function recordPendingReview(
+  cwd: string,
+  baseRef: string | undefined,
+  outcome: 'no-change' | 'updated',
+  reason: string,
+): number {
+  if (!reason.trim()) throw new Error(`--${outcome} needs a reason.`)
+  const report = createReview(cwd, baseRef)
+  if (report.items.length === 0) throw new Error('Nothing is pending review.')
+  for (const item of report.items) {
+    item.outcome = outcome
+    item.reason = reason.trim()
+    item.evidence = [
+      `${item.changedFiles.length ? `Changed: ${item.changedFiles.join(', ')}` : 'No changed files'} at ${report.head}`,
+    ]
+  }
+  return recordReview(cwd, report)
+}
+
 export function recordReview(cwd: string, input: unknown): number {
   if (
     !isObject(input) ||
