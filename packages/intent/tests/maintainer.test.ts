@@ -337,9 +337,30 @@ it('reports invalid and conflicting existing skills without registering them', a
     '---\nname: query\ndescription: Query again\n---\nGuidance.\n',
   )
   write('skills/broken/SKILL.md', '---\nname: other\n---\nGuidance.\n')
+  write(
+    'skills/blank/SKILL.md',
+    '---\nname: blank\ndescription: Blank domain\nmetadata:\n  domain: " "\n---\nGuidance.\n',
+  )
+  write(
+    '_artifacts/skill_tree.yaml',
+    'skills:\n  - name: taken\n    slug: taken\n    path: elsewhere/taken/SKILL.md\n    domain: d\n',
+  )
+  write(
+    'skills/taken/SKILL.md',
+    '---\nname: taken\ndescription: Taken\n---\nGuidance.\n',
+  )
   expect(await main(['maintainer', 'setup'])).toBe(0)
-  expect(parse(read('_artifacts/skill_tree.yaml')).skills).toEqual([])
+  expect(parse(read('_artifacts/skill_tree.yaml')).skills).toEqual([
+    expect.objectContaining({
+      name: 'taken',
+      path: 'elsewhere/taken/SKILL.md',
+    }),
+    expect.objectContaining({ name: 'blank', domain: 'uncategorized' }),
+  ])
   const output = vi.mocked(console.log).mock.calls.flat().join('\n')
+  expect(output).toContain(
+    'Skipped skills/taken/SKILL.md: Another skill has the same name',
+  )
   expect(output).toContain(
     'Skipped skills/broken/SKILL.md: Skill name must match',
   )

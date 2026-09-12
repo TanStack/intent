@@ -48,10 +48,14 @@ export function findExistingSkills(
     .split('\0')
     .filter(Boolean)
   const tree = readRecord(project, 'skill_tree.yaml')
+  const entries = skillEntries(project, tree)
   const registered = new Set(
-    skillEntries(project, tree).map((entry) =>
+    entries.map((entry) =>
       relative(project.root, skillPath(project, entry)).replaceAll('\\', '/'),
     ),
+  )
+  const registeredNames = new Set(
+    entries.map((entry) => String(entry.slug ?? entry.name)),
   )
   const mapPath = recordPath(project, 'domain_map.yaml')
   const mapped: Array<unknown> = existsSync(mapPath)
@@ -126,6 +130,7 @@ export function findExistingSkills(
     })
   for (const skill of skills) {
     if (
+      registeredNames.has(skill.name) ||
       skills.some((other) => other.id !== skill.id && other.name === skill.name)
     )
       skill.problems.push(
@@ -143,8 +148,12 @@ function inferDomain(
   id: string,
 ): string {
   const metadata = frontmatter.metadata
-  if (isObject(metadata) && typeof metadata.domain === 'string')
-    return metadata.domain
+  if (
+    isObject(metadata) &&
+    typeof metadata.domain === 'string' &&
+    metadata.domain.trim()
+  )
+    return metadata.domain.trim()
   const name = basename(dirname(id))
   const mapping = mapped.find((value) => isObject(value) && value.slug === name)
   if (isObject(mapping) && typeof mapping.domain === 'string')

@@ -277,19 +277,35 @@ export async function runMaintainerCommand(
         const created = setupRecords(project)
         configureDistribution(project, options)
         const existing = findExistingSkills(project)
-        const registered = planAddSkills(
-          project,
-          existing
-            .filter((skill) => skill.problems.length === 0)
-            .map((skill) => ({
-              name: skill.name,
-              options: {
-                package: skill.package || undefined,
-                path: skill.path,
-                domain: skill.domain,
-              },
-            })),
-        )
+        // Register one skill at a time so a candidate the planner rejects is
+        // reported as skipped instead of aborting the others.
+        let registered: ReturnType<typeof planAddSkills> = {
+          changes: [],
+          paths: [],
+        }
+        for (const skill of existing) {
+          if (skill.problems.length) continue
+          try {
+            registered = planAddSkills(
+              project,
+              [
+                {
+                  name: skill.name,
+                  options: {
+                    package: skill.package || undefined,
+                    path: skill.path,
+                    domain: skill.domain,
+                  },
+                },
+              ],
+              registered.changes,
+            )
+          } catch (error) {
+            skill.problems.push(
+              error instanceof Error ? error.message : String(error),
+            )
+          }
+        }
         writeChanges(project.root, registered.changes)
         runSetupGithubActions(project.root, getMetaDir())
         writeIntentSkillsBlock({
