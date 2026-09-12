@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import { resolveProjectContext } from '../core/project-context.js'
@@ -194,27 +195,49 @@ export function checkSkillBlocks(
   },
   ts: typeof TS | null = loadTypeScript(options.root),
 ): SkillBlockCheck {
-  const { root, packageDir, library, skills } = options
+  const { root, packageDir, library } = options
+  // `check` validates every skill and then describes the pending ones, so a
+  // skill's result is kept for the rest of the process instead of building a
+  // second program for the same content.
   const findings: Array<SkillBlockFinding> = []
+  const skills: Array<{ file: string; content: string; key: string }> = []
+  let blockCount = 0
+  const entry = ts ? libraryEntry(packageDir) : null
+  const stamp = entry ? `${entry}\0${statSync(entry).mtimeMs}` : ''
+  for (const skill of options.skills) {
+    const key = [
+      packageDir,
+      library,
+      stamp,
+      skill.file,
+      digest(skill.content),
+    ].join('\0')
+    const cached = checked.get(key)
+    if (cached) {
+      findings.push(...cached.findings)
+      blockCount += cached.blocks
+    } else skills.push({ ...skill, key })
+  }
   for (const skill of skills)
     findings.push(...checkSkillLinks(root, skill.file, skill.content))
   const blocks = skills.flatMap((skill) =>
     extractCodeBlocks(skill.file, skill.content),
   )
-  if (blocks.length === 0) return { blocks: 0, findings }
-  if (!ts)
-    return {
-      blocks: blocks.length,
-      findings,
-      skipped: 'TypeScript is not installed in this repository',
-    }
-  const entry = libraryEntry(packageDir)
+  const remember = (skipped?: string) => {
+    if (!skipped)
+      for (const skill of skills)
+        checked.set(skill.key, {
+          blocks: blocks.filter((block) => block.file === skill.file).length,
+          findings: findings.filter((finding) => finding.file === skill.file),
+        })
+    return { blocks: blockCount + blocks.length, findings, skipped }
+  }
+  if (blocks.length === 0) return remember()
+  if (!ts) return remember('TypeScript is not installed in this repository')
   if (!entry)
-    return {
-      blocks: blocks.length,
-      findings,
-      skipped: `no type entry found for ${library} in ${relative(root, packageDir) || '.'}`,
-    }
+    return remember(
+      `no type entry found for ${library} in ${relative(root, packageDir) || '.'}`,
+    )
 
   const virtualDir = join(root, '.intent', 'skill-examples')
   const virtual = new Map<string, CodeBlock>()
@@ -309,43 +332,83 @@ export function checkSkillBlocks(
       }
     }
   }
-  return { blocks: blocks.length, findings }
+  return remember()
 }
 
-// One-line summary of a skill's examples for a review item, or null when the
-// skill has no code blocks or they could not be checked.
+const checked = new Map<
+  string,
+  { blocks: number; findings: Array<SkillBlockFinding> }
+>()
+const digest = (value: string) =>
+  createHash('sha256').update(value).digest('hex')
+
+// One-line summary per skill for review items, in one program per package.
+// Skills without code blocks, or whose blocks could not be checked, are left
+// out of the result.
 export function describeSkillExamples(
   root: string,
-  file: string,
-): string | null {
-  const absolute = resolve(root, file)
-  const { packageRoot } = resolveProjectContext({
-    cwd: root,
-    targetPath: absolute,
-  })
-  if (!packageRoot) return null
-  let library = readScalarField(parseFrontmatter(absolute), 'library')
-  if (!library) {
-    try {
-      library = JSON.parse(
-        readFileSync(join(packageRoot, 'package.json'), 'utf8'),
-      ).name
-    } catch {
-      return null
+  files: Array<string>,
+): Map<string, string> {
+  const groups = new Map<
+    string,
+    { packageDir: string; library: string; files: Array<string> }
+  >()
+  for (const file of files) {
+    const absolute = resolve(root, file)
+    const { packageRoot } = resolveProjectContext({
+      cwd: root,
+      targetPath: absolute,
+    })
+    if (!packageRoot) continue
+    let library: unknown = readScalarField(
+      parseFrontmatter(absolute),
+      'library',
+    )
+    if (!library) {
+      try {
+        library = JSON.parse(
+          readFileSync(join(packageRoot, 'package.json'), 'utf8'),
+        ).name
+      } catch {
+        continue
+      }
+    }
+    if (typeof library !== 'string') continue
+    const key = `${packageRoot}\0${library}`
+    const group = groups.get(key) ?? {
+      packageDir: packageRoot,
+      library,
+      files: [],
+    }
+    group.files.push(file)
+    groups.set(key, group)
+  }
+  const summaries = new Map<string, string>()
+  for (const group of groups.values()) {
+    const skills = group.files.map((file) => ({
+      file,
+      content: readFileSync(resolve(root, file), 'utf8'),
+    }))
+    const result = checkSkillBlocks({
+      root,
+      packageDir: group.packageDir,
+      library: group.library,
+      skills,
+    })
+    if (result.skipped) continue
+    for (const skill of skills) {
+      if (!extractCodeBlocks(skill.file, skill.content).length) continue
+      const errors = result.findings.filter(
+        (finding) =>
+          finding.file === skill.file && finding.severity === 'error',
+      )
+      summaries.set(
+        skill.file,
+        errors.length
+          ? `${errors.length} example error(s), first at line ${errors[0]!.line}`
+          : 'examples still compile',
+      )
     }
   }
-  if (typeof library !== 'string') return null
-  const result = checkSkillBlocks({
-    root,
-    packageDir: packageRoot,
-    library,
-    skills: [{ file, content: readFileSync(absolute, 'utf8') }],
-  })
-  if (result.blocks === 0 || result.skipped) return null
-  const errors = result.findings.filter(
-    (finding) => finding.severity === 'error',
-  )
-  return errors.length
-    ? `${errors.length} example error(s), first at line ${errors[0]!.line}`
-    : 'examples still compile'
+  return summaries
 }

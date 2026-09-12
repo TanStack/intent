@@ -444,6 +444,12 @@ export async function runMaintainerCommand(
     for (const problem of status.problems) console.log(`  ${problem}`)
     for (const path of status.staleFiles)
       console.log(`  Run intent maintainer sync: ${path}`)
+    const examples = describeSkillExamples(
+      project.root,
+      review.items
+        .filter((item) => item.kind === 'skill' && !item.problems.length)
+        .map((item) => item.path),
+    )
     for (const item of review.items) {
       const label =
         item.kind === 'skill'
@@ -456,12 +462,9 @@ export async function runMaintainerCommand(
         : item.changedFiles.length
           ? `changed ${item.changedFiles.join(', ')}`
           : 'no recorded review'
-      const examples =
-        item.kind === 'skill' && !item.problems.length
-          ? describeSkillExamples(project.root, item.path)
-          : null
+      const example = examples.get(item.path)
       console.log(
-        `  ${label} ${item.path}: ${detail}${examples ? `; ${examples}` : ''}`,
+        `  ${label} ${item.path}: ${detail}${example ? `; ${example}` : ''}`,
       )
     }
   }
