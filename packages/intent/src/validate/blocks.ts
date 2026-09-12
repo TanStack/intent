@@ -8,7 +8,7 @@ import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
 import { parseFrontmatter, readScalarField } from '../shared/utils.js'
 import type TS from 'typescript'
 
-export interface SkillBlockFinding {
+interface SkillBlockFinding {
   file: string
   line: number
   message: string
@@ -50,7 +50,7 @@ const partialSnippetCodes = new Set([
 ])
 const missingModuleCodes = new Set([2307, 2792])
 
-export function loadTypeScript(root: string): typeof TS | null {
+function loadTypeScript(root: string): typeof TS | null {
   for (const from of [join(root, 'package.json'), import.meta.url]) {
     try {
       return createRequire(from)('typescript') as typeof TS
@@ -61,7 +61,7 @@ export function loadTypeScript(root: string): typeof TS | null {
   return null
 }
 
-export function extractCodeBlocks(
+function extractCodeBlocks(
   file: string,
   content: string,
 ): Array<CodeBlock> {
@@ -75,7 +75,7 @@ export function extractCodeBlocks(
   return blocks
 }
 
-export function checkSkillLinks(
+function checkSkillLinks(
   root: string,
   file: string,
   content: string,
@@ -105,7 +105,7 @@ export function checkSkillLinks(
 // The file that declares the library's public types. A declared entry that
 // Git tracks is hand-written and used as-is; a missing or ignored one is
 // build output, so the matching source file stands in for it.
-export function libraryEntry(packageDir: string): string | null {
+function libraryEntry(packageDir: string): string | null {
   let manifest: Record<string, unknown> = {}
   try {
     manifest = JSON.parse(
