@@ -195,6 +195,7 @@ describe('packed release', () => {
     const overview = run(['maintainer', '--help']).stdout
     for (const action of ['setup', 'add', 'status', 'sync', 'review', 'check'])
       expect(overview).toContain(`\n${action}: maintainer ${action}`)
+    expect(overview).not.toContain('maintainer adopt')
   })
 
   it('keeps nested authoring references usable within the extracted package', () => {
