@@ -62,9 +62,7 @@ function readJson(path: string): Record<string, unknown> {
   return value
 }
 
-function inferDistributionRepository(
-  project: MaintainerProject,
-): string {
+function inferDistributionRepository(project: MaintainerProject): string {
   const manifest = readJson(projectPath(project.root, 'package.json'))
   const declared = isObject(manifest.repository)
     ? manifest.repository.url
