@@ -171,7 +171,7 @@ export function planAddSkills(
       })
     }
     nextSpec = `${nextSpec.trimEnd()}\n\n- Registered \`${name}\` in \`${packageDir ?? '.'}\` (domain \`${options.domain}\`).${tasks.length ? ` Developer tasks: ${tasks.join('; ')}.` : ''} ${tasks.length ? 'Decisions and checks' : 'Task coverage, decisions, and checks'} still need to be recorded.\n`
-    paths.push(join(packageDir ?? '', entry.path))
+    paths.push(join(packageDir ?? '', entry.path).replaceAll('\\', '/'))
   }
   if (additions.length) {
     changes.push(

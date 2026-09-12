@@ -211,8 +211,10 @@ describe('intent meta', () => {
     )
     const format = join('generate-skill', 'references', 'skill-format.md')
     const distribution = join('generate-skill', 'references', 'distribution.md')
-    expect(output).toContain(`](${join(metaDir, format)})`)
-    expect(output).toContain(`](${join(metaDir, distribution)})`)
+    // Rewritten destinations always use forward slashes, on every platform.
+    const posix = (path: string) => path.split(sep).join('/')
+    expect(output).toContain(`](${posix(join(metaDir, format))})`)
+    expect(output).toContain(`](${posix(join(metaDir, distribution))})`)
     for (const path of [
       format,
       distribution,

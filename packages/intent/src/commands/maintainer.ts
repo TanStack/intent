@@ -324,7 +324,7 @@ export async function runMaintainerCommand(
       }
       const preview = planAdoptionChanges(project, chosen)
       const files = preview.changes.map((change) =>
-        relative(project.root, change.path),
+        relative(project.root, change.path).replaceAll('\\', '/'),
       )
       if (!(await prompts.confirm(chosen, files))) {
         console.log('Adoption canceled. No files changed.')
@@ -419,9 +419,11 @@ export async function runMaintainerCommand(
     schemaVersion: 1,
     root: project.root,
     artifacts: project.artifacts,
-    skills: plan.skills.map((path) => relative(project.root, path)),
+    skills: plan.skills.map((path) =>
+      relative(project.root, path).replaceAll('\\', '/'),
+    ),
     staleFiles: plan.changes.map((change) =>
-      relative(project.root, change.path),
+      relative(project.root, change.path).replaceAll('\\', '/'),
     ),
     problems: plan.problems,
     distribution: {

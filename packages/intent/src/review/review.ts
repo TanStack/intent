@@ -354,7 +354,9 @@ function reviewIgnorePatterns(tree: Record<string, unknown>, path: string) {
 export function createReview(cwd: string, baseRef?: string): ReviewReport {
   let root: string
   try {
-    root = git(resolve(cwd), ['rev-parse', '--show-toplevel']).trim()
+    // Git prints forward slashes on every platform; normalize so the root
+    // compares equal to paths built with node:path (backslashes on Windows).
+    root = resolve(git(resolve(cwd), ['rev-parse', '--show-toplevel']).trim())
   } catch {
     throw new Error(
       'Skill review requires a Git working tree with an initial commit.',

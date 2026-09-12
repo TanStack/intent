@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync } from 'node:fs'
-import { basename, dirname, join, relative } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { parseDocument, stringify } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
 import { writeChanges } from './files.js'
@@ -40,11 +40,15 @@ export function resolveMaintainerProject(
 ): MaintainerProject {
   let root: string
   try {
-    root = execFileSync(
-      'git',
-      ['-c', 'core.fsmonitor=false', 'rev-parse', '--show-toplevel'],
-      { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
-    ).trim()
+    // Git prints forward slashes on every platform; normalize so the root
+    // compares equal to paths built with node:path (backslashes on Windows).
+    root = resolve(
+      execFileSync(
+        'git',
+        ['-c', 'core.fsmonitor=false', 'rev-parse', '--show-toplevel'],
+        { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+      ).trim(),
+    )
   } catch {
     throw new Error('Maintainer commands require a Git working tree.')
   }
@@ -164,7 +168,9 @@ export function skillPath(
 export function setupRecords(project: MaintainerProject): Array<string> {
   const changes = planSetupRecords(project)
   writeChanges(project.root, changes)
-  return changes.map((change) => relative(project.root, change.path))
+  return changes.map((change) =>
+    relative(project.root, change.path).replaceAll('\\', '/'),
+  )
 }
 
 export function planSetupRecords(
