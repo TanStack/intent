@@ -117,10 +117,22 @@ See [Default install](../cli/intent-install#default-install) for picker controls
 
 Use `--no-notices` to suppress non-critical notices on stderr for one run:
 
-```bash
-npx @tanstack/intent@latest list --no-notices
-npx @tanstack/intent@latest install --map --no-notices
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest list --no-notices
+react: @tanstack/intent@latest install --map --no-notices
+solid: @tanstack/intent@latest list --no-notices
+solid: @tanstack/intent@latest install --map --no-notices
+vue: @tanstack/intent@latest list --no-notices
+vue: @tanstack/intent@latest install --map --no-notices
+svelte: @tanstack/intent@latest list --no-notices
+svelte: @tanstack/intent@latest install --map --no-notices
+angular: @tanstack/intent@latest list --no-notices
+angular: @tanstack/intent@latest install --map --no-notices
+lit: @tanstack/intent@latest list --no-notices
+lit: @tanstack/intent@latest install --map --no-notices
+
+<!-- ::end:tabs -->
 
 For CI or wrapper scripts, set `INTENT_NO_NOTICES=1` to suppress notices without changing command arguments.
 
@@ -132,11 +144,30 @@ Discovery and resolution warnings are separate from policy notices and are not s
 
 Use `intent exclude` to manage this list from the CLI:
 
-```bash
-npx @tanstack/intent@latest exclude add @tanstack/router#experimental-*
-npx @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
-npx @tanstack/intent@latest exclude list
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+```text
+react: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+react: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
+react: @tanstack/intent@latest exclude list
+solid: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+solid: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
+solid: @tanstack/intent@latest exclude list
+vue: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+vue: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
+vue: @tanstack/intent@latest exclude list
+svelte: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+svelte: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
+svelte: @tanstack/intent@latest exclude list
+angular: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+angular: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
+angular: @tanstack/intent@latest exclude list
+lit: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
+lit: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
+lit: @tanstack/intent@latest exclude list
 ```
+
+<!-- ::end:tabs -->
 
 ```json
 {

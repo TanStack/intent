@@ -5,13 +5,18 @@ id: quick-start-consumers
 
 ## 1. Run install
 
-```bash
-npx @tanstack/intent@latest install
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest install
+solid: @tanstack/intent@latest install
+vue: @tanstack/intent@latest install
+svelte: @tanstack/intent@latest install
+angular: @tanstack/intent@latest install
+lit: @tanstack/intent@latest install
+
+<!-- ::end:tabs -->
 
 Run this in an interactive terminal. On first use, Intent helps you choose which installed packages and skills your agent may use, then creates or updates skill-loading guidance.
-
-Examples use `npx` for npm projects. In pnpm, Yarn, or Bun projects, use the matching runner: `pnpm dlx`, `yarn dlx`, or `bunx`.
 
 1. **Choose what to enable.** Pick **Enable all**, **Choose packages or scopes**, or **Choose individual skills**. Package and skill lists support search.
 2. **Confirm and finish.** Check the saved rules and destination `package.json`. Choose **Continue with all selected skills** to save, or **Review individual skills** to pick which selected packages to inspect before confirming. Intent writes permissions and guidance, verifies the guidance, and shows a command to list available skills.
@@ -27,34 +32,33 @@ Canceling before confirmation writes neither file. `--dry-run` previews the flow
 If an `intent-skills` block already exists, Intent updates that file in place.
 If no block exists, `AGENTS.md` is the default target.
 
-Intent creates guidance like:
-
-```markdown
-<!-- intent-skills:start -->
-## Skill Loading
-
-Before editing files for a substantial task:
-- Run `pnpm dlx @tanstack/intent@latest list` from the workspace root to see available local skills.
-- If a listed skill matches the task, run `pnpm dlx @tanstack/intent@latest load <package>#<skill>` before changing files.
-- Use the loaded `SKILL.md` guidance while making the change.
-- Monorepos: when working across packages, run the skill check from the workspace root and prefer the local skill for the package being changed.
-- Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
-<!-- intent-skills:end -->
-```
-
-Intent detects the package manager when generating this block, so the runner may be `npx`, `pnpm dlx`, `yarn dlx`, or `bunx`.
+The managed block instructs agents to run `intent list` from the workspace root, load the most specific matching skill with `intent load`, and apply its guidance before editing. Intent generates those commands using the detected package manager's runner. See [Default output](../cli/intent-install#default-output) for the installed instructions and [Mapping output](../cli/intent-install#mapping-output) for explicit task mappings.
 
 To enforce loading guidance before edits in supported agents, opt in to hooks:
 
-```bash
-npx @tanstack/intent@latest hooks install
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest hooks install
+solid: @tanstack/intent@latest hooks install
+vue: @tanstack/intent@latest hooks install
+svelte: @tanstack/intent@latest hooks install
+angular: @tanstack/intent@latest hooks install
+lit: @tanstack/intent@latest hooks install
+
+<!-- ::end:tabs -->
 
 Project-scoped hooks are installed for Claude Code and Codex. `intent install` can write project guidance to `.github/copilot-instructions.md`, but GitHub Copilot CLI hook enforcement is user-scoped, so configure it explicitly:
 
-```bash
-npx @tanstack/intent@latest hooks install --scope user --agents copilot
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest hooks install --scope user --agents copilot
+solid: @tanstack/intent@latest hooks install --scope user --agents copilot
+vue: @tanstack/intent@latest hooks install --scope user --agents copilot
+svelte: @tanstack/intent@latest hooks install --scope user --agents copilot
+angular: @tanstack/intent@latest hooks install --scope user --agents copilot
+lit: @tanstack/intent@latest hooks install --scope user --agents copilot
+
+<!-- ::end:tabs -->
 
 Cursor and generic `AGENTS.md` agents use the guidance block only.
 
@@ -86,9 +90,16 @@ When permissions already exist, including inherited workspace permissions, `inst
 
 Load a skill when it matches the task:
 
-```bash
-npx @tanstack/intent@latest load @tanstack/react-query#core
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest load @tanstack/react-query#core
+solid: @tanstack/intent@latest load @tanstack/react-query#core
+vue: @tanstack/intent@latest load @tanstack/react-query#core
+svelte: @tanstack/intent@latest load @tanstack/react-query#core
+angular: @tanstack/intent@latest load @tanstack/react-query#core
+lit: @tanstack/intent@latest load @tanstack/react-query#core
+
+<!-- ::end:tabs -->
 
 This prints the skill content for the installed package version.
 
@@ -96,38 +107,71 @@ Intent cannot guarantee that an agent selected the correct skill or followed its
 
 If you want explicit task-to-skill mappings in your agent config, opt in:
 
-```bash
-npx @tanstack/intent@latest install --map
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest install --map
+solid: @tanstack/intent@latest install --map
+vue: @tanstack/intent@latest install --map
+svelte: @tanstack/intent@latest install --map
+angular: @tanstack/intent@latest install --map
+lit: @tanstack/intent@latest install --map
+
+<!-- ::end:tabs -->
 
 ## 4. Keep skills up-to-date
 
-```bash
-npm update @tanstack/react-query
-```
+Update the library through your project's dependency-update workflow.
 
 Skills version with library releases. Updating a library also updates its packaged skills, so the skill version matches the installed code. If a package is installed both locally and globally and global scanning is enabled, Intent prefers the local version.
 
 List the installed skills:
 
-```bash
-npx @tanstack/intent@latest list
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest list
+solid: @tanstack/intent@latest list
+vue: @tanstack/intent@latest list
+svelte: @tanstack/intent@latest list
+angular: @tanstack/intent@latest list
+lit: @tanstack/intent@latest list
+
+<!-- ::end:tabs -->
 
 Use `--json` for machine-readable output:
 
-```bash
-npx @tanstack/intent@latest list --json
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest list --json
+solid: @tanstack/intent@latest list --json
+vue: @tanstack/intent@latest list --json
+svelte: @tanstack/intent@latest list --json
+angular: @tanstack/intent@latest list --json
+lit: @tanstack/intent@latest list --json
+
+<!-- ::end:tabs -->
 
 Global package scanning is opt-in:
 
-```bash
-npx @tanstack/intent@latest list --global
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest list --global
+solid: @tanstack/intent@latest list --global
+vue: @tanstack/intent@latest list --global
+svelte: @tanstack/intent@latest list --global
+angular: @tanstack/intent@latest list --global
+lit: @tanstack/intent@latest list --global
+
+<!-- ::end:tabs -->
 
 You can also check if any skills reference outdated source documentation:
 
-```bash
-npx @tanstack/intent@latest stale
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest stale
+solid: @tanstack/intent@latest stale
+vue: @tanstack/intent@latest stale
+svelte: @tanstack/intent@latest stale
+angular: @tanstack/intent@latest stale
+lit: @tanstack/intent@latest stale
+
+<!-- ::end:tabs -->
