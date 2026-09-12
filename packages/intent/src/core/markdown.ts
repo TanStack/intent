@@ -1,8 +1,17 @@
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import { toPosixPath } from '../shared/utils.js'
 
-/** Private-use character that no path function treats as a separator. */
-const BACKSLASH_PLACEHOLDER = '\uE000'
+/**
+ * A character that does not occur in `text`, taken from the Unicode private
+ * use area so no path function treats it as a separator. Scanning for a free
+ * code point keeps a destination that already contains such a character (a
+ * literal U+E000, say) from being rewritten as a backslash.
+ */
+function pickPlaceholder(text: string): string {
+  let codePoint = 0xe000
+  while (text.includes(String.fromCharCode(codePoint))) codePoint++
+  return String.fromCharCode(codePoint)
+}
 
 function resolveFromCwd(path: string): string {
   return resolve(process.cwd(), path)
@@ -177,9 +186,10 @@ function rewriteMarkdownDestination({
   // A backslash in a Markdown destination is an escape (`\)`), never a path
   // separator. Hide it from the path functions, which on Windows would
   // otherwise normalize it into `/`, and restore it in the rewritten output.
+  const placeholder = pickPlaceholder(pathPart)
   const resolvedDestinationPath = resolve(
     context.skillDir,
-    pathPart.replaceAll('\\', BACKSLASH_PLACEHOLDER),
+    pathPart.replaceAll('\\', placeholder),
   )
   const relativeToPackageRoot = relative(
     context.resolvedPackageRoot,
@@ -200,7 +210,7 @@ function rewriteMarkdownDestination({
       ? relativeToCwd
       : resolvedDestinationPath
 
-  const rewritten = `${toPosixPath(rewrittenPath).replaceAll(BACKSLASH_PLACEHOLDER, '\\')}${suffix}`
+  const rewritten = `${toPosixPath(rewrittenPath).replaceAll(placeholder, '\\')}${suffix}`
   context.rewrittenDestinations.set(destination, rewritten)
   return rewritten
 }
