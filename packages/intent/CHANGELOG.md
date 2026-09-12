@@ -1,5 +1,63 @@
 # @tanstack/intent
 
+## 0.5.0
+
+### Minor Changes
+
+- [#258](https://github.com/TanStack/intent/pull/258) [`920a3d5`](https://github.com/TanStack/intent/commit/920a3d5c9871304379ddbe61b00ef417257a097c) - Bring library skill authoring and maintenance into the normal coding-agent workflow. `intent install --maintainer` installs persistent guidance for agreed skill batches, source-grounded updates, representative executable task checks, and fresh-consumer verification when available.
+
+  Add `intent review` to identify affected guidance and unmapped changes from Git, then record evidence-backed outcomes against source and skill content hashes. A skill or planning record with no recorded review is compared with the commit that introduced it. Repeated no-ops stay quiet until content changes; missing source evidence remains unresolved. The generated release workflow uses recorded reviews when present and retains the existing staleness fallback otherwise.
+
+  Require every authoring batch to create and incrementally maintain `domain_map.yaml`, `skill_spec.md`, and `skill_tree.yaml`, preserving prior coverage, maintainer decisions, and remaining work. Track their review against source and skill contents and keep missing or invalid records unresolved. Keep focused authoring available through `maintainer setup`, `maintainer add`, `meta generate-skill`, and review reminders without mandatory full-library discovery. Add maintainer fixtures and protected task graders.
+
+  Separate activation guidance in `description` from descriptive text in `metadata.purpose`, preserving original descriptions when migrating existing skills. Expose purpose separately in discovery and `list --json`; older skills remain supported. Group related features by developer task, use references for conditional detail, check discovery separately from task correctness, and bundle tested scripts only when useful.
+
+  Keep the review-state lock held through atomic replacement, explain stale locks, and render repository-controlled review fields as untrusted data. Use the same command runner for reminder follow-up review commands.
+
+  Replace `scaffold` with `intent maintainer setup|add|status|sync|review|check`. Initialize cumulative records and copy the `check-skills.yml` CI workflow when none exists, register package-owned skills, synchronize frontmatter and publishing metadata, and check authoring gaps and revision-bound reviews through deterministic commands. Preserve existing authored decisions and custom record locations.
+
+- [#262](https://github.com/TanStack/intent/pull/262) [`e560b60`](https://github.com/TanStack/intent/commit/e560b60e59f5063606252513ceed687f7767e988) - Add guided adoption of existing package-owned skills with a read-only JSON plan, explicit batch registration and distribution choices, and interactive confirmation. Preserve authored guidance and prior records, reject stale plans, leave semantic review pending, and keep CI noninteractive.
+
+- [#263](https://github.com/TanStack/intent/pull/263) [`d4eca84`](https://github.com/TanStack/intent/commit/d4eca844556b34ed0f281f9f9c11052233ce949f) - Add optional interactive maintainer review with guidance and source-diff inspection, per-item reasons and evidence, and confirmation before recording. Reuse existing fingerprints and evidence validation, retain JSON workflows, and prohibit interactive prompts in CI.
+
+- [#260](https://github.com/TanStack/intent/pull/260) [`3437a6c`](https://github.com/TanStack/intent/commit/3437a6c8a6d8d0365f41cd0834c6b17195158931) - Add explicit repository skill distribution to the maintainer command workflow. Package-only distribution is the default and needs no record. Keep skills in their owning packages, record a selection or an explicit opt-out in `skill_tree.yaml`, and generate Claude/Cursor plugin metadata and consumer install commands for `npx skills add` and `gh skill add`. Preserve unrelated plugin fields, require explicit prerequisite selection, and check generated files for drift without publishing or installing anything on the maintainer's behalf.
+
+  Find selected package skills even when root-level skills exist, and reject conflicting Claude marketplace-only definitions before writing generated files.
+
+### Patch Changes
+
+- [#279](https://github.com/TanStack/intent/pull/279) [`c642ba8`](https://github.com/TanStack/intent/commit/c642ba8f2a27af08624c1fb17727018dcd1254d6) - Ship `@tanstack/intent` with zero runtime dependencies. The libraries it uses (`yaml`, `semver`, `jsonc-parser`, `cac`, `std-env`, `@clack/prompts`) are now bundled and tree-shaken into `dist`, which cuts the install footprint from roughly 2.4 MB across 10 packages to under 1 MB in one, and makes every command start faster because Node loads a few chunks instead of ~150 files from `node_modules`.
+
+- [#276](https://github.com/TanStack/intent/pull/276) [`74d1b26`](https://github.com/TanStack/intent/commit/74d1b264c931880e2bfe13c518b1944e50a233d9) - Speed up dependency discovery. Resolve each dependency directory with a plain `node_modules` walk plus a single symlink collapse instead of Node's module resolver, which evaluated export maps and realpathed every path segment per lookup, and resolve each package's real root once per package instead of once per skill. `intent list` in a pnpm monorepo runs roughly 30% faster; discovered packages and paths are unchanged.
+
+- [#282](https://github.com/TanStack/intent/pull/282) [`fc5472a`](https://github.com/TanStack/intent/commit/fc5472a516a18c0068334e23326adb33c7038780) - Cut the filesystem work in dependency discovery. Each dependency edge now costs one `readlink` instead of a stat through the symlink plus an `lstat` and a `realpath`; symlink targets, candidate paths, and `node_modules` directories are memoized per scan; and directories the walk has already resolved skip their identity `lstat`. Workspace pattern sorting no longer initializes the ICU collator on every run. `intent list` in a pnpm monorepo runs about 35% faster and in an npm project about 25% faster, with identical results.
+
+- [#283](https://github.com/TanStack/intent/pull/283) [`0be3bc7`](https://github.com/TanStack/intent/commit/0be3bc7504376f64689b7f19e8345e10d4018188) - Make agent hooks fast when `@tanstack/intent` is installed in the project. The session-start catalog previously ran `npx @tanstack/intent@latest list` (or the pnpm, yarn, or bun equivalent), which resolves the package against the npm registry on every session start and took one to four seconds; the runner now executes the locally installed CLI directly with the current Node binary, which takes about a tenth of a second, and falls back to the package-manager runner only when there is no local install. When that installation also has a `node_modules/.bin/intent` shim, the catalog suggests `node_modules/.bin/intent load <package>#<skill>` for loads (otherwise it keeps suggesting the package-manager runner), and the edit gate recognizes that form. Reinstall hooks with `intent hooks install` to pick up the new runner.
+
+- [#278](https://github.com/TanStack/intent/pull/278) [`0c074e3`](https://github.com/TanStack/intent/commit/0c074e3da6f2241475ae209b51ac1195ecafa716) - Trim `intent list` and `intent load` startup. Discovery no longer loads the `semver` package on every run (a small built-in comparator picks between duplicate installed versions of a package, with identical results), and `intent install` loads its interactive prompt library only when it actually prompts.
+
+- [#273](https://github.com/TanStack/intent/pull/273) [`36a1bf1`](https://github.com/TanStack/intent/commit/36a1bf1cd2a9fdab842f215ec1a8df7b04eee4a8) - Record developer tasks at registration with `maintainer add --task`, retire a registered skill with `maintainer remove <name>` without deleting its guidance, and include the recording contract (allowed outcomes and required fields) in `review --json` reports. Evidence may be a single string or a list, and the report points at `.intent/review.json`, which review ignores.
+
+- [#272](https://github.com/TanStack/intent/pull/272) [`33b5e8b`](https://github.com/TanStack/intent/commit/33b5e8b0a38877a121ef4f2b38c39c236b6ca383) - Print an ordered overview for `intent maintainer --help` and per-action options for `intent maintainer <action> --help`. Name every file `maintainer add` and `maintainer sync` write, label consumer install commands, show changed files and missing reviews in `maintainer status` and `check`, validate each skills root once, report all missing repository-distribution inputs together, and print unsupported options in their kebab-case form.
+
+- [#271](https://github.com/TanStack/intent/pull/271) [`337f8f5`](https://github.com/TanStack/intent/commit/337f8f537ac63c89e9c557d19911fcbc2c739997) - Stop reporting files Intent writes as unmapped source changes. Agent instruction files, generated plugin metadata, the CI workflow, package manifests, and lockfiles no longer need a recorded review unless a skill maps them; `review.ignore` in `skill_tree.yaml` adds repository-specific patterns.
+
+  Register a skill with the workspace package that owns the current directory when `maintainer add` runs without `--package`. Reject a review record that annotates no outcomes and explain the required fields. Accept per-skill `files` entries written by `maintainer sync` during validation. Advise the current CI workflow version.
+
+- [#284](https://github.com/TanStack/intent/pull/284) [`864562c`](https://github.com/TanStack/intent/commit/864562c4035c3382887973ac9e53decb1b436d08) - Keep Markdown link destinations that contain a private-use character (U+E000) intact when `intent load` and `intent meta` rewrite relative paths; the escape placeholder is now chosen so it never collides with the destination's own characters.
+
+- [#267](https://github.com/TanStack/intent/pull/267) [`54f7d97`](https://github.com/TanStack/intent/commit/54f7d97292afc22c9ce99995bd56c8103aa7c0f4) - Refresh workspace roots, patterns, and members between core operations. Keep workspace discovery reuse within the existing operation-local filesystem cache so listing and loading observe changed membership and source kinds.
+
+  Avoid enumerating unrelated workspace members and reading unused skill metadata during direct loads. Preserve fresh policy reads and final path checks.
+
+- [#268](https://github.com/TanStack/intent/pull/268) [`fab9591`](https://github.com/TanStack/intent/commit/fab95914ab34bcdd3766c8d19991e86dae5c585b) - Generate standalone hook command parsing from the tested policy parser. Preserve agent-specific output, install ownership, and fail-open catalog behavior.
+
+- [#265](https://github.com/TanStack/intent/pull/265) [`5f56f22`](https://github.com/TanStack/intent/commit/5f56f22c035b8dd425e140ab51c6b41cb4e36a9a) - Reuse parsed planning records, source hashes, and Git source matches within maintainer operations. Keep fresh checks for later reports and writes.
+
+- [#275](https://github.com/TanStack/intent/pull/275) [`9e73959`](https://github.com/TanStack/intent/commit/9e7395929195f44c03b18caaffe0bb33966a389e) - Fix Windows path handling. Preserve backslash escapes in Markdown link destinations when `intent load` and `intent meta` rewrite relative paths (an escaped `\)` was normalized into a path separator). Normalize the Git repository root reported by `git rev-parse` so `intent maintainer add` no longer rejects every skill path with "must belong to the selected package", and print repository-relative paths in maintainer output and `maintainer status --json` with forward slashes on every platform.
+
+- [#266](https://github.com/TanStack/intent/pull/266) [`7a2a9e1`](https://github.com/TanStack/intent/commit/7a2a9e1fbc5baa43cb092a3dcf88e1e5a4cb5722) - Recognize Intent installed as a devDependency at the owning workspace root when validating package skills.
+
 ## 0.4.0
 
 ### Minor Changes
