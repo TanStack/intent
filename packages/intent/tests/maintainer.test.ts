@@ -35,6 +35,9 @@ beforeEach(() => {
   previousCwd = process.cwd()
   root = mkdtempSync(join(tmpdir(), 'intent-maintainer-'))
   process.chdir(root)
+  // Setup copies a workflow that pins Intent's release commit; keep the
+  // resolver off the network here.
+  process.env.INTENT_WORKFLOW_REF = 'abc123 # v9.9.9'
   vi.spyOn(console, 'log').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
   execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], {
@@ -221,7 +224,12 @@ it('rejects cyclic prerequisites without applying an otherwise valid package upd
 it('copies the CI workflow once and passes check without a recorded distribution choice', async () => {
   expect(await main(['maintainer', 'setup'])).toBe(0)
   const workflow = '.github/workflows/check-skills.yml'
-  expect(read(workflow)).toContain('intent maintainer check')
+  // The caller pins both reusable workflows to the resolved release commit.
+  for (const name of ['check-skills', 'review-skills'])
+    expect(read(workflow)).toContain(
+      `uses: TanStack/intent/.github/workflows/${name}.yml@abc123 # v9.9.9`,
+    )
+  expect(read(workflow)).toContain("package-label: 'library'")
   write(workflow, '# customized\n')
   expect(await main(['maintainer', 'setup'])).toBe(0)
   expect(read(workflow)).toBe('# customized\n')
@@ -235,6 +243,111 @@ it('copies the CI workflow once and passes check without a recorded distribution
   expect(status.problems).not.toContainEqual(
     expect.stringContaining('distribution'),
   )
+})
+
+it('writes the check report to the GitHub step summary', async () => {
+  const previousSummary = process.env.GITHUB_STEP_SUMMARY
+  process.env.GITHUB_STEP_SUMMARY = join(root, 'github-summary')
+  try {
+    write('src/query.ts', 'export const query = () => 1\n')
+    expect(await main(['maintainer', 'setup'])).toBe(0)
+    expect(
+      await main([
+        'maintainer',
+        'add',
+        'query',
+        '--domain',
+        'queries',
+        '--description',
+        'Use when querying with Library.',
+        '--source',
+        'src/query.ts',
+      ]),
+    ).toBe(0)
+    write(
+      'skills/query/SKILL.md',
+      '---\nname: query\ndescription: Use when querying with Library.\nsources: [src/query.ts]\n---\nCall query() to obtain the current value.\n',
+    )
+    write(
+      'skills/_artifacts/domain_map.yaml',
+      'domains: [{slug: queries, name: Queries}]\nskills:\n  - slug: query\n    domain: queries\n    tasks: [Read the current value]\n',
+    )
+    write(
+      'skills/_artifacts/skill_spec.md',
+      '# Skill spec\n\n## Coverage and batch history\n\nThe query task covers src/query.ts; future mutation guidance remains unassessed. Checked query() returns 1.\n',
+    )
+    expect(await main(['maintainer', 'sync'])).toBe(0)
+    const report = createReview(root)
+    for (const item of report.items) {
+      item.outcome = 'updated'
+      item.reason =
+        'Checked the query example against the implementation and reconciled all three planning records.'
+      item.evidence = [
+        'src/query.ts returns 1; the fixture checks the corresponding consumer instruction.',
+      ]
+    }
+    write('.intent/review.json', JSON.stringify(report))
+    expect(
+      await main(['maintainer', 'review', '--record', '.intent/review.json']),
+    ).toBe(0)
+    expect(await main(['maintainer', 'check', '--github-summary'])).toBe(0)
+    let summary = read('github-summary')
+    // Validation writes its section first, then the check.
+    expect(summary.indexOf('Skill validation passed.')).toBeLessThan(
+      summary.indexOf('Maintainer check passed.'),
+    )
+    rmSync(join(root, 'github-summary'))
+    write('src/query.ts', 'export const query = () => 2\n')
+    expect(await main(['maintainer', 'check', '--github-summary'])).toBe(1)
+    summary = read('github-summary')
+    expect(summary).toContain('Maintainer check failed.')
+    expect(summary).toContain(
+      '  Review skill skills/query/SKILL.md: changed src/query.ts',
+    )
+    // The flag belongs to check alone.
+    expect(await main(['maintainer', 'status', '--github-summary'])).toBe(1)
+    expect(vi.mocked(console.error).mock.calls.flat().join('\n')).toContain(
+      '--github-summary is not supported by maintainer status',
+    )
+  } finally {
+    if (previousSummary === undefined) delete process.env.GITHUB_STEP_SUMMARY
+    else process.env.GITHUB_STEP_SUMMARY = previousSummary
+  }
+})
+
+it('validates every skills root in one run so check reports all of their errors', async () => {
+  write('pnpm-workspace.yaml', 'packages: [packages/*]\n')
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  for (const name of ['query', 'cache']) {
+    write(`packages/${name}/package.json`, `{"name":"@library/${name}"}\n`)
+    expect(
+      await main([
+        'maintainer',
+        'add',
+        name,
+        '--package',
+        `packages/${name}`,
+        '--domain',
+        'queries',
+        '--description',
+        `Use for ${name}.`,
+        '--source',
+        'package.json',
+      ]),
+    ).toBe(0)
+    // Valid for the planning records, over the line limit for validate.
+    write(
+      `packages/${name}/skills/${name}/SKILL.md`,
+      `---\nname: ${name}\ndescription: Use for ${name}.\n---\n${'Guidance.\n'.repeat(500)}`,
+    )
+  }
+  expect(await main(['maintainer', 'check'])).toBe(1)
+  const output = vi.mocked(console.error).mock.calls.flat().join('\n')
+  expect(output.match(/Validation failed with 2 error/g)).toHaveLength(1)
+  for (const name of ['query', 'cache'])
+    expect(output).toContain(
+      `${join('packages', name, 'skills', name, 'SKILL.md')}: Exceeds 500 line limit`,
+    )
 })
 
 it('preserves a planning record located directly at the repository root', async () => {
@@ -537,6 +650,7 @@ it('adopts two packages and saves an explicit distribution selection', async () 
 
 afterEach(() => {
   process.chdir(previousCwd)
+  delete process.env.INTENT_WORKFLOW_REF
   vi.restoreAllMocks()
   rmSync(root, { recursive: true, force: true })
 })

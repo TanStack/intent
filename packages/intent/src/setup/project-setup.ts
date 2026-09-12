@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
@@ -40,6 +41,51 @@ interface TemplateVars {
   DOCS_PATH: string
   SRC_PATH: string
   WATCH_PATHS: string
+  INTENT_WORKFLOW_REF: string
+}
+
+const intentRepository = 'https://github.com/TanStack/intent.git'
+
+// The reference the copied workflow pins Intent's reusable workflows to: the
+// commit of the release that is running, written as `<sha> # v<version>` so
+// Dependabot and Renovate can bump it, or the version tag alone when the
+// commit cannot be resolved (offline, or a build that is not a release).
+export function resolveIntentWorkflowRef(
+  packageDir: string,
+  remote: string = intentRepository,
+): string {
+  const version = readPackageJson(packageDir).version
+  const tag = `v${typeof version === 'string' ? version : '0.0.0'}`
+  try {
+    const listed = execFileSync(
+      'git',
+      [
+        'ls-remote',
+        '--tags',
+        remote,
+        `refs/tags/${tag}`,
+        `refs/tags/${tag}^{}`,
+      ],
+      {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 10_000,
+      },
+    )
+    // An annotated tag lists its own object first and the peeled commit
+    // under `^{}`; a workflow reference needs the commit.
+    const lines = listed
+      .split('\n')
+      .map((line) => line.split('\t'))
+      .filter((parts): parts is [string, string] => parts.length === 2)
+    const commit =
+      lines.find(([, ref]) => ref === `refs/tags/${tag}^{}`)?.[0] ??
+      lines.find(([, ref]) => ref === `refs/tags/${tag}`)?.[0]
+    if (commit && /^[0-9a-f]{40}$/.test(commit)) return `${commit} # ${tag}`
+  } catch {
+    // Fall through to the tag.
+  }
+  return tag
 }
 
 function isGenericWorkspaceName(name: string, root: string): boolean {
@@ -220,6 +266,7 @@ function detectVars(root: string, packageDirs?: Array<string>): TemplateVars {
     DOCS_PATH: docsPath ?? 'docs/**',
     SRC_PATH: srcPath,
     WATCH_PATHS: watchPaths,
+    INTENT_WORKFLOW_REF: '',
   }
 }
 
@@ -236,11 +283,19 @@ function applyVars(content: string, vars: TemplateVars): string {
     .replace(/\{\{DOCS_PATH\}\}/g, vars.DOCS_PATH)
     .replace(/\{\{SRC_PATH\}\}/g, vars.SRC_PATH)
     .replace(/\{\{WATCH_PATHS\}\}/g, vars.WATCH_PATHS)
+    .replace(/\{\{INTENT_WORKFLOW_REF\}\}/g, vars.INTENT_WORKFLOW_REF)
 }
 
 // ---------------------------------------------------------------------------
 // Copy helpers
 // ---------------------------------------------------------------------------
+
+function templatesUse(srcDir: string, placeholder: string): boolean {
+  if (!existsSync(srcDir)) return false
+  return readdirSync(srcDir).some((entry) =>
+    readFileSync(join(srcDir, entry), 'utf8').includes(placeholder),
+  )
+}
 
 function copyTemplates(
   srcDir: string,
@@ -408,6 +463,12 @@ export function runSetupGithubActions(
 
   const srcDir = join(metaDir, 'templates', 'workflows')
   const destDir = join(workspaceRoot, '.github', 'workflows')
+  // Resolving the reference contacts GitHub, so only a template that pins
+  // one asks for it. Tests and offline runs can supply INTENT_WORKFLOW_REF.
+  if (templatesUse(srcDir, '{{INTENT_WORKFLOW_REF}}'))
+    vars.INTENT_WORKFLOW_REF =
+      process.env.INTENT_WORKFLOW_REF ||
+      resolveIntentWorkflowRef(join(metaDir, '..'))
   const { copied, skipped } = copyTemplates(srcDir, destDir, vars)
   result.workflows = copied
   result.skipped = skipped
@@ -421,6 +482,8 @@ export function runSetupGithubActions(
     console.log(`\nTemplate variables applied:`)
     console.log(`  Package:  ${vars.PACKAGE_LABEL}`)
     console.log(`  Repo:     ${vars.REPO}`)
+    if (vars.INTENT_WORKFLOW_REF)
+      console.log(`  Workflow: TanStack/intent@${vars.INTENT_WORKFLOW_REF}`)
     console.log(
       `  Mode:     ${packageDirs.length > 0 ? `monorepo (${packageDirs.length} packages with skills)` : 'single package'}`,
     )

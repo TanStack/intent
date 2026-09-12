@@ -402,7 +402,7 @@ function collectAgentSkillSpecWarnings({
 }
 
 export async function runValidateCommand(
-  dir?: string,
+  dir?: string | Array<string>,
   options: ValidateCommandOptions = {},
 ): Promise<void> {
   if (options.fix && options.check) {
@@ -439,7 +439,7 @@ export async function runValidateCommand(
 }
 
 async function runValidateCommandInternal(
-  dir?: string,
+  dir?: string | Array<string>,
   options: ValidateCommandOptions = {},
 ): Promise<void> {
   const [{ parse: parseYaml }, { readScalarField }] = await Promise.all([
@@ -447,17 +447,24 @@ async function runValidateCommandInternal(
     import('../shared/utils.js'),
   ])
   const { findSkillFiles } = createIntentFsCache()
-  const context = resolveProjectContext({
-    cwd: process.cwd(),
-    targetPath: dir,
-  })
-  const explicitDir = dir !== undefined
-  const skillsDirs = explicitDir
-    ? [context.targetSkillsDir ?? resolve(process.cwd(), dir)]
-    : collectDefaultSkillsDirs(context, findSkillFiles)
+  // Explicit directories are validated in one run, so a caller with several
+  // skills roots gets every error in one report and one summary.
+  const explicitDirs =
+    dir === undefined ? undefined : [...new Set([dir].flat())]
+  const skillsDirs = explicitDirs
+    ? explicitDirs.map(
+        (target) =>
+          resolveProjectContext({ cwd: process.cwd(), targetPath: target })
+            .targetSkillsDir ?? resolve(process.cwd(), target),
+      )
+    : collectDefaultSkillsDirs(
+        resolveProjectContext({ cwd: process.cwd() }),
+        findSkillFiles,
+      )
 
-  if (explicitDir && !existsSync(skillsDirs[0]!)) {
-    fail(`Skills directory not found: ${skillsDirs[0]}`)
+  for (const skillsDir of explicitDirs ? skillsDirs : []) {
+    if (!existsSync(skillsDir)) fail(`Skills directory not found: ${skillsDir}`)
+    if (findSkillFiles(skillsDir).length === 0) fail('No SKILL.md files found')
   }
 
   const errors: Array<ValidationError> = []
@@ -465,10 +472,6 @@ async function runValidateCommandInternal(
   const fixPlans: Array<FrontmatterFixPlan> = []
   const setVersionPlans: Array<SetVersionPlan> = []
   let validatedCount = 0
-
-  if (explicitDir && findSkillFiles(skillsDirs[0]!).length === 0) {
-    fail('No SKILL.md files found')
-  }
 
   if (skillsDirs.length === 0) {
     console.log('No skills/ directory found — skipping validation.')

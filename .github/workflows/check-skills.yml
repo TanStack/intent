@@ -1,0 +1,100 @@
+# Reusable workflow behind the pull-request job of a library repository's
+# check-skills.yml. The caller pins this file to an Intent release commit and
+# grants the job `contents: read` only, so a compromised copy of this
+# workflow could read the repository and nothing more.
+#
+# Intent itself runs from the repository's own lockfile-pinned copy, so a
+# malicious npm publish does nothing until the maintainer merges a bump. The
+# `intent-version` input opts into a registry install instead.
+
+name: Check Skills
+
+on:
+  workflow_call:
+    inputs:
+      intent-version:
+        description: npm dist-tag or version of @tanstack/intent to install instead of the repository's own copy
+        type: string
+        default: ''
+      node-version:
+        description: Node.js version for the checks
+        type: string
+        default: '22'
+
+permissions: {}
+
+jobs:
+  validate:
+    name: Validate intent skills
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect package manager
+        id: manager
+        env:
+          INTENT_VERSION: ${{ inputs.intent-version }}
+        run: |
+          cache=''
+          if [ -z "$INTENT_VERSION" ]; then
+            if [ -f pnpm-lock.yaml ]; then cache=pnpm
+            elif [ -f yarn.lock ]; then cache=yarn
+            elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then cache=npm
+            fi
+          fi
+          if [ "$cache" = pnpm ] || [ "$cache" = yarn ]; then corepack enable; fi
+          echo "cache=$cache" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ steps.manager.outputs.cache }}
+
+      - name: Install intent
+        env:
+          INTENT_VERSION: ${{ inputs.intent-version }}
+          MANAGER: ${{ steps.manager.outputs.cache }}
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+        run: |
+          if [ -n "$INTENT_VERSION" ]; then
+            npm install -g "@tanstack/intent@${INTENT_VERSION}"
+            exit 0
+          fi
+          case "$MANAGER" in
+            pnpm) pnpm install --frozen-lockfile --ignore-scripts ;;
+            yarn)
+              if yarn --version | grep -q '^1\.'; then
+                yarn install --frozen-lockfile --ignore-scripts
+              else
+                yarn install --immutable --mode=skip-build
+              fi ;;
+            npm) npm ci --ignore-scripts ;;
+            *)
+              echo "::error::No lockfile found. Commit one, or set the intent-version input to install @tanstack/intent from npm."
+              exit 1 ;;
+          esac
+          if [ ! -e node_modules/.bin/intent ]; then
+            echo "::error::@tanstack/intent is not installed in this repository. Add it to devDependencies so CI runs the version the lockfile pins, or set the intent-version input to install it from npm."
+            exit 1
+          fi
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Validate skills
+        run: intent validate --github-summary
+
+      - name: Check maintainer workflow
+        env:
+          INTENT_REVIEW_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -f .intent/review-state.json ] || grep -q -- '<!-- intent-maintainer:start -->' AGENTS.md CLAUDE.md .cursorrules .github/copilot-instructions.md 2>/dev/null; then
+            intent maintainer check --base "$INTENT_REVIEW_BASE" --github-summary
+          fi
