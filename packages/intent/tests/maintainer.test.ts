@@ -411,8 +411,10 @@ it('validates unregistered workspace skills as well as custom registered roots',
   )
   expect(await main(['maintainer', 'check'])).toBe(1)
   const errors = vi.mocked(console.error).mock.calls.flat().join('\n')
-  expect(errors).toContain('guidance/query/SKILL.md')
-  expect(errors).toContain('packages/client/skills/missing/SKILL.md')
+  expect(errors).toContain(join('guidance', 'query', 'SKILL.md'))
+  expect(errors).toContain(
+    join('packages', 'client', 'skills', 'missing', 'SKILL.md'),
+  )
 })
 
 it('writes the check report to the GitHub step summary', async () => {
