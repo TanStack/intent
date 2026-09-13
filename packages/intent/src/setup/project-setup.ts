@@ -444,7 +444,11 @@ export function runEditPackageJsonAll(
 // Command: setup-github-actions
 // ---------------------------------------------------------------------------
 
-function planSetupGithubActions(root: string, metaDir: string, artifacts = '') {
+export function planSetupGithubActions(
+  root: string,
+  metaDir: string,
+  artifacts = '',
+) {
   const workspaceRoot = findWorkspaceRoot(root) ?? root
   const packageDirs = findPackagesWithSkills(workspaceRoot)
   const vars = detectVars(

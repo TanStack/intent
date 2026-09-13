@@ -6,7 +6,7 @@ import type { SkillUse } from './use.js'
 import type { SkillEntry } from '../shared/types.js'
 
 const RUNTIME_SKILL_LOOKUP_COMMENT_PATTERN =
-  /^Runtime lookup only: run `npx @tanstack\/intent@latest load [^`]+ --path`, and load its reported path for this session\. Do not copy the resolved path into this file\.$/
+  /^Runtime lookup only: run `(?:npx @tanstack\/intent@latest|npm exec --no -- intent) load [^`]+ --path`, and load its reported path for this session\. Do not copy the resolved path into this file\.$/
 
 export function isAbsolutePath(path: string): boolean {
   return (

@@ -81,7 +81,7 @@ describe('maintainer installation', () => {
     const manifest = readFileSync('package.json', 'utf8')
     expect(await main(['install', '--maintainer', '--dry-run'])).toBe(0)
     expect(log.mock.calls.flat().join('\n')).toContain(
-      'pnpm dlx @tanstack/intent@latest meta generate-skill',
+      'pnpm exec intent meta generate-skill',
     )
     expect(existsSync('AGENTS.md')).toBe(false)
     expect(readFileSync('package.json', 'utf8')).toBe(manifest)

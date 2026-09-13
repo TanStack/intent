@@ -11,7 +11,6 @@ import {
   skillEntries,
   skillPath,
 } from './project.js'
-import { writeChanges } from './files.js'
 import type { MaintainerProject, SkillEntry } from './project.js'
 import type { FileChange } from './files.js'
 
@@ -76,15 +75,7 @@ function inferDistributionRepository(project: MaintainerProject): string {
     : ''
 }
 
-export function configureDistribution(
-  project: MaintainerProject,
-  options: DistributionOptions,
-): void {
-  const change = planDistributionChoice(project, options)
-  if (change) writeChanges(project.root, [change])
-}
-
-function planDistributionChoice(
+export function planDistributionChoice(
   project: MaintainerProject,
   options: DistributionOptions,
   changes: ReadonlyArray<FileChange> = [],

@@ -129,7 +129,7 @@ describe('workflow review helpers', () => {
       '- `missing-package-coverage` for `@tanstack/react-start-rsc`: workspace package is not represented',
     )
     expect(body).toContain('`@tanstack/react-start-rsc`')
-    expect(body).toContain('npx @tanstack/intent@latest meta generate-skill')
+    expect(body).toContain('npm exec --no -- intent meta generate-skill')
     expect(body).toContain(
       'Review signals are investigation inputs, not proof that content must change.',
     )
@@ -184,13 +184,13 @@ describe('workflow review helpers', () => {
         reasons: ['source changed'],
       },
     ])
-    expect(body).toContain('`npx @tanstack/intent@latest review --json`')
+    expect(body).toContain('`npm exec --no -- intent review --json`')
     expect(body).not.toContain('regenerate `intent review --json`')
   })
 
   it('builds generated workflow advisory review items', () => {
     const items = createWorkflowAdvisoryReviewItems('@tanstack/router', [
-      'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
+      'Intent workflow update available: run `npm exec --no -- intent setup`.',
     ])
 
     expect(items).toEqual([
@@ -199,7 +199,7 @@ describe('workflow review helpers', () => {
         library: '@tanstack/router',
         subject: 'check-skills.yml',
         reasons: [
-          'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
+          'Intent workflow update available: run `npm exec --no -- intent setup`.',
         ],
       },
     ])

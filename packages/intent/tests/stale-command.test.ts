@@ -278,7 +278,7 @@ describe('getCheckSkillsWorkflowAdvisories', () => {
     )
 
     expect(getCheckSkillsWorkflowAdvisories(root)).toEqual([
-      expect.stringContaining('npx @tanstack/intent@latest setup'),
+      expect.stringContaining('run the installed `intent setup`'),
     ])
   })
 

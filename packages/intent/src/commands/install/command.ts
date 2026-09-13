@@ -50,11 +50,11 @@ Follow these steps in order:
    - If not found: continue to step 2.
 
 2. DISCOVER AVAILABLE SKILLS
-   Run: \`npx @tanstack/intent@latest list\`
+   Run: \`npm exec --no -- intent list\`
    This scans project-local node_modules by default and outputs each package and skill's name,
    description, and source.
    If the user explicitly wants globally installed skills included, run:
-   \`npx @tanstack/intent@latest list --global\`
+   \`npm exec --no -- intent list --global\`
    This works best in Node-compatible environments (npm, pnpm, Bun, or Deno npm interop
    with node_modules enabled).
    If no skills are found, do not create a config file. Report: "No intent-enabled skills found."
@@ -72,7 +72,7 @@ Follow these steps in order:
    - Include slash-named sub-skills when no parent mapping exists, or when they describe distinct user tasks.
    - If the proposed block would exceed 12 mappings, show the full discovered list and ask which packages
      or skill groups to include before writing.
-   - Add one fallback note telling the agent to run \`npx @tanstack/intent@latest list\` for less common local skills.
+   - Add one fallback note telling the agent to run \`npm exec --no -- intent list\` for less common local skills.
 
    Based on the repository scan and the coverage rule, propose the skill-to-task mappings.
    For each one explain:
@@ -97,7 +97,7 @@ Follow these steps in order:
 # TanStack Intent - before editing files, run the matching guidance command.
 tanstackIntent:
   - id: "@scope/package#skill-name"
-    run: "npx @tanstack/intent@latest load @scope/package#skill-name"
+    run: "npm exec --no -- intent load @scope/package#skill-name"
     for: "describe the task or code area here"
 <!-- intent-skills:end -->
 

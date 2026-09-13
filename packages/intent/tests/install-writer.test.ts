@@ -95,7 +95,7 @@ const exampleBlock = `<!-- intent-skills:start -->
 # TanStack Intent - before editing files, run the matching guidance command.
 tanstackIntent:
   - id: "@tanstack/query#fetching"
-    run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#fetching"
+    run: "pnpm exec intent load @tanstack/query#fetching"
     for: "Query data fetching"
 <!-- intent-skills:end -->
 `
@@ -106,7 +106,7 @@ describe('install writer block builder', () => {
 
     expect(generated.mappingCount).toBe(0)
     expect(generated.block).toContain('## Skill Loading')
-    expect(generated.block).toContain('npx @tanstack/intent@latest list')
+    expect(generated.block).toContain('npm exec --no -- intent list')
     expect(generated.block).toContain('If a listed skill matches the task')
     expect(generated.block).toContain('before changing files')
     expect(generated.block).toContain('Monorepos:')
@@ -118,10 +118,8 @@ describe('install writer block builder', () => {
   it('builds package-manager-specific loading guidance', () => {
     const generated = buildIntentSkillGuidanceBlock('pnpm')
 
-    expect(generated.block).toContain('pnpm dlx @tanstack/intent@latest list')
-    expect(generated.block).toContain(
-      'pnpm dlx @tanstack/intent@latest load <package>#<skill>',
-    )
+    expect(generated.block).toContain('pnpm exec intent list')
+    expect(generated.block).toContain('pnpm exec intent load <package>#<skill>')
   })
 
   it('builds a deterministic compact block', () => {
@@ -160,13 +158,13 @@ describe('install writer block builder', () => {
 # TanStack Intent - before editing files, run the matching guidance command.
 tanstackIntent:
   - id: "@tanstack/query#fetching"
-    run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#fetching"
+    run: "pnpm exec intent load @tanstack/query#fetching"
     for: "Query data fetching patterns"
   - id: "@tanstack/query#mutations"
-    run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#mutations"
+    run: "pnpm exec intent load @tanstack/query#mutations"
     for: "Mutation patterns"
   - id: "@tanstack/router#routing"
-    run: "pnpm dlx @tanstack/intent@latest load @tanstack/router#routing"
+    run: "pnpm exec intent load @tanstack/router#routing"
     for: "Routing patterns"
 <!-- intent-skills:end -->
 `)
@@ -197,7 +195,7 @@ tanstackIntent:
     expect(generated.block).toContain('id: "@tanstack/query#global-fetching"')
     expect(generated.block).toContain('id: "@tanstack/query#pnpm-fetching"')
     expect(generated.block).toContain(
-      'run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#global-fetching"',
+      'run: "pnpm exec intent load @tanstack/query#global-fetching"',
     )
     expect(generated.block).not.toContain('/home/sarah')
     expect(generated.block).not.toContain('node_modules/.pnpm')
@@ -236,12 +234,12 @@ tanstackIntent:
     expect(generated.block).toContain('for: "Core skill"')
     expect(generated.block).toContain('id: "@tanstack/query#core"')
     expect(generated.block).toContain(
-      'run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#core"',
+      'run: "pnpm exec intent load @tanstack/query#core"',
     )
     expect(generated.block).toContain('for: "Sub-skill"')
     expect(generated.block).toContain('id: "@tanstack/query#core/fetching"')
     expect(generated.block).toContain(
-      'run: "pnpm dlx @tanstack/intent@latest load @tanstack/query#core/fetching"',
+      'run: "pnpm exec intent load @tanstack/query#core/fetching"',
     )
     expect(generated.block).not.toContain('Reference material')
     expect(generated.block).not.toContain('Maintainer task')

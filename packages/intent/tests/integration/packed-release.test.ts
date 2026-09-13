@@ -463,7 +463,7 @@ Existing fixture guidance, pending source review.
     )
     expect(body).toContain('### Agent Review')
     expect(body).not.toContain('Paste this into your coding agent')
-    expect(body).toContain('npx @tanstack/intent@latest meta generate-skill')
+    expect(body).toContain('npm exec --no -- intent meta generate-skill')
 
     // Execute the advertised meta command with this extracted release.
     const procedure = run(['meta', 'generate-skill'])

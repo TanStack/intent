@@ -72,7 +72,7 @@ For new guidance and updates that change a recommended behavior, follow [task qu
 
 For new or changed descriptions, also follow [discovery checks](references/task-quality.md#check-discovery-separately). Keep activation evidence separate from task correctness.
 
-Run `npx @tanstack/intent@latest validate <skills-root>` with the actual owning package's skill directory (or the repository's installed `intent`). Fix errors without weakening validation. Keep every SKILL.md within the 500-line limit. Review packaging warnings separately; they do not require installing dependencies or changing publishing configuration during authoring.
+Run `npm exec --no -- intent validate <skills-root>` with the actual owning package's skill directory (or the repository's installed `intent`). Fix errors without weakening validation. Keep every SKILL.md within the 500-line limit. Review packaging warnings separately; they do not require installing dependencies or changing publishing configuration during authoring.
 
 Check that every reference and prerequisite resolves, every changed claim matches the cited source/version, and examples use actual supported APIs. Exercise the relevant example or package check where available. Intent's structural validation does not prove semantic correctness or agent behavior. If a check cannot run, report it as not verified with the reason.
 

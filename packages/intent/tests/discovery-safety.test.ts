@@ -89,7 +89,7 @@ describe('discovered command arguments', () => {
       const hintCommand = hint.split('`')[1]!
       const runners = ['npm', 'pnpm', 'yarn', 'bun', 'unknown'] as const
       const stubs =
-        'npx() { printf "%s\\n" "$@"; }; pnpm() { printf "%s\\n" "$@"; }; yarn() { printf "%s\\n" "$@"; }; bunx() { printf "%s\\n" "$@"; }; '
+        'npm() { printf "%s\\n" "$@"; }; pnpm() { printf "%s\\n" "$@"; }; yarn() { printf "%s\\n" "$@"; }; bunx() { printf "%s\\n" "$@"; }; '
       for (const shell of ['/bin/sh', '/bin/bash', '/bin/zsh'].filter(
         existsSync,
       )) {
@@ -105,8 +105,11 @@ describe('discovered command arguments', () => {
             .trim()
             .split('\n')
           expect(actual).toEqual([
-            ...(runner === 'pnpm' || runner === 'yarn' ? ['dlx'] : []),
-            '@tanstack/intent@latest',
+            ...(runner === 'bun'
+              ? ['--no-install', '--package', '@tanstack/intent', 'intent']
+              : runner === 'pnpm' || runner === 'yarn'
+                ? ['exec', 'intent']
+                : ['exec', '--no', '--', 'intent']),
             'load',
             use,
             '--global',
@@ -116,12 +119,12 @@ describe('discovered command arguments', () => {
           execFileSync(shell, ['-c', stubs + command], { encoding: 'utf8' })
             .trim()
             .split('\n'),
-        ).toEqual(['@tanstack/intent@latest', 'load', use])
+        ).toEqual(['exec', '--no', '--', 'intent', 'load', use])
         expect(
           execFileSync(shell, ['-c', stubs + hintCommand], { encoding: 'utf8' })
             .trim()
             .split('\n'),
-        ).toEqual(['@tanstack/intent@latest', 'load', use, '--path'])
+        ).toEqual(['exec', '--no', '--', 'intent', 'load', use, '--path'])
       }
     },
   )

@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -60,6 +61,38 @@ beforeEach(() => {
     ],
     { cwd: root },
   )
+})
+
+it('keeps the selected planning directory in the generated CI caller', async () => {
+  expect(
+    await main([
+      'maintainer',
+      'setup',
+      '--artifacts',
+      'planning records',
+      '--distribution',
+      'none',
+    ]),
+  ).toBe(0)
+  expect(
+    parse(read('.github/workflows/check-skills.yml')).jobs.validate.with
+      .artifacts,
+  ).toBe('planning records')
+})
+
+it('rejects Actions expressions in the planning directory before setup writes', async () => {
+  expect(
+    await main([
+      'maintainer',
+      'setup',
+      '--artifacts',
+      '${{ secrets.TOKEN }}',
+      '--distribution',
+      'none',
+    ]),
+  ).toBe(1)
+  expect(existsSync(join(root, '${{ secrets.TOKEN }}'))).toBe(false)
+  expect(existsSync(join(root, '.github'))).toBe(false)
 })
 
 it('checks the authored workflow, rejects stale outcomes, and reopens after source edits', async () => {
@@ -187,6 +220,110 @@ it('rejects paths outside the repository and symlinked directories before changi
   } finally {
     rmSync(outside, { recursive: true, force: true })
   }
+})
+
+it.each(['instructions', 'workflow directory', 'dangling workflow'])(
+  'rejects an escaping %s link before setup writes records',
+  async (target) => {
+    const outside = mkdtempSync(join(tmpdir(), 'intent-setup-outside-'))
+    try {
+      writeFileSync(join(outside, 'instructions.md'), '# Preserve me\n')
+      if (target === 'instructions')
+        symlinkSync(join(outside, 'instructions.md'), join(root, 'AGENTS.md'))
+      else if (target === 'workflow directory')
+        symlinkSync(outside, join(root, '.github'))
+      else {
+        mkdirSync(join(root, '.github/workflows'), { recursive: true })
+        symlinkSync(
+          join(outside, 'workflow.yml'),
+          join(root, '.github/workflows/check-skills.yml'),
+        )
+      }
+      expect(await main(['maintainer', 'setup'])).toBe(1)
+      expect(readFileSync(join(outside, 'instructions.md'), 'utf8')).toBe(
+        '# Preserve me\n',
+      )
+      expect(existsSync(join(outside, 'workflow.yml'))).toBe(false)
+      expect(existsSync(join(outside, 'workflows'))).toBe(false)
+      expect(existsSync(join(root, 'skills/_artifacts'))).toBe(false)
+    } finally {
+      rmSync(outside, { recursive: true, force: true })
+    }
+  },
+)
+
+it('rejects invalid distribution inputs before creating any planning records', async () => {
+  for (const args of [
+    ['--distribution', 'invalid'],
+    ['--distribution', 'none', '--skill', 'query'],
+    [
+      '--distribution',
+      'repo',
+      '--skill',
+      'missing',
+      '--repository',
+      'owner/library',
+    ],
+  ]) {
+    expect(await main(['maintainer', 'setup', ...args])).toBe(1)
+    expect(existsSync(join(root, 'skills/_artifacts'))).toBe(false)
+    expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
+    expect(existsSync(join(root, '.github'))).toBe(false)
+  }
+})
+
+it('preserves a safe AGENTS alias while updating its repository destination', async () => {
+  write('CLAUDE.md', '# Existing instructions\n')
+  symlinkSync('CLAUDE.md', join(root, 'AGENTS.md'))
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  expect(lstatSync(join(root, 'AGENTS.md')).isSymbolicLink()).toBe(true)
+  expect(read('CLAUDE.md')).toContain('# Existing instructions\n')
+  expect(read('CLAUDE.md')).toContain('<!-- intent-maintainer:start -->')
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  expect(
+    read('CLAUDE.md').match(/<!-- intent-maintainer:start -->/g),
+  ).toHaveLength(1)
+})
+
+it.each(['.git/config', 'node_modules/instructions.md', 'missing.md'])(
+  'rejects an instruction alias to %s before any setup writes',
+  async (target) => {
+    if (target.startsWith('node_modules'))
+      write(target, '# Dependency instructions\n')
+    const before = existsSync(join(root, target)) ? read(target) : undefined
+    symlinkSync(target, join(root, 'AGENTS.md'))
+    expect(await main(['maintainer', 'setup'])).toBe(1)
+    expect(existsSync(join(root, 'skills/_artifacts'))).toBe(false)
+    expect(existsSync(join(root, '.github'))).toBe(false)
+    if (before !== undefined) expect(read(target)).toBe(before)
+    else expect(existsSync(join(root, target))).toBe(false)
+  },
+)
+
+it('can select an existing skill for distribution during first setup', async () => {
+  write(
+    'skills/query/SKILL.md',
+    '---\nname: query\ndescription: Use when querying.\nsources: [package.json]\n---\nRead the package.\n',
+  )
+  expect(
+    await main([
+      'maintainer',
+      'setup',
+      '--distribution',
+      'repo',
+      '--skill',
+      'query',
+      '--repository',
+      'owner/library',
+    ]),
+  ).toBe(0)
+  expect(
+    parse(read('skills/_artifacts/skill_tree.yaml')).distribution,
+  ).toMatchObject({
+    mode: 'repo',
+    repository: 'owner/library',
+    skills: ['query'],
+  })
 })
 
 it('rejects cyclic prerequisites without applying an otherwise valid package update', async () => {

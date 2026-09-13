@@ -136,7 +136,7 @@ describe('skill path helpers', () => {
     const hint = formatRuntimeSkillLookupHint(target)
 
     expect(comment).toContain(
-      'npx @tanstack/intent@latest load @tanstack/query#query-core/fetching --path',
+      'npm exec --no -- intent load @tanstack/query#query-core/fetching --path',
     )
     expect(comment).toContain('Do not copy the resolved path into this file.')
     expect(comment).not.toContain('grep')
@@ -146,7 +146,7 @@ describe('skill path helpers', () => {
     expect(isRuntimeSkillLookupComment(`# ${comment}`)).toBe(true)
     expect(
       isRuntimeSkillLookupComment(
-        'Runtime lookup only: run `npx @tanstack/intent@latest load foo#bar`.',
+        'Runtime lookup only: run `npm exec --no -- intent load foo#bar`.',
       ),
     ).toBe(false)
   })

@@ -3,7 +3,6 @@ import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { parseDocument, stringify } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
-import { writeChanges } from './files.js'
 import type { FileChange } from './files.js'
 
 export const authoringMarker = '<!-- intent:needs-authoring -->'
@@ -165,15 +164,9 @@ export function skillPath(
   return path
 }
 
-export function setupRecords(project: MaintainerProject): Array<string> {
-  const changes = planSetupRecords(project)
-  writeChanges(project.root, changes)
-  return changes.map((change) =>
-    relative(project.root, change.path).replaceAll('\\', '/'),
-  )
-}
-
-function planSetupRecords(project: MaintainerProject): Array<FileChange> {
+export function planSetupRecords(
+  project: MaintainerProject,
+): Array<FileChange> {
   const { root } = project
   const context = resolveProjectContext({ cwd: root })
   if (!context.packageRoot)

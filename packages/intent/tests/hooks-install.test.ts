@@ -48,6 +48,9 @@ describe('hook installer', () => {
           : { hookSpecificOutput: { permissionDecision: 'deny' } }
       const commands = [
         ['intent list', true],
+        ['npm exec --no -- intent list', true],
+        ['yarn exec intent load @tanstack/router#routing', true],
+        ['bunx --no-install --package @tanstack/intent intent list', true],
         ['pnpm exec intent load @tanstack/router#routing', true],
         ['pnpm dlx @tanstack/intent@latest list --json', true],
         ['npx @tanstack/intent@latest load @tanstack/router#routing', true],
@@ -84,7 +87,7 @@ describe('hook installer', () => {
         else expect(JSON.parse(after.stdout)).toMatchObject(denial)
       }
     },
-    // Each case launches at least 30 real Node processes.
+    // Each case launches 39 real Node processes, including three for each runner.
     30_000,
   )
 

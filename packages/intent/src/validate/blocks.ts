@@ -30,8 +30,45 @@ interface CodeBlock {
   extension: 'ts' | 'tsx' | 'js' | 'jsx'
 }
 
-const codeFence =
-  /^ {0,3}(`{3,}|~{3,})[ \t]*([A-Za-z0-9_-]*)[^\n]*\n([\s\S]*?)\n {0,3}\1[ \t]*$/gm
+// Scan whole fences before selecting languages: a Markdown example can contain
+// shorter fences, closing fences may be longer, and EOF also closes a fence.
+function codeFences(content: string) {
+  const lines = content.split(/\r?\n/)
+  const fences: Array<{
+    start: number
+    end: number
+    language: string
+    code: string
+  }> = []
+  for (let start = 0; start < lines.length; start++) {
+    const opening = /^( {0,3})(`{3,}|~{3,})(.*)$/.exec(lines[start]!)
+    if (!opening || (opening[2]![0] === '`' && opening[3]!.includes('`')))
+      continue
+    const marker = opening[2]!
+    let end = start + 1
+    for (; end < lines.length; end++) {
+      const closing = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(lines[end]!)
+      if (
+        closing &&
+        closing[1]![0] === marker[0] &&
+        closing[1]!.length >= marker.length
+      )
+        break
+    }
+    const dedent = new RegExp(`^ {0,${opening[1]!.length}}`)
+    fences.push({
+      start,
+      end,
+      language: opening[3]!.trim().split(/\s+/)[0]!.toLowerCase(),
+      code: lines
+        .slice(start + 1, end)
+        .map((line) => line.replace(dedent, ''))
+        .join('\n'),
+    })
+    start = end
+  }
+  return fences
+}
 const checkedLanguages = new Set([
   'ts',
   'tsx',
@@ -48,7 +85,7 @@ const markdownLink = /\[[^\]]*\]\((?:<([^>]*)>|([^)\s]+))(?:\s+"[^"]*")?\)/g
 // contract or a genuinely broken example.
 const partialSnippetCodes = new Set([
   1375, 2304, 2318, 2503, 2552, 2580, 2581, 2582, 2583, 2584, 2591, 2592, 2593,
-  2602, 2686, 2688, 7006, 7026, 7031, 17004,
+  2602, 2686, 2688, 7006, 7026, 7031, 17004, 18004,
 ])
 const missingModuleCodes = new Set([2307, 2792])
 
@@ -65,17 +102,17 @@ function loadTypeScript(root: string): typeof TS | null {
 
 function extractCodeBlocks(file: string, content: string): Array<CodeBlock> {
   const blocks: Array<CodeBlock> = []
-  for (const match of content.matchAll(codeFence)) {
-    const language = match[2]!.toLowerCase()
+  for (const fence of codeFences(content)) {
+    const language = fence.language
     if (!checkedLanguages.has(language)) continue
-    const line = content.slice(0, match.index).split('\n').length + 1
+    const line = fence.start + 2
     const extension =
       language === 'tsx' || language === 'jsx'
         ? language
         : language.startsWith('j')
           ? 'js'
           : 'ts'
-    blocks.push({ file, line, code: match[3]!, extension })
+    blocks.push({ file, line, code: fence.code, extension })
   }
   return blocks
 }
@@ -88,9 +125,15 @@ function checkSkillLinks(
   const findings: Array<SkillBlockFinding> = []
   const absolute = resolve(root, file)
   // Blank out fenced examples, keeping newlines so line numbers still match.
-  const prose = content.replace(codeFence, (block) =>
-    block.replace(/[^\n]/g, ' '),
-  )
+  const lines = content.split(/\r?\n/)
+  for (const fence of codeFences(content))
+    for (
+      let index = fence.start;
+      index <= fence.end && index < lines.length;
+      index++
+    )
+      lines[index] = ''
+  const prose = lines.join('\n')
   for (const match of prose.matchAll(markdownLink)) {
     const target = match[1] ?? match[2]!
     if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) continue
@@ -99,7 +142,7 @@ function checkSkillLinks(
     if (!existsSync(resolve(dirname(absolute), path)))
       findings.push({
         file,
-        line: content.slice(0, match.index).split('\n').length,
+        line: prose.slice(0, match.index).split('\n').length,
         message: `Link target not found: ${target}`,
         severity: 'error',
       })
@@ -129,7 +172,15 @@ function libraryEntry(packageDir: string): string | null {
     isRecord(exportsRoot) && isRecord(exportsRoot.import)
       ? exportsRoot.import.types
       : undefined,
+    isRecord(exportsRoot) && isRecord(exportsRoot.require)
+      ? exportsRoot.require.types
+      : undefined,
     typeof exportsRoot === 'string' ? exportsRoot : undefined,
+    isRecord(exportsRoot) ? exportsRoot.import : undefined,
+    isRecord(exportsRoot) ? exportsRoot.require : undefined,
+    isRecord(exportsRoot) ? exportsRoot.default : undefined,
+    manifest.module,
+    manifest.main,
   ].find((value): value is string => typeof value === 'string')
   const candidates: Array<string> = []
   if (declared) {
@@ -146,9 +197,26 @@ function libraryEntry(packageDir: string): string | null {
       `src/${name}.d.ts`,
       `src/${name}.d.cts`,
       `src/${name}.d.mts`,
+      `src/${name}.js`,
+      `src/${name}.jsx`,
+      `src/${name}.mjs`,
+      `src/${name}.cjs`,
     )
   }
-  candidates.push('src/index.ts', 'src/index.tsx', 'index.ts', 'index.d.ts')
+  candidates.push(
+    'src/index.ts',
+    'src/index.tsx',
+    'index.ts',
+    'index.d.ts',
+    'src/index.js',
+    'src/index.jsx',
+    'src/index.mjs',
+    'src/index.cjs',
+    'index.js',
+    'index.jsx',
+    'index.mjs',
+    'index.cjs',
+  )
   for (const candidate of candidates) {
     const path = resolve(packageDir, candidate)
     if (existsSync(path)) return path
@@ -260,6 +328,9 @@ export function checkSkillBlocks(
   const compilerOptions: TS.CompilerOptions = {
     noEmit: true,
     strict: false,
+    // Router and other conditional APIs require null and undefined to stay
+    // distinct. Partial examples still tolerate omitted names and implicit any.
+    strictNullChecks: true,
     skipLibCheck: true,
     allowJs: true,
     checkJs: true,
@@ -414,20 +485,31 @@ export function describeSkillExamples(
       library: group.library,
       skills,
     })
-    if (result.skipped) continue
-    for (const skill of skills) {
-      if (!extractCodeBlocks(skill.file, skill.content).length) continue
-      const errors = result.findings.filter(
-        (finding) =>
-          finding.file === skill.file && finding.severity === 'error',
-      )
-      summaries.set(
-        skill.file,
-        errors.length
-          ? `${errors.length} example error(s), first at line ${errors[0]!.line}`
-          : 'examples still compile',
-      )
-    }
+    for (const [file, summary] of summarizeSkillExamples(result, skills))
+      summaries.set(file, summary)
+  }
+  return summaries
+}
+
+// Share the result of validation with the maintainer report, without retaining
+// compiler state across invocations or skipping any validation roots.
+export function summarizeSkillExamples(
+  result: SkillBlockCheck,
+  skills: ReadonlyArray<{ file: string; content: string }>,
+): Map<string, string> {
+  const summaries = new Map<string, string>()
+  if (result.skipped) return summaries
+  for (const skill of skills) {
+    if (!extractCodeBlocks(skill.file, skill.content).length) continue
+    const errors = result.findings.filter(
+      (finding) => finding.file === skill.file && finding.severity === 'error',
+    )
+    summaries.set(
+      skill.file,
+      errors.length
+        ? `${errors.length} example error(s), first at line ${errors[0]!.line}`
+        : 'examples still compile',
+    )
   }
   return summaries
 }
