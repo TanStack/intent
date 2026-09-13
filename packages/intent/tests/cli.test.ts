@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as discovery from '../src/discovery/scanner.js'
 import { INSTALL_PROMPT } from '../src/commands/install/command.js'
 import { isMainModule, main } from '../src/cli.js'
+import { runValidateCommand } from '../src/commands/validate.js'
 import type { PermissionPrompts } from '../src/commands/install/permissions.js'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
@@ -3303,6 +3304,78 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('✅ Validated 1 skill files — all passed')
     expect(output).not.toContain('@tanstack/intent is not in devDependencies')
+  })
+
+  it.each([
+    ['guidance', 'guidance/guides'],
+    ['guidance/guides', 'guidance'],
+  ])(
+    'counts each skill and packaging warning once across overlapping roots: %s, %s',
+    async (first, second) => {
+      const root = mkdtempSync(
+        join(realTmpdir, 'intent-cli-validate-overlapping-'),
+      )
+      tempDirs.push(root)
+      writeJson(join(root, 'package.json'), {
+        name: 'library',
+        devDependencies: { '@tanstack/intent': '^0.4.0' },
+        keywords: ['tanstack-intent'],
+        files: [],
+      })
+      writeSkillMd(join(root, 'guidance', 'direct'), {
+        name: 'direct',
+        description: 'Use the library directly.',
+      })
+      writeSkillMd(join(root, 'guidance', 'guides', 'query'), {
+        name: 'query',
+        description: 'Query the library.',
+      })
+      process.chdir(root)
+
+      await runValidateCommand([first, second])
+
+      const lines: Array<string> = logSpy.mock.calls.flat().map(String)
+      expect.soft(lines).toContain('✅ Validated 2 skill files — all passed')
+      const packagingWarnings = lines.filter((line) =>
+        line.includes('not covered by the "files" array'),
+      )
+      expect.soft(packagingWarnings).toHaveLength(2)
+      for (const directory of ['guidance/direct', 'guidance/guides/query']) {
+        expect
+          .soft(
+            packagingWarnings.filter((warning) =>
+              warning.includes(`"${directory}"`),
+            ),
+          )
+          .toHaveLength(1)
+      }
+    },
+  )
+
+  it('does not repeat package warnings for an overlapping root with no additional skills', async () => {
+    const root = mkdtempSync(
+      join(realTmpdir, 'intent-cli-validate-covered-root-'),
+    )
+    tempDirs.push(root)
+    writeJson(join(root, 'package.json'), { name: 'library', files: [] })
+    writeSkillMd(join(root, 'guidance', 'guides', 'query'), {
+      name: 'query',
+      description: 'Query the library.',
+    })
+    process.chdir(root)
+
+    await runValidateCommand(['guidance', 'guidance/guides'])
+
+    const lines: Array<string> = logSpy.mock.calls.flat().map(String)
+    expect(lines).toContain('✅ Validated 1 skill files — all passed')
+    for (const message of [
+      '@tanstack/intent is not in devDependencies',
+      'Missing "tanstack-intent" in keywords array',
+    ]) {
+      expect
+        .soft(lines.filter((line) => line.includes(message)))
+        .toHaveLength(1)
+    }
   })
 
   it('validates nested pnpm workspace package skills from the repo root', async () => {
