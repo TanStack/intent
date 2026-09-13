@@ -84,6 +84,8 @@ describe('hook installer', () => {
         else expect(JSON.parse(after.stdout)).toMatchObject(denial)
       }
     },
+    // Each case launches at least 30 real Node processes.
+    30_000,
   )
 
   it('declares supported scopes in the adapter registry', () => {
@@ -715,6 +717,7 @@ function runHookScript(scriptPath: string, event: Record<string, unknown>) {
   return spawnSync(process.execPath, [scriptPath], {
     encoding: 'utf8',
     input: JSON.stringify(event),
+    timeout: 5_000,
   })
 }
 
