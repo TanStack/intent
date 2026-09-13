@@ -3,7 +3,7 @@ title: setup commands
 id: intent-setup
 ---
 
-These commands configure a package for publishing skills and install the optional CI workflow. Repositories that use the [maintainer workflow](./intent-maintainer) keep `package.json` current with `intent maintainer sync` and only need `setup` from this page; `edit-package-json` is for repositories that publish skills without the maintainer workflow.
+These commands configure a package for publishing skills and install the optional CI workflow. Repositories that use the [maintainer workflow](./intent-maintainer) keep `package.json` current with `intent maintainer sync` and install CI during `intent maintainer setup`; `edit-package-json` is for repositories that publish skills without the maintainer workflow.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -46,7 +46,7 @@ lit: @tanstack/intent@latest setup
 - Skips files that already exist at the destination
 
 > [!NOTE]
-> `setup` installs the generated repository workflow, not Intent's maintainer or consumer guidance. Run `maintainer setup` for persistent instructions and cumulative records.
+> `setup` installs the generated repository workflow, not Intent's maintainer or consumer guidance. Run `maintainer setup` to install the same CI workflow together with persistent instructions and cumulative records.
 
 ## Required `files` entries
 
@@ -65,10 +65,11 @@ lit: @tanstack/intent@latest setup
 ## Notes
 
 - `setup` skips existing files
-- On every pull request, `check-skills.yml` runs structural validation
-- On pull requests with `.intent/review-state.json` or an `intent-maintainer` block, it also runs `intent maintainer check --base <pull-request-base-sha> --github-summary`, so the failure reasons appear in the job's step summary
+- On pull requests without maintainer setup, `check-skills.yml` runs `intent validate --github-summary`
+- With `.intent/review-state.json` or an `intent-maintainer` block, it runs the combined validation and review command `intent maintainer check --base <pull-request-base-sha> --github-summary`, so the failure reasons appear in the job's step summary
 - On release and manual runs with review state, it runs `intent review --github-review`; without review state, it falls back to `intent stale --github-review`
 - Release and manual runs create or update one review-reminder pull request only when the selected check reports review work
+- npm, pnpm, Yarn (including Plug'n'Play), and Bun lockfiles are supported. Yarn PnP runs the installed binary through Yarn so its loader is active
 - Both reusable workflows run the repository's own lockfile-pinned copy of `@tanstack/intent`, installed with the frozen lockfile and scripts disabled, so a new Intent version runs in CI only after its dependency bump merges. A repository without Intent in `devDependencies` fails with instructions; set the `intent-version` input (for example `latest`) on the caller's `with:` block to install from npm instead
 - The workflows also accept `node-version` (default `22`), and the review workflow accepts `package-label`; edit the copied caller's `with:` block to change them
 - A copy from an earlier Intent version that inlined the steps still works; `intent stale` prints a reminder when it is behind. Delete or move it and rerun `setup` to switch to the caller

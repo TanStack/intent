@@ -33,10 +33,10 @@ lit: @tanstack/intent@latest maintainer setup
 
 <!-- ::end:tabs -->
 
-This creates missing planning records and an `intent-maintainer` block in `AGENTS.md`, or updates the file that already contains an Intent maintainer or consumer block. It preserves surrounding instructions and a separate `intent-skills` consumer block. Review this setup diff and keep it in the repository so later agent sessions receive the same authoring and review procedure.
+This registers existing package-owned skills, copies the CI workflow when missing, and creates missing planning records and an `intent-maintainer` block in `AGENTS.md`, or updates the file that already contains an Intent maintainer or consumer block. It preserves surrounding instructions and a separate `intent-skills` consumer block. Review this setup diff and keep it in the repository so later agent sessions receive the same authoring and review procedure.
 
 > [!NOTE]
-> Setup preserves existing records and instructions. It creates skeletons for missing records; their task knowledge still needs authoring. The runner uses `@tanstack/intent@latest`. CI installation remains a separate command.
+> Setup preserves existing records and instructions. It creates skeletons for missing records; their task knowledge still needs authoring. Registration preserves existing skill text and reports invalid or conflicting candidates. Review inferred domains and complete the records before running the maintainer check.
 
 ## Create the first useful batch
 
@@ -95,7 +95,7 @@ Review the resulting skills, planning documents, and checks as one batch:
 
 | Check | Evidence |
 | --- | --- |
-| Structure | Frontmatter, required fields, and line limits; inspect reference paths and reading conditions separately. |
+| Structure | Frontmatter, required fields, line limits, relative links, and TypeScript/JavaScript example diagnostics; inspect reading conditions separately. |
 | Developer task | Executable checks accept a working solution and reject a plausible mistake. |
 | Discovery | Realistic matching and adjacent nonmatching requests exercise the skill description. |
 | Fresh consumer | An isolated agent attempts the task with the candidate skills and protected checks grade the result. |
@@ -107,9 +107,9 @@ For direct authoring guidance, load `meta generate-skill`. Explicitly requested 
 
 ## Choose how consumers install the skills
 
-Setup explains repository distribution until you record a choice, and `maintainer check` fails until one is recorded. Record the choice before the first check.
+Skills ship with their owning npm package by default. Repository installers and native plugins are optional additional distribution routes.
 
-Selecting skills for repository distribution requires registered, authored skills: `maintainer sync` refuses to generate exports while a selected skill still carries the `intent:needs-authoring` marker. On a brand-new library, record `--distribution none` first, author the batch, then rerun setup with the selection. Select the public skills explicitly:
+Selecting skills for repository distribution requires registered, authored skills: `maintainer sync` refuses to generate exports while a selected skill still carries the `intent:needs-authoring` marker. On a brand-new library, author the batch first, then rerun setup with the selection. Select the public skills explicitly:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -124,7 +124,7 @@ lit: @tanstack/intent@latest maintainer setup --distribution repo --skill discov
 
 Use the actual registered names; each must be a tree entry whose `SKILL.md` exists. When the repository, plugin name, or selection cannot be resolved, setup reports every missing input in one error. This records the selection in the skill tree. `maintainer sync` generates plugin metadata pointing to the existing package directories and prints consumer commands for `npx skills add` and `gh skill add`. Consumers can also use the native Claude or Cursor plugin flow. No second copy of the skill text is created, and later skills are not added automatically.
 
-To keep the package-only workflow, or to unblock `maintainer check` before the skills are authored, record the opt-out:
+To explicitly record package-only distribution or turn off earlier repository exports:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -170,6 +170,8 @@ lit: @tanstack/intent@latest maintainer check
 
 Interactive review shows each item's current guidance and changed files, asks for an outcome, and records the reason and evidence you supply. `maintainer check` then reports authoring gaps, generated files, and pending reviews together.
 
+After assessing every pending item, `intent maintainer review --unchanged "<reason>"` or `--updated "<reason>"` records a shared conclusion. Use a JSON report when items need different outcomes or evidence.
+
 Coding agents follow the same steps without a terminal. The installed guidance instructs the agent to run `intent maintainer review --json`, examine affected skills, the planning record, and changed files outside existing source mappings, annotate each completed item with an outcome, reason, and evidence, then record the report with `intent maintainer review --record <report.json>`. The report's `recording` block lists the accepted outcomes and required fields; recording a report that annotates nothing fails.
 
 Completed outcomes are saved in `.intent/review-state.json`. Keep that file with the source, skill, and planning-record changes it describes. Files Intent writes for you, such as the agent instruction block, plugin manifests, `package.json`, and lockfiles, do not appear as unmapped changes.
@@ -178,31 +180,25 @@ See [`intent review`](../cli/intent-review) for comparison rules, report fields,
 
 ## Configure publishing
 
-Run the same synchronization command after skill edits. Add the optional CI workflow when the repository is ready for it:
+Run the same synchronization command after skill edits:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
 react: @tanstack/intent@latest maintainer sync
-react: @tanstack/intent@latest setup
 solid: @tanstack/intent@latest maintainer sync
-solid: @tanstack/intent@latest setup
 vue: @tanstack/intent@latest maintainer sync
-vue: @tanstack/intent@latest setup
 svelte: @tanstack/intent@latest maintainer sync
-svelte: @tanstack/intent@latest setup
 angular: @tanstack/intent@latest maintainer sync
-angular: @tanstack/intent@latest setup
 lit: @tanstack/intent@latest maintainer sync
-lit: @tanstack/intent@latest setup
 
 <!-- ::end:tabs -->
 
 `maintainer sync` aligns the tree, adds the `tanstack-intent` keyword, updates existing package `files` allowlists, and generates selected repository exports. It preserves authored decisions and an absent npm allowlist. Inspect the packed archive as part of the library’s release checks, including whether planning records should be excluded.
 
-`setup` copies `check-skills.yml` to the workspace root's `.github/workflows/` directory and skips an existing destination file. The copy is a short caller for Intent's reusable workflows, pinned to the commit of the Intent release that copied it and granting each job only the permissions it needs; Dependabot or Renovate bumps the pin with each Intent release. CI runs the copy of `@tanstack/intent` your lockfile pins, so keep it in `devDependencies`. The workflow validates skills and recorded source reviews on pull requests. After a release or manual run, it creates or updates a review-reminder pull request when recorded review state or conservative staleness signals require attention. See [setup commands](../cli/intent-setup).
+`maintainer setup` already copies `check-skills.yml` to the workspace root's `.github/workflows/` directory and skips an existing destination file. The copy is a short caller for Intent's reusable workflows, pinned to the commit of the Intent release that copied it and granting each job only the permissions it needs; Dependabot or Renovate bumps the pin with each Intent release. CI runs the copy of `@tanstack/intent` your lockfile pins, so keep it in `devDependencies`. The workflow validates skills and recorded source reviews on pull requests. After a release or manual run, it creates or updates a review-reminder pull request when recorded review state or conservative staleness signals require attention. See [setup commands](../cli/intent-setup).
 
 > [!NOTE]
-> `intent setup` copies CI templates; `intent maintainer setup` initializes the maintainer workflow. To replace an older generated workflow, move or delete it before rerunning `setup`; Intent skips existing files.
+> `intent setup` copies CI templates on its own; `intent maintainer setup` also initializes the maintainer workflow. To replace an older generated workflow, move or delete it before rerunning `setup`; Intent skips existing files.
 
 Publish through the library's normal release process. Skills in the package's published `skills/` directory version with that library release. Consumers install the library, configure permitted skill sources with consumer [`intent install`](../cli/intent-install#default-install), discover the installed skills with [`intent list`](../cli/intent-list), and load matching guidance with `intent load`.
 

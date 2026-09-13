@@ -79,25 +79,27 @@ To control what appears in the session catalog, configure `intent.skills` and `i
 ```json
 {
   "intent": {
-    "skills": ["@tanstack/react-query#core"]
+    "skills": ["@your-scope/library#task-name"]
   }
 }
 ```
+
+The package and skill above are placeholders; use names from your installed skills.
 
 When permissions already exist, including inherited workspace permissions, `install` preserves them and only updates guidance. To change your choices, edit the owning `intent.skills` declaration. You can also use `*` package patterns such as `@tanstack/*`. Existing `intent.exclude` rules still take precedence. See the [source entries](../concepts/configuration#source-entries) in Configuration and the [Trust model](../concepts/trust-model).
 
 ## 3. Use skills in your workflow
 
-Load a skill when it matches the task:
+Run `intent list` and choose a skill that matches the task. Replace `@your-scope/library#task-name` below with an installed package and skill from that list:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest load @tanstack/react-query#core
-solid: @tanstack/intent@latest load @tanstack/react-query#core
-vue: @tanstack/intent@latest load @tanstack/react-query#core
-svelte: @tanstack/intent@latest load @tanstack/react-query#core
-angular: @tanstack/intent@latest load @tanstack/react-query#core
-lit: @tanstack/intent@latest load @tanstack/react-query#core
+react: @tanstack/intent@latest load @your-scope/library#task-name
+solid: @tanstack/intent@latest load @your-scope/library#task-name
+vue: @tanstack/intent@latest load @your-scope/library#task-name
+svelte: @tanstack/intent@latest load @your-scope/library#task-name
+angular: @tanstack/intent@latest load @your-scope/library#task-name
+lit: @tanstack/intent@latest load @your-scope/library#task-name
 
 <!-- ::end:tabs -->
 

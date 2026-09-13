@@ -72,7 +72,9 @@ Git and an initial commit are required. The default command is read-only.
 | --- | --- |
 | Explicit `--base` | The commit selected by that ref. |
 | Existing review state | The first recorded baseline, plus each item's recorded content hashes. |
-| No review state | `HEAD` and the current working tree. |
+| No review state | Each tracked skill uses the commit that introduced it to identify subsequent mapped-source changes. New skills still require an initial review; repository-wide unmapped changes use `HEAD`. |
+
+Items without a recorded review use their introducing commit even when repository review state exists, unless you pass `--base`. Planning records use the commit that introduced their `skill_tree.yaml`.
 
 The comparison includes committed changes since the base and staged, unstaged, and untracked files visible to Git. Renames appear as removals and additions. It reviews final working-tree content; a partially staged index is not separately certified.
 
@@ -174,6 +176,19 @@ Choose **Leave pending** when more work is needed. Items with unresolved source 
 
 Interactive review requires a terminal outside CI and cannot be combined with `--json` or `--record`. A zero exit status means the interaction completed, not that all review items were resolved. Use `intent maintainer check --base <available-commit>` as the read-only CI gate. JSON reports and the manual procedure below remain available to agents and scripts.
 
+### Record all pending items
+
+After inspecting all pending items and running the relevant checks, record one conclusion in one command:
+
+```sh
+intent maintainer review --unchanged "Checked retries and cancellation against the updated implementation; the guidance remains accurate."
+intent maintainer review --updated "Updated the affected examples and planning records, then checked them against the source."
+```
+
+Choose one command. `--unchanged` records `no-change`; `--updated` records `updated`. The reason is required and applies to every pending item. Intent records each item's current changed paths and head revision as evidence and applies the same fingerprint and unresolved-problem checks as JSON recording. The command fails when nothing is pending or any item cannot be recorded. It does not assess the guidance or run the checks for you.
+
+These flags belong to `maintainer review`, accept `--base`, and cannot be combined with each other, `--json`, `--record`, or `--interactive`. Use a JSON report when items need different conclusions or more detailed evidence.
+
 ### JSON review
 
 The installed maintainer procedure handles these steps. For manual use:
@@ -261,7 +276,7 @@ Text output shows the pending count and up to 20 items, with changed paths, unre
 
 ## Automated checks
 
-The optional version 5 [setup workflow](./intent-setup) connects review to PRs and releases:
+The optional version 4 [setup workflow](./intent-setup) connects review to PRs and releases:
 
 | Trigger | Check |
 | --- | --- |

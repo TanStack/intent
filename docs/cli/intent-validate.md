@@ -3,7 +3,7 @@ title: intent validate
 id: intent-validate
 ---
 
-`intent validate` checks `SKILL.md` files and artifacts for structural problems.
+`intent validate` checks `SKILL.md` files and artifacts for structural problems, broken relative links, and code examples that no longer match the library API.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -20,7 +20,7 @@ lit: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--chec
 
 ## Arguments
 
-- `<dir>`: directory containing skills; default is `skills`
+- `<dir>`: directory containing skills; without it, discover the applicable root and workspace skill directories
 - Relative paths are resolved from the current working directory
 
 ## Options
@@ -105,6 +105,14 @@ lit: @tanstack/intent@latest validate --fix
 - `description` length is at most 1024 characters
 - `type: framework` requires `requires` to be an array
 - Total file length is at most 500 lines
+
+### Code examples and links
+
+TypeScript and JavaScript fences (`ts`, `tsx`, `typescript`, `js`, `jsx`, and `javascript`) are checked as independent examples against the library's source or tracked public declarations. Workspace imports resolve to their owning packages. Missing exports, incompatible options, and syntax errors fail validation with the skill path and line number; deprecated imports produce warnings. Names and external modules intentionally omitted from partial examples are tolerated. The checker does not execute examples.
+
+TypeScript 5.0 or newer must be available in the repository for code checking. If it or the library type entry is unavailable, Intent reports why those checks were skipped; this is not a successful typecheck. Prose-only skills do not load TypeScript.
+
+Relative Markdown links outside fenced examples must point to an existing file or directory. External URLs and anchors are not checked. Link checks still run when TypeScript is unavailable. Repeated validations read current source files and link targets.
 
 ### Artifacts
 

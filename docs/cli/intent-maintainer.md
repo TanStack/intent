@@ -11,8 +11,7 @@ id: intent-maintainer
 
 | Command | What it does |
 | --- | --- |
-| `maintainer setup` | Install repository guidance, create missing planning records, and save the distribution choice. |
-| `maintainer adopt` | Review and register existing package-owned skills with interactive confirmation or an explicit JSON plan. |
+| `maintainer setup` | Register existing package skills, create missing planning records, and install repository guidance and CI. |
 | `maintainer add <name>` | Create a skill skeleton or register an existing skill in the cumulative record. |
 | `maintainer remove <name>` | Retire a registered skill in the planning records without deleting its guidance. |
 | `maintainer status` | Show authoring gaps, stale generated files, and pending source reviews. |
@@ -37,7 +36,7 @@ lit: @tanstack/intent@latest maintainer setup
 
 <!-- ::end:tabs -->
 
-Setup preserves existing documents and repository instructions. Standalone packages use `skills/_artifacts/`; monorepos share `_artifacts/` at the repository root. An existing custom location is retained. If several locations exist, select one with `--artifacts <repository-relative-directory>`.
+Setup preserves existing documents and repository instructions and copies the [CI workflow](./intent-setup) when it is missing. Standalone packages use `skills/_artifacts/`; monorepos share `_artifacts/` at the repository root. An existing custom location is retained. If several locations exist, select one with `--artifacts <repository-relative-directory>`.
 
 The three records have separate jobs:
 
@@ -49,7 +48,7 @@ The three records have separate jobs:
 
 Generated skeletons remain unfinished. Author their contents and remove the `intent:needs-authoring` marker after completing that work. A successful setup command does not mean the skills are ready to publish.
 
-For an existing library, use [guided adoption](./intent-adopt) to register its current skills without rewriting their content. Reviewers can use [interactive review](./intent-review#interactive-review) in a human terminal; CI uses the noninteractive checks.
+Setup automatically registers valid, Git-visible `skills/**/SKILL.md` files in the root package and workspace packages, preserving their content. It skips dependencies, hidden agent directories, invalid skills, and conflicting names, reporting each skipped candidate. Domains come from `metadata.domain`, the existing domain map, a parent directory under `skills/`, or `uncategorized`; review that placeholder and complete task coverage. For custom locations outside `skills/`, use `maintainer add --path`. Repeating setup preserves existing registrations and workflow files. Reviewers can use [interactive review](./intent-review#interactive-review) in a human terminal; CI uses the noninteractive checks.
 
 ## Add a skill
 
@@ -121,7 +120,7 @@ lit: @tanstack/intent@latest maintainer setup --distribution none
 
 <!-- ::end:tabs -->
 
-Setup remembers this choice. `maintainer check` fails on an unconfigured choice until either option is recorded.
+Setup remembers this choice. Package-only distribution is the default, so an unrecorded choice does not block `maintainer check`. Select repository exports only when you want that additional installation route.
 
 After authoring, `maintainer sync` updates Claude and Cursor plugin manifests and marketplace entries that point to the existing skill directories. It preserves unrelated plugin fields and other marketplace entries. It writes `.intent/skill-distribution.json` with source paths and install arguments, and prints commands consumers can copy. Sync refuses to generate exports while a selected skill still carries the `intent:needs-authoring` marker. Conflicting plugin identities or source roots require resolution before synchronization writes anything.
 
@@ -176,7 +175,7 @@ Status accepts `--json` and an actual Git comparison base with `--base <ref>`. S
 
 `maintainer review --interactive` is the human path. It walks each pending item in the terminal, shows the current guidance and changed files, and records the chosen outcomes with reason and evidence. It requires a terminal outside CI.
 
-Coding agents and scripts use the JSON path instead. Generate the report and save it under `.intent/`, which `maintainer setup` created:
+After checking every pending item, agents and scripts can record one shared conclusion with `maintainer review --unchanged "<reason>"` or `maintainer review --updated "<reason>"`. Use the [one-command review](./intent-review#record-all-pending-items) only when that conclusion covers every item. Use the JSON path for different outcomes or evidence per item. Generate the report and save it under `.intent/`, which `maintainer setup` created:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -210,9 +209,9 @@ lit: @tanstack/intent@latest maintainer check
 
 <!-- ::end:tabs -->
 
-The report's `recording` block lists the allowed outcomes, the narrower planning outcomes, the required fields, and the record command. `--record` rejects a report that annotates none of its items. The [source-review reference](./intent-review) describes the report format, fingerprints, baseline recovery, and the [Intent-owned paths](./intent-review#ignored-paths) that unmapped-change review skips by default. `maintainer review` supports its `--base`, `--json`, `--record`, and `--interactive` options. The standalone `review` command also remains available for workflow reminder output and review-only checks.
+The report's `recording` block lists the allowed outcomes, the narrower planning outcomes, the required fields, and the record command. `--record` rejects a report that annotates none of its items. The [source-review reference](./intent-review) describes the report format, fingerprints, baseline recovery, and the [Intent-owned paths](./intent-review#ignored-paths) that unmapped-change review skips by default. `maintainer review` supports its `--base`, `--json`, `--record`, `--interactive`, `--unchanged`, and `--updated` options. The standalone `review` command also remains available for workflow reminder output and review-only checks.
 
-`maintainer check --base <pull-request-base>` runs the same maintainer checks in CI. Add `--github-summary` to write the headline, authoring issues, files to sync, and pending review items to the GitHub Actions step summary after the validation section; the generated workflow passes it. The flag belongs to `check` alone. It does not publish, install consumer skills, or certify that an agent's recorded conclusion is correct. Missing task evidence remains a review responsibility. Repository validation protects the source tree; it does not execute an authoring model in CI.
+`maintainer check --base <pull-request-base>` runs the same maintainer checks in CI. It validates the workspace's default skill directories together with custom registered roots in one run, including code examples and relative links. Add `--github-summary` to write the headline, authoring issues, files to sync, and pending review items to the GitHub Actions step summary after the validation section; the generated workflow passes it. The flag belongs to `check` alone. It does not publish, install consumer skills, or certify that an agent's recorded conclusion is correct. Missing task evidence remains a review responsibility. Repository validation protects the source tree; it does not execute an authoring model in CI.
 
 ## Verify distribution
 
