@@ -20,6 +20,7 @@ import type {
 } from './commands/maintainer.js'
 import type { ReviewCommandOptions } from './commands/review.js'
 import type { ValidateCommandOptions } from './commands/validate.js'
+import type { RepairCommandOptions } from './commands/repair.js'
 
 function createCli(
   runtime: InstallCommandRuntime & MaintainerCommandRuntime = {},
@@ -100,6 +101,19 @@ function createCli(
         import('./commands/meta.js'),
       ])
       await runMetaCommand(name, getMetaDir())
+    })
+
+  cli
+    .command(
+      'repair [dir]',
+      'Plan conservative skill repairs without full validation',
+    )
+    .option('--write', 'Apply unambiguous frontmatter repairs')
+    .option('--json', 'Output the repair report as JSON')
+    .option('--patch', 'Print a reviewable patch without editing skill files')
+    .action(async (dir: string | undefined, options: RepairCommandOptions) => {
+      const { runRepairCommand } = await import('./commands/repair.js')
+      runRepairCommand(dir, options)
     })
 
   cli
