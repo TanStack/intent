@@ -109,6 +109,13 @@ describe('packed release', () => {
     ).version
     expect(metadata.version).toBe(version)
     expect(metadata.commit).toMatch(/^[a-f0-9]{40}$/)
+    expect(metadata.commit).toBe(
+      execFileSync('git', ['-c', 'core.fsmonitor=false', 'rev-parse', 'HEAD'], {
+        cwd: packageRoot,
+        encoding: 'utf8',
+        timeout,
+      }).trim(),
+    )
     const result = spawnSync(process.execPath, [cli, 'setup'], {
       cwd,
       encoding: 'utf8',
