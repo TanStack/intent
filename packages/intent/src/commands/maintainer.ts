@@ -19,6 +19,7 @@ import {
 } from '../maintainer/distribution.js'
 import { runSetupGithubActions } from '../setup/index.js'
 import { detectIntentCommandPackageManager } from '../shared/command-runner.js'
+import { describeSkillExamples } from '../validate/blocks.js'
 import { getMetaDir } from './support.js'
 import {
   buildMaintainerGuidanceBlock,
@@ -447,6 +448,12 @@ export async function runMaintainerCommand(
     for (const problem of status.problems) console.log(`  ${problem}`)
     for (const path of status.staleFiles)
       console.log(`  Run intent maintainer sync: ${path}`)
+    const examples = describeSkillExamples(
+      project.root,
+      review.items
+        .filter((item) => item.kind === 'skill' && !item.problems.length)
+        .map((item) => item.path),
+    )
     for (const item of review.items) {
       const label =
         item.kind === 'skill'
@@ -459,7 +466,10 @@ export async function runMaintainerCommand(
         : item.changedFiles.length
           ? `changed ${item.changedFiles.join(', ')}`
           : 'no recorded review'
-      console.log(`  ${label} ${item.path}: ${detail}`)
+      const example = examples.get(item.path)
+      console.log(
+        `  ${label} ${item.path}: ${detail}${example ? `; ${example}` : ''}`,
+      )
     }
   }
   if (action === 'check') {
