@@ -64,7 +64,12 @@
     "build": {
       "cache": true,
       "dependsOn": ["^build"],
-      "inputs": ["production", "^production", "intentWorkflows"],
+      "inputs": [
+        "production",
+        "^production",
+        "intentWorkflows",
+        { "runtime": "git -c core.fsmonitor=false rev-parse HEAD" }
+      ],
       "outputs": ["{projectRoot}/build", "{projectRoot}/dist"]
     },
     "test:docs": {
