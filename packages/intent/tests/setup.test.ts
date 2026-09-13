@@ -8,7 +8,6 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { execFileSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   resolveIntentWorkflowRef,
@@ -43,20 +42,17 @@ beforeEach(() => {
 
   writeFileSync(
     join(metaDir, 'templates', 'workflows', 'check-skills.yml'),
-    [
-      'label: {{PACKAGE_LABEL}}',
-      '# intent-workflow-version: 4',
-      'install: npm install -g @tanstack/intent',
-      'validate: intent validate --github-summary',
-      'review: intent stale --github-review --package-label "{{PACKAGE_LABEL}}"',
-      'has_review=true',
-      'gh pr list --head "$BRANCH"',
-      'gh pr edit "$PR_URL" --body-file pr-body.md',
-      'uses: TanStack/intent/.github/workflows/check-skills.yml@{{INTENT_WORKFLOW_REF}}',
-    ].join('\n'),
+    readFileSync(
+      join(
+        repoRoot,
+        'packages/intent/meta/templates/workflows/check-skills.yml',
+      ),
+      'utf8',
+    ),
   )
   // Keep the resolver off the network in these tests.
-  process.env.INTENT_WORKFLOW_REF = 'abc123 # v9.9.9'
+  process.env.INTENT_WORKFLOW_REF =
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v9.9.9'
 })
 
 afterEach(() => {
@@ -250,6 +246,18 @@ describe('runEditPackageJson', () => {
 })
 
 describe('runSetupGithubActions', () => {
+  it.each([
+    "client'",
+    'client\npermissions: write-all',
+    '${{ secrets.TOKEN }}',
+  ])('rejects a workflow label containing syntax: %s', (name) => {
+    writePkg({ name })
+    expect(() => runSetupGithubActions(root, metaDir)).toThrow(
+      'unsafe package label',
+    )
+    expect(existsSync(join(root, '.github'))).toBe(false)
+  })
+
   it('copies workflow templates with variable substitution', () => {
     writePkg({
       name: '@tanstack/query',
@@ -268,21 +276,17 @@ describe('runSetupGithubActions', () => {
       join(root, '.github', 'workflows', 'check-skills.yml'),
       'utf8',
     )
-    expect(checkContent).toContain('label: @tanstack/query')
-    expect(checkContent).toContain('# intent-workflow-version: 4')
-    expect(checkContent).toContain('install: npm install -g @tanstack/intent')
-    expect(checkContent).toContain('validate: intent validate --github-summary')
-    expect(checkContent).toContain(
-      'review: intent stale --github-review --package-label "@tanstack/query"',
-    )
-    expect(checkContent).toContain('has_review=true')
-    expect(checkContent).toContain('gh pr list --head "$BRANCH"')
-    expect(checkContent).toContain(
-      'gh pr edit "$PR_URL" --body-file pr-body.md',
-    )
-    expect(checkContent).toContain(
-      'uses: TanStack/intent/.github/workflows/check-skills.yml@abc123 # v9.9.9',
-    )
+    expect(checkContent).toContain("package-label: '@tanstack/query'")
+    expect(checkContent).toContain('# intent-workflow-version: 6')
+    expect(checkContent).toContain('repair: true')
+    for (const name of [
+      'check-skills',
+      'review-skills',
+      'publish-skill-review',
+    ])
+      expect(checkContent).toContain(
+        `uses: TanStack/intent/.github/workflows/${name}.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v9.9.9`,
+      )
   })
 
   it('keeps remote docs URLs out of single-package watch globs', () => {
@@ -337,7 +341,7 @@ describe('runSetupGithubActions', () => {
 
     expect(checkContent).toContain('pull_request:')
     // Each caller job pins the release commit and grants only what its
-    // workflow needs, so a compromised upstream cannot escalate.
+    // workflow needs; the privileged publisher is separately gated.
     expect(checkContent).toContain(
       'uses: TanStack/intent/.github/workflows/check-skills.yml@{{INTENT_WORKFLOW_REF}}',
     )
@@ -369,50 +373,44 @@ describe('runSetupGithubActions', () => {
     expect(review).toContain('intent stale --github-review')
   })
 
-  it('pins the reusable workflows to the release commit, falling back to the tag', () => {
-    const remote = mkdtempSync(join(tmpdir(), 'intent-workflow-remote-'))
-    const git = (...args: Array<string>) =>
-      execFileSync('git', ['-c', 'core.fsmonitor=false', ...args], {
-        cwd: remote,
-        encoding: 'utf8',
-      }).trim()
-    try {
-      git('init', '-q')
-      writeFileSync(join(remote, 'README.md'), 'fixture\n')
-      git('add', 'README.md')
-      git(
-        '-c',
-        'user.name=T',
-        '-c',
-        'user.email=t@e',
-        'commit',
-        '-qm',
-        'release',
+  it('uses only matching packaged workflow metadata and refuses a mutable fallback', () => {
+    writePkg({ name: '@tanstack/intent', version: '1.2.3' })
+    expect(() => resolveIntentWorkflowRef(root)).toThrow(
+      'No immutable workflow reference',
+    )
+    mkdirSync(join(root, 'dist'))
+    const metadata = (value: unknown) =>
+      writeFileSync(join(root, 'dist/workflow-ref.json'), JSON.stringify(value))
+    metadata({ version: '1.2.3', commit: 'b'.repeat(40) })
+    expect(resolveIntentWorkflowRef(root)).toBe(`${'b'.repeat(40)} # v1.2.3`)
+    for (const value of [
+      null,
+      { version: 'other', commit: 'b'.repeat(40) },
+      { version: '1.2.3', commit: 'main' },
+      { version: '1.2.3', commit: null },
+    ]) {
+      metadata(value)
+      expect(() => resolveIntentWorkflowRef(root)).toThrow(
+        'No immutable workflow reference',
       )
-      git(
-        '-c',
-        'user.name=T',
-        '-c',
-        'user.email=t@e',
-        'tag',
-        '-a',
-        'v1.2.3',
-        '-m',
-        'v1.2.3',
-      )
-      const commit = git('rev-parse', 'HEAD')
-      writePkg({ name: '@tanstack/intent', version: '1.2.3' })
-      // An annotated tag resolves to its commit, not the tag object.
-      expect(resolveIntentWorkflowRef(root, remote)).toBe(`${commit} # v1.2.3`)
-      writePkg({ name: '@tanstack/intent', version: '9.9.9' })
-      expect(resolveIntentWorkflowRef(root, remote)).toBe('v9.9.9')
-      expect(resolveIntentWorkflowRef(root, join(remote, 'missing'))).toBe(
-        'v9.9.9',
-      )
-    } finally {
-      rmSync(remote, { recursive: true, force: true })
     }
   })
+
+  it.each([
+    'main',
+    'v1.2.3',
+    'abc123',
+    `${'a'.repeat(40)}\npermissions: write-all`,
+  ])(
+    'rejects unsafe workflow override %s without copying a workflow',
+    (ref) => {
+      process.env.INTENT_WORKFLOW_REF = ref
+      expect(() => runSetupGithubActions(root, metaDir)).toThrow(
+        'full 40-character commit SHA',
+      )
+      expect(existsSync(join(root, '.github'))).toBe(false)
+    },
+  )
 
   it('copies templates with defaults when no package.json', () => {
     const result = runSetupGithubActions(root, metaDir)
@@ -518,10 +516,9 @@ describe('runSetupGithubActions', () => {
       join(monoRoot, '.github', 'workflows', 'check-skills.yml'),
       'utf8',
     )
-    expect(checkContent).toContain('label: @tanstack/router')
-    expect(checkContent).toContain('npm install -g @tanstack/intent')
+    expect(checkContent).toContain("package-label: '@tanstack/router'")
     expect(checkContent).toContain(
-      'intent stale --github-review --package-label "@tanstack/router"',
+      'review-skills.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v9.9.9',
     )
 
     rmSync(monoRoot, { recursive: true, force: true })

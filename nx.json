@@ -22,6 +22,11 @@
       "default",
       "!{projectRoot}/tests/**/*",
       "!{projectRoot}/eslint.config.js"
+    ],
+    "intentWorkflows": [
+      "{workspaceRoot}/.github/workflows/check-skills.yml",
+      "{workspaceRoot}/.github/workflows/review-skills.yml",
+      "{workspaceRoot}/.github/workflows/publish-skill-review.yml"
     ]
   },
   "targetDefaults": {
@@ -31,7 +36,8 @@
       "inputs": [
         "default",
         "^production",
-        "{workspaceRoot}/packages/intent/meta/**/*"
+        "{workspaceRoot}/packages/intent/meta/**/*",
+        "intentWorkflows"
       ],
       "outputs": ["{projectRoot}/coverage"]
     },
@@ -41,7 +47,8 @@
       "inputs": [
         "default",
         "^production",
-        "{workspaceRoot}/packages/intent/meta/**/*"
+        "{workspaceRoot}/packages/intent/meta/**/*",
+        "intentWorkflows"
       ]
     },
     "test:eslint": {
@@ -57,7 +64,7 @@
     "build": {
       "cache": true,
       "dependsOn": ["^build"],
-      "inputs": ["production", "^production"],
+      "inputs": ["production", "^production", "intentWorkflows"],
       "outputs": ["{projectRoot}/build", "{projectRoot}/dist"]
     },
     "test:docs": {

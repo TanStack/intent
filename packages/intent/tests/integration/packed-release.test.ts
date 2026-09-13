@@ -99,6 +99,40 @@ afterAll(() => {
 })
 
 describe('packed release', () => {
+  it('uses its packaged release SHA offline without an override or tag lookup', () => {
+    expect(packedFiles).toContain('dist/workflow-ref.json')
+    const metadata = JSON.parse(
+      readFileSync(join(installedRoot, 'dist/workflow-ref.json'), 'utf8'),
+    )
+    const version = JSON.parse(
+      readFileSync(join(installedRoot, 'package.json'), 'utf8'),
+    ).version
+    expect(metadata.version).toBe(version)
+    expect(metadata.commit).toMatch(/^[a-f0-9]{40}$/)
+    const result = spawnSync(process.execPath, [cli, 'setup'], {
+      cwd,
+      encoding: 'utf8',
+      timeout,
+      env: {
+        ...process.env,
+        INTENT_WORKFLOW_REF: '',
+        PATH: '',
+        npm_config_offline: 'true',
+      },
+    })
+    expect(result.status, result.stderr).toBe(0)
+    const caller = readFileSync(
+      join(cwd, '.github/workflows/check-skills.yml'),
+      'utf8',
+    )
+    for (const name of [
+      'check-skills',
+      'review-skills',
+      'publish-skill-review',
+    ])
+      expect(caller).toContain(`/${name}.yml@${metadata.commit} # v${version}`)
+  })
+
   it('installs standalone hooks from the packed CLI', () => {
     const installed = run([
       'hooks',

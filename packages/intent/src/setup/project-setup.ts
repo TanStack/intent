@@ -1,18 +1,14 @@
-import { execFileSync } from 'node:child_process'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { basename, join, relative } from 'node:path'
+import { repositoryWritePath } from '../shared/write-path.js'
+import { writeChanges } from '../maintainer/files.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import {
   findPackagesWithSkills,
   findWorkspaceRoot,
   readWorkspacePatterns,
 } from './workspace-patterns.js'
+import type { FileChange } from '../maintainer/files.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,50 +38,37 @@ interface TemplateVars {
   SRC_PATH: string
   WATCH_PATHS: string
   INTENT_WORKFLOW_REF: string
+  INTENT_ARTIFACTS: string
 }
 
-const intentRepository = 'https://github.com/TanStack/intent.git'
-
-// The reference the copied workflow pins Intent's reusable workflows to: the
-// commit of the release that is running, written as `<sha> # v<version>` so
-// Dependabot and Renovate can bump it, or the version tag alone when the
-// commit cannot be resolved (offline, or a build that is not a release).
-export function resolveIntentWorkflowRef(
-  packageDir: string,
-  remote: string = intentRepository,
-): string {
+// The pin belongs to the installed artifact. Never resolve a mutable release
+// tag at setup time or silently weaken the pin when offline.
+export function resolveIntentWorkflowRef(packageDir: string): string {
   const version = readPackageJson(packageDir).version
-  const tag = `v${typeof version === 'string' ? version : '0.0.0'}`
   try {
-    const listed = execFileSync(
-      'git',
-      [
-        'ls-remote',
-        '--tags',
-        remote,
-        `refs/tags/${tag}`,
-        `refs/tags/${tag}^{}`,
-      ],
-      {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        timeout: 10_000,
-      },
+    const metadata = JSON.parse(
+      readFileSync(join(packageDir, 'dist/workflow-ref.json'), 'utf8'),
     )
-    // An annotated tag lists its own object first and the peeled commit
-    // under `^{}`; a workflow reference needs the commit.
-    const lines = listed
-      .split('\n')
-      .map((line) => line.split('\t'))
-      .filter((parts): parts is [string, string] => parts.length === 2)
-    const commit =
-      lines.find(([, ref]) => ref === `refs/tags/${tag}^{}`)?.[0] ??
-      lines.find(([, ref]) => ref === `refs/tags/${tag}`)?.[0]
-    if (commit && /^[0-9a-f]{40}$/.test(commit)) return `${commit} # ${tag}`
+    if (
+      metadata.version === version &&
+      typeof metadata.commit === 'string' &&
+      /^[0-9a-f]{40}$/.test(metadata.commit)
+    )
+      return validateWorkflowRef(`${metadata.commit} # v${version}`)
   } catch {
-    // Fall through to the tag.
+    // Report one actionable error for absent, invalid, or mismatched metadata.
   }
-  return tag
+  throw new Error(
+    'No immutable workflow reference is packaged for this Intent version. Install a release build, or set INTENT_WORKFLOW_REF to a verified full commit SHA for development.',
+  )
+}
+
+function validateWorkflowRef(ref: string): string {
+  if (!/^[0-9a-f]{40}(?: # v[0-9][A-Za-z0-9.+-]*)?$/.test(ref))
+    throw new Error(
+      'INTENT_WORKFLOW_REF must be a full 40-character commit SHA, optionally followed by a release version comment.',
+    )
+  return ref
 }
 
 function isGenericWorkspaceName(name: string, root: string): boolean {
@@ -267,6 +250,7 @@ function detectVars(root: string, packageDirs?: Array<string>): TemplateVars {
     SRC_PATH: srcPath,
     WATCH_PATHS: watchPaths,
     INTENT_WORKFLOW_REF: '',
+    INTENT_ARTIFACTS: '',
   }
 }
 
@@ -284,6 +268,7 @@ function applyVars(content: string, vars: TemplateVars): string {
     .replace(/\{\{SRC_PATH\}\}/g, vars.SRC_PATH)
     .replace(/\{\{WATCH_PATHS\}\}/g, vars.WATCH_PATHS)
     .replace(/\{\{INTENT_WORKFLOW_REF\}\}/g, vars.INTENT_WORKFLOW_REF)
+    .replace(/\{\{INTENT_ARTIFACTS\}\}/g, vars.INTENT_ARTIFACTS)
 }
 
 // ---------------------------------------------------------------------------
@@ -303,21 +288,25 @@ function templatesUse(
   )
 }
 
-function copyTemplates(
+function planTemplates(
   srcDir: string,
   destDir: string,
   vars: TemplateVars,
-): { copied: Array<string>; skipped: Array<string> } {
+  root: string,
+): {
+  changes: Array<FileChange>
+  copied: Array<string>
+  skipped: Array<string>
+} {
   const copied: Array<string> = []
   const skipped: Array<string> = []
+  const changes: Array<FileChange> = []
 
-  if (!existsSync(srcDir)) return { copied, skipped }
-
-  mkdirSync(destDir, { recursive: true })
+  if (!existsSync(srcDir)) return { changes, copied, skipped }
 
   for (const entry of readdirSync(srcDir)) {
     const srcPath = join(srcDir, entry)
-    const destPath = join(destDir, entry)
+    const destPath = repositoryWritePath(root, join(destDir, entry))
 
     if (existsSync(destPath)) {
       skipped.push(destPath)
@@ -332,11 +321,11 @@ function copyTemplates(
       )
     }
     const substituted = applyVars(content, vars)
-    writeFileSync(destPath, substituted)
+    changes.push({ path: destPath, source: null, content: substituted })
     copied.push(destPath)
   }
 
-  return { copied, skipped }
+  return { changes, copied, skipped }
 }
 
 // ---------------------------------------------------------------------------
@@ -455,45 +444,72 @@ export function runEditPackageJsonAll(
 // Command: setup-github-actions
 // ---------------------------------------------------------------------------
 
-export function runSetupGithubActions(
+export function planSetupGithubActions(
   root: string,
   metaDir: string,
-): SetupGithubActionsResult {
+  artifacts = '',
+) {
   const workspaceRoot = findWorkspaceRoot(root) ?? root
   const packageDirs = findPackagesWithSkills(workspaceRoot)
   const vars = detectVars(
     workspaceRoot,
     packageDirs.length > 0 ? packageDirs : undefined,
   )
-  const result: SetupGithubActionsResult = { workflows: [], skipped: [] }
-
+  // This label enters a YAML scalar and a GitHub Actions input. Package or
+  // repository metadata must not introduce YAML or Actions expressions.
+  if (!/^[A-Za-z0-9@._ /-]+$/.test(vars.PACKAGE_LABEL))
+    throw new Error('Cannot generate a workflow with an unsafe package label.')
+  if (artifacts && !/^[A-Za-z0-9@._ /-]+$/.test(artifacts))
+    throw new Error(
+      'Cannot generate a workflow with an unsafe planning directory.',
+    )
+  vars.INTENT_ARTIFACTS = artifacts
   const srcDir = join(metaDir, 'templates', 'workflows')
   const destDir = join(workspaceRoot, '.github', 'workflows')
-  // Resolving the reference contacts GitHub, so only a template that pins
-  // one and will actually be copied asks for it. Existing workflows stay offline.
+  if (existsSync(srcDir))
+    for (const entry of readdirSync(srcDir))
+      repositoryWritePath(workspaceRoot, join(destDir, entry))
+  // Existing workflows are preserved even in a development build with no pin.
   if (templatesUse(srcDir, destDir, '{{INTENT_WORKFLOW_REF}}'))
     vars.INTENT_WORKFLOW_REF =
-      process.env.INTENT_WORKFLOW_REF ||
-      resolveIntentWorkflowRef(join(metaDir, '..'))
-  const { copied, skipped } = copyTemplates(srcDir, destDir, vars)
-  result.workflows = copied
-  result.skipped = skipped
-
-  for (const f of result.workflows) console.log(`✓ Copied workflow: ${f}`)
-  for (const f of result.skipped) console.log(`  Already exists: ${f}`)
-
-  if (result.workflows.length === 0 && result.skipped.length === 0) {
-    console.log('No templates directory found. Is @tanstack/intent installed?')
-  } else if (result.workflows.length > 0) {
-    console.log(`\nTemplate variables applied:`)
-    console.log(`  Package:  ${vars.PACKAGE_LABEL}`)
-    console.log(`  Repo:     ${vars.REPO}`)
+      (process.env.INTENT_WORKFLOW_REF
+        ? validateWorkflowRef(process.env.INTENT_WORKFLOW_REF)
+        : undefined) || resolveIntentWorkflowRef(join(metaDir, '..'))
+  const {
+    changes,
+    copied: workflows,
+    skipped,
+  } = planTemplates(srcDir, destDir, vars, workspaceRoot)
+  const messages = [
+    ...workflows.map((file) => `✓ Copied workflow: ${file}`),
+    ...skipped.map((file) => `  Already exists: ${file}`),
+  ]
+  if (workflows.length === 0 && skipped.length === 0) {
+    messages.push(
+      'No templates directory found. Is @tanstack/intent installed?',
+    )
+  } else if (workflows.length > 0) {
+    messages.push(
+      `\nTemplate variables applied:`,
+      `  Package:  ${vars.PACKAGE_LABEL}`,
+      `  Repo:     ${vars.REPO}`,
+    )
     if (vars.INTENT_WORKFLOW_REF)
-      console.log(`  Workflow: TanStack/intent@${vars.INTENT_WORKFLOW_REF}`)
-    console.log(
+      messages.push(`  Workflow: TanStack/intent@${vars.INTENT_WORKFLOW_REF}`)
+    messages.push(
       `  Mode:     ${packageDirs.length > 0 ? `monorepo (${packageDirs.length} packages with skills)` : 'single package'}`,
     )
   }
 
-  return result
+  return { root: workspaceRoot, changes, workflows, skipped, messages }
+}
+
+export function runSetupGithubActions(
+  root: string,
+  metaDir: string,
+): SetupGithubActionsResult {
+  const plan = planSetupGithubActions(root, metaDir)
+  writeChanges(plan.root, plan.changes)
+  for (const message of plan.messages) console.log(message)
+  return { workflows: plan.workflows, skipped: plan.skipped }
 }

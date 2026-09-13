@@ -1,12 +1,5 @@
-# Reusable workflow behind the release and manual job of a library
-# repository's check-skills.yml. The caller pins this file to an Intent
-# release commit. It needs `contents: write` to push the review branch and
-# `pull-requests: write` to open or update the review PR; the caller grants
-# exactly those two, on this job alone.
-#
-# Intent itself runs from the repository's own lockfile-pinned copy, so a
-# malicious npm publish does nothing until the maintainer merges a bump. The
-# `intent-version` input opts into a registry install instead.
+# Read-only release/manual report. PR publication is a separate opt-in
+# reusable workflow on a fresh runner; it never executes this job's checkout.
 
 name: Review Skills
 
@@ -18,32 +11,35 @@ on:
         type: string
         default: ''
       intent-version:
-        description: npm dist-tag or version of @tanstack/intent to install instead of the repository's own copy
+        description: Exact npm version of @tanstack/intent to install instead of the repository's own copy
         type: string
         default: ''
       node-version:
         description: Node.js version for the checks
         type: string
         default: '22'
+    outputs:
+      has-review:
+        description: Whether a review report was produced
+        value: ${{ jobs.review.outputs.has-review }}
 
 permissions: {}
 
 jobs:
   review:
     name: Check intent skill coverage
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+    outputs:
+      has-review: ${{ steps.stale.outputs.has_review }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          # The token is supplied to the one push below, so the installed CLI
-          # runs without credentials in the checkout.
           persist-credentials: false
 
       - name: Detect package manager
@@ -82,7 +78,11 @@ jobs:
           COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
         run: |
           if [ -n "$INTENT_VERSION" ]; then
-            npm install -g "@tanstack/intent@${INTENT_VERSION}"
+            if [[ ! "$INTENT_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::intent-version must be an exact version, never a tag or range."
+              exit 1
+            fi
+            npm install -g --ignore-scripts "@tanstack/intent@${INTENT_VERSION}"
             exit 0
           fi
           case "$MANAGER" in
@@ -131,34 +131,11 @@ jobs:
             intent stale --github-review "${LABEL[@]}"
           fi
 
-      - name: Open or update review PR
+      - name: Save review report
         if: steps.stale.outputs.has_review == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ github.event.release.tag_name || 'manual' }}
-          BASE_BRANCH: ${{ github.event.repository.default_branch }}
-          SERVER_URL: ${{ github.server_url }}
-        run: |
-          BRANCH="skills/review-${VERSION}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          PR_URL="$(gh pr list --head "$BRANCH" --json url --jq '.[0].url')"
-          if [ -n "$PR_URL" ]; then
-            gh pr edit "$PR_URL" --body-file pr-body.md
-          else
-            # A remote branch left from an earlier, merged review PR has no
-            # commits ahead of the base, so it is recreated from the base.
-            git checkout -B "$BRANCH"
-            git commit --allow-empty -m "chore: review intent skills for ${VERSION}"
-            # Same header actions/checkout would have persisted, scoped to this push.
-            AUTH="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
-            git -c "http.${SERVER_URL}/.extraheader=AUTHORIZATION: basic ${AUTH}" \
-              push --force origin "$BRANCH"
-            gh pr create \
-              --title "Review intent skills (${VERSION})" \
-              --body-file pr-body.md \
-              --head "$BRANCH" \
-              --base "$BASE_BRANCH"
-          fi
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: intent-review-report
+          path: review-items.json
+          if-no-files-found: error
+          retention-days: 7
