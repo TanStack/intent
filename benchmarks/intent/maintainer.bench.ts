@@ -11,8 +11,9 @@ const cliPath = fileURLToPath(
 
 for (const count of [20, 200]) {
   describe(`maintainer setup with ${count} existing skills`, () => {
-    let root: string
-    beforeAll(() => {
+    let root: string | undefined
+    function setup() {
+      if (root) return
       root = createTempDir('maintainer-setup')
       writeJson(join(root, 'package.json'), {
         name: '@bench/library',
@@ -31,15 +32,21 @@ for (const count of [20, 200]) {
       execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], {
         cwd: root,
       })
-    })
-    afterAll(() => rmSync(root, { recursive: true, force: true }))
+    }
+    function teardown() {
+      if (root) rmSync(root, { recursive: true, force: true })
+      root = undefined
+    }
+    beforeAll(setup)
+    afterAll(teardown)
 
     bench(
       'registers the complete batch',
       () => {
+        setup()
         // Repeat first setup, without including fixture creation or a network lookup.
         for (const path of ['skills/_artifacts', '.intent', 'AGENTS.md']) {
-          rmSync(join(root, path), { recursive: true, force: true })
+          rmSync(join(root!, path), { recursive: true, force: true })
         }
         const result = spawnSync(
           process.execPath,
@@ -59,7 +66,7 @@ for (const count of [20, 200]) {
           )
         }
       },
-      { warmupIterations: 3, time: 3_000 },
+      { warmupIterations: 3, time: 3_000, setup, teardown },
     )
   })
 }
