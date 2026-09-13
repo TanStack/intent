@@ -96,7 +96,7 @@ export function planFrontmatterRepair(path: string, source: string) {
       }
     }
     if (!changes.length) return { fields: fm, changes, problems }
-    next = document.toString().replace(/\r?\n$/, '')
+    next = document.toString({ lineWidth: 0 }).replace(/\r?\n$/, '')
     const parsed = parseDocument(next)
     if (parsed.errors.length || !isDeepStrictEqual(parsed.toJS(), expected))
       throw new Error('Unexpected frontmatter change')

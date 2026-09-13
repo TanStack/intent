@@ -66,6 +66,25 @@ it('repairs frontmatter without rewriting or fully validating code examples', as
   expect(match[2]).toBe(body)
 })
 
+it('keeps long frontmatter values on one line when repairing', async () => {
+  const description =
+    'Use when the client needs a long activation sentence that runs well past the default eighty-column YAML fold width.'
+  write(
+    'skills/client/SKILL.md',
+    `---\nname: client\ndescription: ${description}\nlibrary: "@acme/client"\n---\nBody\n`,
+  )
+
+  expect(await main(['repair', '--write', '--json'])).toBe(0)
+
+  const repaired = readFileSync(join(root, 'skills/client/SKILL.md'), 'utf8')
+  expect(repaired).toContain(`\ndescription: ${description}\n`)
+  expect(parse(repaired.split('---')[1]!)).toEqual({
+    name: 'client',
+    description,
+    metadata: { library: '@acme/client' },
+  })
+})
+
 it('prints an applicable patch for labeled alternatives without applying the suggestion', async () => {
   const file = 'skills/client/SKILL.md'
   const before = '// BEFORE (classic)\nfunction Client() { return 1 }\n\n'
