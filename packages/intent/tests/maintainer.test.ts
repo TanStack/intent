@@ -372,6 +372,44 @@ it('reports invalid and conflicting existing skills without registering them', a
   )
 })
 
+it('keeps valid registrations when the planner rejects a candidate in the batch', async () => {
+  const contents = new Map(
+    ['alpha', 'broken', 'omega'].map((name) => [
+      name,
+      `---\nname: ${name}\ndescription: Use ${name}.\n---\nAuthored guidance.\n`,
+    ]),
+  )
+  for (const [name, content] of contents)
+    write(`skills/${name}/SKILL.md`, content)
+  write(
+    'skills/_artifacts/domain_map.yaml',
+    'skills: [{ slug: broken, domain: "" }]\n',
+  )
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  expect(
+    parse(read('skills/_artifacts/skill_tree.yaml')).skills.map(
+      (entry: { name: string }) => entry.name,
+    ),
+  ).toEqual(['alpha', 'omega'])
+  expect(read('skills/_artifacts/skill_spec.md')).not.toContain(
+    'Registered `broken`',
+  )
+  expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
+    'Skipped skills/broken/SKILL.md: Choose the task domain',
+  )
+  for (const [name, content] of contents)
+    expect(read(`skills/${name}/SKILL.md`)).toBe(content)
+  const records = ['skill_tree.yaml', 'domain_map.yaml', 'skill_spec.md'].map(
+    (file) => read(`skills/_artifacts/${file}`),
+  )
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  expect(
+    ['skill_tree.yaml', 'domain_map.yaml', 'skill_spec.md'].map((file) =>
+      read(`skills/_artifacts/${file}`),
+    ),
+  ).toEqual(records)
+})
+
 afterEach(() => {
   process.chdir(previousCwd)
   vi.restoreAllMocks()
