@@ -24,7 +24,7 @@ export function planFrontmatterRepair(path: string, source: string) {
     return {
       changes,
       problems: document.errors.map(
-        (error) => `Invalid YAML: ${error.message}`,
+        (error) => `Invalid YAML frontmatter: ${error.message}`,
       ),
     }
   let fields: unknown
@@ -34,7 +34,7 @@ export function planFrontmatterRepair(path: string, source: string) {
     return {
       changes,
       problems: [
-        `Invalid YAML: ${error instanceof Error ? error.message : String(error)}`,
+        `Invalid YAML frontmatter: ${error instanceof Error ? error.message : String(error)}`,
       ],
     }
   }
@@ -59,7 +59,7 @@ export function planFrontmatterRepair(path: string, source: string) {
     }
     // Never choose between conflicting values, including while fixing another
     // field in the same file. The maintainer must resolve the conflict first.
-    if (problems.length) return { changes, problems }
+    if (problems.length) return { fields: fm, changes, problems }
   } else problems.push('metadata must be a mapping')
 
   let next: string
@@ -95,13 +95,14 @@ export function planFrontmatterRepair(path: string, source: string) {
         delete expected[key]
       }
     }
-    if (!changes.length) return { changes, problems }
+    if (!changes.length) return { fields: fm, changes, problems }
     next = document.toString().replace(/\r?\n$/, '')
     const parsed = parseDocument(next)
     if (parsed.errors.length || !isDeepStrictEqual(parsed.toJS(), expected))
       throw new Error('Unexpected frontmatter change')
   } catch {
     return {
+      fields: fm,
       changes: [],
       problems: [
         ...problems,
@@ -115,5 +116,5 @@ export function planFrontmatterRepair(path: string, source: string) {
     source,
     content: `---${opening}${next}${closing}---${afterClose}${body}`,
   }
-  return { changes, problems, change }
+  return { fields: fm, changes, problems, change }
 }

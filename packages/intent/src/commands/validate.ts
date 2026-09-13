@@ -439,26 +439,12 @@ async function runValidateCommandInternal(
         continue
       }
 
-      let fm: Record<string, unknown>
-      try {
-        fm = parseYaml(match[1]) as Record<string, unknown>
-      } catch (err) {
-        const detail = err instanceof Error ? err.message : String(err)
-        errors.push({
-          file: rel,
-          message: `Invalid YAML frontmatter: ${detail}`,
-        })
-        continue
-      }
-
-      if (!isRecord(fm)) {
-        errors.push({ file: rel, message: 'Frontmatter must be a mapping' })
-        continue
-      }
       const repair = planFrontmatterRepair(filePath, content)
+      for (const message of repair.problems) errors.push({ file: rel, message })
+      const fm = repair.fields
+      if (!fm) continue
       if (repair.change)
         fixPlans.push({ ...repair.change, file: rel, changes: repair.changes })
-      for (const message of repair.problems) errors.push({ file: rel, message })
 
       // Only target files whose metadata is a mapping (or absent); a
       // non-mapping metadata scalar is rejected by the repair planner, and
