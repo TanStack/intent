@@ -339,8 +339,15 @@ export async function runMaintainerCommand(
           })),
           [],
           (index, error) => {
-            candidates[index]!.problems.push(
-              error instanceof Error ? error.message : String(error),
+            const candidate = candidates[index]!
+            // A blank domain only comes from a domain_map.yaml entry, and
+            // setup has no --domain flag to point the maintainer at.
+            candidate.problems.push(
+              candidate.domain.trim()
+                ? error instanceof Error
+                  ? error.message
+                  : String(error)
+                : `Set a non-empty domain for ${candidate.name} in ${project.artifacts}/domain_map.yaml, then run intent maintainer setup again.`,
             )
           },
         )
