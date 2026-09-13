@@ -2635,7 +2635,7 @@ describe('cli commands', () => {
     expect(fixed).toContain('\nSkill content here.\n')
   })
 
-  it('keeps existing metadata values when removing conflicting top-level scalars', async () => {
+  it('refuses conflicting frontmatter migrations without discarding either value', async () => {
     const root = mkdtempSync(
       join(realTmpdir, 'intent-cli-validate-fix-conflict-'),
     )
@@ -2660,13 +2660,16 @@ describe('cli commands', () => {
     )
 
     process.chdir(root)
+    const original = readFileSync(skillPath, 'utf8')
 
     const exitCode = await main(['validate', '--fix'])
     const fixed = readFileSync(skillPath, 'utf8')
 
-    expect(exitCode).toBe(0)
-    expect(fixed).toContain('metadata:\n  library: nested')
-    expect(fixed).not.toContain('\nlibrary: top')
+    expect(exitCode).toBe(1)
+    expect(fixed).toBe(original)
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+      'Conflicting values for "library" and "metadata.library"',
+    )
   })
 
   it('fixes names while leaving scalar migrations blocked by non-mapping metadata', async () => {

@@ -395,6 +395,40 @@ and prints the selected skill's frontmatter and body.
     expect(existsSync(join(cwd, '_artifacts'))).toBe(false)
   })
 
+  it('prepares and applies mechanical repairs with the packed CLI', () => {
+    const skillDir = join(cwd, 'skills', 'with spaces', 'client')
+    mkdirSync(skillDir, { recursive: true })
+    const path = join(skillDir, 'SKILL.md')
+    const original =
+      '---\nname: client\ndescription: Use the client.\nlibrary: consumer\n---\n\nKeep this body unchanged.\n'
+    writeFileSync(path, original)
+    const patch = run(['repair', '--patch'])
+    expect(patch.status, patch.stderr).toBe(0)
+    expect(readFileSync(path, 'utf8')).toBe(original)
+    expect(
+      spawnSync(
+        'git',
+        ['-c', 'core.fsmonitor=false', 'apply', '--check', '-'],
+        {
+          cwd,
+          input: patch.stdout,
+          encoding: 'utf8',
+          timeout,
+        },
+      ).status,
+    ).toBe(0)
+    const repaired = run(['repair', '--write', '--json'])
+    expect(repaired.status, repaired.stderr).toBe(0)
+    expect(JSON.parse(repaired.stdout).repairs).toHaveLength(1)
+    expect(readFileSync(path, 'utf8')).toContain(
+      'metadata:\n  library: consumer',
+    )
+    const second = run(['repair', '--patch'])
+    expect(second.status, second.stderr).toBe(0)
+    expect(second.stdout).toBe('')
+    expect(existsSync(join(cwd, '.intent', 'review-state.json'))).toBe(false)
+  })
+
   it('routes local and generated review reports to the shipped focused procedure', () => {
     writeFileSync(
       join(cwd, 'package.json'),

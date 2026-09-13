@@ -117,6 +117,95 @@ function extractCodeBlocks(file: string, content: string): Array<CodeBlock> {
   return blocks
 }
 
+// These are suggestions for review, not automatic fixes: BEFORE/AFTER can
+// describe sequential work as well as alternative implementations.
+export function planExampleRepairs(root: string, content: string) {
+  const suggestions: Array<{ line: number; message: string }> = []
+  const lines = content.split(/(?<=\n)/)
+  let ts: typeof TS | null | undefined
+  for (const fence of codeFences(content).reverse()) {
+    if (
+      !checkedLanguages.has(fence.language) ||
+      fence.end >= lines.length ||
+      !/^\s*\/\/\s*BEFORE\b/i.test(fence.code) ||
+      !/\/\/\s*AFTER\b/i.test(fence.code)
+    )
+      continue
+    ts ??= loadTypeScript(root)
+    if (!ts || Number(ts.versionMajorMinor.split('.')[0]) < 5)
+      return {
+        content,
+        suggestions: [],
+        skipped:
+          'TypeScript 5.0 or newer is required to suggest example repairs.',
+      }
+    const extension =
+      fence.language === 'tsx' || fence.language === 'jsx'
+        ? fence.language
+        : fence.language.startsWith('j')
+          ? 'js'
+          : 'ts'
+    const filename = `example.${extension}`
+    const source = ts.createSourceFile(
+      filename,
+      fence.code,
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const markers = source.statements.flatMap((statement) =>
+      (ts!.getLeadingCommentRanges(fence.code, statement.pos) ?? []).flatMap(
+        (comment) => {
+          const label = /^\/\/\s*(BEFORE|AFTER)\b[^\n]*$/i.exec(
+            fence.code.slice(comment.pos, comment.end),
+          )
+          const lineStart = fence.code.lastIndexOf('\n', comment.pos - 1) + 1
+          return label && !fence.code.slice(lineStart, comment.pos).trim()
+            ? [{ label: label[1]!.toUpperCase(), pos: lineStart }]
+            : []
+        },
+      ),
+    )
+    if (
+      markers.length !== 2 ||
+      markers[0]!.label !== 'BEFORE' ||
+      markers[1]!.label !== 'AFTER' ||
+      fence.code.slice(0, markers[0]!.pos).trim()
+    )
+      continue
+    const split = markers[1]!.pos
+    const halves = [fence.code.slice(0, split), fence.code.slice(split)]
+    if (
+      halves.some((code) =>
+        (
+          ts!.transpileModule(code, {
+            fileName: filename,
+            reportDiagnostics: true,
+            compilerOptions: {
+              target: ts!.ScriptTarget.ESNext,
+              module: ts!.ModuleKind.ESNext,
+              jsx: ts!.JsxEmit.Preserve,
+            },
+          }).diagnostics ?? []
+        ).some(
+          (diagnostic) => diagnostic.category === ts!.DiagnosticCategory.Error,
+        ),
+      )
+    )
+      continue
+    const at =
+      fence.start + 1 + fence.code.slice(0, split).split('\n').length - 1
+    const eol = lines[fence.start]!.endsWith('\r\n') ? '\r\n' : '\n'
+    const closing = lines[fence.end]!.replace(/\r?\n$/, '')
+    lines.splice(at, 0, `${closing}${eol}${eol}${lines[fence.start]}`)
+    suggestions.unshift({
+      line: at + 1,
+      message:
+        'Review splitting the labeled BEFORE/AFTER alternatives into separate code fences.',
+    })
+  }
+  return { content: lines.join(''), suggestions }
+}
+
 function checkSkillLinks(
   root: string,
   file: string,

@@ -1,16 +1,18 @@
-import {
-  appendFileSync,
-  existsSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs'
+import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fail, isCliFailure } from '../shared/cli-error.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { checkSkillBlocks, summarizeSkillExamples } from '../validate/blocks.js'
+import { writeChanges } from '../maintainer/files.js'
+import { repositoryWritePath } from '../shared/write-path.js'
+import {
+  agentSkillNamePattern,
+  planFrontmatterRepair,
+} from '../validate/repairs.js'
 import { printWarnings } from './support.js'
+import type { FileChange } from '../maintainer/files.js'
 import type { ProjectContext } from '../core/project-context.js'
 
 interface ValidationError {
@@ -23,9 +25,8 @@ interface ValidationWarning {
   message: string
 }
 
-interface FrontmatterFixPlan {
+interface FrontmatterFixPlan extends FileChange {
   file: string
-  filePath: string
   changes: Array<string>
 }
 
@@ -41,8 +42,6 @@ export interface ValidateCommandOptions {
   setVersion?: string
 }
 
-const agentSkillNamePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-
 // The Agent Skills spec allows exactly these six top-level frontmatter keys.
 const specTopLevelKeys = new Set([
   'name',
@@ -56,13 +55,6 @@ const specTopLevelKeys = new Set([
 // Array fields Intent still emits at the top level; their migration to a
 // structured surface is tracked separately (#161), so they are not flagged here.
 const intentArrayKeys = new Set(['sources', 'requires'])
-
-const metadataScalarKeys = [
-  'type',
-  'library',
-  'library_version',
-  'framework',
-] as const
 
 function isScalarValue(value: unknown): boolean {
   return (
@@ -199,113 +191,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
-function collectFrontmatterFixPlan({
-  filePath,
-  fm,
-  rel,
-}: {
-  filePath: string
-  fm: Record<string, unknown>
-  rel: string
-}): FrontmatterFixPlan | null {
-  const changes: Array<string> = []
-  const parentDir = basename(dirname(filePath))
-
-  if (
-    typeof fm.name === 'string' &&
-    (fm.name.includes('/') || fm.name !== parentDir) &&
-    agentSkillNamePattern.test(parentDir)
-  ) {
-    changes.push(`rewrite name to "${parentDir}"`)
-  }
-
-  const metadata = fm.metadata
-  const canMoveMetadata = metadata === undefined || isRecord(metadata)
-  if (canMoveMetadata) {
-    const metadataRecord = isRecord(metadata) ? metadata : undefined
-    for (const key of metadataScalarKeys) {
-      if (typeof fm[key] !== 'string') continue
-
-      if (metadataRecord && key in metadataRecord) {
-        changes.push(
-          `remove top-level "${key}"; metadata.${key} already exists`,
-        )
-      } else {
-        changes.push(`move top-level "${key}" under metadata.${key}`)
-      }
-    }
-  }
-
-  return changes.length > 0 ? { file: rel, filePath, changes } : null
-}
-
 function normalizeLineEndings(value: string, lineEnding: string): string {
   return lineEnding === '\r\n' ? value.replace(/\r?\n/g, '\r\n') : value
 }
 
-async function applyFrontmatterFixes(
-  fixPlans: Array<FrontmatterFixPlan>,
-): Promise<void> {
-  const { parseDocument } = await import('yaml')
+function repairRoot(): string {
+  const context = resolveProjectContext({ cwd: process.cwd() })
+  return context.workspaceRoot ?? context.packageRoot ?? context.cwd
+}
 
-  for (const plan of fixPlans) {
-    const content = readFileSync(plan.filePath, 'utf8')
-    const match = content.match(
-      /^---(\r?\n)([\s\S]*?)(\r?\n)---(\r?\n?)([\s\S]*)/,
-    )
-    if (!match) continue
-
-    const openingLineEnding = match[1]
-    const frontmatter = match[2]
-    const closingLineEnding = match[3]
-    const afterClose = match[4]
-    const body = match[5]
-    if (
-      openingLineEnding === undefined ||
-      frontmatter === undefined ||
-      closingLineEnding === undefined ||
-      afterClose === undefined ||
-      body === undefined
-    ) {
-      continue
-    }
-
-    const doc = parseDocument(frontmatter)
-    if (doc.errors.length > 0) continue
-
-    const fm = doc.toJS() as Record<string, unknown>
-    const parentDir = basename(dirname(plan.filePath))
-
-    if (
-      typeof fm.name === 'string' &&
-      (fm.name.includes('/') || fm.name !== parentDir) &&
-      agentSkillNamePattern.test(parentDir)
-    ) {
-      doc.set('name', parentDir)
-    }
-
-    const metadata = fm.metadata
-    const canMoveMetadata = metadata === undefined || isRecord(metadata)
-    if (canMoveMetadata) {
-      for (const key of metadataScalarKeys) {
-        const value = fm[key]
-        if (typeof value !== 'string') continue
-
-        if (!doc.hasIn(['metadata', key])) {
-          const valueNode = doc.get(key, true)
-          doc.setIn(['metadata', key], valueNode ?? value)
-        }
-        doc.delete(key)
-      }
-    }
-
-    const nextFrontmatter = normalizeLineEndings(
-      doc.toString().replace(/\r?\n$/, ''),
-      openingLineEnding,
-    )
-    const nextContent = `---${openingLineEnding}${nextFrontmatter}${closingLineEnding}---${afterClose}${body}`
-    writeFileSync(plan.filePath, nextContent)
-  }
+function applyFrontmatterFixes(plans: Array<FrontmatterFixPlan>): void {
+  const root = repairRoot()
+  writeChanges(
+    root,
+    plans.map((plan) => ({
+      ...plan,
+      path: repositoryWritePath(root, plan.path),
+    })),
+  )
 }
 
 async function applySetVersion(
@@ -313,9 +216,12 @@ async function applySetVersion(
   version: string,
 ): Promise<void> {
   const { parseDocument } = await import('yaml')
+  const root = repairRoot()
+  const changes: Array<FileChange> = []
 
   for (const plan of plans) {
-    const content = readFileSync(plan.filePath, 'utf8')
+    const path = repositoryWritePath(root, plan.filePath)
+    const content = readFileSync(path, 'utf8')
     const match = content.match(
       /^---(\r?\n)([\s\S]*?)(\r?\n)---(\r?\n?)([\s\S]*)/,
     )
@@ -346,8 +252,9 @@ async function applySetVersion(
       openingLineEnding,
     )
     const nextContent = `---${openingLineEnding}${nextFrontmatter}${closingLineEnding}---${afterClose}${body}`
-    writeFileSync(plan.filePath, nextContent)
+    changes.push({ path, source: content, content: nextContent })
   }
+  writeChanges(root, changes)
 }
 
 function collectAgentSkillSpecWarnings({
@@ -544,11 +451,17 @@ async function runValidateCommandInternal(
         continue
       }
 
-      const fixPlan = collectFrontmatterFixPlan({ filePath, fm, rel })
-      if (fixPlan) fixPlans.push(fixPlan)
+      if (!isRecord(fm)) {
+        errors.push({ file: rel, message: 'Frontmatter must be a mapping' })
+        continue
+      }
+      const repair = planFrontmatterRepair(filePath, content)
+      if (repair.change)
+        fixPlans.push({ ...repair.change, file: rel, changes: repair.changes })
+      for (const message of repair.problems) errors.push({ file: rel, message })
 
       // Only target files whose metadata is a mapping (or absent); a
-      // non-mapping metadata scalar is rejected by validation below, and
+      // non-mapping metadata scalar is rejected by the repair planner, and
       // setIn cannot safely graft a key onto it.
       if (options.setVersion !== undefined) {
         const meta = fm.metadata
@@ -609,20 +522,11 @@ async function runValidateCommandInternal(
         }
       }
 
-      if (fm.metadata !== undefined) {
-        if (!isRecord(fm.metadata)) {
-          errors.push({
-            file: rel,
-            message: 'metadata must be a mapping',
-          })
-        } else if (
-          Object.values(fm.metadata).some((value) => typeof value !== 'string')
-        ) {
-          errors.push({
-            file: rel,
-            message: 'metadata values must be strings',
-          })
-        }
+      if (
+        isRecord(fm.metadata) &&
+        Object.values(fm.metadata).some((value) => typeof value !== 'string')
+      ) {
+        errors.push({ file: rel, message: 'metadata values must be strings' })
       }
 
       if (typeof fm.description === 'string' && fm.description.length > 1024) {
@@ -768,15 +672,20 @@ async function runValidateCommandInternal(
   const willFix = options.fix === true && fixPlans.length > 0
 
   if (willSetVersion || willFix) {
+    if (willFix && willSetVersion) {
+      const root = repairRoot()
+      for (const plan of setVersionPlans)
+        repositoryWritePath(root, plan.filePath)
+    }
+    if (willFix) {
+      applyFrontmatterFixes(fixPlans)
+      console.log(`✅ Fixed ${fixPlans.length} skill files`)
+    }
     if (willSetVersion) {
       await applySetVersion(setVersionPlans, options.setVersion!)
       console.log(
         `✅ Set library_version to "${options.setVersion}" on ${setVersionPlans.length} skill files`,
       )
-    }
-    if (willFix) {
-      await applyFrontmatterFixes(fixPlans)
-      console.log(`✅ Fixed ${fixPlans.length} skill files`)
     }
     await runValidateCommandInternal(
       dir,
@@ -846,7 +755,7 @@ function writeGithubValidationSummary({
   appendFileSync(summaryPath, lines.join('\n'))
 }
 
-function collectDefaultSkillsDirs(
+export function collectDefaultSkillsDirs(
   context: ProjectContext,
   findSkillFiles: (dir: string) => Array<string>,
 ): Array<string> {
