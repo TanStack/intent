@@ -249,7 +249,7 @@ it('runs the PR gate for maintainer instructions before any review state exists'
     jobs: { validate: { steps: Array<{ name: string; run?: string }> } }
   }
   const script = template.jobs.validate.steps.find(
-    (step) => step.name === 'Check maintainer workflow',
+    (step) => step.name === 'Check skills',
   )!.run!
   mkdirSync('bin')
   writeFileSync(
@@ -266,7 +266,9 @@ it('runs the PR gate for maintainer instructions before any review state exists'
     },
   }
   execFileSync('bash', ['-c', script], options)
-  expect(existsSync('checked-args')).toBe(false)
+  expect(readFileSync('checked-args', 'utf8')).toBe(
+    'validate\n--github-summary\n',
+  )
   writeFileSync('CLAUDE.md', '<!-- intent-maintainer:start -->\n')
   execFileSync('bash', ['-c', script], options)
   expect(readFileSync('checked-args', 'utf8')).toBe(
