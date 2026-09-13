@@ -28,8 +28,9 @@ function runNode(args: Array<string>, cwd?: string): void {
 }
 
 describe('cold start', () => {
-  let root: string
-  beforeAll(() => {
+  let root: string | undefined
+  function setup() {
+    if (root) return
     root = mkdtempSync(join(tmpdir(), 'intent-prose-startup-'))
     writeFileSync(
       join(root, 'package.json'),
@@ -40,8 +41,13 @@ describe('cold start', () => {
       join(root, 'skills', 'guide', 'SKILL.md'),
       '---\nname: guide\ndescription: Use when reading the guide.\n---\nProse-only guidance.\n',
     )
-  })
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  }
+  function teardown() {
+    if (root) rmSync(root, { recursive: true, force: true })
+    root = undefined
+  }
+  beforeAll(setup)
+  afterAll(teardown)
 
   bench(
     'empty node process (baseline)',
@@ -61,7 +67,10 @@ describe('cold start', () => {
 
   bench(
     'intent validate prose-only skills',
-    () => runNode([cliPath, 'validate'], root),
-    coldStartBenchOptions,
+    () => {
+      setup()
+      runNode([cliPath, 'validate'], root)
+    },
+    { ...coldStartBenchOptions, setup, teardown },
   )
 })
