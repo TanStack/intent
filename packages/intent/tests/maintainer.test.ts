@@ -542,7 +542,7 @@ it('keeps valid registrations when the planner rejects a candidate in the batch'
     'Registered `broken`',
   )
   expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
-    'Skipped skills/broken/SKILL.md: Choose the task domain',
+    'Skipped skills/broken/SKILL.md: Set a non-empty domain for broken in skills/_artifacts/domain_map.yaml, then run intent maintainer setup again.',
   )
   for (const [name, content] of contents)
     expect(read(`skills/${name}/SKILL.md`)).toBe(content)
