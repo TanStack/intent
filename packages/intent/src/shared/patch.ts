@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { devNull, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { repositoryWritePath } from './write-path.js'
 import type { FileChange } from '../maintainer/files.js'
@@ -22,7 +22,7 @@ export function renderRepairPatch(
         '-c',
         'core.autocrlf=false',
         '-c',
-        `core.attributesFile=${devNull}`,
+        'core.attributesFile=/dev/null',
         ...args,
       ],
       {
@@ -31,7 +31,7 @@ export function renderRepairPatch(
           PATH: process.env.PATH,
           SystemRoot: process.env.SystemRoot,
           GIT_CONFIG_NOSYSTEM: '1',
-          GIT_CONFIG_GLOBAL: devNull,
+          GIT_CONFIG_GLOBAL: '/dev/null',
           GIT_ATTR_NOSYSTEM: '1',
           GIT_CONFIG_COUNT: '0',
         },
@@ -50,7 +50,7 @@ export function renderRepairPatch(
     const paths = changes.map((change) =>
       relative(root, repositoryWritePath(root, change.path)),
     )
-    git(['-c', `init.templateDir=${devNull}`, 'init', '-q'])
+    git(['-c', 'init.templateDir=', 'init', '-q'])
     for (const [index, change] of changes.entries()) {
       const path = join(temporary, paths[index]!)
       mkdirSync(dirname(path), { recursive: true })

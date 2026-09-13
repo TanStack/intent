@@ -404,6 +404,7 @@ and prints the selected skill's frontmatter and body.
     writeFileSync(path, original)
     const patch = run(['repair', '--patch'])
     expect(patch.status, patch.stderr).toBe(0)
+    expect(patch.stdout).toContain('SKILL.md')
     expect(readFileSync(path, 'utf8')).toBe(original)
     expect(
       spawnSync(
