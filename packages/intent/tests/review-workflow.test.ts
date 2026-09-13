@@ -75,6 +75,40 @@ it('records confirmed interactive outcomes through the existing review checks', 
   expect(createReview(root).items).toEqual([])
 })
 
+it('records every pending item in one command with the reviewed files as evidence', async () => {
+  writeFileSync('new-api.ts', 'export const enabled = true\n')
+  expect(
+    await main(['maintainer', 'review', '--unchanged', 'internal flag only']),
+  ).toBe(0)
+  const state = JSON.parse(readFileSync('.intent/review-state.json', 'utf8'))
+  expect(state.items['source:new-api.ts']).toMatchObject({
+    outcome: 'no-change',
+    reason: 'internal flag only',
+    evidence: [expect.stringMatching(/^Changed: new-api\.ts at [a-f0-9]{40}$/)],
+  })
+  expect(createReview(root).items).toEqual([])
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  expect(
+    await main(['maintainer', 'review', '--updated', 'nothing pending']),
+  ).toBe(1)
+  expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+    'Nothing is pending review',
+  )
+})
+
+it('rejects a one-shot outcome without a reason or combined with other modes', async () => {
+  writeFileSync('new-api.ts', 'export const enabled = true\n')
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  for (const args of [
+    ['--unchanged', ' '],
+    ['--unchanged', 'a', '--updated', 'b'],
+    ['--updated', 'a', '--json'],
+    ['--unchanged', 'a', '--interactive'],
+  ])
+    expect(await main(['maintainer', 'review', ...args])).toBe(1)
+  expect(existsSync('.intent/review-state.json')).toBe(false)
+})
+
 it('keeps interactive cancellation and CI read-only', async () => {
   writeFileSync('new-api.ts', 'export const enabled = true\n')
   const reviewItem = vi.fn(() => Promise.resolve(null))

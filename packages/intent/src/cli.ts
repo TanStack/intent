@@ -240,6 +240,14 @@ function createCli(
       '--interactive',
       'Inspect and record maintainer review outcomes in a terminal',
     )
+    .option(
+      '--unchanged <reason>',
+      'Record every pending review item as reviewed with no guidance change',
+    )
+    .option(
+      '--updated <reason>',
+      'Record every pending review item as reviewed with updated guidance',
+    )
     .option('--json', 'Output status or review as JSON')
     .option(
       '--record <file>',
@@ -253,6 +261,9 @@ function createCli(
     .example('maintainer status --json')
     .example('maintainer sync')
     .example('maintainer review --json')
+    .example(
+      'maintainer review --unchanged "internal refactor, public API unchanged"',
+    )
     .example('maintainer review --interactive')
     .example('maintainer check --base origin/main')
     .action(
