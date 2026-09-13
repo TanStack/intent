@@ -29,7 +29,7 @@ Every skill has a `metadata.type` field in its frontmatter. Valid types:
 | `composition` | Integration between two or more libraries                  | `electric-drizzle`        |
 | `security`    | Audit checklist or security validation                     | `electric-security-check` |
 
-Agents discover skills via `npx @tanstack/intent list` and read them directly from `node_modules`. Framework skills declare a `requires` dependency on their core skill so agents load them in the right order.
+Agents discover skills via `npm exec --no -- intent list` and read them directly from `node_modules`. Framework skills declare a `requires` dependency on their core skill so agents load them in the right order.
 
 There are two workflows. Detect which applies.
 
@@ -225,7 +225,7 @@ packages/
 │   └── package.json             # Add "skills" to files array
 ```
 
-Publishing configuration is separate from authoring. When the maintainer requests it, `npx @tanstack/intent@latest edit-package-json` prepares the package; review its resulting diff.
+Publishing configuration is separate from authoring. When the maintainer requests it, `npm exec --no -- intent edit-package-json` prepares the package; review its resulting diff.
 
 ### Steps 2–7 — Write skills
 

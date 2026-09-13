@@ -217,10 +217,10 @@ describe('packed release', () => {
       expect(result.stdout).toContain(`name: ${name}\n`)
       if (name === 'domain-discovery') {
         expect(result.stdout).toContain(
-          `](${join(installedRoot, 'meta', name, 'references', 'deep-read.md')})`,
+          `](${join(installedRoot, 'meta', name, 'references', 'deep-read.md').replaceAll('\\', '/')})`,
         )
         expect(result.stdout).toContain(
-          `](${join(installedRoot, 'meta', name, 'references', 'artifacts.md')})`,
+          `](${join(installedRoot, 'meta', name, 'references', 'artifacts.md').replaceAll('\\', '/')})`,
         )
       }
       const links: Array<string> = markdownLinkExtractor(result.stdout)
@@ -228,7 +228,10 @@ describe('packed release', () => {
         if (/^(https?:|#)/.test(link)) continue
         const target = link.split('#')[0]!
         expect(isAbsolute(target), link).toBe(true)
-        expect(target.startsWith(join(installedRoot, 'meta')), link).toBe(true)
+        expect(
+          resolve(target).startsWith(join(installedRoot, 'meta')),
+          link,
+        ).toBe(true)
         expect(statSync(target).isFile(), link).toBe(true)
       }
     }
@@ -463,7 +466,7 @@ Existing fixture guidance, pending source review.
     )
     expect(body).toContain('### Agent Review')
     expect(body).not.toContain('Paste this into your coding agent')
-    expect(body).toContain('npx @tanstack/intent@latest meta generate-skill')
+    expect(body).toContain('npm exec --no -- intent meta generate-skill')
 
     // Execute the advertised meta command with this extracted release.
     const procedure = run(['meta', 'generate-skill'])
@@ -476,7 +479,7 @@ Existing fixture guidance, pending source review.
       'references',
       'review-signals.md',
     )
-    expect(links).toContain(reviewReference)
+    expect(links).toContain(reviewReference.replaceAll('\\', '/'))
     const guidance = readFileSync(reviewReference, 'utf8')
     expect(guidance).toContain('stale-check-failed')
     expect(guidance).toContain('workflow-advisory')

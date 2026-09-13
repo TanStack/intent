@@ -190,17 +190,25 @@ it('explains an existing recording lock without deleting another writer’s lock
   ).toBe('another writer')
 })
 
-it('reopens source edits and remembers their review before and after commit', () => {
-  accept()
-  write('src/request.ts', 'export const attempts = 4\n')
-  const report = createReview(root)
-  expect(report.items[0]?.changedFiles).toEqual(['src/request.ts'])
-  accept(report)
-  expect(createReview(root).items).toEqual([])
-  git('add', 'src/request.ts')
-  git('commit', '-qm', 'changed')
-  expect(createReview(root).items).toEqual([])
-})
+it.each(['ts', 'tsx', 'js', 'jsx'])(
+  'reopens %s source edits and remembers their review before and after commit',
+  (extension) => {
+    const source = `src/request.${extension}`
+    write(source, 'export const attempts = 3\n')
+    skill([`acme/library:src/**/*.${extension}`])
+    git('add', '.')
+    git('commit', '--allow-empty', '-qm', 'source format')
+    accept()
+    write(source, 'export const attempts = 4\n')
+    const report = createReview(root)
+    expect(report.items[0]?.changedFiles).toEqual([source])
+    accept(report)
+    expect(createReview(root).items).toEqual([])
+    git('add', source)
+    git('commit', '-qm', 'changed')
+    expect(createReview(root).items).toEqual([])
+  },
+)
 
 it('reopens changes to a skill reference', () => {
   accept()

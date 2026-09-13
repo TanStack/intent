@@ -1,9 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { formatIntentCommand } from '../../shared/command-runner.js'
+import { repositoryWritePath } from '../../shared/write-path.js'
+import { writeChanges } from '../../maintainer/files.js'
+import { parseIntentInvocation } from '../../hooks/policy.js'
 import { isGeneratedMappingSkill } from '../../skills/categories.js'
 import { formatSkillUse, parseSkillUse } from '../../skills/use.js'
+import type { FileChange } from '../../maintainer/files.js'
 import type { ScanResult, SkillEntry } from '../../shared/types.js'
 
 type GuidanceNamespace = 'intent-skills' | 'intent-maintainer'
@@ -137,10 +141,8 @@ function containsLocalPathValue(value: string): boolean {
 }
 
 function parseLoadedSkillUse(command: string): string | null {
-  const match = command.match(
-    /(?:^|&&|\|\||;|\|)\s*(?:bunx\s+@tanstack\/intent(?:@latest)?|pnpm\s+exec\s+intent|pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?|npx\s+@tanstack\/intent(?:@latest)?|yarn\s+dlx\s+@tanstack\/intent(?:@latest)?|intent)\s+load\s+([^\s|;&]+)/i,
-  )
-  return match?.[1] ?? null
+  const invocation = parseIntentInvocation(command)
+  return invocation?.action === 'load' ? (invocation.skillUse ?? null) : null
 }
 
 export function verifyIntentSkillsBlockFile({
@@ -283,7 +285,7 @@ export function resolveIntentSkillsBlockTargetPath(
       root,
       namespace === 'intent-skills' ? 'intent-maintainer' : 'intent-skills',
     )?.filePath ??
-    join(root, 'AGENTS.md')
+    repositoryWritePath(root, join(root, 'AGENTS.md'))
   )
 }
 
@@ -355,6 +357,7 @@ export function buildIntentSkillGuidanceBlock(
       INTENT_SKILLS_START,
       '## Skill Loading',
       '',
+      'Use the repository’s installed Intent. If it is unavailable, report the missing dependency instead of downloading a replacement.',
       'Before editing files for a substantial task:',
       `- Run \`${listCommand}\` from the workspace root to see available local skills.`,
       `- If a listed skill matches the task, run \`${loadCommand}\` before changing files.`,
@@ -380,6 +383,7 @@ export function buildMaintainerGuidanceBlock(
       '<!-- intent-maintainer:start -->',
       '## Library Skill Maintenance',
       '',
+      'Use the repository’s installed Intent. If it is unavailable, report the missing dependency instead of downloading a replacement.',
       `Before substantial library source, documentation, examples, tests, or skill work, run \`${command}\` and follow the packaged maintainer procedure.`,
       'Use the current request and repository evidence. For initial skills, propose a useful batch and reuse any scope already agreed with the maintainer.',
       `Before handing off a skill batch or library change, run \`${reviewCommand}\`. Follow the maintainer procedure to update affected guidance, run task checks, and record completed review outcomes. Report an evidence-backed no-op or missing evidence explicitly.`,
@@ -410,7 +414,7 @@ function findExistingConfigWithManagedBlock(
   managedBlock: ManagedBlock
 } | null {
   for (const file of SUPPORTED_AGENT_CONFIG_FILES) {
-    const filePath = join(root, file)
+    const filePath = repositoryWritePath(root, join(root, file))
     if (!existsSync(filePath)) continue
 
     const content = readFileSync(filePath, 'utf8')
@@ -439,18 +443,23 @@ function replaceManagedBlock(
   return `${content.slice(0, managedBlock.start)}${styledBlock}${content.slice(managedBlock.end)}`
 }
 
-export function writeIntentSkillsBlock({
+export function planIntentSkillsBlock({
   block,
   mappingCount,
   root,
   skipWhenEmpty = true,
   namespace = 'intent-skills',
-}: WriteIntentSkillsBlockOptions): WriteIntentSkillsBlockResult {
+}: WriteIntentSkillsBlockOptions): {
+  result: WriteIntentSkillsBlockResult
+  change?: FileChange
+} {
   if (mappingCount === 0 && skipWhenEmpty) {
     return {
-      mappingCount,
-      status: 'skipped',
-      targetPath: null,
+      result: {
+        mappingCount,
+        status: 'skipped',
+        targetPath: null,
+      },
     }
   }
 
@@ -465,17 +474,25 @@ export function writeIntentSkillsBlock({
     )
     if (nextContent === existingTarget.content) {
       return {
-        mappingCount,
-        status: 'unchanged',
-        targetPath,
+        result: {
+          mappingCount,
+          status: 'unchanged',
+          targetPath,
+        },
       }
     }
 
-    writeFileSync(targetPath, nextContent)
     return {
-      mappingCount,
-      status: 'updated',
-      targetPath,
+      change: {
+        path: targetPath,
+        source: existingTarget.content,
+        content: nextContent,
+      },
+      result: {
+        mappingCount,
+        status: 'updated',
+        targetPath,
+      },
     }
   }
 
@@ -485,19 +502,34 @@ export function writeIntentSkillsBlock({
     const separator = currentContent === '' ? '' : newline
     const nextContent = `${withNewlineStyle(block, newline)}${separator}${currentContent}`
 
-    writeFileSync(targetPath, nextContent)
     return {
-      mappingCount,
-      status: 'updated',
-      targetPath,
+      change: {
+        path: targetPath,
+        source: currentContent,
+        content: nextContent,
+      },
+      result: {
+        mappingCount,
+        status: 'updated',
+        targetPath,
+      },
     }
   }
 
-  mkdirSync(dirname(targetPath), { recursive: true })
-  writeFileSync(targetPath, block)
   return {
-    mappingCount,
-    status: 'created',
-    targetPath,
+    change: { path: targetPath, source: null, content: block },
+    result: {
+      mappingCount,
+      status: 'created',
+      targetPath,
+    },
   }
+}
+
+export function writeIntentSkillsBlock(
+  options: WriteIntentSkillsBlockOptions,
+): WriteIntentSkillsBlockResult {
+  const plan = planIntentSkillsBlock(options)
+  if (plan.change) writeChanges(options.root, [plan.change])
+  return plan.result
 }

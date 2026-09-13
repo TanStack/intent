@@ -26,7 +26,7 @@ export function parseIntentInvocation(
   // `node_modules/.bin/intent`, which the session catalog suggests when the
   // project has the CLI installed.
   const match = command.match(
-    /(?:^|&&|\|\||;|\|)\s*((?:bunx\s+@tanstack\/intent(?:@latest)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:(?:[^\s|;&]*[\\/])?intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i,
+    /(?:^|&&|\|\||;|\|)\s*((?:bunx\s+--no-install\s+--package\s+@tanstack\/intent\s+intent)|(?:npm\s+exec\s+--no\s+--\s+intent)|(?:yarn\s+exec\s+intent)|(?:bunx\s+@tanstack\/intent(?:@latest)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:(?:[^\s|;&]*[\\/])?intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i,
   )
 
   if (!match?.[1] || !match[2]) {

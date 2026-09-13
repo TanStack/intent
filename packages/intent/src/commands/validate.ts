@@ -9,7 +9,7 @@ import { fail, isCliFailure } from '../shared/cli-error.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
-import { checkSkillBlocks } from '../validate/blocks.js'
+import { checkSkillBlocks, summarizeSkillExamples } from '../validate/blocks.js'
 import { printWarnings } from './support.js'
 import type { ProjectContext } from '../core/project-context.js'
 
@@ -406,6 +406,7 @@ export async function runValidateCommand(
   dir?: string | Array<string>,
   options: ValidateCommandOptions = {},
   additionalDirs: Array<string> = [],
+  exampleSummaries?: Map<string, string>,
 ): Promise<void> {
   if (options.fix && options.check) {
     fail('Cannot combine --fix and --check')
@@ -424,12 +425,22 @@ export async function runValidateCommand(
   }
 
   if (!options.githubSummary) {
-    await runValidateCommandInternal(dir, options, additionalDirs)
+    await runValidateCommandInternal(
+      dir,
+      options,
+      additionalDirs,
+      exampleSummaries,
+    )
     return
   }
 
   try {
-    await runValidateCommandInternal(dir, options, additionalDirs)
+    await runValidateCommandInternal(
+      dir,
+      options,
+      additionalDirs,
+      exampleSummaries,
+    )
     writeGithubValidationSummary({ ok: true })
   } catch (err) {
     writeGithubValidationSummary({
@@ -444,6 +455,7 @@ async function runValidateCommandInternal(
   dir?: string | Array<string>,
   options: ValidateCommandOptions = {},
   additionalDirs: Array<string> = [],
+  exampleSummaries?: Map<string, string>,
 ): Promise<void> {
   const [{ parse: parseYaml }, { readScalarField }] = await Promise.all([
     import('yaml'),
@@ -673,6 +685,9 @@ async function runValidateCommandInternal(
           library,
           skills,
         })
+        if (exampleSummaries)
+          for (const [file, summary] of summarizeSkillExamples(result, skills))
+            exampleSummaries.set(resolve(process.cwd(), file), summary)
         if (result.skipped) skippedBlockChecks.add(result.skipped)
         for (const finding of result.findings) {
           if (finding.severity === 'error')
@@ -763,11 +778,16 @@ async function runValidateCommandInternal(
       await applyFrontmatterFixes(fixPlans)
       console.log(`✅ Fixed ${fixPlans.length} skill files`)
     }
-    await runValidateCommandInternal(dir, {
-      ...options,
-      fix: false,
-      setVersion: undefined,
-    })
+    await runValidateCommandInternal(
+      dir,
+      {
+        ...options,
+        fix: false,
+        setVersion: undefined,
+      },
+      additionalDirs,
+      exampleSummaries,
+    )
     return
   }
 
@@ -811,7 +831,7 @@ function writeGithubValidationSummary({
       'Run locally:',
       '',
       '```bash',
-      'npx @tanstack/intent@latest validate',
+      'intent validate',
       '```',
       '',
       'Command output:',

@@ -1,12 +1,12 @@
 import { appendFileSync } from 'node:fs'
-import { dirname, relative } from 'node:path'
+import { dirname, relative, resolve } from 'node:path'
 import { isCI } from 'std-env'
 import { resolveProjectContext } from '../core/project-context.js'
 import { fail } from '../shared/cli-error.js'
 import {
+  planSetupRecords,
   readRecord,
   resolveMaintainerProject,
-  setupRecords,
 } from '../maintainer/project.js'
 import { addSkill, planAddSkills } from '../maintainer/add.js'
 import { findExistingSkills } from '../maintainer/existing.js'
@@ -15,16 +15,16 @@ import { planMaintainerSync } from '../maintainer/sync.js'
 import { withMaintainerLock, writeChanges } from '../maintainer/files.js'
 import { createReview, recordPendingReview } from '../review/review.js'
 import {
-  configureDistribution,
+  planDistributionChoice,
   readDistribution,
 } from '../maintainer/distribution.js'
-import { runSetupGithubActions } from '../setup/index.js'
+import { planSetupGithubActions } from '../setup/index.js'
 import { detectIntentCommandPackageManager } from '../shared/command-runner.js'
 import { describeSkillExamples } from '../validate/blocks.js'
 import { getMetaDir } from './support.js'
 import {
   buildMaintainerGuidanceBlock,
-  writeIntentSkillsBlock,
+  planIntentSkillsBlock,
 } from './install/guidance.js'
 import { runReviewCommand } from './review.js'
 import { runValidateCommand } from './validate.js'
@@ -332,9 +332,8 @@ export async function runMaintainerCommand(
   if (['setup', 'add', 'remove', 'sync'].includes(action)) {
     await withMaintainerLock(project.root, () => {
       if (action === 'setup') {
-        const created = setupRecords(project)
-        configureDistribution(project, options)
-        const existing = findExistingSkills(project)
+        const created = planSetupRecords(project)
+        const existing = findExistingSkills(project, created)
         const candidates = existing.filter((skill) => !skill.problems.length)
         const registered = planAddSkills(
           project,
@@ -346,7 +345,7 @@ export async function runMaintainerCommand(
               domain: skill.domain,
             },
           })),
-          [],
+          created,
           (index, error) => {
             const candidate = candidates[index]!
             // A blank domain only comes from a domain_map.yaml entry, and
@@ -360,9 +359,17 @@ export async function runMaintainerCommand(
             )
           },
         )
-        writeChanges(project.root, registered.changes)
-        runSetupGithubActions(project.root, getMetaDir())
-        writeIntentSkillsBlock({
+        const distributionChange = planDistributionChoice(
+          project,
+          options,
+          registered.changes,
+        )
+        const workflow = planSetupGithubActions(
+          project.root,
+          getMetaDir(),
+          project.artifacts,
+        )
+        const guidance = planIntentSkillsBlock({
           ...buildMaintainerGuidanceBlock(
             detectIntentCommandPackageManager(project.root),
           ),
@@ -370,6 +377,16 @@ export async function runMaintainerCommand(
           namespace: 'intent-maintainer',
           skipWhenEmpty: false,
         })
+        const changes = [
+          ...registered.changes,
+          ...(distributionChange ? [distributionChange] : []),
+          ...workflow.changes,
+          ...(guidance.change ? [guidance.change] : []),
+        ]
+        writeChanges(project.root, [
+          ...new Map(changes.map((change) => [change.path, change])).values(),
+        ])
+        for (const message of workflow.messages) console.log(message)
         console.log(
           `Maintainer records: ${project.artifacts} (${created.length} created).`,
         )
@@ -448,15 +465,35 @@ export async function runMaintainerCommand(
     },
     review,
   }
-  const headline = `${status.skills.length} skill(s), ${status.staleFiles.length} file(s) to sync, ${status.problems.length} authoring issue(s), ${review.items.length} pending review item(s).`
-  const examples = options.json
-    ? new Map<string, string>()
-    : describeSkillExamples(
-        project.root,
-        review.items
-          .filter((item) => item.kind === 'skill' && !item.problems.length)
-          .map((item) => item.path),
+  const validatedExamples = new Map<string, string>()
+  let validation: unknown
+  if (action === 'check') {
+    // Include default workspace skills and any custom registered roots. Their errors land in
+    // one report and one summary section, and the failure is rethrown after
+    // the check summary below so the two sections keep their order.
+    try {
+      await runValidateCommand(
+        undefined,
+        { githubSummary: options.githubSummary },
+        plan.skills.map((path) => dirname(dirname(path))),
+        validatedExamples,
       )
+    } catch (err) {
+      validation = err
+    }
+  }
+  const headline = `${status.skills.length} skill(s), ${status.staleFiles.length} file(s) to sync, ${status.problems.length} authoring issue(s), ${review.items.length} pending review item(s).`
+  const examples =
+    action === 'check'
+      ? validatedExamples
+      : options.json
+        ? new Map<string, string>()
+        : describeSkillExamples(
+            project.root,
+            review.items
+              .filter((item) => item.kind === 'skill' && !item.problems.length)
+              .map((item) => item.path),
+          )
   const lines = [
     ...status.problems,
     ...status.staleFiles.map((path) => `Run intent maintainer sync: ${path}`),
@@ -472,7 +509,9 @@ export async function runMaintainerCommand(
         : item.changedFiles.length
           ? `changed ${item.changedFiles.join(', ')}`
           : 'no recorded review'
-      const example = examples.get(item.path)
+      const example = examples.get(
+        action === 'check' ? resolve(project.root, item.path) : item.path,
+      )
       return `${label} ${item.path}: ${detail}${example ? `; ${example}` : ''}`
     }),
   ]
@@ -482,19 +521,6 @@ export async function runMaintainerCommand(
     for (const line of lines) console.log(`  ${line}`)
   }
   if (action === 'check') {
-    // Include default workspace skills and any custom registered roots. Their errors land in
-    // one report and one summary section, and the failure is rethrown after
-    // the check summary below so the two sections keep their order.
-    let validation: unknown
-    try {
-      await runValidateCommand(
-        undefined,
-        { githubSummary: options.githubSummary },
-        plan.skills.map((path) => dirname(dirname(path))),
-      )
-    } catch (err) {
-      validation = err
-    }
     if (options.githubSummary)
       writeGithubCheckSummary({
         headline,

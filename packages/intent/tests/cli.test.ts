@@ -324,7 +324,7 @@ describe('cli commands', () => {
     expect(output).toContain('tanstackIntent:')
     expect(output).toContain('  - id: "@scope/package#skill-name"')
     expect(output).toContain(
-      '    run: "npx @tanstack/intent@latest load @scope/package#skill-name"',
+      '    run: "npm exec --no -- intent load @scope/package#skill-name"',
     )
     expect(output).toContain('    for: "describe the task or code area here"')
     expect(output).not.toContain('skills:\n  - when:')
@@ -471,7 +471,7 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('Created AGENTS.md with skill loading guidance.')
     expect(content).toContain('## Skill Loading')
-    expect(content).toContain('npx @tanstack/intent@latest list')
+    expect(content).toContain('npm exec --no -- intent list')
     expect(content).toContain('If a listed skill matches the task')
     expect(content).toContain('before changing files')
     expect(content).toContain('Monorepos:')
@@ -660,7 +660,7 @@ describe('cli commands', () => {
       'Created AGENTS.md with skill loading guidance.',
     )
     expect(output).toContain('Available: 1 skill from 1 package.')
-    expect(output).toContain('Next: npx @tanstack/intent@latest list')
+    expect(output).toContain('Next: npm exec --no -- intent list')
     expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
       '## Skill Loading',
     )
@@ -889,10 +889,8 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain('Generated skill loading guidance for AGENTS.md.')
-    expect(output).toContain('npx @tanstack/intent@latest list')
-    expect(output).toContain(
-      'npx @tanstack/intent@latest load <package>#<skill>',
-    )
+    expect(output).toContain('npm exec --no -- intent list')
+    expect(output).toContain('npm exec --no -- intent load <package>#<skill>')
     expect(existsSync(join(root, 'AGENTS.md'))).toBe(false)
   })
 
@@ -949,10 +947,8 @@ describe('cli commands', () => {
     const output = logSpy.mock.calls.flat().join('\n')
 
     expect(exitCode).toBe(0)
-    expect(output).toContain('pnpm dlx @tanstack/intent@latest list')
-    expect(output).toContain(
-      'pnpm dlx @tanstack/intent@latest load <package>#<skill>',
-    )
+    expect(output).toContain('pnpm exec intent list')
+    expect(output).toContain('pnpm exec intent load <package>#<skill>')
   })
 
   it('writes skill loading guidance even with no discovered skills', async () => {
@@ -976,7 +972,7 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('Created AGENTS.md with skill loading guidance.')
     expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
-      'npx @tanstack/intent@latest list',
+      'npm exec --no -- intent list',
     )
   })
 
@@ -1064,7 +1060,7 @@ describe('cli commands', () => {
     expect(content).toContain('for: "Query data fetching patterns"')
     expect(content).toContain('id: "@tanstack/query#fetching"')
     expect(content).toContain(
-      'run: "npx @tanstack/intent@latest load @tanstack/query#fetching"',
+      'run: "npm exec --no -- intent load @tanstack/query#fetching"',
     )
     expect(content).not.toContain('load:')
     expect(content).not.toContain(root)
@@ -1418,10 +1414,10 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(0)
     expect(output).toContain(
-      'Load: npx @tanstack/intent@latest load @tanstack/query#fetching',
+      'Load: npm exec --no -- intent load @tanstack/query#fetching',
     )
     expect(output).toContain(
-      'Load: npx @tanstack/intent@latest load @tanstack/query#query/cache',
+      'Load: npm exec --no -- intent load @tanstack/query#query/cache',
     )
   })
 
@@ -1541,9 +1537,9 @@ describe('cli commands', () => {
   })
 
   it.each([
-    ['pnpm-lock.yaml', 'pnpm dlx @tanstack/intent@latest'],
-    ['yarn.lock', 'yarn dlx @tanstack/intent@latest'],
-    ['bun.lock', 'bunx @tanstack/intent@latest'],
+    ['pnpm-lock.yaml', 'pnpm exec intent'],
+    ['yarn.lock', 'yarn exec intent'],
+    ['bun.lock', 'bunx --no-install --package @tanstack/intent intent'],
   ])(
     'prints %s load commands for human list output',
     async (lockfile, runner) => {
@@ -1867,7 +1863,7 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('Global fetching skill')
     expect(output).toContain(
-      'Load: npx @tanstack/intent@latest load @tanstack/query#fetching --global',
+      'Load: npm exec --no -- intent load @tanstack/query#fetching --global',
     )
     expect(output).not.toContain(globalPkgDir)
   })

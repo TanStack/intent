@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { main } from '../src/cli.js'
 import { checkSkillBlocks } from '../src/validate/blocks.js'
+import * as blockChecks from '../src/validate/blocks.js'
 
 // Typechecking examples against a real package takes longer than a unit test.
 vi.setConfig({ testTimeout: 30_000 })
@@ -80,6 +81,32 @@ it('accepts a partial example whose only gaps are names the snippet leaves out',
   expect(result.findings).toEqual([])
 })
 
+it('supports APIs that require strict null checks while rejecting null arguments', () => {
+  write(
+    'src/index.ts',
+    "export declare function createRouter(options: undefined extends number ? 'strictNullChecks must be enabled' : { routeTree: object }): void\n",
+  )
+  skill(
+    "```ts\nimport { createRouter } from '@acme/client'\ncreateRouter({ routeTree: {} })\n```\n",
+  )
+  expect(check().findings).toEqual([])
+  skill(
+    "```ts\nimport { createRouter } from '@acme/client'\ncreateRouter({ routeTree: null })\n```\n",
+  )
+  expect(check().findings).toContainEqual(
+    expect.objectContaining({ message: expect.stringMatching(/TS2322/) }),
+  )
+})
+
+it('tolerates omitted shorthand values without suppressing incompatible options', () => {
+  skill(
+    "```ts\nimport { retry } from '@acme/client'\nconst context = { createContext }\nretry(() => fetchItems(context), { max: 'many' })\n```\n",
+  )
+  expect(check().findings.map((finding) => finding.message)).toEqual([
+    expect.stringMatching(/TS2322/),
+  ])
+})
+
 it('parses a plain ts block as TypeScript rather than TSX', () => {
   skill(
     "```ts\nimport { retry } from '@acme/client'\nconst pick = <T>(value: T) => value\nawait retry(() => Promise.resolve(), { max: pick(3) })\n```\n\n```tsx\nconst view = <div>{String(1)}</div>\n```\n",
@@ -87,10 +114,18 @@ it('parses a plain ts block as TypeScript rather than TSX', () => {
   expect(check().findings).toEqual([])
 })
 
-it('keeps declarations in separate examples independent', () => {
-  skill('```ts\nconst count = 1\n```\n\n```ts\nconst count = 2\n```\n')
-  expect(check().findings).toEqual([])
-})
+it.each(['ts', 'tsx', 'js', 'jsx'])(
+  'keeps declarations in separate %s examples independent',
+  (language) => {
+    skill(
+      `\`\`\`${language}\nconst count = 1\n\`\`\`\n\n\`\`\`${language}\nconst count = 2\n\`\`\`\n`,
+    )
+    const result = check()
+    expect(result.blocks).toBe(2)
+    expect(result.skipped).toBeUndefined()
+    expect(result.findings).toEqual([])
+  },
+)
 
 it.each(['js', 'jsx'])(
   'checks library option types in %s examples',
@@ -106,6 +141,149 @@ it.each(['js', 'jsx'])(
     ])
   },
 )
+
+it.each([
+  ['javascript with CRLF', '```javascript\r\n', '\r\n```\r\n'],
+  ['JSX with a longer closing fence', '```jsx\n', '\n````\n'],
+  ['TypeScript with a tilde fence', '~~~typescript\n', '\n~~~~\n'],
+  ['an unclosed JavaScript fence', '```js\n', '\n'],
+])('does not skip invalid examples in %s', (_name, opening, closing) => {
+  skill(
+    `${opening}import { retry } from '@acme/client'\nretry(() => Promise.resolve(), { max: 'many' })${closing}`,
+  )
+  const result = check()
+  expect(result.blocks).toBe(1)
+  expect(result.skipped).toBeUndefined()
+  expect(result.findings).toContainEqual(
+    expect.objectContaining({
+      line: 10,
+      message: expect.stringMatching(/TS2322/),
+    }),
+  )
+})
+
+it.each(['jsx', 'tsx'])(
+  'checks actual component props and syntax in %s',
+  async (language) => {
+    write(
+      'src/index.ts',
+      'export function Counter(props: { count: number; children?: unknown }) { return null }\n',
+    )
+    const example = (expression: string) =>
+      `\`\`\`${language}\nimport { Counter } from '@acme/client'\nconst view = ${expression}\n\`\`\`\n`
+    skill(example('<Counter count={3}><span>Ready</span></Counter>'))
+    expect(check()).toMatchObject({ blocks: 1, findings: [] })
+    expect(check().skipped).toBeUndefined()
+    expect(await main(['validate'])).toBe(0)
+    skill(example('<Counter count="many" />'))
+    expect(check().findings).toContainEqual(
+      expect.objectContaining({
+        line: 10,
+        message: expect.stringMatching(/TS2322/),
+      }),
+    )
+    expect(await main(['validate'])).toBe(1)
+    skill(example('<Counter count={3}>'))
+    expect(check().findings).toContainEqual(
+      expect.objectContaining({
+        line: 10,
+        message: expect.stringMatching(/TS17008/),
+      }),
+    )
+  },
+)
+
+it('checks JSDoc contracts from a JavaScript library instead of skipping it', () => {
+  rmSync(join(root, 'src/index.ts'))
+  write(
+    'package.json',
+    JSON.stringify({
+      name: '@acme/client',
+      version: '1.0.0',
+      exports: './src/index.js',
+    }),
+  )
+  write(
+    'src/index.js',
+    '/** @param {{ max: number }} options */\nexport function retry(options) { return options.max }\n',
+  )
+  skill(
+    "```javascript\nimport { retry } from '@acme/client'\nretry({ max: 'many' })\n```\n",
+  )
+  const result = check()
+  expect(result.skipped).toBeUndefined()
+  expect(result.findings).toContainEqual(
+    expect.objectContaining({
+      line: 10,
+      message: expect.stringMatching(/TS2322/),
+    }),
+  )
+})
+
+it('never executes examples or the library while validating them', () => {
+  write(
+    'src/index.ts',
+    `${read('src/index.ts')}\nthrow new Error('The validator executed the library')\n`,
+  )
+  skill(
+    "```js\nimport { retry } from '@acme/client'\nimport { writeFileSync } from 'node:fs'\nwriteFileSync('example-executed', 'unsafe')\nretry(() => Promise.resolve(), { max: 3 })\n```\n",
+  )
+  expect(check()).toMatchObject({ blocks: 1, findings: [] })
+  expect(existsSync(join(root, 'example-executed'))).toBe(false)
+})
+
+it.each(['js', 'jsx'])(
+  'checks a tracked %s entry declared outside src/index',
+  (extension) => {
+    rmSync(join(root, 'src'), { recursive: true })
+    const entry = `lib/client.${extension}`
+    write(
+      'package.json',
+      JSON.stringify({
+        name: '@acme/client',
+        ...(extension === 'js'
+          ? { exports: { '.': { import: `./${entry}` } } }
+          : { main: entry }),
+      }),
+    )
+    write(
+      entry,
+      '/** @param {{ max: number }} options */\nexport function retry(options) { return options.max }\n',
+    )
+    execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], {
+      cwd: root,
+    })
+    execFileSync('git', ['-c', 'core.fsmonitor=false', 'add', entry], {
+      cwd: root,
+    })
+    skill(
+      `\`\`\`${extension}\nimport { retry } from '@acme/client'\nretry({ max: 'many' })\n\`\`\`\n`,
+    )
+    const result = check()
+    expect(result.skipped).toBeUndefined()
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({
+        line: 10,
+        message: expect.stringMatching(/TS2322/),
+      }),
+    )
+  },
+)
+
+it('keeps nested examples inside a Markdown fence and still checks following prose links', () => {
+  skill(
+    '````markdown\n```jsx\nconst view = <Broken />\n```\n[example](not-a-real-link.md)\n`````\n\nSee [missing](missing.md).\n',
+  )
+  expect(check()).toMatchObject({
+    blocks: 0,
+    findings: [
+      expect.objectContaining({
+        line: 15,
+        message: 'Link target not found: missing.md',
+      }),
+    ],
+  })
+})
 
 it('reports a removed option, a missing export, and a broken example with the skill line', () => {
   skill(
@@ -449,6 +627,23 @@ it('fails validate on a broken example and reports compile status on pending rev
   expect(await main(['maintainer', 'status'])).toBe(0)
   expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
     'Review skill skills/retries/SKILL.md: changed src/index.ts; examples still compile',
+  )
+  const descriptions = vi.spyOn(blockChecks, 'describeSkillExamples')
+  const checks = vi.spyOn(blockChecks, 'checkSkillBlocks')
+  expect(await main(['maintainer', 'check'])).toBe(1) // pending source review
+  expect(checks).toHaveBeenCalledTimes(1)
+  expect(descriptions).not.toHaveBeenCalled()
+  checks.mockClear()
+  write(
+    'src/index.ts',
+    read('src/index.ts').replace('max: number', 'max: string'),
+  )
+  vi.mocked(console.error).mockClear()
+  expect(await main(['maintainer', 'check'])).toBe(1)
+  expect(checks).toHaveBeenCalledTimes(1)
+  expect(descriptions).not.toHaveBeenCalled()
+  expect(vi.mocked(console.error).mock.calls.flat().join('\n')).toContain(
+    'TS2322',
   )
   expect(existsSync(join(root, '.intent/skill-examples'))).toBe(false)
 })

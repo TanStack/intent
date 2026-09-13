@@ -4,11 +4,11 @@ import type { PackageManager } from './types.js'
 export { detectPackageManager as detectIntentCommandPackageManager }
 
 const runnerByPackageManager: Record<PackageManager, string> = {
-  bun: 'bunx @tanstack/intent@latest',
-  npm: 'npx @tanstack/intent@latest',
-  pnpm: 'pnpm dlx @tanstack/intent@latest',
-  unknown: 'npx @tanstack/intent@latest',
-  yarn: 'yarn dlx @tanstack/intent@latest',
+  bun: 'bunx --no-install --package @tanstack/intent intent',
+  npm: 'npm exec --no -- intent',
+  pnpm: 'pnpm exec intent',
+  unknown: 'npm exec --no -- intent',
+  yarn: 'yarn exec intent',
 }
 
 /** Use argument arrays for discovered identifiers; strings are trusted templates. */

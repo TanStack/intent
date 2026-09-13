@@ -14,6 +14,7 @@ import {
   skillPath,
 } from './project.js'
 import type { MaintainerProject } from './project.js'
+import type { FileChange } from './files.js'
 
 export interface ExistingSkill {
   id: string
@@ -31,6 +32,7 @@ const defaultDomain = 'uncategorized'
 // dependencies, and packages outside the workspace are not library skills.
 export function findExistingSkills(
   project: MaintainerProject,
+  changes: ReadonlyArray<FileChange> = [],
 ): Array<ExistingSkill> {
   const files = execFileSync(
     'git',
@@ -47,7 +49,7 @@ export function findExistingSkills(
   )
     .split('\0')
     .filter(Boolean)
-  const tree = readRecord(project, 'skill_tree.yaml')
+  const tree = readRecord(project, 'skill_tree.yaml', changes)
   const entries = skillEntries(project, tree)
   const registered = new Set(
     entries.map((entry) =>
@@ -58,9 +60,10 @@ export function findExistingSkills(
     entries.map((entry) => String(entry.slug ?? entry.name)),
   )
   const mapPath = recordPath(project, 'domain_map.yaml')
-  const mapped: Array<unknown> = existsSync(mapPath)
-    ? readRecord(project, 'domain_map.yaml').document.toJS().skills
-    : []
+  const mapped: Array<unknown> =
+    existsSync(mapPath) || changes.some((change) => change.path === mapPath)
+      ? readRecord(project, 'domain_map.yaml', changes).document.toJS().skills
+      : []
   const packageRoots = new Set([
     project.root,
     ...resolveWorkspacePackages(
