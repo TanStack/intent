@@ -21,6 +21,8 @@ export type IntentFsCache = {
   readPackageJsonResult: (dir: string) => PackageJsonReadResult
   findSkillFiles: (dir: string) => Array<string>
   getFsIdentity: (path: string) => string
+  /** Record a directory known not to be a symlink, skipping its `lstat`. */
+  primeFsIdentity: (realPath: string) => void
   getStats: () => IntentFsCacheStats
   /**
    * Swap the filesystem used for all reads. Under Yarn PnP the scanner installs
@@ -95,6 +97,7 @@ export function createIntentFsCache(): IntentFsCache {
     readPackageJsonResult,
     findSkillFiles,
     getFsIdentity,
+    primeFsIdentity: getFsIdentity.prime,
     getStats: () => ({ ...stats }),
     useFs: (fs: ReadFs) => {
       activeFs = fs

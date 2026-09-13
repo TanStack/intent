@@ -14,9 +14,14 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { main } from '../src/cli.js'
-import { listIntentSkills, resolveIntentSkill } from '../src/core/index.js'
+import {
+  listIntentSkills,
+  loadIntentSkill,
+  resolveIntentSkill,
+} from '../src/core/index.js'
 import { rewriteLoadedSkillMarkdownDestinations } from '../src/core/markdown.js'
 import { checkStaleness } from '../src/staleness/check.js'
+import { nodeReadFs } from '../src/shared/utils.js'
 import type * as NodeFs from 'node:fs'
 import type * as NodePath from 'node:path'
 
@@ -74,6 +79,23 @@ afterEach(() => {
 })
 
 describe('command work budgets', () => {
+  it('resolves direct skills without reading unused frontmatter', () => {
+    write(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'consumer', dependencies: { example: '1.0.0' } }),
+    )
+    writePackage(join(root, 'node_modules', 'example'), 'example')
+    const metadataRead = vi.spyOn(nodeReadFs, 'readSync')
+
+    expect(resolveIntentSkill('example#core', { cwd: root }).skillName).toBe(
+      'core',
+    )
+    expect(loadIntentSkill('example#core', { cwd: root }).content).toContain(
+      'Guide.',
+    )
+    expect(metadataRead).not.toHaveBeenCalled()
+  })
+
   it('indexes each skill path once when matching many artifact entries by name', async () => {
     write(
       join(root, 'package.json'),
@@ -103,30 +125,71 @@ describe('command work budgets', () => {
       ).toHaveLength(1)
     }
   })
-  it('classifies a direct dependency without statting every workspace package', () => {
+  it.each(['packages/*', 'packages/**'])(
+    'classifies a direct dependency without enumerating %s workspace members',
+    (pattern) => {
+      write(
+        join(root, 'package.json'),
+        JSON.stringify({
+          name: 'consumer',
+          dependencies: { example: '1.0.0' },
+          intent: { skills: ['example'] },
+        }),
+      )
+      write(join(root, 'pnpm-workspace.yaml'), `packages:\n  - ${pattern}\n`)
+      const packageDirs = Array.from({ length: 120 }, (_, index) =>
+        join(root, 'packages', `pkg-${index}`),
+      )
+      for (const dir of packageDirs) write(join(dir, 'package.json'), '{}')
+      writePackage(join(root, 'node_modules', 'example'), 'example')
+
+      expect(resolveIntentSkill('example#core', { cwd: root }).skillName).toBe(
+        'core',
+      )
+      expect(
+        vi
+          .mocked(readdirSync)
+          .mock.calls.filter(([path]) => path === join(root, 'packages')),
+      ).toHaveLength(0)
+      expect(
+        vi
+          .mocked(lstatSync)
+          .mock.calls.filter(([path]) => packageDirs.includes(String(path))),
+      ).toHaveLength(0)
+    },
+  )
+
+  it('keeps symlinked members after a wildcard in workspace classification', () => {
     write(
       join(root, 'package.json'),
       JSON.stringify({
         name: 'consumer',
-        dependencies: { example: '1.0.0' },
-        intent: { skills: ['example'] },
+        intent: { skills: ['workspace:example'] },
       }),
     )
-    write(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n')
-    const packageDirs = Array.from({ length: 120 }, (_, index) =>
-      join(root, 'packages', `pkg-${index}`),
+    write(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - groups/*/current\n',
     )
-    for (const dir of packageDirs) write(join(dir, 'package.json'), '{}')
-    writePackage(join(root, 'node_modules', 'example'), 'example')
-
+    const first = join(root, 'first')
+    const second = join(root, 'second')
+    writePackage(first, 'example')
+    writePackage(second, 'example')
+    const workspaceLink = join(root, 'groups', 'team', 'current')
+    const dependencyLink = join(root, 'node_modules', 'example')
+    mkdirSync(dirname(workspaceLink), { recursive: true })
+    mkdirSync(dirname(dependencyLink), { recursive: true })
+    symlinkSync(first, workspaceLink, 'dir')
+    symlinkSync(first, dependencyLink, 'dir')
     expect(resolveIntentSkill('example#core', { cwd: root }).skillName).toBe(
       'core',
     )
-    expect(
-      vi
-        .mocked(lstatSync)
-        .mock.calls.filter(([path]) => packageDirs.includes(String(path))),
-    ).toHaveLength(0)
+
+    unlinkSync(workspaceLink)
+    symlinkSync(second, workspaceLink, 'dir')
+    expect(() => resolveIntentSkill('example#core', { cwd: root })).toThrow(
+      'not listed',
+    )
   })
 
   it.each([false, true])(

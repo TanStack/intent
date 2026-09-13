@@ -32,7 +32,7 @@ function readWorkspacePackageInfos(
   if (context.workspaceRoot) {
     dirs.add(context.workspaceRoot)
 
-    for (const dir of findWorkspacePackages(context.workspaceRoot)) {
+    for (const dir of findWorkspacePackages(context.workspaceRoot, fsCache)) {
       dirs.add(dir)
     }
   }
@@ -224,6 +224,7 @@ function resolveFromPackageRoots(
     const scanned = scanIntentPackageAtRoot(packageRoot, {
       fallbackName: parsedUse.packageName,
       fsCache,
+      includeSkillMetadata: false,
       projectRoot: cwd,
       skillNameHint: parsedUse.skillName,
     })

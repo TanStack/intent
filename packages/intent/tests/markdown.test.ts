@@ -28,6 +28,12 @@ describe('rewriteLoadedSkillMarkdownDestinations', () => {
     )
   })
 
+  it('keeps private-use characters in destinations intact alongside escapes', () => {
+    expect(rewrite('[Odd](docs/a\uE000b\\).md)')).toBe(
+      '[Odd](node_modules/pkg/skills/core/docs/a\uE000b\\).md)',
+    )
+  })
+
   it('preserves malformed inline links', () => {
     expect(rewrite('[Broken](docs/api.md')).toBe('[Broken](docs/api.md')
   })

@@ -91,15 +91,52 @@ function buildValidationFailure(
   return lines.join('\n')
 }
 
-function collectPackagingWarnings(context: ProjectContext): Array<string> {
+// Positive `files` entries as directory prefixes: `skills`, `skills/`, and
+// `skills/**` all publish the whole directory.
+function filesPrefixes(files: ReadonlyArray<string>): Array<string> {
+  const prefixes: Array<string> = []
+  for (const entry of files) {
+    if (entry.startsWith('!')) continue
+    prefixes.push(entry.replace(/\/(?:\*\*|\*)?$/, ''))
+  }
+  return prefixes
+}
+
+function covered(prefixes: ReadonlyArray<string>, directory: string): boolean {
+  return prefixes.some(
+    (prefix) => directory === prefix || directory.startsWith(`${prefix}/`),
+  )
+}
+
+function collectPackagingWarnings(
+  context: ProjectContext,
+  skillsDir: string,
+  skillFiles: ReadonlyArray<string>,
+): Array<string> {
   if (!context.packageRoot || !context.targetPackageJsonPath) return []
 
   const pkgJsonPath = context.targetPackageJsonPath
   if (!existsSync(pkgJsonPath)) return []
 
   let pkgJson: Record<string, unknown>
+  let devDeps: Record<string, string> | undefined
   try {
     pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8'))
+    devDeps = pkgJson.devDependencies as Record<string, string> | undefined
+    if (
+      !devDeps?.['@tanstack/intent'] &&
+      context.workspaceRoot &&
+      context.workspaceRoot !== context.packageRoot
+    ) {
+      const workspaceManifestPath = join(context.workspaceRoot, 'package.json')
+      if (existsSync(workspaceManifestPath)) {
+        const workspaceManifest = JSON.parse(
+          readFileSync(workspaceManifestPath, 'utf8'),
+        ) as Record<string, unknown>
+        devDeps = workspaceManifest.devDependencies as
+          Record<string, string> | undefined
+      }
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return [`Could not parse package.json: ${msg}`]
@@ -107,7 +144,6 @@ function collectPackagingWarnings(context: ProjectContext): Array<string> {
 
   const warnings: Array<string> = []
 
-  const devDeps = pkgJson.devDependencies as Record<string, string> | undefined
   if (!devDeps?.['@tanstack/intent']) {
     warnings.push('@tanstack/intent is not in devDependencies')
   }
@@ -119,15 +155,32 @@ function collectPackagingWarnings(context: ProjectContext): Array<string> {
 
   const files = pkgJson.files as Array<string> | undefined
   if (Array.isArray(files)) {
-    if (!files.includes('skills')) {
-      warnings.push(
-        '"skills" is not in the "files" array — skills won\'t be published',
-      )
+    const packageRoot = context.packageRoot
+    const prefixes = filesPrefixes(files)
+    const skillsRoot = relative(packageRoot, skillsDir).replaceAll('\\', '/')
+    // Either the whole skills directory or each skill directory (as written
+    // by `intent maintainer sync`) publishes the guidance.
+    if (!covered(prefixes, skillsRoot)) {
+      const seen = new Set<string>()
+      for (const file of skillFiles) {
+        const directory = `${skillsRoot}/${relative(skillsDir, dirname(file)).replaceAll('\\', '/')}`
+        if (seen.has(directory)) continue
+        seen.add(directory)
+        if (!covered(prefixes, directory))
+          warnings.push(
+            `"${directory}" is not covered by the "files" array — this skill won't be published`,
+          )
+      }
     }
 
     // In monorepos, _artifacts lives at repo root, not under packages —
     // the negation pattern is a no-op and shouldn't be added.
-    if (!context.isMonorepo && !files.includes('!skills/_artifacts')) {
+    if (
+      !context.isMonorepo &&
+      covered(prefixes, 'skills/_artifacts') &&
+      !files.includes('!skills/_artifacts') &&
+      existsSync(join(packageRoot, 'skills', '_artifacts'))
+    ) {
       warnings.push(
         '"!skills/_artifacts" is not in the "files" array — artifacts will be published unnecessarily',
       )
@@ -610,7 +663,9 @@ async function runValidateCommandInternal(
     }
 
     validatedCount += skillFiles.length
-    warnings.push(...collectPackagingWarnings(validateContext))
+    warnings.push(
+      ...collectPackagingWarnings(validateContext, skillsDir, skillFiles),
+    )
   }
 
   if (options.check) {

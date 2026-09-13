@@ -30,6 +30,7 @@ export interface IntentSkillSummary {
   packageSource: IntentPackage['source']
   skillName: string
   description: string
+  purpose?: string
   type?: string
   framework?: string
 }

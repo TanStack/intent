@@ -3,7 +3,6 @@ name: PR
 on:
   pull_request:
     paths-ignore:
-      - 'docs/**'
       - 'media/**'
       - 'README.md'
 

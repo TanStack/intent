@@ -14,12 +14,12 @@ import {
 import {
   buildIntentSkillGuidanceBlock,
   buildIntentSkillsBlock,
+  buildMaintainerGuidanceBlock,
   resolveIntentSkillsBlockTargetPath,
   verifyIntentSkillsBlockFile,
   writeIntentSkillsBlock,
 } from './guidance.js'
 import { setupInitialPermissions } from './permissions.js'
-import { createPermissionPrompts } from './permission-prompts.js'
 import type { GlobalScanFlags } from '../support.js'
 import type { IntentCoreOptions } from '../../core/index.js'
 import type { ScanResult } from '../../shared/types.js'
@@ -129,6 +129,7 @@ tanstackIntent:
    - The verification result`
 
 export interface InstallCommandOptions extends GlobalScanFlags {
+  maintainer?: boolean
   dryRun?: boolean
   map?: boolean
   review?: boolean
@@ -212,6 +213,59 @@ export async function runInstallCommand(
   scanIntentsOrFail: (coreOptions?: IntentCoreOptions) => Promise<ScanResult>,
   runtime: InstallCommandRuntime = {},
 ): Promise<void> {
+  if (options.maintainer) {
+    if (
+      options.map ||
+      options.review ||
+      options.printPrompt ||
+      options.global ||
+      options.globalOnly
+    ) {
+      fail(
+        '--maintainer cannot be combined with --map, --review, --print-prompt, --global, or --global-only.',
+      )
+    }
+    const generated = buildMaintainerGuidanceBlock(
+      detectIntentCommandPackageManager(),
+    )
+    const namespace = 'intent-maintainer'
+    if (options.dryRun) {
+      const targetPath = resolveIntentSkillsBlockTargetPath(
+        process.cwd(),
+        1,
+        namespace,
+      )!
+      console.log(
+        `Generated maintainer guidance for ${formatTargetPath(targetPath)}.`,
+      )
+      console.log(generated.block)
+      return
+    }
+    const result = writeIntentSkillsBlock({
+      ...generated,
+      namespace,
+      root: process.cwd(),
+      skipWhenEmpty: false,
+    })
+    if (!result.targetPath) fail('Maintainer guidance target was not created.')
+    const verification = verifyIntentSkillsBlockFile({
+      expectedBlock: generated.block,
+      targetPath: result.targetPath,
+      namespace,
+    })
+    if (!verification.ok)
+      fail(
+        `Maintainer setup verification failed: ${verification.errors.join(' ')}`,
+      )
+    console.log(
+      `Maintainer guidance: ${result.status} ${formatTargetPath(result.targetPath)}.`,
+    )
+    console.log(
+      'Maintainer instructions are installed. Run intent maintainer setup to initialize the command workflow.',
+    )
+    return
+  }
+
   if (
     options.review &&
     (options.map || options.printPrompt || options.global || options.globalOnly)
@@ -253,7 +307,12 @@ export async function runInstallCommand(
           review: options.review,
           root: process.cwd(),
           runtime: {
-            prompts: runtime.permissionPrompts ?? createPermissionPrompts(),
+            // Loaded on demand: @clack/prompts is only needed when prompting.
+            prompts:
+              runtime.permissionPrompts ??
+              (
+                await import('./permission-prompts.js')
+              ).createPermissionPrompts(),
           },
         })
       } catch (error) {

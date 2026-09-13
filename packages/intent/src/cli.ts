@@ -14,9 +14,16 @@ import type {
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
 import type { StaleCommandOptions } from './commands/stale.js'
+import type {
+  MaintainerCommandOptions,
+  MaintainerCommandRuntime,
+} from './commands/maintainer.js'
+import type { ReviewCommandOptions } from './commands/review.js'
 import type { ValidateCommandOptions } from './commands/validate.js'
 
-function createCli(runtime: InstallCommandRuntime = {}): CAC {
+function createCli(
+  runtime: InstallCommandRuntime & MaintainerCommandRuntime = {},
+): CAC {
   const cli = cac('intent')
   cli.usage('<command> [options]')
 
@@ -86,7 +93,7 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
     .command('meta [name]', 'List meta-skills, or print one by name')
     .usage('meta [name]')
     .example('meta')
-    .example('meta domain-discovery')
+    .example('meta generate-skill')
     .action(async (name?: string) => {
       const [{ getMetaDir }, { runMetaCommand }] = await Promise.all([
         import('./commands/support.js'),
@@ -126,7 +133,11 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
       'Create or update skill loading guidance in an agent config file',
     )
     .usage(
-      'install [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]',
+      'install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]',
+    )
+    .option(
+      '--maintainer',
+      'Enable library skill authoring and maintenance in agent instructions',
     )
     .option('--review', 'Review and change skill permissions interactively')
     .option('--map', 'Write explicit skill-to-task mappings')
@@ -139,6 +150,7 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
     .option('--global-only', 'Install mappings from global packages only')
     .option('--no-notices', 'Suppress non-critical notices on stderr')
     .example('install')
+    .example('install --maintainer')
     .example('install --review')
     .example('install --map')
     .example('install --dry-run')
@@ -180,14 +192,117 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
     )
 
   cli
-    .command('scaffold', 'Print maintainer scaffold prompt')
-    .usage('scaffold')
-    .action(async () => {
-      const [{ getMetaDir }, { runScaffoldCommand }] = await Promise.all([
-        import('./commands/support.js'),
-        import('./commands/scaffold.js'),
-      ])
-      runScaffoldCommand(getMetaDir())
+    .command(
+      'maintainer <action> [name]',
+      'Set up, author, synchronize, and check library skills',
+    )
+    .usage(
+      'maintainer <setup|adopt|add|remove|status|sync|review|check> [name] [options]',
+    )
+    .option(
+      '--artifacts <directory>',
+      'Established planning directory, relative to the repository root',
+    )
+    .option(
+      '--package <directory>',
+      'Owning package directory, relative to the repository root',
+    )
+    .option(
+      '--path <path>',
+      'Skill path for add, or repository-relative custom directory for adopt',
+    )
+    .option(
+      '--apply <file>',
+      'Apply reviewed adoption choices from a JSON plan',
+    )
+    .option('--domain <slug>', 'Domain for a new skill')
+    .option(
+      '--distribution <mode>',
+      'Repository distribution: repo for selected public skills, none to opt out',
+    )
+    .option(
+      '--repository <owner/repo>',
+      'GitHub repository for skill distribution',
+    )
+    .option('--plugin-name <name>', 'Name for the generated skill plugin')
+    .option(
+      '--skill <name>',
+      'Skill to distribute from the repository; repeat to select more',
+    )
+    .option('--description <text>', 'Activation description for a new skill')
+    .option(
+      '--source <path>',
+      'Source evidence path; repeat for multiple paths',
+    )
+    .option(
+      '--requires <name>',
+      'Prerequisite skill; repeat for multiple skills',
+    )
+    .option(
+      '--task <text>',
+      'Developer task a new skill covers; repeat for multiple tasks',
+    )
+    .option('--base <ref>', 'Git revision to review against')
+    .option(
+      '--interactive',
+      'Inspect and record maintainer review outcomes in a terminal',
+    )
+    .option('--json', 'Output an adoption plan, status, or review as JSON')
+    .option(
+      '--record <file>',
+      'Record outcomes from an annotated review report',
+    )
+    .example('maintainer setup')
+    .example('maintainer adopt')
+    .example('maintainer adopt --json')
+    .example('maintainer adopt --apply adoption.json')
+    .example(
+      'maintainer add caching --domain queries --description "Use when caching queries." --source "src/**"',
+    )
+    .example('maintainer remove caching')
+    .example('maintainer status --json')
+    .example('maintainer sync')
+    .example('maintainer review --json')
+    .example('maintainer review --interactive')
+    .example('maintainer check --base origin/main')
+    .action(
+      async (
+        action: string,
+        name: string | undefined,
+        options: MaintainerCommandOptions,
+      ) => {
+        const { runMaintainerCommand } =
+          await import('./commands/maintainer.js')
+        await runMaintainerCommand(action, name, options, runtime)
+      },
+    )
+
+  cli
+    .command(
+      'review [dir]',
+      'Review first-party skills against actual Git source changes',
+    )
+    .usage(
+      'review [dir] [--base <ref>] [--json] [--check] [--record <file>] [--github-review]',
+    )
+    .option(
+      '--base <ref>',
+      'Compare against this commit instead of the recorded baseline or HEAD',
+    )
+    .option('--json', 'Print revision-bound review evidence as JSON')
+    .option('--check', 'Exit nonzero if any review items remain')
+    .option(
+      '--record <file>',
+      'Record justified outcomes from an annotated JSON report',
+    )
+    .option('--github-review', 'Write GitHub Actions review reminder files')
+    .option('--package-label <label>', 'Package label for the review reminder')
+    .example('review')
+    .example('review --base origin/main --json')
+    .example('review --record review.json')
+    .action(async (dir: string | undefined, options: ReviewCommandOptions) => {
+      const { runReviewCommand } = await import('./commands/review.js')
+      runReviewCommand(dir, options)
     })
 
   cli
@@ -278,7 +393,7 @@ function createCli(runtime: InstallCommandRuntime = {}): CAC {
 
 export async function main(
   argv: Array<string> = process.argv.slice(2),
-  runtime: InstallCommandRuntime = {},
+  runtime: InstallCommandRuntime & MaintainerCommandRuntime = {},
 ) {
   try {
     const cli = createCli(runtime)
@@ -286,6 +401,25 @@ export async function main(
     if (argv.length === 0) {
       cli.outputHelp()
       return 0
+    }
+
+    if (argv[0] === 'maintainer') {
+      const { maintainerActions, maintainerHelp } =
+        await import('./commands/maintainer.js')
+      const action = argv[1]
+      const wantsHelp = argv
+        .slice(1)
+        .some((arg) => arg === '--help' || arg === '-h')
+      if (action === undefined) {
+        console.log(maintainerHelp())
+        return 1
+      }
+      if (wantsHelp) {
+        console.log(
+          maintainerHelp(action in maintainerActions ? action : undefined),
+        )
+        return 0
+      }
     }
 
     // cac expects process.argv format: first two entries (binary + script) are ignored

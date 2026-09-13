@@ -100,7 +100,7 @@ export function listIntentSkills(
   const cwd = resolveCoreCwd(options)
   const scanOptions = toScanOptions(options)
   const fsCache = createIntentFsCache()
-  const projectContext = resolveProjectContext({ cwd })
+  const projectContext = resolveProjectContext({ cwd, fsCache })
   const { hiddenSourceCount, hiddenSources, scan, excludePatterns } =
     scanForPolicedIntents({
       cwd,
@@ -119,6 +119,7 @@ export function listIntentSkills(
         packageSource: pkg.source,
         skillName: skill.name,
         description: skill.description,
+        purpose: skill.purpose,
         type: skill.type,
         framework: skill.framework,
       }
@@ -282,7 +283,7 @@ function resolveIntentSkillInCwd(
   }
 
   const fsCache = createIntentFsCache()
-  const projectContext = resolveProjectContext({ cwd })
+  const projectContext = resolveProjectContext({ cwd, fsCache })
   const excludePatterns = getEffectiveExcludePatterns(
     options,
     projectContext,

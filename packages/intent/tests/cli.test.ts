@@ -3,12 +3,13 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as discovery from '../src/discovery/scanner.js'
@@ -162,27 +163,66 @@ describe('intent meta', () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-meta-reference-'))
     tempDirs.push(root)
     process.chdir(root)
+    // Rewritten destinations always use forward slashes, on every platform.
+    const referencePath = (name: string) =>
+      join(metaDir, 'domain-discovery', 'references', name).split(sep).join('/')
     const expected = readFileSync(
       join(metaDir, 'domain-discovery', 'SKILL.md'),
       'utf8',
     )
       .replaceAll(
         '(references/deep-read.md)',
-        `(${join(metaDir, 'domain-discovery', 'references', 'deep-read.md')})`,
+        `(${referencePath('deep-read.md')})`,
       )
       .replaceAll(
         '(references/deep-read.md#reading-order)',
-        `(${join(metaDir, 'domain-discovery', 'references', 'deep-read.md')}#reading-order)`,
+        `(${referencePath('deep-read.md')}#reading-order)`,
       )
       .replaceAll(
         '(references/artifacts.md)',
-        `(${join(metaDir, 'domain-discovery', 'references', 'artifacts.md')})`,
+        `(${referencePath('artifacts.md')})`,
+      )
+      .replaceAll(
+        '(../generate-skill/SKILL.md)',
+        `(${join(metaDir, 'generate-skill', 'SKILL.md')})`,
       )
 
     const exitCode = await main(['meta', 'domain-discovery'])
 
     expect(exitCode).toBe(0)
     expect(logSpy).toHaveBeenCalledWith(expected)
+  })
+
+  it('loads the focused procedure with format navigation and shipped full-library alternatives', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-focused-meta-'))
+    tempDirs.push(root)
+    process.chdir(root)
+
+    const exitCode = await main(['meta', 'generate-skill'])
+    const output = logSpy.mock.calls.flat().join('\n')
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain('name: generate-skill\n')
+    expect(output).toContain(
+      'For full-library discovery or taxonomy design, use domain-discovery;',
+    )
+    expect(output).toContain(
+      'for generating an approved full-library tree, use tree-generator.',
+    )
+    const format = join('generate-skill', 'references', 'skill-format.md')
+    const distribution = join('generate-skill', 'references', 'distribution.md')
+    // Rewritten destinations always use forward slashes, on every platform.
+    const posix = (path: string) => path.split(sep).join('/')
+    expect(output).toContain(`](${posix(join(metaDir, format))})`)
+    expect(output).toContain(`](${posix(join(metaDir, distribution))})`)
+    for (const path of [
+      format,
+      distribution,
+      join('domain-discovery', 'SKILL.md'),
+      join('tree-generator', 'SKILL.md'),
+    ])
+      expect(existsSync(join(metaDir, path))).toBe(true)
+    expect(readdirSync(root)).toEqual([])
   })
 
   it('fails cleanly for invalid meta-skill names', async () => {
@@ -244,6 +284,24 @@ describe('cli commands', () => {
 
     expect(exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledWith('Unknown command: wat')
+  })
+
+  it('prints an ordered maintainer overview and per-action options', async () => {
+    expect(await main(['maintainer', '--help'])).toBe(0)
+    const overview = getHelpOutput()
+    expect(overview).toContain('Run the actions in this order.')
+    expect(overview.indexOf('setup:')).toBeLessThan(overview.indexOf('check:'))
+    expect(overview).toContain('Writes: Nothing. Use it as the CI gate.')
+
+    logSpy.mockClear()
+    expect(await main(['maintainer', 'add', '--help'])).toBe(0)
+    const add = getHelpOutput()
+    expect(add).toContain('--domain <slug>')
+    expect(add).not.toContain('--record')
+
+    logSpy.mockClear()
+    expect(await main(['maintainer'])).toBe(1)
+    expect(getHelpOutput()).toContain('Usage: intent maintainer <action>')
   })
 
   it('prints command help when --help is passed after a subcommand', async () => {
@@ -1153,13 +1211,9 @@ describe('cli commands', () => {
     expect(content).not.toContain('@tanstack/local#local-skill')
   })
 
-  it('prints the scaffold prompt', async () => {
-    const exitCode = await main(['scaffold'])
-    const output = String(logSpy.mock.calls[0]?.[0])
-
-    expect(exitCode).toBe(0)
-    expect(output).toContain('## Step 1')
-    expect(output).toContain(join('meta', 'domain-discovery', 'SKILL.md'))
+  it('removes scaffold in favor of the maintainer workflow', async () => {
+    expect(await main(['scaffold'])).toBe(1)
+    expect(getHelpOutput()).toContain('maintainer')
   })
 
   it('updates package.json for skill publishing', async () => {
@@ -1289,6 +1343,10 @@ describe('cli commands', () => {
       name: 'db-core',
       description: 'Core database concepts',
     })
+    writeFileSync(
+      join(pkgDir, 'skills/db-core/SKILL.md'),
+      '---\nname: db-core\ndescription: Use when configuring TanStack DB collections.\nmetadata:\n  purpose: Core database concepts\n---\n',
+    )
 
     process.env.INTENT_GLOBAL_NODE_MODULES = isolatedGlobalRoot
     process.chdir(root)
@@ -1320,10 +1378,17 @@ describe('cli commands', () => {
         use: '@tanstack/db#db-core',
         packageName: '@tanstack/db',
         skillName: 'db-core',
+        description: 'Use when configuring TanStack DB collections.',
+        purpose: 'Core database concepts',
       }),
     ])
     expect(parsed.conflicts).toEqual([])
     expect(parsed.warnings).toEqual([])
+    logSpy.mockClear()
+    expect(await main(['list'])).toBe(0)
+    const text = logSpy.mock.calls.flat().join('\n')
+    expect(text).toContain('Use when configuring TanStack DB collections.')
+    expect(text).not.toContain('Core database concepts')
   })
 
   it('prints full load commands for every skill in human list output', async () => {
@@ -3155,6 +3220,62 @@ describe('cli commands', () => {
     expect(output).toContain('Framework skills must have a "requires" field')
   })
 
+  it.each(['package.json', 'pnpm-workspace.yaml'])(
+    'recognizes Intent at the workspace root declared by %s',
+    async (workspaceFile) => {
+      const root = mkdtempSync(
+        join(realTmpdir, 'intent-cli-validate-root-dep-'),
+      )
+      tempDirs.push(root)
+      const manifest = {
+        private: true,
+        ...(workspaceFile === 'package.json'
+          ? { workspaces: ['packages/*'] }
+          : {}),
+        devDependencies: { '@tanstack/intent': '^0.4.0' },
+      }
+      writeJson(join(root, 'package.json'), manifest)
+      if (workspaceFile === 'pnpm-workspace.yaml')
+        writeFileSync(
+          join(root, 'pnpm-workspace.yaml'),
+          'packages:\n  - packages/*\n',
+        )
+      const packageDir = join(root, 'packages', 'client')
+      writeJson(join(packageDir, 'package.json'), {
+        name: 'client',
+        keywords: ['tanstack-intent'],
+        files: ['skills'],
+      })
+      writeSkillMd(join(packageDir, 'skills', 'query'), {
+        name: 'query',
+        description: 'Query the client.',
+      })
+
+      for (const cwd of [root, packageDir]) {
+        process.chdir(cwd)
+        logSpy.mockClear()
+        expect(await main(['validate'])).toBe(0)
+        expect(logSpy.mock.calls.flat().join('\n')).not.toContain(
+          '@tanstack/intent is not in devDependencies',
+        )
+      }
+
+      writeJson(join(root, 'package.json'), {
+        ...manifest,
+        devDependencies: {},
+      })
+      writeJson(join(root, 'packages', 'tooling', 'package.json'), {
+        name: 'tooling',
+        devDependencies: { '@tanstack/intent': '^0.4.0' },
+      })
+      logSpy.mockClear()
+      expect(await main(['validate'])).toBe(0)
+      expect(logSpy.mock.calls.flat().join('\n')).toContain(
+        '@tanstack/intent is not in devDependencies',
+      )
+    },
+  )
+
   it('validates package skills from repo root without root packaging warnings', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-mono-'))
     tempDirs.push(root)
@@ -3339,6 +3460,67 @@ describe('cli commands', () => {
     expect(output).not.toContain(
       '"!skills/_artifacts" is not in the "files" array',
     )
+  })
+
+  it('accepts per-skill files entries and names an unpublished skill directory', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-files-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      name: '@acme/library',
+      devDependencies: { '@tanstack/intent': '^0.0.18' },
+      keywords: ['tanstack-intent'],
+      files: ['dist', 'skills/covered'],
+    })
+    writeSkillMd(join(root, 'skills', 'covered'), {
+      name: 'covered',
+      description: 'Published through its own files entry',
+    })
+    writeSkillMd(join(root, 'skills', 'missing'), {
+      name: 'missing',
+      description: 'Not published',
+    })
+
+    process.chdir(root)
+
+    expect(await main(['validate'])).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).not.toContain('"skills" is not')
+    expect(output).not.toContain('"skills/covered"')
+    expect(output).toContain(
+      '"skills/missing" is not covered by the "files" array',
+    )
+    expect(output).not.toContain('"!skills/_artifacts"')
+  })
+
+  it('still asks to exclude skills/_artifacts when the whole skills directory is published', async () => {
+    const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-artifacts-'))
+    tempDirs.push(root)
+
+    writeJson(join(root, 'package.json'), {
+      name: '@acme/library',
+      devDependencies: { '@tanstack/intent': '^0.0.18' },
+      keywords: ['tanstack-intent'],
+      files: ['skills'],
+    })
+    writeSkillMd(join(root, 'skills', 'core'), {
+      name: 'core',
+      description: 'Core guidance',
+    })
+    mkdirSync(join(root, 'skills', '_artifacts'), { recursive: true })
+    for (const name of ['domain_map.yaml', 'skill_tree.yaml']) {
+      writeFileSync(join(root, 'skills', '_artifacts', name), 'skills: []\n')
+    }
+    writeFileSync(
+      join(root, 'skills', '_artifacts', 'skill_spec.md'),
+      '# Spec\n',
+    )
+
+    process.chdir(root)
+
+    expect(await main(['validate'])).toBe(0)
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('"!skills/_artifacts" is not in the "files" array')
   })
 
   it('skips cleanly when validate is run without a skills directory', async () => {

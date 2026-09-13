@@ -73,6 +73,7 @@ export interface SkillEntry {
   name: string
   path: string
   description: string
+  purpose?: string
   type?: string
   framework?: string
 }

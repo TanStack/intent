@@ -53,6 +53,10 @@ describe('runStaleCommand', () => {
     expect(output).toContain('@tanstack/router')
     expect(output).toContain('@tanstack/react-start-rsc')
     expect(output).toContain('package is not represented')
+    expect(output).toContain('meta generate-skill')
+    expect(output).toContain(
+      'with this report and the relevant code/docs change',
+    )
     expect(output).not.toContain('All skills up-to-date')
   })
 
@@ -70,6 +74,47 @@ describe('runStaleCommand', () => {
     expect(output).toContain('Intent workflow update available')
     expect(output).toContain('npx @tanstack/intent@latest setup')
     expect(output).toContain('No intent-enabled packages found.')
+    expect(output).not.toContain('meta generate-skill')
+  })
+
+  it('does not suggest content review for an up-to-date report', async () => {
+    await runStaleCommand(undefined, {}, () =>
+      Promise.resolve({
+        reports: [
+          {
+            library: 'current-library',
+            currentVersion: '1.0.0',
+            skillVersion: '1.0.0',
+            versionDrift: null,
+            skills: [],
+            signals: [],
+          },
+        ],
+      }),
+    )
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(output).toContain('All skills up-to-date')
+    expect(output).not.toContain('meta generate-skill')
+  })
+
+  it('keeps JSON review data free of next-action text', async () => {
+    const reports = [
+      {
+        library: 'changed-library',
+        currentVersion: '1.1.0',
+        skillVersion: '1.0.0',
+        versionDrift: 'minor' as const,
+        skills: [{ name: 'core', needsReview: true, reasons: ['minor drift'] }],
+        signals: [],
+      },
+    ]
+    await runStaleCommand(undefined, { json: true }, () =>
+      Promise.resolve({ reports }),
+    )
+
+    expect(logSpy.mock.calls).toHaveLength(1)
+    expect(JSON.parse(logSpy.mock.calls[0]![0])).toEqual(reports)
   })
 
   it('does not print workflow update advisories in json output', async () => {

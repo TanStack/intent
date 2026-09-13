@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, test } from 'vitest'
+import { afterAll, beforeAll, bench, describe } from 'vitest'
 import {
   createBenchOptions,
   createCliRunner,
@@ -171,51 +171,38 @@ describe('intent load', () => {
   beforeAll(setup)
   afterAll(teardown)
 
-  test(
+  bench(
     'loads a direct dependency skill',
-    { timeout: 30_000 },
-    async ({ bench }) => {
-      await bench('loads a direct dependency skill', async () => {
-        const state = getFixture()
+    async () => {
+      const state = getFixture()
+      for (let index = 0; index < 10; index++) {
+        await state.runner.run(['load', '@bench/query#query/cache', '--path'])
+      }
+    },
+    createBenchOptions(setup, teardown),
+  )
+
+  bench(
+    'loads direct dependency content as json',
+    async () => {
+      const state = getFixture()
+      for (let index = 0; index < 10; index++) {
+        await state.runner.run(['load', '@bench/query#query/cache', '--json'])
+      }
+    },
+    createBenchOptions(setup, teardown),
+  )
+
+  bench(
+    'loads a direct dependency from a large workspace',
+    async () => {
+      const state = getFixture()
+      await runInCwd(state.workspaceRoot, async () => {
         for (let index = 0; index < 10; index++) {
           await state.runner.run(['load', '@bench/query#query/cache', '--path'])
         }
-      }).run(createBenchOptions(setup, teardown))
+      })
     },
-  )
-
-  test(
-    'loads direct dependency content as json',
-    { timeout: 30_000 },
-    async ({ bench }) => {
-      await bench('loads direct dependency content as json', async () => {
-        const state = getFixture()
-        for (let index = 0; index < 10; index++) {
-          await state.runner.run(['load', '@bench/query#query/cache', '--json'])
-        }
-      }).run(createBenchOptions(setup, teardown))
-    },
-  )
-
-  test(
-    'loads a direct dependency from a large workspace',
-    { timeout: 30_000 },
-    async ({ bench }) => {
-      await bench(
-        'loads a direct dependency from a large workspace',
-        async () => {
-          const state = getFixture()
-          await runInCwd(state.workspaceRoot, async () => {
-            for (let index = 0; index < 10; index++) {
-              await state.runner.run([
-                'load',
-                '@bench/query#query/cache',
-                '--path',
-              ])
-            }
-          })
-        },
-      ).run(createBenchOptions(setup, teardown))
-    },
+    createBenchOptions(setup, teardown),
   )
 })

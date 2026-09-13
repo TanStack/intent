@@ -16,5 +16,12 @@
   "labels": ["dependencies"],
   "rangeStrategy": "bump",
   "postUpdateOptions": ["pnpmDedupe"],
-  "ignoreDeps": ["@types/node", "node"]
+  "ignoreDeps": ["@types/node", "node"],
+  "packageRules": [
+    {
+      "description": "changesets/action v2 requires @changesets/cli v3. Hold the action at v1 until the CLI is upgraded.",
+      "matchPackageNames": ["changesets/action"],
+      "allowedVersions": "<2"
+    }
+  ]
 }
