@@ -228,7 +228,10 @@ describe('packed release', () => {
         if (/^(https?:|#)/.test(link)) continue
         const target = link.split('#')[0]!
         expect(isAbsolute(target), link).toBe(true)
-        expect(target.startsWith(join(installedRoot, 'meta')), link).toBe(true)
+        expect(
+          resolve(target).startsWith(join(installedRoot, 'meta')),
+          link,
+        ).toBe(true)
         expect(statSync(target).isFile(), link).toBe(true)
       }
     }
