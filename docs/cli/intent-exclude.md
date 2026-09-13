@@ -5,9 +5,11 @@ id: intent-exclude
 
 `intent exclude` manages `package.json#intent.exclude` entries.
 
-```bash
-npx @tanstack/intent@latest exclude [list|add|remove] [pattern] [--json]
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+@tanstack/intent@latest exclude [list|add|remove] [pattern] [--json]
+
+<!-- ::end:tabs -->
 
 ## Options
 
@@ -21,12 +23,16 @@ npx @tanstack/intent@latest exclude [list|add|remove] [pattern] [--json]
 
 ## Examples
 
-```bash
-npx @tanstack/intent@latest exclude
-npx @tanstack/intent@latest exclude list --json
-npx @tanstack/intent@latest exclude add @tanstack/router#experimental-*
-npx @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+```text
+@tanstack/intent@latest exclude
+@tanstack/intent@latest exclude list --json
+@tanstack/intent@latest exclude add @tanstack/router#experimental-*
+@tanstack/intent@latest exclude remove @tanstack/router#experimental-*
 ```
+
+<!-- ::end:tabs -->
 
 ## Behavior
 
