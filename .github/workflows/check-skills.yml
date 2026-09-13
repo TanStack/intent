@@ -1,7 +1,7 @@
 # Reusable workflow behind the pull-request job of a library repository's
 # check-skills.yml. The caller pins this file to an Intent release commit and
-# grants the job `contents: read` only, so a compromised copy of this
-# workflow could read the repository and nothing more.
+# grants the job `contents: read` only. No publishing credentials are supplied;
+# read access still includes the checked-out repository contents.
 #
 # Intent itself runs from the repository's own lockfile-pinned copy, so a
 # malicious npm publish does nothing until the maintainer merges a bump. The
@@ -12,8 +12,16 @@ name: Check Skills
 on:
   workflow_call:
     inputs:
+      repair:
+        description: Prepare mechanical repairs and reviewable example patches without publishing changes
+        type: boolean
+        default: false
+      artifacts:
+        description: Repository-relative planning directory when using the maintainer workflow
+        type: string
+        default: ''
       intent-version:
-        description: npm dist-tag or version of @tanstack/intent to install instead of the repository's own copy
+        description: Exact npm version of @tanstack/intent to install instead of the repository's own copy
         type: string
         default: ''
       node-version:
@@ -74,7 +82,11 @@ jobs:
           COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
         run: |
           if [ -n "$INTENT_VERSION" ]; then
-            npm install -g "@tanstack/intent@${INTENT_VERSION}"
+            if [[ ! "$INTENT_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::intent-version must be an exact version, never a tag or range."
+              exit 1
+            fi
+            npm install -g --ignore-scripts "@tanstack/intent@${INTENT_VERSION}"
             exit 0
           fi
           case "$MANAGER" in
@@ -108,12 +120,68 @@ jobs:
           fi
           echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
 
+      - name: Prepare repairs
+        if: inputs.repair
+        id: repairs
+        continue-on-error: true
+        env:
+          INTENT_ARTIFACTS: ${{ inputs.artifacts }}
+        run: |
+          DIRECTORY=$(mktemp -d "$RUNNER_TEMP/intent-repairs.XXXXXX")
+          echo "directory=$DIRECTORY" >> "$GITHUB_OUTPUT"
+          git -c core.fsmonitor=false rev-parse HEAD > "$DIRECTORY/base-sha.txt"
+          if [ -n "$(git -c core.fsmonitor=false status --porcelain --untracked-files=all)" ]; then
+            echo "::error::Repair patches require a clean checkout after dependency installation."
+            exit 1
+          fi
+          status=0
+          intent repair --write --json > "$DIRECTORY/repair-report.json" || status=1
+          ARTIFACTS=()
+          if [ -n "$INTENT_ARTIFACTS" ]; then ARTIFACTS=(--artifacts "$INTENT_ARTIFACTS"); fi
+          if [ -n "$INTENT_ARTIFACTS" ] || [ -f .intent/review-state.json ] || grep -q -- '<!-- intent-maintainer:start -->' AGENTS.md CLAUDE.md .cursorrules .github/copilot-instructions.md 2>/dev/null; then
+            intent maintainer sync "${ARTIFACTS[@]}" > "$DIRECTORY/sync.log" 2>&1 || status=1
+          fi
+          # Include newly generated manifests in the patch without staging their
+          # contents. This runner never commits, pushes, or records a review.
+          git -c core.fsmonitor=false add --intent-to-add -- .
+          git -c core.fsmonitor=false diff --no-ext-diff --no-textconv --binary HEAD > "$DIRECTORY/mechanical.patch"
+          # Safe repairs are already applied, so this second patch contains only
+          # suggestions. It applies after mechanical.patch and requires assessment.
+          intent repair --patch > "$DIRECTORY/example-suggestions.patch" || status=1
+          if [ -s "$DIRECTORY/mechanical.patch" ]; then
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+          fi
+          exit "$status"
+
       - name: Check skills
         env:
           INTENT_REVIEW_BASE: ${{ github.event.pull_request.base.sha }}
+          INTENT_ARTIFACTS: ${{ inputs.artifacts }}
         run: |
-          if [ -f .intent/review-state.json ] || grep -q -- '<!-- intent-maintainer:start -->' AGENTS.md CLAUDE.md .cursorrules .github/copilot-instructions.md 2>/dev/null; then
-            intent maintainer check --base "$INTENT_REVIEW_BASE" --github-summary
+          ARTIFACTS=()
+          if [ -n "$INTENT_ARTIFACTS" ]; then ARTIFACTS=(--artifacts "$INTENT_ARTIFACTS"); fi
+          if [ -n "$INTENT_ARTIFACTS" ] || [ -f .intent/review-state.json ] || grep -q -- '<!-- intent-maintainer:start -->' AGENTS.md CLAUDE.md .cursorrules .github/copilot-instructions.md 2>/dev/null; then
+            intent maintainer check --base "$INTENT_REVIEW_BASE" --github-summary "${ARTIFACTS[@]}"
           else
             intent validate --github-summary
+          fi
+
+      - name: Save repair patches
+        if: always() && inputs.repair && steps.repairs.outputs.directory != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: intent-repairs
+          path: ${{ steps.repairs.outputs.directory }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Require repair review
+        if: always() && inputs.repair && steps.repairs.outcome != 'skipped'
+        env:
+          REPAIR_PENDING: ${{ steps.repairs.outputs.pending }}
+          REPAIR_OUTCOME: ${{ steps.repairs.outcome }}
+        run: |
+          if [ "$REPAIR_PENDING" = true ] || [ "$REPAIR_OUTCOME" != success ]; then
+            echo "::error::Review the intent-repairs artifact. Apply mechanical.patch first; assess example-suggestions.patch separately. Resolve remaining checks before merging."
+            exit 1
           fi
