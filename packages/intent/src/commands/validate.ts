@@ -403,8 +403,9 @@ function collectAgentSkillSpecWarnings({
 }
 
 export async function runValidateCommand(
-  dir?: string,
+  dir?: string | Array<string>,
   options: ValidateCommandOptions = {},
+  additionalDirs: Array<string> = [],
 ): Promise<void> {
   if (options.fix && options.check) {
     fail('Cannot combine --fix and --check')
@@ -423,12 +424,12 @@ export async function runValidateCommand(
   }
 
   if (!options.githubSummary) {
-    await runValidateCommandInternal(dir, options)
+    await runValidateCommandInternal(dir, options, additionalDirs)
     return
   }
 
   try {
-    await runValidateCommandInternal(dir, options)
+    await runValidateCommandInternal(dir, options, additionalDirs)
     writeGithubValidationSummary({ ok: true })
   } catch (err) {
     writeGithubValidationSummary({
@@ -440,25 +441,39 @@ export async function runValidateCommand(
 }
 
 async function runValidateCommandInternal(
-  dir?: string,
+  dir?: string | Array<string>,
   options: ValidateCommandOptions = {},
+  additionalDirs: Array<string> = [],
 ): Promise<void> {
   const [{ parse: parseYaml }, { readScalarField }] = await Promise.all([
     import('yaml'),
     import('../shared/utils.js'),
   ])
   const { findSkillFiles } = createIntentFsCache()
-  const context = resolveProjectContext({
-    cwd: process.cwd(),
-    targetPath: dir,
-  })
-  const explicitDir = dir !== undefined
-  const skillsDirs = explicitDir
-    ? [context.targetSkillsDir ?? resolve(process.cwd(), dir)]
-    : collectDefaultSkillsDirs(context, findSkillFiles)
+  // Explicit directories are validated in one run, so a caller with several
+  // skills roots gets every error in one report and one summary.
+  const explicitDirs = [
+    ...new Set([...(dir === undefined ? [] : [dir].flat()), ...additionalDirs]),
+  ].map(
+    (target) =>
+      resolveProjectContext({ cwd: process.cwd(), targetPath: target })
+        .targetSkillsDir ?? resolve(process.cwd(), target),
+  )
+  const skillsDirs = [
+    ...new Set([
+      ...(dir === undefined
+        ? collectDefaultSkillsDirs(
+            resolveProjectContext({ cwd: process.cwd() }),
+            findSkillFiles,
+          )
+        : []),
+      ...explicitDirs,
+    ]),
+  ]
 
-  if (explicitDir && !existsSync(skillsDirs[0]!)) {
-    fail(`Skills directory not found: ${skillsDirs[0]}`)
+  for (const skillsDir of explicitDirs) {
+    if (!existsSync(skillsDir)) fail(`Skills directory not found: ${skillsDir}`)
+    if (findSkillFiles(skillsDir).length === 0) fail('No SKILL.md files found')
   }
 
   const errors: Array<ValidationError> = []
@@ -467,10 +482,7 @@ async function runValidateCommandInternal(
   const fixPlans: Array<FrontmatterFixPlan> = []
   const setVersionPlans: Array<SetVersionPlan> = []
   let validatedCount = 0
-
-  if (explicitDir && findSkillFiles(skillsDirs[0]!).length === 0) {
-    fail('No SKILL.md files found')
-  }
+  const validatedFiles = new Set<string>()
 
   if (skillsDirs.length === 0) {
     console.log('No skills/ directory found — skipping validation.')
@@ -490,6 +502,8 @@ async function runValidateCommandInternal(
       library: string | undefined
     }> = []
     for (const filePath of skillFiles) {
+      if (validatedFiles.has(filePath)) continue
+      validatedFiles.add(filePath)
       const rel = relative(process.cwd(), filePath)
       const content = readFileSync(filePath, 'utf8')
       const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)/)

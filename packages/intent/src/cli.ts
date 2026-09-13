@@ -253,6 +253,7 @@ function createCli(
       '--record <file>',
       'Record outcomes from an annotated review report',
     )
+    .option('--github-summary', 'Write a GitHub Actions step summary for check')
     .example('maintainer setup')
     .example(
       'maintainer add caching --domain queries --description "Use when caching queries." --source "src/**"',
@@ -266,6 +267,7 @@ function createCli(
     )
     .example('maintainer review --interactive')
     .example('maintainer check --base origin/main')
+    .example('maintainer check --base origin/main --github-summary')
     .action(
       async (
         action: string,

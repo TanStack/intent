@@ -1,16 +1,21 @@
-# check-skills.yml — Drop this into your library repo's .github/workflows/
+# check-skills.yml — copied by `intent maintainer setup` into .github/workflows/
 #
-# Validates intent skills and recorded source reviews on PRs. After a release or manual run, opens or
-# updates one review PR when existing skills, artifact coverage, or workspace
-# package coverage need review.
+# Validates intent skills and recorded source reviews on pull requests. After a
+# release or manual run, opens or updates one review PR when skills, artifact
+# coverage, or workspace package coverage need review.
 #
-# Triggers: pull requests, new release published, or
-# manual workflow_dispatch.
+# The steps live in TanStack/intent's reusable workflows, pinned below to the
+# commit of the Intent release that copied this file. Dependabot and Renovate
+# bump the pin like any other action reference; a `github-actions` entry in
+# .github/dependabot.yml is enough. Each job grants only the permissions its
+# workflow needs, and Intent runs from this repository's own lockfile-pinned
+# copy of @tanstack/intent.
 #
-# intent-workflow-version: 5
+# intent-workflow-version: 4
 #
 # Template variables (replaced by `intent setup`):
 #   {{PACKAGE_LABEL}} — e.g. @tanstack/query or my-workspace workspace
+#   {{INTENT_WORKFLOW_REF}} — the release commit, or its tag when unresolved
 
 name: Check Skills
 
@@ -20,95 +25,20 @@ on:
     types: [published]
   workflow_dispatch: {}
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 
 jobs:
   validate:
-    name: Validate intent skills
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install intent
-        run: npm install -g @tanstack/intent
-
-      - name: Validate skills
-        run: intent validate --github-summary
-
-      - name: Check maintainer workflow
-        env:
-          INTENT_REVIEW_BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          if [ -f .intent/review-state.json ] || grep -q -- '<!-- intent-maintainer:start -->' AGENTS.md CLAUDE.md .cursorrules .github/copilot-instructions.md 2>/dev/null; then
-            intent maintainer check --base "$INTENT_REVIEW_BASE"
-          fi
+    permissions:
+      contents: read
+    uses: TanStack/intent/.github/workflows/check-skills.yml@{{INTENT_WORKFLOW_REF}}
 
   review:
-    name: Check intent skill coverage
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install intent
-        run: npm install -g @tanstack/intent
-
-      - name: Check skills
-        id: stale
-        run: |
-          if [ -f .intent/review-state.json ]; then
-            intent review --github-review --package-label "{{PACKAGE_LABEL}}"
-          else
-            intent stale --github-review --package-label "{{PACKAGE_LABEL}}"
-          fi
-
-      - name: Open or update review PR
-        if: steps.stale.outputs.has_review == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ github.event.release.tag_name || 'manual' }}"
-          BRANCH="skills/review-${VERSION}"
-          BASE_BRANCH="${{ github.event.repository.default_branch }}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git fetch origin "$BRANCH" || true
-          if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-          else
-            git checkout -b "$BRANCH"
-            git commit --allow-empty -m "chore: review intent skills for ${VERSION}"
-            git push origin "$BRANCH"
-          fi
-
-          PR_URL="$(gh pr list --head "$BRANCH" --json url --jq '.[0].url')"
-          if [ -n "$PR_URL" ]; then
-            gh pr edit "$PR_URL" --body-file pr-body.md
-          else
-            gh pr create \
-              --title "Review intent skills (${VERSION})" \
-              --body-file pr-body.md \
-              --head "$BRANCH" \
-              --base "$BASE_BRANCH"
-          fi
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: TanStack/intent/.github/workflows/review-skills.yml@{{INTENT_WORKFLOW_REF}}
+    with:
+      package-label: '{{PACKAGE_LABEL}}'
