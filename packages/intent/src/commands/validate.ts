@@ -644,7 +644,8 @@ async function runValidateCommandInternal(
       } catch {
         packageName = undefined
       }
-      const byLibrary: Record<string, typeof checkedSkills> = {}
+      const byLibrary: Record<string, typeof checkedSkills> =
+        Object.create(null)
       for (const skill of checkedSkills) {
         const library = skill.library ?? packageName
         if (library) (byLibrary[library] ??= []).push(skill)

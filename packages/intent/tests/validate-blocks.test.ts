@@ -87,6 +87,26 @@ it('parses a plain ts block as TypeScript rather than TSX', () => {
   expect(check().findings).toEqual([])
 })
 
+it('keeps declarations in separate examples independent', () => {
+  skill('```ts\nconst count = 1\n```\n\n```ts\nconst count = 2\n```\n')
+  expect(check().findings).toEqual([])
+})
+
+it.each(['js', 'jsx'])(
+  'checks library option types in %s examples',
+  (language) => {
+    skill(
+      `\`\`\`${language}\nimport { retry } from '@acme/client'\nretry(() => fetchItems(), { max: 'many' })\n\`\`\`\n`,
+    )
+    expect(check().findings).toEqual([
+      expect.objectContaining({
+        line: 10,
+        message: expect.stringMatching(/TS2322/),
+      }),
+    ])
+  },
+)
+
 it('reports a removed option, a missing export, and a broken example with the skill line', () => {
   skill(
     [
@@ -160,6 +180,52 @@ it('warns on deprecated imports and fails broken relative links', () => {
       message: 'legacyRetry is deprecated: Use retry.',
     }),
   ])
+})
+
+it('revalidates unchanged skills after an imported source or link target changes', async () => {
+  write('src/index.ts', "export { retry } from './retry'\n")
+  write(
+    'src/retry.ts',
+    'export function retry(options: { max: number }): void {}\n',
+  )
+  write('skills/retries/reference.md', '# Reference\n')
+  skill(
+    "See [reference](reference.md).\n\n```ts\nimport { retry } from '@acme/client'\nretry({ max: 3 })\n```\n",
+  )
+  expect(await main(['validate'])).toBe(0)
+  write(
+    'src/retry.ts',
+    'export function retry(options: { max: string }): void {}\n',
+  )
+  rmSync(join(root, 'skills/retries/reference.md'))
+  expect(await main(['validate'])).toBe(1)
+  const errors = vi.mocked(console.error).mock.calls.flat().join('\n')
+  expect(errors).toContain('TS2322')
+  expect(errors).toContain('Link target not found: reference.md')
+})
+
+it.each(['__proto__', 'constructor'])(
+  'accepts %s as a library name without crashing',
+  async (library) => {
+    write('package.json', JSON.stringify({ name: library, version: '1.0.0' }))
+    skill(
+      `\`\`\`ts\nimport { retry } from '${library}'\nretry(() => fetchItems(), { max: 3 })\n\`\`\`\n`,
+    )
+    expect(await main(['validate'])).toBe(0)
+  },
+)
+
+it('checks prose links without loading TypeScript', () => {
+  write('node_modules/typescript/package.json', '{"main":"index.cjs"}\n')
+  write(
+    'node_modules/typescript/index.cjs',
+    "require('node:fs').writeFileSync('typescript-loaded', '')\n",
+  )
+  skill('See [missing](missing.md).\n')
+  expect(check().findings).toEqual([
+    expect.objectContaining({ message: 'Link target not found: missing.md' }),
+  ])
+  expect(existsSync(join(root, 'typescript-loaded'))).toBe(false)
 })
 
 it('uses tracked hand-written declarations and maps build output back to source', () => {

@@ -1,6 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import { resolveProjectContext } from '../core/project-context.js'
@@ -160,12 +159,9 @@ function libraryEntry(packageDir: string): string | null {
 // Every workspace package mapped to its own entry, so an example that imports
 // a sibling package (an adapter, a framework binding) is checked against it
 // instead of silently resolving to nothing.
-const workspaceEntries = new Map<string, Record<string, Array<string>>>()
 function workspacePaths(root: string): Record<string, Array<string>> {
   const context = resolveProjectContext({ cwd: root })
   const workspaceRoot = context.workspaceRoot ?? root
-  const cached = workspaceEntries.get(workspaceRoot)
-  if (cached) return cached
   const paths: Record<string, Array<string>> = {}
   for (const dir of resolveWorkspacePackages(
     workspaceRoot,
@@ -185,7 +181,6 @@ function workspacePaths(root: string): Record<string, Array<string>> {
       slash(join(dir, '*')),
     ]
   }
-  workspaceEntries.set(workspaceRoot, paths)
   return paths
 }
 
@@ -228,54 +223,32 @@ export function checkSkillBlocks(
     library: string
     skills: Array<{ file: string; content: string }>
   },
-  ts: typeof TS | null = loadTypeScript(options.root),
+  ts?: typeof TS | null,
 ): SkillBlockCheck {
   const { root, packageDir, library } = options
-  // `check` validates every skill and then describes the pending ones, so a
-  // skill's result is kept for the rest of the process instead of building a
-  // second program for the same content.
-  const findings: Array<SkillBlockFinding> = []
-  const skills: Array<{ file: string; content: string; key: string }> = []
-  let blockCount = 0
-  const entry = ts ? libraryEntry(packageDir) : null
-  const stamp = entry ? `${entry}\0${statSync(entry).mtimeMs}` : ''
-  for (const skill of options.skills) {
-    const key = [
-      packageDir,
-      library,
-      stamp,
-      skill.file,
-      digest(skill.content),
-    ].join('\0')
-    const cached = checked.get(key)
-    if (cached) {
-      findings.push(...cached.findings)
-      blockCount += cached.blocks
-    } else skills.push({ ...skill, key })
-  }
-  for (const skill of skills)
-    findings.push(...checkSkillLinks(root, skill.file, skill.content))
-  const blocks = skills.flatMap((skill) =>
+  const findings = options.skills.flatMap((skill) =>
+    checkSkillLinks(root, skill.file, skill.content),
+  )
+  const blocks = options.skills.flatMap((skill) =>
     extractCodeBlocks(skill.file, skill.content),
   )
-  const remember = (skipped?: string) => {
-    if (!skipped)
-      for (const skill of skills)
-        checked.set(skill.key, {
-          blocks: blocks.filter((block) => block.file === skill.file).length,
-          findings: findings.filter((finding) => finding.file === skill.file),
-        })
-    return { blocks: blockCount + blocks.length, findings, skipped }
-  }
-  if (blocks.length === 0) return remember()
-  if (!ts) return remember('TypeScript is not installed in this repository')
+  const result = (skipped?: string): SkillBlockCheck => ({
+    blocks: blocks.length,
+    findings,
+    skipped,
+  })
+  if (blocks.length === 0) return result()
+  // Prose and link validation do not need the TypeScript runtime.
+  if (ts === undefined) ts = loadTypeScript(root)
+  if (!ts) return result('TypeScript is not installed in this repository')
   if (Number(ts.versionMajorMinor.split('.')[0]) < 5)
-    return remember(
+    return result(
       `TypeScript ${ts.version} is installed; 5.0 or newer is required`,
     )
+  const entry = libraryEntry(packageDir)
   const ownsLibrary = packageName(packageDir) === library
   if (ownsLibrary && !entry)
-    return remember(
+    return result(
       `no type entry found for ${library} in ${relative(root, packageDir) || '.'}`,
     )
 
@@ -289,12 +262,14 @@ export function checkSkillBlocks(
     strict: false,
     skipLibCheck: true,
     allowJs: true,
-    checkJs: false,
+    checkJs: true,
     resolveJsonModule: true,
     esModuleInterop: true,
     allowSyntheticDefaultImports: true,
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
+    // Each fence is a standalone example, even when it has no imports.
+    moduleDetection: ts.ModuleDetectionKind.Force,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     jsx: ts.JsxEmit.Preserve,
     lib: ['lib.esnext.d.ts', 'lib.dom.d.ts'],
@@ -383,15 +358,8 @@ export function checkSkillBlocks(
       }
     }
   }
-  return remember()
+  return result()
 }
-
-const checked = new Map<
-  string,
-  { blocks: number; findings: Array<SkillBlockFinding> }
->()
-const digest = (value: string) =>
-  createHash('sha256').update(value).digest('hex')
 
 // One-line summary per skill for review items, in one program per package.
 // Skills without code blocks, or whose blocks could not be checked, are left
