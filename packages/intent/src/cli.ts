@@ -197,7 +197,7 @@ function createCli(
       'Set up, author, synchronize, and check library skills',
     )
     .usage(
-      'maintainer <setup|adopt|add|remove|status|sync|review|check> [name] [options]',
+      'maintainer <setup|add|remove|status|sync|review|check> [name] [options]',
     )
     .option(
       '--artifacts <directory>',
@@ -207,14 +207,7 @@ function createCli(
       '--package <directory>',
       'Owning package directory, relative to the repository root',
     )
-    .option(
-      '--path <path>',
-      'Skill path for add, or repository-relative custom directory for adopt',
-    )
-    .option(
-      '--apply <file>',
-      'Apply reviewed adoption choices from a JSON plan',
-    )
+    .option('--path <path>', 'Skill path relative to the owning package')
     .option('--domain <slug>', 'Domain for a new skill')
     .option(
       '--distribution <mode>',
@@ -247,15 +240,20 @@ function createCli(
       '--interactive',
       'Inspect and record maintainer review outcomes in a terminal',
     )
-    .option('--json', 'Output an adoption plan, status, or review as JSON')
+    .option(
+      '--unchanged <reason>',
+      'Record every pending review item as reviewed with no guidance change',
+    )
+    .option(
+      '--updated <reason>',
+      'Record every pending review item as reviewed with updated guidance',
+    )
+    .option('--json', 'Output status or review as JSON')
     .option(
       '--record <file>',
       'Record outcomes from an annotated review report',
     )
     .example('maintainer setup')
-    .example('maintainer adopt')
-    .example('maintainer adopt --json')
-    .example('maintainer adopt --apply adoption.json')
     .example(
       'maintainer add caching --domain queries --description "Use when caching queries." --source "src/**"',
     )
@@ -263,6 +261,9 @@ function createCli(
     .example('maintainer status --json')
     .example('maintainer sync')
     .example('maintainer review --json')
+    .example(
+      'maintainer review --unchanged "internal refactor, public API unchanged"',
+    )
     .example('maintainer review --interactive')
     .example('maintainer check --base origin/main')
     .action(
