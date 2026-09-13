@@ -16,12 +16,7 @@ For repository-wide maintenance, enable the maintainer workflow once:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer setup
-solid: @tanstack/intent@latest maintainer setup
-vue: @tanstack/intent@latest maintainer setup
-svelte: @tanstack/intent@latest maintainer setup
-angular: @tanstack/intent@latest maintainer setup
-lit: @tanstack/intent@latest maintainer setup
+@tanstack/intent@latest maintainer setup
 
 <!-- ::end:tabs -->
 
@@ -31,12 +26,7 @@ For a one-off authoring session, tell the agent to run:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest meta generate-skill
-solid: @tanstack/intent@latest meta generate-skill
-vue: @tanstack/intent@latest meta generate-skill
-svelte: @tanstack/intent@latest meta generate-skill
-angular: @tanstack/intent@latest meta generate-skill
-lit: @tanstack/intent@latest meta generate-skill
+@tanstack/intent@latest meta generate-skill
 
 <!-- ::end:tabs -->
 
@@ -46,12 +36,7 @@ Give the agent a developer task or concrete code/docs change. The focused proced
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer sync
-solid: @tanstack/intent@latest maintainer sync
-vue: @tanstack/intent@latest maintainer sync
-svelte: @tanstack/intent@latest maintainer sync
-angular: @tanstack/intent@latest maintainer sync
-lit: @tanstack/intent@latest maintainer sync
+@tanstack/intent@latest maintainer sync
 
 <!-- ::end:tabs -->
 
@@ -61,12 +46,7 @@ This adds the `tanstack-intent` keyword and registered skill directories to exis
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer review --json
-solid: @tanstack/intent@latest maintainer review --json
-vue: @tanstack/intent@latest maintainer review --json
-svelte: @tanstack/intent@latest maintainer review --json
-angular: @tanstack/intent@latest maintainer review --json
-lit: @tanstack/intent@latest maintainer review --json
+@tanstack/intent@latest maintainer review --json
 
 <!-- ::end:tabs -->
 
@@ -88,12 +68,7 @@ Use `maintainer review` and `stale` as separate checks as the library changes. `
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer review
-solid: @tanstack/intent@latest maintainer review
-vue: @tanstack/intent@latest maintainer review
-svelte: @tanstack/intent@latest maintainer review
-angular: @tanstack/intent@latest maintainer review
-lit: @tanstack/intent@latest maintainer review
+@tanstack/intent@latest maintainer review
 
 <!-- ::end:tabs -->
 
@@ -101,12 +76,7 @@ Uses Git changes and recorded content fingerprints to identify skills, planning 
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest stale
-solid: @tanstack/intent@latest stale
-vue: @tanstack/intent@latest stale
-svelte: @tanstack/intent@latest stale
-angular: @tanstack/intent@latest stale
-lit: @tanstack/intent@latest stale
+@tanstack/intent@latest stale
 
 <!-- ::end:tabs -->
 
@@ -114,12 +84,7 @@ Reports conservative package and release signals: version drift, missing stored 
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest setup
-solid: @tanstack/intent@latest setup
-vue: @tanstack/intent@latest setup
-svelte: @tanstack/intent@latest setup
-angular: @tanstack/intent@latest setup
-lit: @tanstack/intent@latest setup
+@tanstack/intent@latest setup
 
 <!-- ::end:tabs -->
 

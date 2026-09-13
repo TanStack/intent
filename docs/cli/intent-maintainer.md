@@ -27,12 +27,7 @@ Run from a Git working tree containing the library's package manifest:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer setup
-solid: @tanstack/intent@latest maintainer setup
-vue: @tanstack/intent@latest maintainer setup
-svelte: @tanstack/intent@latest maintainer setup
-angular: @tanstack/intent@latest maintainer setup
-lit: @tanstack/intent@latest maintainer setup
+@tanstack/intent@latest maintainer setup
 
 <!-- ::end:tabs -->
 
@@ -54,12 +49,7 @@ Setup automatically registers valid, Git-visible `skills/**/SKILL.md` files in t
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
-solid: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
-vue: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
-svelte: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
-angular: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
-lit: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
+@tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts"
 
 <!-- ::end:tabs -->
 
@@ -75,12 +65,7 @@ Registration updates the tree and domain map and appends an entry to the spec. T
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer remove retries
-solid: @tanstack/intent@latest maintainer remove retries
-vue: @tanstack/intent@latest maintainer remove retries
-svelte: @tanstack/intent@latest maintainer remove retries
-angular: @tanstack/intent@latest maintainer remove retries
-lit: @tanstack/intent@latest maintainer remove retries
+@tanstack/intent@latest maintainer remove retries
 
 <!-- ::end:tabs -->
 
@@ -94,12 +79,7 @@ Package skills can also be offered through GitHub installers and native plugins.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer setup --distribution repo --repository owner/library --skill discover-library --skill retries
-solid: @tanstack/intent@latest maintainer setup --distribution repo --repository owner/library --skill discover-library --skill retries
-vue: @tanstack/intent@latest maintainer setup --distribution repo --repository owner/library --skill discover-library --skill retries
-svelte: @tanstack/intent@latest maintainer setup --distribution repo --repository owner/library --skill discover-library --skill retries
-angular: @tanstack/intent@latest maintainer setup --distribution repo --repository owner/library --skill discover-library --skill retries
-lit: @tanstack/intent@latest maintainer setup --distribution repo --repository owner/library --skill discover-library --skill retries
+@tanstack/intent@latest maintainer setup --distribution repo --repository owner/library --skill discover-library --skill retries
 
 <!-- ::end:tabs -->
 
@@ -111,12 +91,7 @@ To keep the package distribution workflow without generating repository exports:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer setup --distribution none
-solid: @tanstack/intent@latest maintainer setup --distribution none
-vue: @tanstack/intent@latest maintainer setup --distribution none
-svelte: @tanstack/intent@latest maintainer setup --distribution none
-angular: @tanstack/intent@latest maintainer setup --distribution none
-lit: @tanstack/intent@latest maintainer setup --distribution none
+@tanstack/intent@latest maintainer setup --distribution none
 
 <!-- ::end:tabs -->
 
@@ -150,24 +125,9 @@ Publish through the library's normal release process. Repository exports do not 
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer status
-react: @tanstack/intent@latest maintainer sync
-react: @tanstack/intent@latest maintainer review --interactive
-solid: @tanstack/intent@latest maintainer status
-solid: @tanstack/intent@latest maintainer sync
-solid: @tanstack/intent@latest maintainer review --interactive
-vue: @tanstack/intent@latest maintainer status
-vue: @tanstack/intent@latest maintainer sync
-vue: @tanstack/intent@latest maintainer review --interactive
-svelte: @tanstack/intent@latest maintainer status
-svelte: @tanstack/intent@latest maintainer sync
-svelte: @tanstack/intent@latest maintainer review --interactive
-angular: @tanstack/intent@latest maintainer status
-angular: @tanstack/intent@latest maintainer sync
-angular: @tanstack/intent@latest maintainer review --interactive
-lit: @tanstack/intent@latest maintainer status
-lit: @tanstack/intent@latest maintainer sync
-lit: @tanstack/intent@latest maintainer review --interactive
+@tanstack/intent@latest maintainer status
+@tanstack/intent@latest maintainer sync
+@tanstack/intent@latest maintainer review --interactive
 
 <!-- ::end:tabs -->
 
@@ -180,12 +140,7 @@ After checking every pending item, agents and scripts can record one shared conc
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
 ```text
-react: @tanstack/intent@latest maintainer review --json > .intent/review.json
-solid: @tanstack/intent@latest maintainer review --json > .intent/review.json
-vue: @tanstack/intent@latest maintainer review --json > .intent/review.json
-svelte: @tanstack/intent@latest maintainer review --json > .intent/review.json
-angular: @tanstack/intent@latest maintainer review --json > .intent/review.json
-lit: @tanstack/intent@latest maintainer review --json > .intent/review.json
+@tanstack/intent@latest maintainer review --json > .intent/review.json
 ```
 
 <!-- ::end:tabs -->
@@ -194,18 +149,8 @@ Annotate the completed items, then record the report and run the combined check:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer review --record .intent/review.json
-react: @tanstack/intent@latest maintainer check
-solid: @tanstack/intent@latest maintainer review --record .intent/review.json
-solid: @tanstack/intent@latest maintainer check
-vue: @tanstack/intent@latest maintainer review --record .intent/review.json
-vue: @tanstack/intent@latest maintainer check
-svelte: @tanstack/intent@latest maintainer review --record .intent/review.json
-svelte: @tanstack/intent@latest maintainer check
-angular: @tanstack/intent@latest maintainer review --record .intent/review.json
-angular: @tanstack/intent@latest maintainer check
-lit: @tanstack/intent@latest maintainer review --record .intent/review.json
-lit: @tanstack/intent@latest maintainer check
+@tanstack/intent@latest maintainer review --record .intent/review.json
+@tanstack/intent@latest maintainer check
 
 <!-- ::end:tabs -->
 

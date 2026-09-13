@@ -8,12 +8,7 @@ id: intent-stale
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
 ```text
-react: @tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]
-solid: @tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]
-vue: @tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]
-svelte: @tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]
-angular: @tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]
-lit: @tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]
+@tanstack/intent@latest stale [dir] [--json] [--github-review] [--package-label <label>]
 ```
 
 <!-- ::end:tabs -->

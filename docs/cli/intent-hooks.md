@@ -7,12 +7,7 @@ id: intent-hooks
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest hooks install [--scope project|user] [--agents copilot,claude,codex|all]
-solid: @tanstack/intent@latest hooks install [--scope project|user] [--agents copilot,claude,codex|all]
-vue: @tanstack/intent@latest hooks install [--scope project|user] [--agents copilot,claude,codex|all]
-svelte: @tanstack/intent@latest hooks install [--scope project|user] [--agents copilot,claude,codex|all]
-angular: @tanstack/intent@latest hooks install [--scope project|user] [--agents copilot,claude,codex|all]
-lit: @tanstack/intent@latest hooks install [--scope project|user] [--agents copilot,claude,codex|all]
+@tanstack/intent@latest hooks install [--scope project|user] [--agents copilot,claude,codex|all]
 
 <!-- ::end:tabs -->
 

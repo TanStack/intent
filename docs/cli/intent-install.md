@@ -7,12 +7,7 @@ id: intent-install
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
-solid: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
-vue: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
-svelte: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
-angular: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
-lit: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
+@tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-run] [--print-prompt] [--global] [--global-only] [--no-notices]
 
 <!-- ::end:tabs -->
 
@@ -95,12 +90,7 @@ After permissions are saved, Intent updates an existing managed guidance block i
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest install --review
-solid: @tanstack/intent@latest install --review
-vue: @tanstack/intent@latest install --review
-svelte: @tanstack/intent@latest install --review
-angular: @tanstack/intent@latest install --review
-lit: @tanstack/intent@latest install --review
+@tanstack/intent@latest install --review
 
 <!-- ::end:tabs -->
 

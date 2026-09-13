@@ -119,18 +119,8 @@ Use `--no-notices` to suppress non-critical notices on stderr for one run:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest list --no-notices
-react: @tanstack/intent@latest install --map --no-notices
-solid: @tanstack/intent@latest list --no-notices
-solid: @tanstack/intent@latest install --map --no-notices
-vue: @tanstack/intent@latest list --no-notices
-vue: @tanstack/intent@latest install --map --no-notices
-svelte: @tanstack/intent@latest list --no-notices
-svelte: @tanstack/intent@latest install --map --no-notices
-angular: @tanstack/intent@latest list --no-notices
-angular: @tanstack/intent@latest install --map --no-notices
-lit: @tanstack/intent@latest list --no-notices
-lit: @tanstack/intent@latest install --map --no-notices
+@tanstack/intent@latest list --no-notices
+@tanstack/intent@latest install --map --no-notices
 
 <!-- ::end:tabs -->
 
@@ -147,24 +137,9 @@ Use `intent exclude` to manage this list from the CLI:
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
 ```text
-react: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
-react: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
-react: @tanstack/intent@latest exclude list
-solid: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
-solid: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
-solid: @tanstack/intent@latest exclude list
-vue: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
-vue: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
-vue: @tanstack/intent@latest exclude list
-svelte: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
-svelte: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
-svelte: @tanstack/intent@latest exclude list
-angular: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
-angular: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
-angular: @tanstack/intent@latest exclude list
-lit: @tanstack/intent@latest exclude add @tanstack/router#experimental-*
-lit: @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
-lit: @tanstack/intent@latest exclude list
+@tanstack/intent@latest exclude add @tanstack/router#experimental-*
+@tanstack/intent@latest exclude remove @tanstack/router#experimental-*
+@tanstack/intent@latest exclude list
 ```
 
 <!-- ::end:tabs -->

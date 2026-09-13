@@ -9,12 +9,7 @@ After setup, request library changes as usual; Intent’s maintainer commands ke
 
 <!-- ::start:tabs variant="package-manager" mode="dev-install" -->
 
-react: @tanstack/intent
-solid: @tanstack/intent
-vue: @tanstack/intent
-svelte: @tanstack/intent
-angular: @tanstack/intent
-lit: @tanstack/intent
+@tanstack/intent
 
 <!-- ::end:tabs -->
 
@@ -24,12 +19,7 @@ Run `maintainer setup` from the library repository:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer setup
-solid: @tanstack/intent@latest maintainer setup
-vue: @tanstack/intent@latest maintainer setup
-svelte: @tanstack/intent@latest maintainer setup
-angular: @tanstack/intent@latest maintainer setup
-lit: @tanstack/intent@latest maintainer setup
+@tanstack/intent@latest maintainer setup
 
 <!-- ::end:tabs -->
 
@@ -50,12 +40,7 @@ Use `maintainer add` to create or register each agreed skill, keeping the file b
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
-solid: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
-vue: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
-svelte: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
-angular: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
-lit: @tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
+@tanstack/intent@latest maintainer add retries --package packages/client --domain requests --description "Use when configuring retries with this client." --source "src/retry.ts" --task "Retry a failed request with a bounded backoff"
 
 <!-- ::end:tabs -->
 
@@ -113,12 +98,7 @@ Selecting skills for repository distribution requires registered, authored skill
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer setup --distribution repo --skill discover-library --skill retries
-solid: @tanstack/intent@latest maintainer setup --distribution repo --skill discover-library --skill retries
-vue: @tanstack/intent@latest maintainer setup --distribution repo --skill discover-library --skill retries
-svelte: @tanstack/intent@latest maintainer setup --distribution repo --skill discover-library --skill retries
-angular: @tanstack/intent@latest maintainer setup --distribution repo --skill discover-library --skill retries
-lit: @tanstack/intent@latest maintainer setup --distribution repo --skill discover-library --skill retries
+@tanstack/intent@latest maintainer setup --distribution repo --skill discover-library --skill retries
 
 <!-- ::end:tabs -->
 
@@ -128,12 +108,7 @@ To explicitly record package-only distribution or turn off earlier repository ex
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer setup --distribution none
-solid: @tanstack/intent@latest maintainer setup --distribution none
-vue: @tanstack/intent@latest maintainer setup --distribution none
-svelte: @tanstack/intent@latest maintainer setup --distribution none
-angular: @tanstack/intent@latest maintainer setup --distribution none
-lit: @tanstack/intent@latest maintainer setup --distribution none
+@tanstack/intent@latest maintainer setup --distribution none
 
 <!-- ::end:tabs -->
 
@@ -147,24 +122,9 @@ Before handoff, run sync so the metadata matches the final files, review the pen
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer sync
-react: @tanstack/intent@latest maintainer review --interactive
-react: @tanstack/intent@latest maintainer check
-solid: @tanstack/intent@latest maintainer sync
-solid: @tanstack/intent@latest maintainer review --interactive
-solid: @tanstack/intent@latest maintainer check
-vue: @tanstack/intent@latest maintainer sync
-vue: @tanstack/intent@latest maintainer review --interactive
-vue: @tanstack/intent@latest maintainer check
-svelte: @tanstack/intent@latest maintainer sync
-svelte: @tanstack/intent@latest maintainer review --interactive
-svelte: @tanstack/intent@latest maintainer check
-angular: @tanstack/intent@latest maintainer sync
-angular: @tanstack/intent@latest maintainer review --interactive
-angular: @tanstack/intent@latest maintainer check
-lit: @tanstack/intent@latest maintainer sync
-lit: @tanstack/intent@latest maintainer review --interactive
-lit: @tanstack/intent@latest maintainer check
+@tanstack/intent@latest maintainer sync
+@tanstack/intent@latest maintainer review --interactive
+@tanstack/intent@latest maintainer check
 
 <!-- ::end:tabs -->
 
@@ -184,12 +144,7 @@ Run the same synchronization command after skill edits:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest maintainer sync
-solid: @tanstack/intent@latest maintainer sync
-vue: @tanstack/intent@latest maintainer sync
-svelte: @tanstack/intent@latest maintainer sync
-angular: @tanstack/intent@latest maintainer sync
-lit: @tanstack/intent@latest maintainer sync
+@tanstack/intent@latest maintainer sync
 
 <!-- ::end:tabs -->
 

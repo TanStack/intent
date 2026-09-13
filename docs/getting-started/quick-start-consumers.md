@@ -9,12 +9,7 @@ Add `@tanstack/intent` as a development dependency and commit your lockfile befo
 
 <!-- ::start:tabs variant="package-manager" mode="dev-install" -->
 
-react: @tanstack/intent
-solid: @tanstack/intent
-vue: @tanstack/intent
-svelte: @tanstack/intent
-angular: @tanstack/intent
-lit: @tanstack/intent
+@tanstack/intent
 
 <!-- ::end:tabs -->
 
@@ -22,12 +17,7 @@ Then run setup with that installed version. The generated commands use the local
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest install
-solid: @tanstack/intent@latest install
-vue: @tanstack/intent@latest install
-svelte: @tanstack/intent@latest install
-angular: @tanstack/intent@latest install
-lit: @tanstack/intent@latest install
+@tanstack/intent@latest install
 
 <!-- ::end:tabs -->
 
@@ -53,12 +43,7 @@ To enforce loading guidance before edits in supported agents, opt in to hooks:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest hooks install
-solid: @tanstack/intent@latest hooks install
-vue: @tanstack/intent@latest hooks install
-svelte: @tanstack/intent@latest hooks install
-angular: @tanstack/intent@latest hooks install
-lit: @tanstack/intent@latest hooks install
+@tanstack/intent@latest hooks install
 
 <!-- ::end:tabs -->
 
@@ -66,12 +51,7 @@ Project-scoped hooks are installed for Claude Code and Codex. `intent install` c
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest hooks install --scope user --agents copilot
-solid: @tanstack/intent@latest hooks install --scope user --agents copilot
-vue: @tanstack/intent@latest hooks install --scope user --agents copilot
-svelte: @tanstack/intent@latest hooks install --scope user --agents copilot
-angular: @tanstack/intent@latest hooks install --scope user --agents copilot
-lit: @tanstack/intent@latest hooks install --scope user --agents copilot
+@tanstack/intent@latest hooks install --scope user --agents copilot
 
 <!-- ::end:tabs -->
 
@@ -109,12 +89,7 @@ Run `intent list` and choose a skill that matches the task. Replace `@your-scope
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest load @your-scope/library#task-name
-solid: @tanstack/intent@latest load @your-scope/library#task-name
-vue: @tanstack/intent@latest load @your-scope/library#task-name
-svelte: @tanstack/intent@latest load @your-scope/library#task-name
-angular: @tanstack/intent@latest load @your-scope/library#task-name
-lit: @tanstack/intent@latest load @your-scope/library#task-name
+@tanstack/intent@latest load @your-scope/library#task-name
 
 <!-- ::end:tabs -->
 
@@ -126,12 +101,7 @@ If you want explicit task-to-skill mappings in your agent config, opt in:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest install --map
-solid: @tanstack/intent@latest install --map
-vue: @tanstack/intent@latest install --map
-svelte: @tanstack/intent@latest install --map
-angular: @tanstack/intent@latest install --map
-lit: @tanstack/intent@latest install --map
+@tanstack/intent@latest install --map
 
 <!-- ::end:tabs -->
 
@@ -145,12 +115,7 @@ List the installed skills:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest list
-solid: @tanstack/intent@latest list
-vue: @tanstack/intent@latest list
-svelte: @tanstack/intent@latest list
-angular: @tanstack/intent@latest list
-lit: @tanstack/intent@latest list
+@tanstack/intent@latest list
 
 <!-- ::end:tabs -->
 
@@ -158,12 +123,7 @@ Use `--json` for machine-readable output:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest list --json
-solid: @tanstack/intent@latest list --json
-vue: @tanstack/intent@latest list --json
-svelte: @tanstack/intent@latest list --json
-angular: @tanstack/intent@latest list --json
-lit: @tanstack/intent@latest list --json
+@tanstack/intent@latest list --json
 
 <!-- ::end:tabs -->
 
@@ -171,12 +131,7 @@ Global package scanning is opt-in:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest list --global
-solid: @tanstack/intent@latest list --global
-vue: @tanstack/intent@latest list --global
-svelte: @tanstack/intent@latest list --global
-angular: @tanstack/intent@latest list --global
-lit: @tanstack/intent@latest list --global
+@tanstack/intent@latest list --global
 
 <!-- ::end:tabs -->
 
@@ -184,11 +139,6 @@ You can also check if any skills reference outdated source documentation:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest stale
-solid: @tanstack/intent@latest stale
-vue: @tanstack/intent@latest stale
-svelte: @tanstack/intent@latest stale
-angular: @tanstack/intent@latest stale
-lit: @tanstack/intent@latest stale
+@tanstack/intent@latest stale
 
 <!-- ::end:tabs -->

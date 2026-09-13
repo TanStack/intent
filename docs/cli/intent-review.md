@@ -10,12 +10,7 @@ For the full maintainer pipeline, use [`intent maintainer review`](./intent-main
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
 ```text
-react: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
-solid: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
-vue: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
-svelte: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
-angular: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
-lit: @tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
+@tanstack/intent@latest review [dir] [--base <ref>] [--json] [--check] [--record <report.json>] [--github-review] [--package-label <label>]
 ```
 
 <!-- ::end:tabs -->
@@ -87,12 +82,7 @@ A squash merge, shallow clone, or history rewrite can remove the commit stored a
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
 ```text
-react: @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
-solid: @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
-vue: @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
-svelte: @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
-angular: @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
-lit: @tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
+@tanstack/intent@latest review --base <available-commit> --json > .intent/review.json
 ```
 
 <!-- ::end:tabs -->
@@ -101,12 +91,7 @@ Review and resolve every item in that report, then record it:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest review --record .intent/review.json
-solid: @tanstack/intent@latest review --record .intent/review.json
-vue: @tanstack/intent@latest review --record .intent/review.json
-svelte: @tanstack/intent@latest review --record .intent/review.json
-angular: @tanstack/intent@latest review --record .intent/review.json
-lit: @tanstack/intent@latest review --record .intent/review.json
+@tanstack/intent@latest review --record .intent/review.json
 
 <!-- ::end:tabs -->
 
@@ -199,12 +184,7 @@ The installed maintainer procedure handles these steps. For manual use:
    <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
    ```text
-   react: @tanstack/intent@latest review --json > .intent/review.json
-   solid: @tanstack/intent@latest review --json > .intent/review.json
-   vue: @tanstack/intent@latest review --json > .intent/review.json
-   svelte: @tanstack/intent@latest review --json > .intent/review.json
-   angular: @tanstack/intent@latest review --json > .intent/review.json
-   lit: @tanstack/intent@latest review --json > .intent/review.json
+   @tanstack/intent@latest review --json > .intent/review.json
    ```
 
    <!-- ::end:tabs -->
@@ -214,18 +194,8 @@ The installed maintainer procedure handles these steps. For manual use:
 
    <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-   react: @tanstack/intent@latest review --record .intent/review.json
-   react: @tanstack/intent@latest review --check
-   solid: @tanstack/intent@latest review --record .intent/review.json
-   solid: @tanstack/intent@latest review --check
-   vue: @tanstack/intent@latest review --record .intent/review.json
-   vue: @tanstack/intent@latest review --check
-   svelte: @tanstack/intent@latest review --record .intent/review.json
-   svelte: @tanstack/intent@latest review --check
-   angular: @tanstack/intent@latest review --record .intent/review.json
-   angular: @tanstack/intent@latest review --check
-   lit: @tanstack/intent@latest review --record .intent/review.json
-   lit: @tanstack/intent@latest review --check
+   @tanstack/intent@latest review --record .intent/review.json
+   @tanstack/intent@latest review --check
 
    <!-- ::end:tabs -->
 

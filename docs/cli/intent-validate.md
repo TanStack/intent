@@ -8,12 +8,7 @@ id: intent-validate
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
 ```text
-react: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
-solid: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
-vue: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
-svelte: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
-angular: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
-lit: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
+@tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
 ```
 
 <!-- ::end:tabs -->
@@ -36,12 +31,7 @@ Use `--set-version` in a release step to stamp the version the skills describe:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
-solid: @tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
-vue: @tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
-svelte: @tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
-angular: @tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
-lit: @tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
+@tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
 
 <!-- ::end:tabs -->
 
@@ -53,12 +43,7 @@ Use `--check` in CI to detect mechanical frontmatter migrations that have not be
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest validate --check
-solid: @tanstack/intent@latest validate --check
-vue: @tanstack/intent@latest validate --check
-svelte: @tanstack/intent@latest validate --check
-angular: @tanstack/intent@latest validate --check
-lit: @tanstack/intent@latest validate --check
+@tanstack/intent@latest validate --check
 
 <!-- ::end:tabs -->
 
@@ -66,12 +51,7 @@ Use `--fix` locally to apply the mechanical frontmatter migrations:
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-react: @tanstack/intent@latest validate --fix
-solid: @tanstack/intent@latest validate --fix
-vue: @tanstack/intent@latest validate --fix
-svelte: @tanstack/intent@latest validate --fix
-angular: @tanstack/intent@latest validate --fix
-lit: @tanstack/intent@latest validate --fix
+@tanstack/intent@latest validate --fix
 
 <!-- ::end:tabs -->
 
