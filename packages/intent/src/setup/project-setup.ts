@@ -444,7 +444,7 @@ export function runEditPackageJsonAll(
 // Command: setup-github-actions
 // ---------------------------------------------------------------------------
 
-export function planSetupGithubActions(
+function planSetupGithubActions(
   root: string,
   metaDir: string,
   artifacts = '',
