@@ -16,6 +16,8 @@ lit: @tanstack/intent@latest install [--maintainer] [--review] [--map] [--dry-ru
 
 <!-- ::end:tabs -->
 
+Keep `@tanstack/intent` in devDependencies and commit the lockfile before using the generated guidance. The generated commands use `pnpm exec`, `npm exec --no`, `yarn exec`, or `bunx --no-install`; install a missing CLI explicitly instead of allowing later agent sessions to fetch `latest`.
+
 ## Options
 
 ### Permission review

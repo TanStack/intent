@@ -76,6 +76,10 @@
           "to": "cli/intent-validate"
         },
         {
+          "label": "intent repair",
+          "to": "cli/intent-repair"
+        },
+        {
           "label": "intent setup",
           "to": "cli/intent-setup"
         },

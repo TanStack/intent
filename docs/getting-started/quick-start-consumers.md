@@ -3,7 +3,22 @@ title: Quick Start for Consumers
 id: quick-start-consumers
 ---
 
-## 1. Run install
+## 1. Install Intent and set up guidance
+
+Add `@tanstack/intent` as a development dependency and commit your lockfile before generating guidance:
+
+<!-- ::start:tabs variant="package-manager" mode="dev-install" -->
+
+react: @tanstack/intent
+solid: @tanstack/intent
+vue: @tanstack/intent
+svelte: @tanstack/intent
+angular: @tanstack/intent
+lit: @tanstack/intent
+
+<!-- ::end:tabs -->
+
+Then run setup with that installed version. The generated commands use the local CLI without downloading a newer release.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 

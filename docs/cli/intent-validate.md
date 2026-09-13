@@ -75,10 +75,12 @@ lit: @tanstack/intent@latest validate --fix
 
 <!-- ::end:tabs -->
 
-`--fix` only rewrites unambiguous frontmatter migrations:
+`--fix` applies these frontmatter migrations:
 
 - `name` values are rewritten to the parent directory leaf when the parent directory is already a legal skill name
 - Top-level string fields `type`, `library`, `library_version`, and `framework` are moved under `metadata`
+
+Equal top-level and nested values are deduplicated. If they disagree, the entire file is preserved and the conflict is reported for assessment. A successful migration does not establish that the skill's guidance is accurate for its recorded library version. Use [intent repair](./intent-repair) for a lightweight repair plan or reviewable patch without full validation.
 
 `--fix` does not rewrite authoring-judgment validation errors:
 
@@ -100,7 +102,7 @@ lit: @tanstack/intent@latest validate --fix
 
 ### Field rules
 
-- Only spec top-level keys are allowed (`name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`); Intent-specific scalars (`type`, `library`, `library_version`, `framework`) must live under `metadata`
+- Standard top-level fields are `name`, `description`, `license`, `compatibility`, `metadata`, and `allowed-tools`. Intent also accepts top-level `sources` and `requires` arrays. Intent-specific scalars (`type`, `library`, `library_version`, `framework`) must live under `metadata`
 - `metadata`, when present, is a mapping of string values
 - `description` length is at most 1024 characters
 - `type: framework` requires `requires` to be an array
@@ -108,7 +110,11 @@ lit: @tanstack/intent@latest validate --fix
 
 ### Code examples and links
 
-TypeScript and JavaScript fences (`ts`, `tsx`, `typescript`, `js`, `jsx`, and `javascript`) are checked as independent examples against the library's source or tracked public declarations. Workspace imports resolve to their owning packages. Missing exports, incompatible options, and syntax errors fail validation with the skill path and line number; deprecated imports produce warnings. Names and external modules intentionally omitted from partial examples are tolerated. The checker does not execute examples.
+TypeScript and JavaScript fences (`ts`, `tsx`, `typescript`, `js`, `jsx`, and `javascript`) are checked as separate source files in one compiler context per package, against the library's source or tracked public declarations. Workspace imports resolve to their owning packages. Missing exports, incompatible options, and syntax errors fail validation with the skill path and line number; deprecated imports produce warnings. Names and external modules intentionally omitted from partial examples are tolerated. JavaScript libraries can supply JSDoc contracts without a separate type declaration entry. JSX and TSX examples check component props and syntax; they do not render components or prove framework behavior. Standalone backtick and tilde fences support longer closing markers and end-of-file closure, while nested fences inside a Markdown example remain data. The checker does not execute examples.
+
+The checker enables strict null checks because some library APIs require them, while tolerating omitted names, shorthand values, and implicit parameter types. Each code fence represents one example. Separate before/after implementations into distinct fences; use `diff` or `text` for deliberately invalid code or fragments that cannot be checked as a source file. The checker does not infer those distinctions from prose or comments.
+
+Module augmentations and global declarations still share the package compiler context. Two examples that pass separately can conflict when checked together. Verify those examples in isolated fixtures before treating the combined diagnostics as defects in the guidance; separate fences alone do not isolate their augmentations.
 
 TypeScript 5.0 or newer must be available in the repository for code checking. If it or the library type entry is unavailable, Intent reports why those checks were skipped; this is not a successful typecheck. Prose-only skills do not load TypeScript.
 
