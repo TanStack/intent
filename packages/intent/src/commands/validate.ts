@@ -490,7 +490,11 @@ async function runValidateCommandInternal(
   }
 
   for (const skillsDir of skillsDirs) {
-    const skillFiles = findSkillFiles(skillsDir)
+    const skillFiles = findSkillFiles(skillsDir).filter((filePath) => {
+      if (validatedFiles.has(filePath)) return false
+      validatedFiles.add(filePath)
+      return true
+    })
     const validateContext = resolveProjectContext({
       cwd: process.cwd(),
       targetPath: skillsDir,
@@ -502,8 +506,6 @@ async function runValidateCommandInternal(
       library: string | undefined
     }> = []
     for (const filePath of skillFiles) {
-      if (validatedFiles.has(filePath)) continue
-      validatedFiles.add(filePath)
       const rel = relative(process.cwd(), filePath)
       const content = readFileSync(filePath, 'utf8')
       const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)/)
@@ -727,9 +729,11 @@ async function runValidateCommandInternal(
     }
 
     validatedCount += skillFiles.length
-    warnings.push(
-      ...collectPackagingWarnings(validateContext, skillsDir, skillFiles),
-    )
+    if (skillFiles.length) {
+      warnings.push(
+        ...collectPackagingWarnings(validateContext, skillsDir, skillFiles),
+      )
+    }
   }
 
   for (const reason of skippedBlockChecks)
