@@ -3,15 +3,24 @@ title: intent validate
 id: intent-validate
 ---
 
-`intent validate` checks `SKILL.md` files and artifacts for structural problems.
+`intent validate` checks `SKILL.md` files and artifacts for structural problems, broken relative links, and code examples that no longer match the library API.
 
-```bash
-npx @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check]
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+```text
+react: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
+solid: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
+vue: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
+svelte: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
+angular: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
+lit: @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check] [--set-version <version>]
 ```
+
+<!-- ::end:tabs -->
 
 ## Arguments
 
-- `<dir>`: directory containing skills; default is `skills`
+- `<dir>`: directory containing skills; without it, discover the applicable root and workspace skill directories
 - Relative paths are resolved from the current working directory
 
 ## Options
@@ -19,20 +28,52 @@ npx @tanstack/intent@latest validate [<dir>] [--github-summary] [--fix] [--check
 - `--github-summary`: write a GitHub Actions step summary when `GITHUB_STEP_SUMMARY` is set
 - `--check`: fail if any `SKILL.md` has fixable frontmatter migrations pending, without writing files
 - `--fix`: rewrite fixable `SKILL.md` frontmatter migrations, then validate the result
+- `--set-version <version>`: set `metadata.library_version` on the matched skills, then validate the result; cannot be combined with `--check`
+
+## Set the library version
+
+Use `--set-version` in a release step to stamp the version the skills describe:
+
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
+solid: @tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
+vue: @tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
+svelte: @tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
+angular: @tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
+lit: @tanstack/intent@latest validate packages/query/skills --set-version 5.62.0
+
+<!-- ::end:tabs -->
+
+The value must be a non-empty string. Skills whose `metadata` is not a mapping are skipped. `--check` only reports pending changes and never writes, so the two options cannot be combined.
 
 ## Frontmatter migration fixes
 
 Use `--check` in CI to detect mechanical frontmatter migrations that have not been applied:
 
-```bash
-npx @tanstack/intent@latest validate --check
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest validate --check
+solid: @tanstack/intent@latest validate --check
+vue: @tanstack/intent@latest validate --check
+svelte: @tanstack/intent@latest validate --check
+angular: @tanstack/intent@latest validate --check
+lit: @tanstack/intent@latest validate --check
+
+<!-- ::end:tabs -->
 
 Use `--fix` locally to apply the mechanical frontmatter migrations:
 
-```bash
-npx @tanstack/intent@latest validate --fix
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest validate --fix
+solid: @tanstack/intent@latest validate --fix
+vue: @tanstack/intent@latest validate --fix
+svelte: @tanstack/intent@latest validate --fix
+angular: @tanstack/intent@latest validate --fix
+lit: @tanstack/intent@latest validate --fix
+
+<!-- ::end:tabs -->
 
 `--fix` only rewrites unambiguous frontmatter migrations:
 
@@ -65,6 +106,14 @@ npx @tanstack/intent@latest validate --fix
 - `type: framework` requires `requires` to be an array
 - Total file length is at most 500 lines
 
+### Code examples and links
+
+TypeScript and JavaScript fences (`ts`, `tsx`, `typescript`, `js`, `jsx`, and `javascript`) are checked as independent examples against the library's source or tracked public declarations. Workspace imports resolve to their owning packages. Missing exports, incompatible options, and syntax errors fail validation with the skill path and line number; deprecated imports produce warnings. Names and external modules intentionally omitted from partial examples are tolerated. The checker does not execute examples.
+
+TypeScript 5.0 or newer must be available in the repository for code checking. If it or the library type entry is unavailable, Intent reports why those checks were skipped; this is not a successful typecheck. Prose-only skills do not load TypeScript.
+
+Relative Markdown links outside fenced examples must point to an existing file or directory. External URLs and anchors are not checked. Link checks still run when TypeScript is unavailable. Repeated validations read current source files and link targets.
+
 ### Artifacts
 
 When `<dir>/_artifacts` exists, Intent also checks:
@@ -75,13 +124,12 @@ When `<dir>/_artifacts` exists, Intent also checks:
 
 ## Packaging warnings
 
-Packaging warnings are always computed from `package.json` in the current working directory:
+Packaging warnings are computed from the `package.json` that owns the validated skills:
 
-- `@tanstack/intent` missing from `devDependencies`
+- `@tanstack/intent` missing from `devDependencies` (in a monorepo, the workspace root's `devDependencies` also count)
 - Missing `tanstack-intent` in keywords array
-- Missing `files` entries when `files` array exists:
-  - `skills`
-  - `!skills/_artifacts`
+- A skill directory not covered by the `files` array, when that array exists. Either `skills` or the per-skill `skills/<name>` entries that `intent maintainer sync` writes cover a skill; the warning names the uncovered directory.
+- Missing `!skills/_artifacts` when the whole `skills` directory is published, `skills/_artifacts` exists, and the package is not in a monorepo
 
 Warnings are informational; they are printed on both pass and fail paths.
 
@@ -93,5 +141,5 @@ Warnings are informational; they are printed on both pass and fail paths.
 
 ## Related
 
-- [intent scaffold](./intent-scaffold)
+- [intent maintainer](./intent-maintainer)
 - [setup commands](./intent-setup)

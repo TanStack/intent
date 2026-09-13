@@ -68,8 +68,8 @@
           "to": "cli/intent-meta"
         },
         {
-          "label": "intent scaffold",
-          "to": "cli/intent-scaffold"
+          "label": "intent maintainer",
+          "to": "cli/intent-maintainer"
         },
         {
           "label": "intent validate",
@@ -82,6 +82,10 @@
         {
           "label": "intent stale",
           "to": "cli/intent-stale"
+        },
+        {
+          "label": "intent review",
+          "to": "cli/intent-review"
         }
       ]
     }

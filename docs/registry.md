@@ -10,59 +10,123 @@ The registry periodically searches npm for packages with the `tanstack-intent` k
 
 ## Ship skills in 4 steps
 
-### 1. Generate skills
+### 1. Create a skill batch
 
-Tell your AI coding agent to run:
+For repository-wide maintenance, enable the maintainer workflow once:
 
-```bash
-npx @tanstack/intent@latest scaffold
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-This walks the agent through domain discovery, skill tree generation, and skill creation. You review at each stage. Skills land in a `skills/` directory at your package root — each as a `SKILL.md` file in its own subdirectory.
+react: @tanstack/intent@latest maintainer setup
+solid: @tanstack/intent@latest maintainer setup
+vue: @tanstack/intent@latest maintainer setup
+svelte: @tanstack/intent@latest maintainer setup
+angular: @tanstack/intent@latest maintainer setup
+lit: @tanstack/intent@latest maintainer setup
 
-### 2. Validate
+<!-- ::end:tabs -->
 
-```bash
-npx @tanstack/intent@latest validate
-```
+Register agreed skills with `maintainer add`, then ask your coding agent to author the developer tasks they cover. The installed instructions load the focused authoring procedure, maintain the shared planning record, and run source-aware review before handoff.
 
-Catches structural issues, missing frontmatter, and broken source references before you publish.
+For a one-off authoring session, tell the agent to run:
 
-### 3. Add the keyword
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-Add `"tanstack-intent"` to the `keywords` array in your `package.json`:
+react: @tanstack/intent@latest meta generate-skill
+solid: @tanstack/intent@latest meta generate-skill
+vue: @tanstack/intent@latest meta generate-skill
+svelte: @tanstack/intent@latest meta generate-skill
+angular: @tanstack/intent@latest meta generate-skill
+lit: @tanstack/intent@latest meta generate-skill
 
-```json
-{
-  "keywords": ["tanstack-intent"]
-}
-```
+<!-- ::end:tabs -->
 
-This is how the registry finds your package on npm.
+Give the agent a developer task or concrete code/docs change. The focused procedure creates or updates the relevant guidance and validates it for review; full-library discovery remains available when explicitly requested. Skills use the owning package's `skills/` directory or its existing custom root. Record the [repository distribution choice](./cli/intent-maintainer#choose-repository-distribution) during setup: select public skills or use `maintainer setup --distribution none` for the package-only workflow. See the [maintainer quick start](./getting-started/quick-start-maintainers).
+
+### 2. Synchronize metadata
+
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest maintainer sync
+solid: @tanstack/intent@latest maintainer sync
+vue: @tanstack/intent@latest maintainer sync
+svelte: @tanstack/intent@latest maintainer sync
+angular: @tanstack/intent@latest maintainer sync
+lit: @tanstack/intent@latest maintainer sync
+
+<!-- ::end:tabs -->
+
+This adds the `tanstack-intent` keyword and registered skill directories to existing `files` allowlists. It preserves npm’s default contents when no allowlist exists. It also synchronizes selected repository exports. Review the diff and inspect the packed archive through the library’s release checks.
+
+### 3. Review and check
+
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest maintainer review --json
+solid: @tanstack/intent@latest maintainer review --json
+vue: @tanstack/intent@latest maintainer review --json
+svelte: @tanstack/intent@latest maintainer review --json
+angular: @tanstack/intent@latest maintainer review --json
+lit: @tanstack/intent@latest maintainer review --json
+
+<!-- ::end:tabs -->
+
+Save the report under `.intent/`, assess the pending items, and annotate completed outcomes with their reasons and actual evidence. Record the report with `intent maintainer review --record <report.json>`, then run `intent maintainer check`. This checks skill structure, registration, generated files, and pending reviews together. See the [source-review reference](./cli/intent-review) for report fields and recording.
 
 ### 4. Publish
 
-```bash
-npm publish
-```
+Publish through your library's normal release process.
+
+For repository exports, complete the [distribution acceptance checks](./cli/intent-maintainer#verify-distribution) and follow the [release and update contract](./cli/intent-maintainer#releases-and-updates). Publishing an npm version alone does not update plugin versions or consumer installations.
 
 The registry discovers your package on its next sync cycle. Your skills, version history, and download stats appear on the registry automatically.
 
+A passing structural check alone does not establish that the consumer can complete the task. Include that task evidence in the library's release review.
+
 ## Keeping skills current
 
-Skills derived from docs drift when docs change. Two commands keep them honest:
+Use `maintainer review` and `stale` as separate checks as the library changes. `setup` optionally installs their CI workflow:
 
-```bash
-npx @tanstack/intent@latest stale
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-Flags skills whose source docs have changed since the skill was last updated.
+react: @tanstack/intent@latest maintainer review
+solid: @tanstack/intent@latest maintainer review
+vue: @tanstack/intent@latest maintainer review
+svelte: @tanstack/intent@latest maintainer review
+angular: @tanstack/intent@latest maintainer review
+lit: @tanstack/intent@latest maintainer review
 
-```bash
-npx @tanstack/intent@latest setup
-```
+<!-- ::end:tabs -->
 
-Copies CI workflow templates into your repo so validation and staleness checks run in GitHub Actions. Catch drift before it ships.
+Uses Git changes and recorded content fingerprints to identify skills, planning records, and unmapped source areas that need semantic review. Record completed outcomes with their evidence in `.intent/review-state.json`; missing evidence remains pending.
+
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest stale
+solid: @tanstack/intent@latest stale
+vue: @tanstack/intent@latest stale
+svelte: @tanstack/intent@latest stale
+angular: @tanstack/intent@latest stale
+lit: @tanstack/intent@latest stale
+
+<!-- ::end:tabs -->
+
+Reports conservative package and release signals: version drift, missing stored source SHAs, artifact warnings, and package coverage. It does not compare source diffs. Flagged text reports include the focused authoring command so your agent can investigate the evidence and return a reviewable update or an explained no-op.
+
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+react: @tanstack/intent@latest setup
+solid: @tanstack/intent@latest setup
+vue: @tanstack/intent@latest setup
+svelte: @tanstack/intent@latest setup
+angular: @tanstack/intent@latest setup
+lit: @tanstack/intent@latest setup
+
+<!-- ::end:tabs -->
+
+Copies the generated CI workflow into your repository. Pull requests validate skills and check recorded source reviews when maintainer guidance or review state exists. Release and manual runs use recorded review state when available, with conservative `stale` signals as the fallback.
+
+> [!NOTE]
+> Maintainers use `maintainer setup`, `add`, `status`, `sync`, `review`, and `check` throughout the workflow. Consumers choose their installer: Intent for installed package guidance, or the generated GitHub/plugin commands for selected repository skills. See [repository distribution](./cli/intent-maintainer#choose-repository-distribution).
 
 ## Requesting a library
 
