@@ -43,14 +43,18 @@ jobs:
         env:
           INTENT_VERSION: ${{ inputs.intent-version }}
         run: |
-          cache=''
+          manager=''
           if [ -z "$INTENT_VERSION" ]; then
-            if [ -f pnpm-lock.yaml ]; then cache=pnpm
-            elif [ -f yarn.lock ]; then cache=yarn
-            elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then cache=npm
+            if [ -f bun.lock ] || [ -f bun.lockb ]; then manager=bun
+            elif [ -f pnpm-lock.yaml ]; then manager=pnpm
+            elif [ -f yarn.lock ]; then manager=yarn
+            elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then manager=npm
             fi
           fi
-          if [ "$cache" = pnpm ] || [ "$cache" = yarn ]; then corepack enable; fi
+          if [ "$manager" = pnpm ] || [ "$manager" = yarn ]; then corepack enable; fi
+          cache="$manager"
+          if [ "$manager" = bun ]; then cache=''; fi
+          echo "manager=$manager" >> "$GITHUB_OUTPUT"
           echo "cache=$cache" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
@@ -59,10 +63,14 @@ jobs:
           node-version: ${{ inputs.node-version }}
           cache: ${{ steps.manager.outputs.cache }}
 
+      - name: Setup Bun
+        if: steps.manager.outputs.manager == 'bun'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
       - name: Install intent
         env:
           INTENT_VERSION: ${{ inputs.intent-version }}
-          MANAGER: ${{ steps.manager.outputs.cache }}
+          MANAGER: ${{ steps.manager.outputs.manager }}
           COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
         run: |
           if [ -n "$INTENT_VERSION" ]; then
@@ -70,12 +78,24 @@ jobs:
             exit 0
           fi
           case "$MANAGER" in
+            bun) bun install --frozen-lockfile --ignore-scripts ;;
             pnpm) pnpm install --frozen-lockfile --ignore-scripts ;;
             yarn)
               if yarn --version | grep -q '^1\.'; then
                 yarn install --frozen-lockfile --ignore-scripts
               else
                 yarn install --immutable --mode=skip-build
+                if ! yarn bin intent > /dev/null; then
+                  echo "::error::Add @tanstack/intent to this workspace's devDependencies, or set intent-version."
+                  exit 1
+                fi
+                # Yarn PnP has no node_modules/.bin; Yarn supplies its loader.
+                # Restrict execution to the installed binary, never a package script.
+                mkdir -p "$RUNNER_TEMP/intent-bin"
+                printf '%s\n' '#!/usr/bin/env bash' 'exec yarn run --binaries-only intent "$@"' > "$RUNNER_TEMP/intent-bin/intent"
+                chmod +x "$RUNNER_TEMP/intent-bin/intent"
+                echo "$RUNNER_TEMP/intent-bin" >> "$GITHUB_PATH"
+                exit 0
               fi ;;
             npm) npm ci --ignore-scripts ;;
             *)
@@ -88,13 +108,12 @@ jobs:
           fi
           echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
 
-      - name: Validate skills
-        run: intent validate --github-summary
-
-      - name: Check maintainer workflow
+      - name: Check skills
         env:
           INTENT_REVIEW_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ -f .intent/review-state.json ] || grep -q -- '<!-- intent-maintainer:start -->' AGENTS.md CLAUDE.md .cursorrules .github/copilot-instructions.md 2>/dev/null; then
             intent maintainer check --base "$INTENT_REVIEW_BASE" --github-summary
+          else
+            intent validate --github-summary
           fi

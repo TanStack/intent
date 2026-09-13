@@ -290,10 +290,16 @@ function applyVars(content: string, vars: TemplateVars): string {
 // Copy helpers
 // ---------------------------------------------------------------------------
 
-function templatesUse(srcDir: string, placeholder: string): boolean {
+function templatesUse(
+  srcDir: string,
+  destDir: string,
+  placeholder: string,
+): boolean {
   if (!existsSync(srcDir)) return false
-  return readdirSync(srcDir).some((entry) =>
-    readFileSync(join(srcDir, entry), 'utf8').includes(placeholder),
+  return readdirSync(srcDir).some(
+    (entry) =>
+      !existsSync(join(destDir, entry)) &&
+      readFileSync(join(srcDir, entry), 'utf8').includes(placeholder),
   )
 }
 
@@ -464,8 +470,8 @@ export function runSetupGithubActions(
   const srcDir = join(metaDir, 'templates', 'workflows')
   const destDir = join(workspaceRoot, '.github', 'workflows')
   // Resolving the reference contacts GitHub, so only a template that pins
-  // one asks for it. Tests and offline runs can supply INTENT_WORKFLOW_REF.
-  if (templatesUse(srcDir, '{{INTENT_WORKFLOW_REF}}'))
+  // one and will actually be copied asks for it. Existing workflows stay offline.
+  if (templatesUse(srcDir, destDir, '{{INTENT_WORKFLOW_REF}}'))
     vars.INTENT_WORKFLOW_REF =
       process.env.INTENT_WORKFLOW_REF ||
       resolveIntentWorkflowRef(join(metaDir, '..'))

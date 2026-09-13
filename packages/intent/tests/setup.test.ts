@@ -9,7 +9,7 @@ import {
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   resolveIntentWorkflowRef,
   runEditPackageJson,
@@ -434,6 +434,27 @@ describe('runSetupGithubActions', () => {
     const result = runSetupGithubActions(root, metaDir)
     expect(result.workflows).toHaveLength(0)
     expect(result.skipped).toHaveLength(1)
+  })
+
+  it('does not resolve a release reference when every workflow already exists', () => {
+    runSetupGithubActions(root, metaDir)
+    mkdirSync(join(root, 'bin'))
+    const calls = join(root, 'git-calls')
+    writeFileSync(
+      join(root, 'bin/git'),
+      `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\nexit 1\n`,
+      { mode: 0o755 },
+    )
+    vi.stubEnv('PATH', `${join(root, 'bin')}:${process.env.PATH}`)
+    vi.stubEnv('INTENT_WORKFLOW_REF', '')
+    try {
+      expect(runSetupGithubActions(root, metaDir).workflows).toEqual([])
+      expect(
+        existsSync(calls) ? readFileSync(calls, 'utf8') : '',
+      ).not.toContain('ls-remote')
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('handles missing templates directory gracefully', () => {

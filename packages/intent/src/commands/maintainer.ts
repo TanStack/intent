@@ -467,14 +467,15 @@ export async function runMaintainerCommand(
     for (const line of lines) console.log(`  ${line}`)
   }
   if (action === 'check') {
-    // One validate run over every skills root: every root's errors land in
+    // Include default workspace skills and any custom registered roots. Their errors land in
     // one report and one summary section, and the failure is rethrown after
     // the check summary below so the two sections keep their order.
     let validation: unknown
     try {
       await runValidateCommand(
-        plan.skills.map((path) => dirname(dirname(path))),
+        undefined,
         { githubSummary: options.githubSummary },
+        plan.skills.map((path) => dirname(dirname(path))),
       )
     } catch (err) {
       validation = err

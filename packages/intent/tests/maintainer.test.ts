@@ -245,6 +245,39 @@ it('copies the CI workflow once and passes check without a recorded distribution
   )
 })
 
+it('validates unregistered workspace skills as well as custom registered roots', async () => {
+  write('pnpm-workspace.yaml', 'packages: [packages/*]\n')
+  write('packages/client/package.json', '{"name":"client"}\n')
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  expect(
+    await main([
+      'maintainer',
+      'add',
+      'query',
+      '--path',
+      'guidance/query/SKILL.md',
+      '--domain',
+      'queries',
+      '--description',
+      'Use query.',
+      '--source',
+      'package.json',
+    ]),
+  ).toBe(0)
+  write(
+    'guidance/query/SKILL.md',
+    `---\nname: query\ndescription: ${'x'.repeat(1025)}\n---\nInvalid registered guidance.\n`,
+  )
+  write(
+    'packages/client/skills/missing/SKILL.md',
+    `---\nname: missing\ndescription: ${'x'.repeat(1025)}\n---\nInvalid unregistered guidance.\n`,
+  )
+  expect(await main(['maintainer', 'check'])).toBe(1)
+  const errors = vi.mocked(console.error).mock.calls.flat().join('\n')
+  expect(errors).toContain('guidance/query/SKILL.md')
+  expect(errors).toContain('packages/client/skills/missing/SKILL.md')
+})
+
 it('writes the check report to the GitHub step summary', async () => {
   const previousSummary = process.env.GITHUB_STEP_SUMMARY
   process.env.GITHUB_STEP_SUMMARY = join(root, 'github-summary')
