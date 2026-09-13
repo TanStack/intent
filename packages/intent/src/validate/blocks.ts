@@ -26,6 +26,9 @@ interface CodeBlock {
   file: string
   line: number
   code: string
+  // Virtual file extension: a plain ts block must not parse as JSX, or a
+  // generic arrow like <T>(x: T) => x reads as an unclosed element.
+  extension: 'ts' | 'tsx' | 'js' | 'jsx'
 }
 
 const codeFence =
@@ -67,7 +70,13 @@ function extractCodeBlocks(file: string, content: string): Array<CodeBlock> {
     const language = match[2]!.toLowerCase()
     if (!checkedLanguages.has(language)) continue
     const line = content.slice(0, match.index).split('\n').length + 1
-    blocks.push({ file, line, code: match[3]! })
+    const extension =
+      language === 'tsx' || language === 'jsx'
+        ? language
+        : language.startsWith('j')
+          ? 'js'
+          : 'ts'
+    blocks.push({ file, line, code: match[3]!, extension })
   }
   return blocks
 }
@@ -273,7 +282,7 @@ export function checkSkillBlocks(
   const virtualDir = slash(join(root, '.intent', 'skill-examples'))
   const virtual = new Map<string, CodeBlock>()
   blocks.forEach((block, index) =>
-    virtual.set(`${virtualDir}/block-${index}.tsx`, block),
+    virtual.set(`${virtualDir}/block-${index}.${block.extension}`, block),
   )
   const compilerOptions: TS.CompilerOptions = {
     noEmit: true,

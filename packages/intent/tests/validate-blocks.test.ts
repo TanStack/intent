@@ -80,6 +80,13 @@ it('accepts a partial example whose only gaps are names the snippet leaves out',
   expect(result.findings).toEqual([])
 })
 
+it('parses a plain ts block as TypeScript rather than TSX', () => {
+  skill(
+    "```ts\nimport { retry } from '@acme/client'\nconst pick = <T>(value: T) => value\nawait retry(() => Promise.resolve(), { max: pick(3) })\n```\n\n```tsx\nconst view = <div>{String(1)}</div>\n```\n",
+  )
+  expect(check().findings).toEqual([])
+})
+
 it('reports a removed option, a missing export, and a broken example with the skill line', () => {
   skill(
     [
