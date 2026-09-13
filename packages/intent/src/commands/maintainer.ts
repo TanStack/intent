@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs'
 import { dirname, relative } from 'node:path'
 import { isCI } from 'std-env'
 import { resolveProjectContext } from '../core/project-context.js'
@@ -83,6 +84,10 @@ const optionHelp: Record<string, [flag: string, description: string]> = {
   ],
   json: ['--json', 'Print JSON instead of text'],
   record: ['--record <file>', 'Record outcomes from an annotated JSON report'],
+  githubSummary: [
+    '--github-summary',
+    'Write a GitHub Actions step summary when GITHUB_STEP_SUMMARY is set',
+  ],
 }
 
 // Ordered as a maintainer runs them. `maintainer --help` prints this table and
@@ -155,11 +160,13 @@ export const maintainerActions: Record<string, MaintainerAction> = {
     ].map((key) => optionHelp[key]!),
   },
   check: {
-    usage: 'maintainer check [--base <ref>]',
+    usage: 'maintainer check [--base <ref>] [--github-summary]',
     summary:
       'Fail when authoring issues, stale generated files, or pending reviews remain.',
     writes: 'Nothing. Use it as the CI gate.',
-    options: ['artifacts', 'base'].map((key) => optionHelp[key]!),
+    options: ['artifacts', 'base', 'githubSummary'].map(
+      (key) => optionHelp[key]!,
+    ),
   },
 }
 
@@ -212,6 +219,7 @@ export interface MaintainerCommandOptions extends DistributionOptions {
   interactive?: boolean
   unchanged?: string
   updated?: string
+  githubSummary?: boolean
 }
 
 // An explicit --package is repository-relative. Without one, a command run from
@@ -251,7 +259,7 @@ export async function runMaintainerCommand(
     status: ['artifacts', 'base', 'json'],
     sync: ['artifacts'],
     review: ['base', 'json', 'record', 'interactive', 'unchanged', 'updated'],
-    check: ['artifacts', 'base'],
+    check: ['artifacts', 'base', 'githubSummary'],
   }
   if (!allowed[action])
     fail(
@@ -440,21 +448,19 @@ export async function runMaintainerCommand(
     },
     review,
   }
-  if (options.json) console.log(JSON.stringify(status, null, 2))
-  else {
-    console.log(
-      `${status.skills.length} skill(s), ${status.staleFiles.length} file(s) to sync, ${status.problems.length} authoring issue(s), ${review.items.length} pending review item(s).`,
-    )
-    for (const problem of status.problems) console.log(`  ${problem}`)
-    for (const path of status.staleFiles)
-      console.log(`  Run intent maintainer sync: ${path}`)
-    const examples = describeSkillExamples(
-      project.root,
-      review.items
-        .filter((item) => item.kind === 'skill' && !item.problems.length)
-        .map((item) => item.path),
-    )
-    for (const item of review.items) {
+  const headline = `${status.skills.length} skill(s), ${status.staleFiles.length} file(s) to sync, ${status.problems.length} authoring issue(s), ${review.items.length} pending review item(s).`
+  const examples = options.json
+    ? new Map<string, string>()
+    : describeSkillExamples(
+        project.root,
+        review.items
+          .filter((item) => item.kind === 'skill' && !item.problems.length)
+          .map((item) => item.path),
+      )
+  const lines = [
+    ...status.problems,
+    ...status.staleFiles.map((path) => `Run intent maintainer sync: ${path}`),
+    ...review.items.map((item) => {
       const label =
         item.kind === 'skill'
           ? 'Review skill'
@@ -467,18 +473,36 @@ export async function runMaintainerCommand(
           ? `changed ${item.changedFiles.join(', ')}`
           : 'no recorded review'
       const example = examples.get(item.path)
-      console.log(
-        `  ${label} ${item.path}: ${detail}${example ? `; ${example}` : ''}`,
-      )
-    }
+      return `${label} ${item.path}: ${detail}${example ? `; ${example}` : ''}`
+    }),
+  ]
+  if (options.json) console.log(JSON.stringify(status, null, 2))
+  else {
+    console.log(headline)
+    for (const line of lines) console.log(`  ${line}`)
   }
   if (action === 'check') {
-    // Validate each skills root once instead of once per skill directory.
-    for (const dir of new Set(
-      plan.skills.map((path) => dirname(dirname(path))),
-    ))
-      await runValidateCommand(dir)
-    if (plan.problems.length || plan.changes.length || review.items.length)
+    // Include default workspace skills and any custom registered roots. Their errors land in
+    // one report and one summary section, and the failure is rethrown after
+    // the check summary below so the two sections keep their order.
+    let validation: unknown
+    try {
+      await runValidateCommand(
+        undefined,
+        { githubSummary: options.githubSummary },
+        plan.skills.map((path) => dirname(dirname(path))),
+      )
+    } catch (err) {
+      validation = err
+    }
+    if (options.githubSummary)
+      writeGithubCheckSummary({
+        headline,
+        lines,
+        validationFailed: validation !== undefined,
+      })
+    if (validation !== undefined) throw validation
+    if (lines.length)
       fail(
         'Maintainer check failed. Resolve the authoring issues, run intent maintainer sync, and record review outcomes with intent maintainer review --unchanged <reason> or --updated <reason>, with --interactive, or by annotating a --json report and passing it to --record <report.json>.',
       )
@@ -486,4 +510,38 @@ export async function runMaintainerCommand(
       'Maintainer checks passed. Recorded conclusions still depend on the supplied review evidence.',
     )
   }
+}
+
+// The step summary repeats the console report, so a failing gate is readable
+// from the PR checks tab without opening the job log. Validation writes its
+// own section first when it runs with the same flag.
+function writeGithubCheckSummary({
+  headline,
+  lines,
+  validationFailed,
+}: {
+  headline: string
+  lines: Array<string>
+  validationFailed: boolean
+}): void {
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY
+  if (!summaryPath) return
+  const ok = lines.length === 0 && !validationFailed
+  appendFileSync(
+    summaryPath,
+    [
+      '### Intent maintainer check',
+      '',
+      ok ? 'Maintainer check passed.' : 'Maintainer check failed.',
+      '',
+      '```text',
+      headline,
+      ...lines.map((line) => `  ${line}`),
+      ...(validationFailed
+        ? ['Skill validation failed; see the validation summary above.']
+        : []),
+      '```',
+      '',
+    ].join('\n'),
+  )
 }
