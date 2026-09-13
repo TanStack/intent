@@ -54,11 +54,20 @@ export function planAddSkills(
   project: MaintainerProject,
   additions: Array<{ name: string | undefined; options: AddSkillOptions }>,
   initialChanges: Array<FileChange> = [],
+  onInvalid?: (index: number, error: unknown) => void,
 ) {
   const changes = [...initialChanges]
   const tree = readRecord(project, 'skill_tree.yaml', changes)
   const entries = skillEntries(project, tree)
+  const names = new Set(
+    entries.map((entry) => String(entry.slug ?? entry.name)),
+  )
+  const registeredPaths = new Set(
+    entries.map((entry) => skillPath(project, entry)),
+  )
   const map = readRecord(project, 'domain_map.yaml', changes)
+  const mapSkills: Array<Record<string, unknown>> = map.document.toJS().skills
+  const mappedNames = new Set(mapSkills.map((skill) => skill.slug))
   const specPath = recordPath(project, 'skill_spec.md')
   const specChange = changes.find((change) => change.path === specPath)
   const spec = existsSync(specPath) ? readFileSync(specPath, 'utf8') : null
@@ -66,106 +75,28 @@ export function planAddSkills(
   if (nextSpec === null)
     throw new Error('Missing skill_spec.md. Run intent maintainer setup.')
   const paths: Array<string> = []
-  for (const { name, options } of additions) {
-    if (!name || name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name))
-      throw new Error(
-        'Choose a skill name of at most 64 lowercase letters, numbers, and hyphens.',
-      )
-    if (!options.domain?.trim())
-      throw new Error('Choose the task domain with --domain <slug>.')
-    if (entries.some((entry) => (entry.slug ?? entry.name) === name))
-      throw new Error(
-        `Skill ${name} is already registered. Edit its SKILL.md, then run intent maintainer sync.`,
-      )
-    const packageDir = options.package === '.' ? undefined : options.package
-    const entry: SkillEntry = {
-      name,
-      slug: name,
-      domain: options.domain,
-      ...(packageDir ? { package: packageDir } : {}),
-      path: options.path ?? `skills/${name}/SKILL.md`,
+  for (const [index, { name, options }] of additions.entries()) {
+    let addition: ReturnType<typeof prepareAddition>
+    try {
+      addition = prepareAddition(project, name, options, names, registeredPaths)
+    } catch (error) {
+      if (!onInvalid) throw error
+      onInvalid(index, error)
+      continue
     }
-    const path = skillPath(project, entry)
-    if (basename(dirname(path)) !== name)
-      throw new Error('The skill name must match its parent directory.')
-    if (entries.some((existing) => skillPath(project, existing) === path))
-      throw new Error(`Skill path is already registered: ${entry.path}`)
-    const packageRoot = packageDir
-      ? projectPath(project.root, packageDir)
-      : project.root
-    const manifestPath = projectPath(
-      project.root,
-      packageDir ? `${packageDir}/package.json` : 'package.json',
-    )
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
-    if (
-      resolveProjectContext({ cwd: project.root, targetPath: path })
-        .packageRoot !== packageRoot
-    )
-      throw new Error('The skill path must belong to the selected package.')
-    let frontmatter: Record<string, unknown>
-    if (existsSync(path)) {
-      if (options.description || options.source || options.requires)
-        throw new Error(
-          'To register an existing skill, supply its --path and --domain; edit its frontmatter directly before running sync.',
-        )
-      const parsed = parseFrontmatter(path)
-      if (!isObject(parsed) || parsed.name !== name)
-        throw new Error(
-          'Existing skill has invalid frontmatter or a different name.',
-        )
-      frontmatter = parsed
-    } else {
-      if (!options.description?.trim())
-        throw new Error('A new skill needs --description <activation text>.')
-      const sources = stringList(
-        options.source === undefined ? [] : [options.source].flat(),
-        'sources',
-      )
-      if (!sources.length)
-        throw new Error('A new skill needs at least one --source <path>.')
-      frontmatter = {
-        name,
-        description: options.description,
-        metadata: { library: manifest.name },
-        sources,
-        ...(options.requires
-          ? { requires: stringList([options.requires].flat(), 'requires') }
-          : {}),
-      }
-      changes.push({
-        path,
-        source: null,
-        content: `---\n${stringify(frontmatter)}---\n\n${authoringMarker}\n\nWrite the task procedure, working examples, source-backed pitfalls, and completion checks. Add metadata.purpose in your own words. Remove the authoring marker after writing and checking the guidance.\n`,
-      })
-    }
-    if (
-      typeof frontmatter.description !== 'string' ||
-      !frontmatter.description.trim()
-    )
-      throw new Error('A skill needs a non-empty description.')
-    entry.description = frontmatter.description
-    entry.sources = stringList(frontmatter.sources ?? [], 'sources')
-    entry.requires = stringList(frontmatter.requires ?? [], 'requires')
-    if (
-      isObject(frontmatter.metadata) &&
-      typeof frontmatter.metadata.purpose === 'string'
-    )
-      entry.purpose = frontmatter.metadata.purpose
+    const { entry, path, packageDir, manifestName, tasks, change } = addition
+    if (change) changes.push(change)
+    names.add(String(entry.slug ?? entry.name))
+    registeredPaths.add(path)
     tree.document.addIn(['skills'], entry)
-    entries.push(entry)
-    const tasks = stringList(
-      options.task === undefined ? [] : [options.task].flat(),
-      'tasks',
-    )
-    const mapSkills: Array<Record<string, unknown>> = map.document.toJS().skills
-    if (!mapSkills.some((skill) => skill.slug === name)) {
+    if (!mappedNames.has(name)) {
+      mappedNames.add(name)
       map.document.addIn(['skills'], {
         name,
         slug: name,
         domain: options.domain,
         description: entry.purpose ?? entry.description,
-        ...(packageDir ? { packages: [manifest.name] } : {}),
+        ...(packageDir ? { packages: [manifestName] } : {}),
         tasks,
         covers: [],
       })
@@ -173,7 +104,7 @@ export function planAddSkills(
     nextSpec = `${nextSpec.trimEnd()}\n\n- Registered \`${name}\` in \`${packageDir ?? '.'}\` (domain \`${options.domain}\`).${tasks.length ? ` Developer tasks: ${tasks.join('; ')}.` : ''} ${tasks.length ? 'Decisions and checks' : 'Task coverage, decisions, and checks'} still need to be recorded.\n`
     paths.push(join(packageDir ?? '', entry.path).replaceAll('\\', '/'))
   }
-  if (additions.length) {
+  if (paths.length) {
     changes.push(
       {
         path: tree.path,
@@ -190,4 +121,105 @@ export function planAddSkills(
     ],
     paths,
   }
+}
+
+// Validate one candidate completely before adding it to the shared batch.
+function prepareAddition(
+  project: MaintainerProject,
+  name: string | undefined,
+  options: AddSkillOptions,
+  names: Set<string>,
+  registeredPaths: Set<string>,
+) {
+  if (!name || name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name))
+    throw new Error(
+      'Choose a skill name of at most 64 lowercase letters, numbers, and hyphens.',
+    )
+  if (!options.domain?.trim())
+    throw new Error('Choose the task domain with --domain <slug>.')
+  if (names.has(name))
+    throw new Error(
+      `Skill ${name} is already registered. Edit its SKILL.md, then run intent maintainer sync.`,
+    )
+  const packageDir = options.package === '.' ? undefined : options.package
+  const entry: SkillEntry = {
+    name,
+    slug: name,
+    domain: options.domain,
+    ...(packageDir ? { package: packageDir } : {}),
+    path: options.path ?? `skills/${name}/SKILL.md`,
+  }
+  const path = skillPath(project, entry)
+  if (basename(dirname(path)) !== name)
+    throw new Error('The skill name must match its parent directory.')
+  if (registeredPaths.has(path))
+    throw new Error(`Skill path is already registered: ${entry.path}`)
+  const packageRoot = packageDir
+    ? projectPath(project.root, packageDir)
+    : project.root
+  const manifestPath = projectPath(
+    project.root,
+    packageDir ? `${packageDir}/package.json` : 'package.json',
+  )
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  if (
+    resolveProjectContext({ cwd: project.root, targetPath: path })
+      .packageRoot !== packageRoot
+  )
+    throw new Error('The skill path must belong to the selected package.')
+  let change: FileChange | undefined
+  let frontmatter: Record<string, unknown>
+  if (existsSync(path)) {
+    if (options.description || options.source || options.requires)
+      throw new Error(
+        'To register an existing skill, supply its --path and --domain; edit its frontmatter directly before running sync.',
+      )
+    const parsed = parseFrontmatter(path)
+    if (!isObject(parsed) || parsed.name !== name)
+      throw new Error(
+        'Existing skill has invalid frontmatter or a different name.',
+      )
+    frontmatter = parsed
+  } else {
+    if (!options.description?.trim())
+      throw new Error('A new skill needs --description <activation text>.')
+    const sources = stringList(
+      options.source === undefined ? [] : [options.source].flat(),
+      'sources',
+    )
+    if (!sources.length)
+      throw new Error('A new skill needs at least one --source <path>.')
+    frontmatter = {
+      name,
+      description: options.description,
+      metadata: { library: manifest.name },
+      sources,
+      ...(options.requires
+        ? { requires: stringList([options.requires].flat(), 'requires') }
+        : {}),
+    }
+    change = {
+      path,
+      source: null,
+      content: `---\n${stringify(frontmatter)}---\n\n${authoringMarker}\n\nWrite the task procedure, working examples, source-backed pitfalls, and completion checks. Add metadata.purpose in your own words. Remove the authoring marker after writing and checking the guidance.\n`,
+    }
+  }
+  if (
+    typeof frontmatter.description !== 'string' ||
+    !frontmatter.description.trim()
+  )
+    throw new Error('A skill needs a non-empty description.')
+  entry.description = frontmatter.description
+  entry.sources = stringList(frontmatter.sources ?? [], 'sources')
+  entry.requires = stringList(frontmatter.requires ?? [], 'requires')
+  if (
+    isObject(frontmatter.metadata) &&
+    typeof frontmatter.metadata.purpose === 'string'
+  )
+    entry.purpose = frontmatter.metadata.purpose
+  const tasks = stringList(
+    options.task === undefined ? [] : [options.task].flat(),
+    'tasks',
+  )
+  return { entry, path, packageDir, manifestName: manifest.name, tasks, change }
 }
