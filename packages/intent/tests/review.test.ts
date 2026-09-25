@@ -147,7 +147,27 @@ it('does not classify shipped meta skills or unrelated agent instructions as lib
   accept()
   expect(createReview(root).items).toEqual([])
 })
+it('ignores hidden agent directories during default skill discovery', () => {
+  write(
+    '.claude/skills/deploy/SKILL.md',
+    '---\nname: deploy\ndescription: Deploy safely\n---\nDeploy guidance.\n',
+  )
+  write(
+    '.cursor/skills/review/SKILL.md',
+    '---\nname: review\ndescription: Review safely\n---\nReview guidance.\n',
+  )
+  write(
+    '.agents/skills/hidden/SKILL.md',
+    '---\nname: hidden\ndescription: Hidden guidance\n---\nHidden guidance.\n',
+  )
 
+  git('add', '.')
+  git('commit', '-qm', 'hidden agent skills')
+
+  expect(createReview(root).items.map((item) => item.id)).toEqual([
+    'skill:skills/request/SKILL.md',
+  ])
+})
 it('reviews a repository-root skill without including its own review state', () => {
   renameSync(join(root, 'skills/request/SKILL.md'), join(root, 'SKILL.md'))
   planningRecords('_artifacts')

@@ -14,7 +14,7 @@ import {
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
-import { parseFrontmatter } from '../shared/utils.js'
+import { parseFrontmatter, isDefaultSkillPath } from '../shared/utils.js'
 
 type Snapshot = Record<string, string | null>
 type Outcome = 'updated' | 'no-change' | 'out-of-scope' | 'unresolved'
@@ -565,7 +565,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
   const skillFiles = files.filter(
     (path) =>
       basename(path) === 'SKILL.md' &&
-      (/(^|\/)skills\//.test(path) ||
+      ((/(^|\/)skills\//.test(path) && isDefaultSkillPath(path)) ||
         customRoots.some((dir) => path.startsWith(`${dir}/`)) ||
         declaredSkills.has(path) ||
         state?.items[`skill:${path}`]),

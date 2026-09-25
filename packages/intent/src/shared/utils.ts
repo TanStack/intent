@@ -58,6 +58,19 @@ export function toPosixPath(p: string): string {
   return p.split(sep).join('/')
 }
 
+/**
+ * Check whether a skill path belongs to the default skill discovery tree.
+ *
+ * Hidden directories and node_modules are excluded from default discovery,
+ * while explicitly declared or custom-root skills can still be handled by
+ * their respective discovery paths.
+ */
+export function isDefaultSkillPath(path: string): boolean {
+  return !path
+    .split('/')
+    .some((part) => part.startsWith('.') || part === 'node_modules')
+}
+
 export interface FsIdentityResolver {
   (path: string): string
   /**
