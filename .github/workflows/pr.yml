@@ -34,7 +34,7 @@ jobs:
         with:
           main-branch-name: main
       - name: Run Checks
-        run: pnpm run test:pr
+        run: pnpm run test:pr --outputStyle=stream
   preview:
     name: Preview
     runs-on: ubuntu-latest
