@@ -21,6 +21,12 @@ describe('intent hook core', () => {
     ).toEqual({ action: 'load', skillUse: '@tanstack/router#routing' })
     expect(parseIntentInvocation('intent list')).toEqual({ action: 'list' })
     expect(
+      parseIntentInvocation('nub exec intent load @tanstack/router#routing'),
+    ).toEqual({ action: 'load', skillUse: '@tanstack/router#routing' })
+    expect(parseIntentInvocation('nub exec intent list')).toEqual({
+      action: 'list',
+    })
+    expect(
       parseIntentInvocation('cd packages/app && intent load @tanstack/x#y'),
     ).toEqual({ action: 'load', skillUse: '@tanstack/x#y' })
     expect(

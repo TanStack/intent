@@ -19,6 +19,34 @@ import { prepareFixtureWorkspace } from './harness/prepare-fixture'
 import type { ToolCallRecord } from 'vitest-evals'
 
 describe('Intent discovery harness capture', () => {
+  it('parses nub exec Intent commands from tool calls', () => {
+    const calls: Array<ToolCallRecord> = [
+      { name: 'shell_command', arguments: { command: 'nub exec intent list' } },
+      {
+        name: 'shell_command',
+        arguments: {
+          command: 'nub exec intent load @tanstack/router#routing',
+        },
+      },
+    ]
+
+    expect(intentCommandsFromToolCalls(calls)).toEqual([
+      {
+        raw: 'nub exec intent list',
+        executable: 'nub exec intent',
+        action: 'list',
+        source: 'tool-call',
+      },
+      {
+        raw: 'nub exec intent load @tanstack/router#routing',
+        executable: 'nub exec intent',
+        action: 'load',
+        skillUse: '@tanstack/router#routing',
+        source: 'tool-call',
+      },
+    ])
+  })
+
   it('parses accepted Intent command forms from tool calls', () => {
     const calls: Array<ToolCallRecord> = [
       { name: 'shell_command', arguments: { command: 'intent list' } },

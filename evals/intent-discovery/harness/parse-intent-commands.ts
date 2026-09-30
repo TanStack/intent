@@ -9,6 +9,7 @@ export type ParsedIntentCommand = {
     | 'bunx @tanstack/intent@latest'
     | 'intent'
     | 'pnpm exec intent'
+    | 'nub exec intent'
     | 'pnpm dlx @tanstack/intent'
     | 'pnpm dlx @tanstack/intent@latest'
     | 'npx @tanstack/intent'
@@ -21,7 +22,7 @@ export type ParsedIntentCommand = {
 }
 
 const commandPattern =
-  /^\s*\$?\s*(?:(?:cd\s+.+?\s+&&\s+))?((?:bunx\s+@tanstack\/intent(?:@latest)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i
+  /^\s*\$?\s*(?:(?:cd\s+.+?\s+&&\s+))?((?:bunx\s+@tanstack\/intent(?:@latest)?)|(?:pnpm\s+exec\s+intent)|(?:nub\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i
 
 export function parseIntentCommand(
   raw: string,
