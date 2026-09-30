@@ -21,89 +21,68 @@ Intent provides tooling for two workflows:
 
 **For maintainers (library teams):**
 
-- Add a persistent skill-authoring and review procedure to repository instructions
-- Create or update focused skill guidance with an existing coding agent
-- Record source-aware review outcomes as the library changes
+- Scaffold skills through AI-assisted domain discovery
 - Validate SKILL.md format and packaging
 - Ship skills in the same release pipeline as code
 - Review version, source, artifact, and package coverage signals
-
-## Keep the workflow boundaries clear
-
-| Stage | Who runs it | Result |
-| --- | --- | --- |
-| Maintainer enablement | Library maintainer | `maintainer setup` creates missing records and installs persistent authoring instructions. |
-| Authoring and maintenance | Library maintainer and coding agent | `meta generate-skill` guides a focused batch; `maintainer review` records evidence-backed outcomes for later source changes. |
-| Package publishing | Library release process | `maintainer sync` updates package and selected repository exports; `setup` optionally adds CI. |
-| Consumer setup | Developer using the published library | Consumer `install` configures permitted skill sources and skill-loading guidance; `list` and `load` use skills from installed dependencies. |
-
-> [!NOTE]
-> Maintainer installation and consumer installation write separate managed guidance blocks. Neither command publishes a package or installs a dependency.
 
 ## How it works
 
 ### Discovery and installation
 
-<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+Use the runner for your package manager:
 
-@tanstack/intent@latest list
+| Tool | Pattern                                      |
+| ---- | -------------------------------------------- |
+| npm  | `npx @tanstack/intent@latest <command>`      |
+| pnpm | `pnpm dlx @tanstack/intent@latest <command>` |
+| Yarn | `yarn dlx @tanstack/intent@latest <command>` |
+| Bun  | `bunx @tanstack/intent@latest <command>`     |
 
-<!-- ::end:tabs -->
+```bash
+npx @tanstack/intent@latest list
+```
 
-Scans the current project's installed dependencies for intent-enabled packages, including `node_modules`, workspace dependencies, and Yarn PnP projects without `node_modules`. You can narrow which packages are surfaced with `package.json#intent.skills`. See the [Trust model](./concepts/trust-model) and [Configuration](./concepts/configuration) for how the allowlist works. Global package scanning is explicit; pass `--global` to include global packages or `--global-only` to ignore local packages. When both local and global packages are scanned, local packages take precedence.
+Scans the current project's installed dependencies for intent-enabled packages, including `node_modules`, workspace dependencies, and Yarn PnP projects without `node_modules`. You can narrow which packages are surfaced with `package.json#intent.skills`. See the [Trust model](./concepts/trust-model) and [Configuration](./concepts/configuration) for how the allowlist works.
+Global package scanning is explicit; pass `--global` to include global packages or `--global-only` to ignore local packages.
+When both local and global packages are scanned, local packages take precedence.
 
-<!-- ::start:tabs variant="package-manager" mode="local-install" -->
-
-@tanstack/intent@latest install
-
-<!-- ::end:tabs -->
+```bash
+npx @tanstack/intent@latest install
+```
 
 Creates or updates lightweight `intent-skills` guidance in your config files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.). Existing guidance is updated in place; otherwise `AGENTS.md` is the default target. Pass `--map` to opt in to explicit task-to-skill mappings.
 
-<!-- ::start:tabs variant="package-manager" mode="local-install" -->
-
-@tanstack/intent@latest hooks install
-
-<!-- ::end:tabs -->
+```bash
+npx @tanstack/intent@latest hooks install
+```
 
 Installs session catalogs and edit gates for supported agents. Project-scoped hooks are available for Claude Code and Codex. GitHub Copilot CLI project guidance can live in `.github/copilot-instructions.md`, while blocking hooks are user-scoped. Cursor and generic `AGENTS.md` agents use guidance only. See [intent hooks](./cli/intent-hooks) for what hooks can observe.
 
-<!-- ::start:tabs variant="package-manager" mode="local-install" -->
-
-@tanstack/intent@latest load @tanstack/query#fetching
-
-<!-- ::end:tabs -->
+```bash
+npx @tanstack/intent@latest load @tanstack/query#fetching
+```
 
 Loads the matching `SKILL.md` content for the installed package version. Pass `--path` when you need the resolved skill file path for debugging.
 
-### Maintainer authoring and review
+### Scaffolding and validation
 
-<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+```bash
+npx @tanstack/intent@latest scaffold
+```
 
-@tanstack/intent@latest maintainer setup
+Guides your agent through domain discovery, tree generation, and skill authoring with interactive maintainer interviews.
 
-<!-- ::end:tabs -->
+```bash
+npx @tanstack/intent@latest validate
+```
 
-Creates missing planning records and installs the authoring procedure in repository instructions. It explains the distribution choice and remembers selected public skills or an opt-out. Skills stay in their owning packages. See the [maintainer quick start](./getting-started/quick-start-maintainers).
-
-Use `maintainer add` to create or register an agreed skill, then author its guidance and task evidence with your coding agent. During later library work:
-
-<!-- ::start:tabs variant="package-manager" mode="local-install" -->
-
-@tanstack/intent@latest maintainer status
-@tanstack/intent@latest maintainer sync
-@tanstack/intent@latest maintainer review --json
-
-<!-- ::end:tabs -->
-
-The commands identify work, align generated metadata, and prepare source-review evidence. Record justified outcomes with `maintainer review --record <report.json>` and finish with `maintainer check`. Content changes reopen review. The [maintainer command reference](./cli/intent-maintainer) covers the full workflow, package ownership, and consumer installer choices. Full-library research remains available through the meta-skills when requested.
+Enforces SKILL.md format rules and packaging requirements before publish.
 
 ### Staleness tracking
 
-<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+```bash
+npx @tanstack/intent@latest stale
+```
 
-@tanstack/intent@latest stale
-
-<!-- ::end:tabs -->
-
-Reports version drift and source, artifact, or package coverage signals that may require skill review. Flagged text reports and generated review PR prompts route your agent to the same focused authoring procedure. The agent checks the source evidence before deciding whether guidance needs to change.
+Reports version drift and source, artifact, or package coverage signals that may require skill review.

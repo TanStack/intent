@@ -5,14 +5,10 @@ id: intent-meta
 
 `intent meta` lists bundled meta-skills or prints one meta-skill file.
 
-<!-- ::start:tabs variant="package-manager" mode="local-install" -->
-
-```text
-@tanstack/intent@latest meta
-@tanstack/intent@latest meta <name>
+```bash
+npx @tanstack/intent@latest meta
+npx @tanstack/intent@latest meta <name>
 ```
-
-<!-- ::end:tabs -->
 
 ## Arguments
 
@@ -34,5 +30,5 @@ id: intent-meta
 
 - Meta directory not found
 - Invalid `<name>` format
-- Unknown `<name>` (message suggests listing the available meta-skills)
+- Unknown `<name>` (message suggests running `npx @tanstack/intent meta`)
 - Read failure for target `SKILL.md`

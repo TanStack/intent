@@ -5,11 +5,9 @@ id: intent-list
 
 `intent list` discovers skill-enabled packages and shows the skills available under the project's permissions and exclusions. It does not change permissions or write guidance.
 
-<!-- ::start:tabs variant="package-manager" mode="local-install" -->
-
-@tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] [--show-hidden] [--no-notices]
-
-<!-- ::end:tabs -->
+```bash
+npx @tanstack/intent@latest list [--json] [--debug] [--global] [--global-only] [--show-hidden] [--no-notices]
+```
 
 ## Options
 
@@ -26,9 +24,6 @@ id: intent-list
 - `--global-only`: list global packages only
 
 ## Behavior
-
-> [!NOTE]
-> `list` is the consumer catalog for skills shipped by project and workspace dependencies. Library maintainers load Intent's packaged authoring procedures through `intent meta` or the installed maintainer block; `intent maintainer` handles setup, registration, synchronization, and checks.
 
 ### Default list
 
@@ -86,7 +81,7 @@ Text output includes:
 - A skill tree grouped by package, with descriptions and commands to load each skill.
 - Version conflicts and discovery warnings, when present.
 
-Load commands use the detected package manager's `@tanstack/intent@latest` runner and preserve the selected global scan scope. `SOURCE` distinguishes local discovery from explicit global scanning.
+Load commands use the detected package manager and preserve the selected global scan scope. `SOURCE` distinguishes local discovery from explicit global scanning.
 
 Text output and discovery warnings go to stdout. Policy notices and `--debug` details go to stderr.
 
@@ -104,8 +99,7 @@ Text output and discovery warnings go to stdout. Policy notices and `--debug` de
       "packageVersion": "5.0.0",
       "packageSource": "local",
       "skillName": "fetching",
-      "description": "Use when fetching and caching server data with TanStack Query.",
-      "purpose": "Query data fetching patterns",
+      "description": "Query data fetching patterns",
       "type": "core",
       "framework": "react"
     }
@@ -130,8 +124,6 @@ Text output and discovery warnings go to stdout. Policy notices and `--debug` de
 | Field | Meaning |
 | --- | --- |
 | `skills` | Available skills. `use` is the portable `<package>#<skill>` identity; `type` and `framework` are optional. |
-| Skill `description` | Standard agent-discovery text describing when to use the skill. Also used in the text listing. |
-| Skill `purpose` | Optional descriptive explanation from `metadata.purpose`, kept separate from activation guidance. Omitted from JSON when absent. |
 | `packages` | Selected packages, their source and location, and permitted skill counts. |
 | `hiddenSourceCount` | Number of packages hidden by the explicit allowlist. |
 | `hiddenSources` | Objects with `name` and `skillCount` in human sessions, even without `--show-hidden`. Always empty in agent sessions. |
@@ -164,7 +156,6 @@ JSON includes diagnostics in the object instead of printing separate warning or 
 
 - [intent install](./intent-install)
 - [intent load](./intent-load)
-- [intent meta](./intent-meta)
 - [intent exclude](./intent-exclude)
 - [Configuration](../concepts/configuration)
 - [Trust model](../concepts/trust-model)
