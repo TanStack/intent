@@ -11,7 +11,7 @@ id: intent-install
 
 <!-- ::end:tabs -->
 
-Keep `@tanstack/intent` in devDependencies and commit the lockfile for CI. The generated guidance uses your detected package manager's on-demand runner with `@tanstack/intent@latest`, which can fetch a newer CLI than the installed version. To run the lockfile-pinned CLI locally, invoke the installed binary instead.
+Keep `@tanstack/intent` in devDependencies and commit the lockfile for CI. The command tabs above run `@tanstack/intent@latest`, which can differ from your installed version. Generated guidance uses the detected package manager's runner; check the generated command to see whether it uses the installed CLI. To use the lockfile-pinned CLI locally, invoke the installed binary.
 
 ## Options
 

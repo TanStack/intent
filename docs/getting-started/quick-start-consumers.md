@@ -13,7 +13,7 @@ Add `@tanstack/intent` as a development dependency and commit your lockfile befo
 
 <!-- ::end:tabs -->
 
-Then run setup. The command tabs use the latest published CLI, not the version in your lockfile. Generated guidance also uses an on-demand runner; installing the dependency pins the version used by CI, not these commands.
+Then run setup. The command tabs use the latest published CLI, not the version in your lockfile. Generated guidance uses the detected package manager's runner; check its command if you need the installed version. The dependency pins the CLI used by CI when configured to run the installed CLI.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
