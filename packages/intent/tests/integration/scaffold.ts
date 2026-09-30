@@ -277,6 +277,9 @@ function install(
             `  - ${JSON.stringify(new URL(registryUrl).hostname)}`,
             'enableGlobalCache: false',
             `globalFolder: ${JSON.stringify(join(dir, '.yarn-global'))}`,
+            // These local fixtures are published immediately before install.
+            'npmPreapprovedPackages:',
+            '  - "@test-intent/*@1.0.0"',
           ].join('\n'),
         )
         // Fresh fixtures need a lockfile even when Yarn runs in CI.
