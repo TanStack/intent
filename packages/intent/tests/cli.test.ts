@@ -1540,6 +1540,7 @@ describe('cli commands', () => {
     ['pnpm-lock.yaml', 'pnpm exec intent'],
     ['yarn.lock', 'yarn exec intent'],
     ['bun.lock', 'bunx --no-install --package @tanstack/intent intent'],
+    ['nub.lock', 'nub exec intent'],
   ])(
     'prints %s load commands for human list output',
     async (lockfile, runner) => {

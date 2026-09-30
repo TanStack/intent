@@ -14,14 +14,41 @@ function readPackageManagerField(
     if (!parsed) return null
 
     const value = parsed.packageManager
-    if (typeof value !== 'string') return null
+    if (typeof value === 'string') return parsePackageManagerName(value)
 
-    if (value.startsWith('pnpm@')) return 'pnpm'
-    if (value.startsWith('yarn@')) return 'yarn'
-    if (value.startsWith('bun@')) return 'bun'
-    if (value.startsWith('npm@')) return 'npm'
+    return readDevEnginesPackageManager(parsed.devEngines)
   } catch {
     return null
+  }
+}
+
+function parsePackageManagerName(value: string): PackageManager | null {
+  const name = value.split('@')[0]
+  switch (name) {
+    case 'pnpm':
+    case 'yarn':
+    case 'bun':
+    case 'npm':
+    case 'nub':
+      return name
+    default:
+      return null
+  }
+}
+
+function readDevEnginesPackageManager(
+  devEngines: unknown,
+): PackageManager | null {
+  if (!devEngines || typeof devEngines !== 'object') return null
+
+  const field = (devEngines as { packageManager?: unknown }).packageManager
+  const entries = Array.isArray(field) ? field : [field]
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') continue
+    const name = (entry as { name?: unknown }).name
+    if (typeof name !== 'string') continue
+    const packageManager = parsePackageManagerName(name)
+    if (packageManager) return packageManager
   }
 
   return null
@@ -37,6 +64,7 @@ function detectPackageManagerInDir(
   if (existsSync(join(dir, '.pnp.cjs')) || existsSync(join(dir, '.pnp.js'))) {
     return 'yarn'
   }
+  if (existsSync(join(dir, 'nub.lock'))) return 'nub'
   if (existsSync(join(dir, 'pnpm-lock.yaml'))) return 'pnpm'
   if (existsSync(join(dir, 'bun.lockb')) || existsSync(join(dir, 'bun.lock'))) {
     return 'bun'

@@ -26,7 +26,7 @@ export interface ScanResult {
   stats: ScanStats
 }
 
-export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'unknown'
+export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'nub' | 'unknown'
 
 export type ScanScope = 'local' | 'local-and-global' | 'global'
 
