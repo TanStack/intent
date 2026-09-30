@@ -41,17 +41,13 @@ function readDevEnginesPackageManager(
 ): PackageManager | null {
   if (!devEngines || typeof devEngines !== 'object') return null
 
+  // An array lists acceptable alternatives rather than the one in use, so only
+  // a single declaration decides; otherwise detection falls back to lockfiles.
   const field = (devEngines as { packageManager?: unknown }).packageManager
-  const entries = Array.isArray(field) ? field : [field]
-  for (const entry of entries) {
-    if (!entry || typeof entry !== 'object') continue
-    const name = (entry as { name?: unknown }).name
-    if (typeof name !== 'string') continue
-    const packageManager = parsePackageManagerName(name)
-    if (packageManager) return packageManager
-  }
+  if (!field || typeof field !== 'object' || Array.isArray(field)) return null
 
-  return null
+  const name = (field as { name?: unknown }).name
+  return typeof name === 'string' ? parsePackageManagerName(name) : null
 }
 
 function detectPackageManagerInDir(

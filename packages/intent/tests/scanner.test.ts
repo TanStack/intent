@@ -2022,23 +2022,20 @@ describe('package manager detection', () => {
     expect(result.packageManager).toBe('nub')
   })
 
-  it('uses the first known entry of a devEngines.packageManager array', () => {
+  it('falls back to lockfiles when devEngines.packageManager lists alternatives', () => {
     writeFileSync(
       join(root, 'package.json'),
       JSON.stringify({
         name: 'app',
         devEngines: {
-          packageManager: [
-            { name: 'deno' },
-            { name: 'nub', version: '^0.7.0' },
-          ],
+          packageManager: [{ name: 'npm' }, { name: 'yarn' }],
         },
       }),
     )
-    writeFileSync(join(root, 'package-lock.json'), '{}')
+    writeFileSync(join(root, 'yarn.lock'), '')
     createDir(root, 'node_modules')
     const result = scanForIntents(root)
-    expect(result.packageManager).toBe('nub')
+    expect(result.packageManager).toBe('yarn')
   })
 
   it('returns unknown when no lockfile found', () => {
