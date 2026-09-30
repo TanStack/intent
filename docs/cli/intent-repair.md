@@ -5,13 +5,15 @@ title: intent repair
 
 `intent repair` handles mechanical skill maintenance before validation and source review. It does not call an agent, typecheck the library, execute examples, change version claims, or record review outcomes.
 
-Run the repository's installed CLI:
+Run the CLI from your repository:
 
-```sh
-pnpm exec intent repair
-pnpm exec intent repair --write
-pnpm exec intent repair --patch > intent-repairs.patch
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+@tanstack/intent@latest repair
+@tanstack/intent@latest repair --write
+@tanstack/intent@latest repair --patch > intent-repairs.patch
+
+<!-- ::end:tabs -->
 
 Without options, the command reports available repairs and suggestions without editing files. `--write` applies only unambiguous frontmatter repairs. `--patch` prints a unified Git patch containing the proposed frontmatter changes and code-example suggestions, while leaving the source files untouched. Review it before applying it with `git apply intent-repairs.patch`.
 

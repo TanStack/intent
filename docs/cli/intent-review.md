@@ -149,11 +149,13 @@ The planning snapshot includes the documents and the discovered skill/source evi
 
 ### Interactive review
 
-For a human terminal, use the repository's installed Intent command:
+For a human terminal, run the interactive command from the library repository:
 
-```sh
-intent maintainer review --interactive
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+@tanstack/intent@latest maintainer review --interactive
+
+<!-- ::end:tabs -->
 
 Inspect each item's current guidance and changed files, choose an outcome, and supply the reason and actual evidence. The changes view compares tracked files with the displayed Git base and includes untracked content. Use `--base <available-commit>` for a specific comparison. Edit and test guidance before starting; changes during review invalidate the affected outcomes.
 
@@ -165,10 +167,14 @@ Interactive review requires a terminal outside CI and cannot be combined with `-
 
 After inspecting all pending items and running the relevant checks, record one conclusion in one command:
 
-```sh
-intent maintainer review --unchanged "Checked retries and cancellation against the updated implementation; the guidance remains accurate."
-intent maintainer review --updated "Updated the affected examples and planning records, then checked them against the source."
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+```text
+@tanstack/intent@latest maintainer review --unchanged "Checked retries and cancellation against the updated implementation; the guidance remains accurate."
+@tanstack/intent@latest maintainer review --updated "Updated the affected examples and planning records, then checked them against the source."
 ```
+
+<!-- ::end:tabs -->
 
 Choose one command. `--unchanged` records `no-change`; `--updated` records `updated`. The reason is required and applies to every pending item. Intent records each item's current changed paths and head revision as evidence and applies the same fingerprint and unresolved-problem checks as JSON recording. The command fails when nothing is pending or any item cannot be recorded. It does not assess the guidance or run the checks for you.
 
@@ -181,23 +187,23 @@ The installed maintainer procedure handles these steps. For manual use:
 1. Review the pending items, edit guidance and planning records as needed, and run the relevant checks.
 2. Regenerate the report after those edits. Save it outside source paths, such as under `.intent/`, which the maintainer commands create:
 
-   <!-- ::start:tabs variant="package-manager" mode="local-install" -->
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-   ```text
-   @tanstack/intent@latest review --json > .intent/review.json
-   ```
+```text
+@tanstack/intent@latest review --json > .intent/review.json
+```
 
-   <!-- ::end:tabs -->
+<!-- ::end:tabs -->
 
 3. Add an outcome, reason, and evidence to each item you completed. Preserve the report's identities, baseline, and fingerprints. The report's `recording` block lists the accepted values.
 4. Record the report and check remaining work:
 
-   <!-- ::start:tabs variant="package-manager" mode="local-install" -->
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
-   @tanstack/intent@latest review --record .intent/review.json
-   @tanstack/intent@latest review --check
+@tanstack/intent@latest review --record .intent/review.json
+@tanstack/intent@latest review --check
 
-   <!-- ::end:tabs -->
+<!-- ::end:tabs -->
 
 ### Outcomes
 

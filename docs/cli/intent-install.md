@@ -11,7 +11,7 @@ id: intent-install
 
 <!-- ::end:tabs -->
 
-Keep `@tanstack/intent` in devDependencies and commit the lockfile before using the generated guidance. The generated commands use `pnpm exec`, `npm exec --no`, `yarn exec`, or `bunx --no-install`; install a missing CLI explicitly instead of allowing later agent sessions to fetch `latest`.
+Keep `@tanstack/intent` in devDependencies and commit the lockfile for CI. The generated guidance uses your detected package manager's on-demand runner with `@tanstack/intent@latest`, which can fetch a newer CLI than the installed version. To run the lockfile-pinned CLI locally, invoke the installed binary instead.
 
 ## Options
 
