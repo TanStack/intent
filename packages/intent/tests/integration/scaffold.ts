@@ -221,10 +221,6 @@ export function scaffoldProject(opts: {
       'packages:\n  - packages/*\n',
     )
   }
-  if (opts.pm === 'yarn' && !opts.pnp) {
-    writeFileSync(join(root, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
-  }
-
   const appDir = join(root, 'packages', 'app')
   mkdirSync(appDir, { recursive: true })
   writeJson(join(appDir, 'package.json'), {
@@ -264,11 +260,28 @@ function install(
       runInstallCommand(`pnpm install ${reg} --no-frozen-lockfile`, dir, env)
       break
     case 'yarn':
-      runInstallCommand(
-        `yarn install ${reg}${opts.pnp ? ' --enable-pnp' : ''} --cache-folder ${yarnCache}`,
-        dir,
-        env,
-      )
+      if (isYarnClassic()) {
+        runInstallCommand(
+          `yarn install ${reg}${opts.pnp ? ' --enable-pnp' : ''} --cache-folder ${yarnCache}`,
+          dir,
+          env,
+        )
+      } else {
+        // Isolate registry metadata too: each fixture registry uses a new port.
+        writeFileSync(
+          join(dir, '.yarnrc.yml'),
+          [
+            `nodeLinker: ${opts.pnp ? 'pnp' : 'node-modules'}`,
+            `npmRegistryServer: ${JSON.stringify(registryUrl)}`,
+            'unsafeHttpWhitelist:',
+            `  - ${JSON.stringify(new URL(registryUrl).hostname)}`,
+            'enableGlobalCache: false',
+            `globalFolder: ${JSON.stringify(join(dir, '.yarn-global'))}`,
+          ].join('\n'),
+        )
+        // Fresh fixtures need a lockfile even when Yarn runs in CI.
+        runInstallCommand('yarn install --no-immutable', dir, env)
+      }
       break
     case 'bun':
       runInstallCommand(`bun install ${reg}`, dir, env)
