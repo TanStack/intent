@@ -6,7 +6,15 @@ blockExoticSubdeps: true
 trustPolicy: 'no-downgrade'
 
 overrides:
+  # Security fixes for vulnerable transitive versions, including parent pins.
+  'brace-expansion@<1.1.21': 1.1.21
+  'brace-expansion@>=4.0.0 <5.0.12': 5.0.12
+  'fast-uri@>=3.0.0 <3.1.8': 3.1.8
+  'js-yaml@>=5.0.0 <5.4.1': 5.4.1
   pino: 10.3.1
+  'qs@>=2.2.5 <6.16.0': 6.16.0
+  'smol-toml@<=1.7.0': 1.7.1
+  'undici@>=7.0.0 <7.29.1': 7.29.1
   undici-types: 8.4.1
 
 packageExtensions:
