@@ -117,10 +117,12 @@ See [Default install](../cli/intent-install#default-install) for picker controls
 
 Use `--no-notices` to suppress non-critical notices on stderr for one run:
 
-```bash
-npx @tanstack/intent@latest list --no-notices
-npx @tanstack/intent@latest install --map --no-notices
-```
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+@tanstack/intent@latest list --no-notices
+@tanstack/intent@latest install --map --no-notices
+
+<!-- ::end:tabs -->
 
 For CI or wrapper scripts, set `INTENT_NO_NOTICES=1` to suppress notices without changing command arguments.
 
@@ -132,11 +134,15 @@ Discovery and resolution warnings are separate from policy notices and are not s
 
 Use `intent exclude` to manage this list from the CLI:
 
-```bash
-npx @tanstack/intent@latest exclude add @tanstack/router#experimental-*
-npx @tanstack/intent@latest exclude remove @tanstack/router#experimental-*
-npx @tanstack/intent@latest exclude list
+<!-- ::start:tabs variant="package-manager" mode="local-install" -->
+
+```text
+@tanstack/intent@latest exclude add @tanstack/router#experimental-*
+@tanstack/intent@latest exclude remove @tanstack/router#experimental-*
+@tanstack/intent@latest exclude list
 ```
+
+<!-- ::end:tabs -->
 
 ```json
 {
