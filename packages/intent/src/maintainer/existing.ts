@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { basename, dirname, relative } from 'node:path'
 import { resolveProjectContext } from '../core/project-context.js'
 import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
-import { parseFrontmatter, isDefaultSkillPath } from '../shared/utils.js'
+import { isDefaultSkillPath, parseFrontmatter } from '../shared/utils.js'
 import { stringList } from './add.js'
 import {
   isObject,

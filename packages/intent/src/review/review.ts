@@ -14,7 +14,7 @@ import {
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
-import { parseFrontmatter, isDefaultSkillPath } from '../shared/utils.js'
+import { isDefaultSkillPath, parseFrontmatter } from '../shared/utils.js'
 
 type Snapshot = Record<string, string | null>
 type Outcome = 'updated' | 'no-change' | 'out-of-scope' | 'unresolved'
@@ -648,10 +648,10 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     const dirs = existingArtifactDirs.length
       ? existingArtifactDirs
       : [
-          resolveProjectContext({ cwd: root }).isMonorepo
-            ? '_artifacts'
-            : 'skills/_artifacts',
-        ]
+        resolveProjectContext({ cwd: root }).isMonorepo
+          ? '_artifacts'
+          : 'skills/_artifacts',
+      ]
     for (const dir of dirs) {
       const paths = artifactNames.map((name) =>
         join(dir, name).replaceAll('\\', '/'),
