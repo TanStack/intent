@@ -168,6 +168,52 @@ it('ignores hidden agent directories during default skill discovery', () => {
     'skill:skills/request/SKILL.md',
   ])
 })
+it('retains a hidden skill through review state without explicit declaration or custom root', () => {
+  const skillPath = '.agents/skills/hidden/SKILL.md'
+
+  write(
+    skillPath,
+    '---\nname: hidden\nsources: [src/hidden.ts]\n---\nHidden guidance.\n',
+  )
+  write('src/hidden.ts', 'export const hidden = true\n')
+
+  planningRecords('_artifacts')
+  write(
+    '_artifacts/skill_tree.yaml',
+    `library: { name: library }\nskills: [{path: ${skillPath}}]\n`,
+  )
+
+  git('add', '.')
+  git('commit', '-qm', 'record hidden skill')
+
+  const initial = createReview(root)
+
+  expect(initial.items.map((item) => item.id)).toContain(
+    `skill:${skillPath}`,
+  )
+
+  expect(
+    initial.items.find((item) => item.id === `skill:${skillPath}`)?.problems,
+  ).toEqual([])
+
+  accept(initial)
+
+  // Remove the explicit declaration. The skill should still be recognized
+  // because its previous review is retained in review state.
+  write(
+    '_artifacts/skill_tree.yaml',
+    'library: { name: library }\nskills: []\n',
+  )
+
+  const retained = createReview(root)
+
+  // The unchanged hidden skill is retained in review state and therefore
+  // remains eligible for review discovery. Since it has already been
+  // reviewed and has no changes, it does not need to appear as a new item.
+  expect(retained.items.map((item) => item.id)).not.toContain(
+    `source:${skillPath}`,
+  )
+})
 it('reviews a repository-root skill without including its own review state', () => {
   renameSync(join(root, 'skills/request/SKILL.md'), join(root, 'SKILL.md'))
   planningRecords('_artifacts')
@@ -764,7 +810,7 @@ it('still tracks an ignored path when a skill maps it as a source', () => {
 })
 
 it('rejects a review record that annotates nothing instead of silently recording zero outcomes', async () => {
-  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
   const report = join(root, '.intent/review.json')
   write('.intent/review.json', JSON.stringify(createReview(root)))
   expect(await main(['review', root, '--record', report])).toBe(1)
@@ -799,7 +845,7 @@ it('accepts a single evidence string when recording', () => {
   for (const item of report.items) {
     item.outcome = 'no-change'
     item.reason = 'Compared the source with the documented request behavior.'
-    ;(item as { evidence: unknown }).evidence = 'src/request.ts'
+      ; (item as { evidence: unknown }).evidence = 'src/request.ts'
   }
   expect(recordReview(root, report)).toBe(1)
   expect(
