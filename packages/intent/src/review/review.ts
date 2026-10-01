@@ -91,6 +91,7 @@ const defaultReviewIgnore = [
   'yarn.lock',
   'bun.lock',
   'bun.lockb',
+  'nub.lock',
 ]
 const digest = (value: string | Buffer) =>
   createHash('sha256').update(value).digest('hex')

@@ -6,6 +6,7 @@ export { detectPackageManager as detectIntentCommandPackageManager }
 const runnerByPackageManager: Record<PackageManager, string> = {
   bun: 'bunx --no-install --package @tanstack/intent intent',
   npm: 'npm exec --no -- intent',
+  nub: 'nub exec intent',
   pnpm: 'pnpm exec intent',
   unknown: 'npm exec --no -- intent',
   yarn: 'yarn exec intent',

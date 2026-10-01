@@ -1988,6 +1988,56 @@ describe('package manager detection', () => {
     expect(result.packageManager).toBe('bun')
   })
 
+  it('detects nub from nub.lock', () => {
+    writeFileSync(join(root, 'nub.lock'), '')
+    createDir(root, 'node_modules')
+    const result = scanForIntents(root)
+    expect(result.packageManager).toBe('nub')
+  })
+
+  it('detects nub from the packageManager field over a pnpm lockfile', () => {
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'app', packageManager: 'nub@0.7.5' }),
+    )
+    writeFileSync(join(root, 'pnpm-lock.yaml'), '')
+    createDir(root, 'node_modules')
+    const result = scanForIntents(root)
+    expect(result.packageManager).toBe('nub')
+  })
+
+  it('detects the package manager from devEngines.packageManager', () => {
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devEngines: {
+          packageManager: { name: 'nub', version: '^0.7.0', onFail: 'warn' },
+        },
+      }),
+    )
+    writeFileSync(join(root, 'pnpm-lock.yaml'), '')
+    createDir(root, 'node_modules')
+    const result = scanForIntents(root)
+    expect(result.packageManager).toBe('nub')
+  })
+
+  it('falls back to lockfiles when devEngines.packageManager lists alternatives', () => {
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devEngines: {
+          packageManager: [{ name: 'npm' }, { name: 'yarn' }],
+        },
+      }),
+    )
+    writeFileSync(join(root, 'yarn.lock'), '')
+    createDir(root, 'node_modules')
+    const result = scanForIntents(root)
+    expect(result.packageManager).toBe('yarn')
+  })
+
   it('returns unknown when no lockfile found', () => {
     createDir(root, 'node_modules')
     const result = scanForIntents(root)
