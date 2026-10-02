@@ -404,8 +404,9 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
         '--exclude-standard',
         '-z',
         '--',
-        ...patterns,
+        // Git drops matches when one include precedes the exclude (#301).
         dependencyExclude,
+        ...patterns,
       ]),
     )
   const diff = (patterns: Array<string> = [], from = base) =>
