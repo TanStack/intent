@@ -205,14 +205,16 @@ it('retains a hidden skill through review state without explicit declaration or 
     'library: { name: library }\nskills: []\n',
   )
 
-  const retained = createReview(root)
+write('src/hidden.ts', 'export const hidden = false\n')
 
-  // The unchanged hidden skill is retained in review state and therefore
-  // remains eligible for review discovery. Since it has already been
-  // reviewed and has no changes, it does not need to appear as a new item.
-  expect(retained.items.map((item) => item.id)).not.toContain(
-    `source:${skillPath}`,
-  )
+const retained = createReview(root)
+const retainedSkill = retained.items.find(
+  (item) => item.id === `skill:${skillPath}`,
+)
+
+expect(retainedSkill).toBeDefined()
+expect(retainedSkill?.problems).toEqual([])
+expect(retainedSkill?.changedFiles).toContain('src/hidden.ts')
 })
 it('reviews a repository-root skill without including its own review state', () => {
   renameSync(join(root, 'skills/request/SKILL.md'), join(root, 'SKILL.md'))
