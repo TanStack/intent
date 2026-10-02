@@ -404,7 +404,6 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
         '--exclude-standard',
         '-z',
         '--',
-        // Git drops matches when one include precedes the exclude (#301).
         dependencyExclude,
         ...patterns,
       ]),

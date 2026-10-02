@@ -231,10 +231,16 @@ it('excludes installed dependencies even without a gitignore entry', () => {
 
 it('matches a single nested source while excluding installed dependencies', () => {
   write('packages/client/src/index.ts', 'export const client = true\n')
+  write('packages/client/src/node_modules/installed/index.ts', 'dependency\n')
   skill(['acme/library:packages/client/src/**'])
   git('add', '.')
   git('commit', '-qm', 'nested source')
-  expect(createReview(root).items[0]?.problems).toEqual([])
+  const [item] = createReview(root).items
+  expect(item?.problems).toEqual([])
+  expect(Object.keys(item?.snapshot ?? {})).toEqual([
+    'packages/client/src/index.ts',
+    'skills/request/SKILL.md',
+  ])
 })
 
 it('includes staged, unstaged, untracked and deleted paths and uses Git glob semantics', () => {
