@@ -198,8 +198,6 @@ it('retains a hidden skill through review state without explicit declaration or 
 
   accept(initial)
 
-  // Remove the explicit declaration. The skill should still be recognized
-  // because its previous review is retained in review state.
   write(
     '_artifacts/skill_tree.yaml',
     'library: { name: library }\nskills: []\n',
