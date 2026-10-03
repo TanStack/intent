@@ -96,7 +96,7 @@ The checker enables strict null checks because some library APIs require them, w
 
 Module augmentations and global declarations still share the package compiler context. Two examples that pass separately can conflict when checked together. Verify those examples in isolated fixtures before treating the combined diagnostics as defects in the guidance; separate fences alone do not isolate their augmentations.
 
-TypeScript 5.0 or newer must be available in the repository for code checking. If it or the library type entry is unavailable, Intent reports why those checks were skipped; this is not a successful typecheck. Prose-only skills do not load TypeScript.
+TypeScript 5.0 or newer must be available in the repository for code checking. If it or the library type entry is unavailable, Intent reports why those checks were skipped; this is not a successful typecheck. Prose-only skills do not load TypeScript. With TypeScript 7.0, Intent checks examples through the compiler API that TypeScript 7 publishes as unstable; Node.js 24 or newer is supported. When `@typescript/typescript6` is installed beside TypeScript 7, Intent uses that package instead. If neither API can run, Intent reports that the checks were skipped. TypeScript 7.1 is not supported at this time.
 
 Relative Markdown links outside fenced examples must point to an existing file or directory. External URLs and anchors are not checked. Link checks still run when TypeScript is unavailable. Repeated validations read current source files and link targets.
 

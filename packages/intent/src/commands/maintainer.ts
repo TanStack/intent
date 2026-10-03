@@ -488,7 +488,7 @@ export async function runMaintainerCommand(
       ? validatedExamples
       : options.json
         ? new Map<string, string>()
-        : describeSkillExamples(
+        : await describeSkillExamples(
             project.root,
             review.items
               .filter((item) => item.kind === 'skill' && !item.problems.length)

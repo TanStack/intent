@@ -17,7 +17,7 @@ export interface RepairCommandOptions {
   patch?: boolean
 }
 
-export function runRepairCommand(
+export async function runRepairCommand(
   dir: string | undefined,
   options: RepairCommandOptions,
 ) {
@@ -55,7 +55,10 @@ export function runRepairCommand(
       changes.push(plan.change)
       report.repairs.push({ file, changes: plan.changes })
     }
-    const examples = planExampleRepairs(root, plan.change?.content ?? source)
+    const examples = await planExampleRepairs(
+      root,
+      plan.change?.content ?? source,
+    )
     report.suggestions.push(
       ...examples.suggestions.map((suggestion) => ({ file, ...suggestion })),
     )

@@ -38,7 +38,7 @@ Use `intent maintainer sync` afterward when the repository has valid maintainer 
 
 Some skills put complete alternative implementations in one fence, each labeled with a top-level `// BEFORE` or `// AFTER` comment. Repair can propose splitting that pair into separate fences when both halves parse. It preserves the code, language, fence style, and title. Markers in strings, nested examples, function bodies, incomplete syntax, unmatched fences, and more than one pair are not split.
 
-The split is always a suggestion: the comments might describe sequential steps instead of alternatives. Check the teaching intent and run validation after applying it. TypeScript 5.0 or newer must be available for these suggestions; the parser does not load a project configuration or execute examples.
+The split is always a suggestion: the comments might describe sequential steps instead of alternatives. Check the teaching intent and run validation after applying it. TypeScript 5.0 or newer must be available for these suggestions; the parser does not load a project configuration or execute examples. TypeScript 7 works under the same conditions as code checking in `intent validate`.
 
 Fragments containing `...`, top-level `return`/`yield`, or deliberate `WRONG` examples require assessment and explicit context. Repair does not guess wrappers, insert casts or missing APIs, or suppress diagnostics. Separate fences also do not isolate module augmentations in the validator's package compiler context.
 

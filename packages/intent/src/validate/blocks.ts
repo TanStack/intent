@@ -2,10 +2,15 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { resolveProjectContext } from '../core/project-context.js'
 import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
 import { parseFrontmatter, readScalarField } from '../shared/utils.js'
 import type TS from 'typescript'
+import type * as NativeApi from 'typescript7/unstable/async'
+import type * as NativeAst from 'typescript7/unstable/ast'
+import type * as NativeIs from 'typescript7/unstable/ast/is'
+import type * as NativeScanner from 'typescript7/unstable/ast/scanner'
 
 interface SkillBlockFinding {
   file: string
@@ -89,16 +94,151 @@ const partialSnippetCodes = new Set([
 ])
 const missingModuleCodes = new Set([2307, 2792])
 
+// In tsconfig form, so both compiler APIs check examples with the same options.
+const exampleCompilerOptions = {
+  noEmit: true,
+  strict: false,
+  // Router and other conditional APIs require null and undefined to stay
+  // distinct. Partial examples still tolerate omitted names and implicit any.
+  strictNullChecks: true,
+  skipLibCheck: true,
+  allowJs: true,
+  checkJs: true,
+  resolveJsonModule: true,
+  esModuleInterop: true,
+  allowSyntheticDefaultImports: true,
+  target: 'esnext',
+  module: 'esnext',
+  // Each fence is a standalone example, even when it has no imports.
+  moduleDetection: 'force',
+  moduleResolution: 'bundler',
+  jsx: 'preserve',
+  lib: ['esnext', 'dom'],
+  types: [],
+}
+
+// TypeScript 7 publishes its compiler API only under these unstable entries.
+interface NativeTypeScript {
+  api: typeof NativeApi
+  ast: typeof NativeAst
+  is: typeof NativeIs
+  scanner: typeof NativeScanner
+}
+type NativeProject = NonNullable<ReturnType<NativeApi.Snapshot['getProject']>>
+type NativeDiagnostic = Awaited<
+  ReturnType<NativeProject['program']['getSemanticDiagnostics']>
+>[number]
+
 function loadTypeScript(root: string): typeof TS | null {
   for (const from of [join(root, 'package.json'), import.meta.url]) {
+    const load = createRequire(from)
+    let ts: typeof TS
     try {
-      return createRequire(from)('typescript') as typeof TS
+      ts = load('typescript') as typeof TS
+    } catch {
+      continue // Try the next location.
+    }
+    if (hasCompilerApi(ts)) return ts
+    // TypeScript 7 exports no compiler API. Its documented side-by-side
+    // package keeps the TypeScript 6 API installed next to it.
+    try {
+      return load('@typescript/typescript6') as typeof TS
+    } catch {
+      return ts
+    }
+  }
+  return null
+}
+
+// A version check is not enough: TypeScript 7 passes the 5.0 minimum but its
+// package root exports only version fields, not the compiler API.
+const hasCompilerApi = (ts: typeof TS) => typeof ts.createProgram === 'function'
+
+// These entries are ES modules. They are imported by the path they resolve
+// to from the repository, so the repository's TypeScript is used rather than
+// one installed near Intent.
+async function loadNativeTypeScript(
+  root: string,
+): Promise<NativeTypeScript | null> {
+  for (const from of [join(root, 'package.json'), import.meta.url]) {
+    const load = createRequire(from)
+    const entry = (name: string) =>
+      import(pathToFileURL(load.resolve(`typescript/unstable/${name}`)).href)
+    try {
+      return {
+        api: await entry('async'),
+        ast: await entry('ast'),
+        is: await entry('ast/is'),
+        scanner: await entry('ast/scanner'),
+      }
     } catch {
       // Try the next location.
     }
   }
   return null
 }
+
+// TypeScript 7 compiles in a separate process. Examples reach it as virtual
+// files listed by a virtual project configuration, so nothing is written.
+async function withNativeCompiler<T>(
+  native: NativeTypeScript,
+  root: string,
+  virtualDir: string,
+  run: (
+    open: (
+      sources: Map<string, string>,
+      compilerOptions: Record<string, unknown>,
+    ) => Promise<NativeProject>,
+  ) => Promise<T>,
+): Promise<T> {
+  const files = new Map<string, string>()
+  let projects = 0
+  const api = new native.api.API({
+    cwd: root,
+    // Answers for virtual paths; undefined falls back to the real file system
+    // for library sources and node_modules. The virtual directory is not on
+    // disk, so it and its parents are reported as existing. Paths are keyed
+    // with forward slashes whatever separator the compiler process uses.
+    fs: {
+      readFile: (path) => files.get(slash(path)),
+      fileExists: (path) => files.has(slash(path)) || undefined,
+      directoryExists: (path) =>
+        `${virtualDir}/`.startsWith(`${slash(path)}/`) || undefined,
+    },
+  })
+  try {
+    return await run(async (sources, compilerOptions) => {
+      // A new configuration per call opens a new project that lists only
+      // this call's files, whatever the compiler process kept from earlier.
+      const config = `${virtualDir}/tsconfig-${projects++}.json`
+      for (const [path, code] of sources) files.set(path, code)
+      files.set(
+        config,
+        JSON.stringify({ compilerOptions, files: [...sources.keys()] }),
+      )
+      const snapshot = await api.updateSnapshot({ openProjects: [config] })
+      const project = snapshot.getProject(config)
+      if (!project) throw new Error(`could not open ${config}`)
+      return project
+    })
+  } finally {
+    await api.close()
+  }
+}
+
+// The same text as flattenDiagnosticMessageText(messageText, ' ') in the
+// TypeScript 6 API.
+function nativeMessage(diagnostic: NativeDiagnostic, indent = 0): string {
+  return [
+    `${indent ? ` ${'  '.repeat(indent)}` : ''}${diagnostic.text}`,
+    ...(diagnostic.messageChain ?? []).map((next) =>
+      nativeMessage(next, indent + 1),
+    ),
+  ].join('')
+}
+
+const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error)
 
 function extractCodeBlocks(file: string, content: string): Array<CodeBlock> {
   const blocks: Array<CodeBlock> = []
@@ -117,28 +257,135 @@ function extractCodeBlocks(file: string, content: string): Array<CodeBlock> {
   return blocks
 }
 
+// Parsing for example repair suggestions, from either compiler API.
+interface ExampleParser {
+  // Full start of each top-level statement, including leading comments.
+  statements: (filename: string, code: string) => Promise<Array<number>>
+  comments: (
+    code: string,
+    position: number,
+  ) => ReadonlyArray<{ pos: number; end: number }>
+  parses: (filename: string, code: string) => Promise<boolean>
+}
+
+function typeScriptParser(ts: typeof TS): ExampleParser {
+  return {
+    statements: (filename, code) =>
+      Promise.resolve(
+        ts
+          .createSourceFile(filename, code, ts.ScriptTarget.Latest, true)
+          .statements.map((statement) => statement.pos),
+      ),
+    comments: (code, position) =>
+      ts.getLeadingCommentRanges(code, position) ?? [],
+    parses: (filename, code) =>
+      Promise.resolve(
+        !(
+          ts.transpileModule(code, {
+            fileName: filename,
+            reportDiagnostics: true,
+            compilerOptions: {
+              target: ts.ScriptTarget.ESNext,
+              module: ts.ModuleKind.ESNext,
+              jsx: ts.JsxEmit.Preserve,
+            },
+          }).diagnostics ?? []
+        ).some(
+          (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
+        ),
+      ),
+  }
+}
+
+function nativeParser(
+  native: NativeTypeScript,
+  virtualDir: string,
+  open: Parameters<Parameters<typeof withNativeCompiler>[3]>[0],
+): ExampleParser {
+  let files = 0
+  const program = async (filename: string, code: string) => {
+    // A new name per parse, so no parse depends on whether the compiler
+    // process re-reads a path it has already read. The filename keeps the
+    // extension, which decides whether the code parses as JSX.
+    const path = `${virtualDir}/${files++}-${filename}`
+    const project = await open(new Map([[path, code]]), exampleCompilerOptions)
+    return { path, program: project.program }
+  }
+  return {
+    statements: async (filename, code) => {
+      const { path, program: parsed } = await program(filename, code)
+      const source = await parsed.getSourceFile(path)
+      if (!source) throw new Error(`could not read ${path}`)
+      return source.statements.map((statement) => statement.pos)
+    },
+    comments: (code, position) =>
+      native.scanner.getLeadingCommentRanges(code, position) ?? [],
+    parses: async (filename, code) => {
+      const { path, program: parsed } = await program(filename, code)
+      return !(await parsed.getSyntacticDiagnostics(path)).some(
+        (diagnostic) =>
+          diagnostic.category === native.api.DiagnosticCategory.Error,
+      )
+    },
+  }
+}
+
 // These are suggestions for review, not automatic fixes: BEFORE/AFTER can
 // describe sequential work as well as alternative implementations.
-export function planExampleRepairs(root: string, content: string) {
-  const suggestions: Array<{ line: number; message: string }> = []
+export async function planExampleRepairs(
+  root: string,
+  content: string,
+): Promise<{
+  content: string
+  suggestions: Array<{ line: number; message: string }>
+  skipped?: string
+}> {
   const lines = content.split(/(?<=\n)/)
-  let ts: typeof TS | null | undefined
-  for (const fence of codeFences(content).reverse()) {
-    if (
-      !checkedLanguages.has(fence.language) ||
-      fence.end >= lines.length ||
-      !/^\s*\/\/\s*BEFORE\b/i.test(fence.code) ||
-      !/\/\/\s*AFTER\b/i.test(fence.code)
+  const fences = codeFences(content)
+    .reverse()
+    .filter(
+      (fence) =>
+        checkedLanguages.has(fence.language) &&
+        fence.end < lines.length &&
+        /^\s*\/\/\s*BEFORE\b/i.test(fence.code) &&
+        /\/\/\s*AFTER\b/i.test(fence.code),
     )
-      continue
-    ts ??= loadTypeScript(root)
-    if (!ts || Number(ts.versionMajorMinor.split('.')[0]) < 5)
-      return {
-        content,
-        suggestions: [],
-        skipped:
-          'TypeScript 5.0 or newer is required to suggest example repairs.',
-      }
+  if (!fences.length) return { content, suggestions: [] }
+  const skip = (skipped: string) => ({ content, suggestions: [], skipped })
+  const ts = loadTypeScript(root)
+  if (!ts || Number(ts.versionMajorMinor.split('.')[0]) < 5)
+    return skip(
+      'TypeScript 5.0 or newer is required to suggest example repairs.',
+    )
+  if (hasCompilerApi(ts))
+    return splitExamples(lines, fences, typeScriptParser(ts))
+  // TypeScript 7 without @typescript/typescript6 beside it.
+  const native = await loadNativeTypeScript(root)
+  if (!native)
+    return skip(
+      `TypeScript ${ts.version} has no compiler API that Intent can use; install @typescript/typescript6 beside it to suggest example repairs.`,
+    )
+  const virtualDir = slash(join(root, '.intent', 'skill-examples'))
+  // The native API is unstable, so a failure reports the skipped suggestions
+  // instead of stopping the repair command.
+  try {
+    return await withNativeCompiler(native, root, virtualDir, (open) =>
+      splitExamples(lines, fences, nativeParser(native, virtualDir, open)),
+    )
+  } catch (error) {
+    return skip(
+      `TypeScript ${ts.version} could not parse the examples: ${errorMessage(error)}`,
+    )
+  }
+}
+
+async function splitExamples(
+  lines: Array<string>,
+  fences: ReturnType<typeof codeFences>,
+  parser: ExampleParser,
+) {
+  const suggestions: Array<{ line: number; message: string }> = []
+  for (const fence of fences) {
     const extension =
       fence.language === 'tsx' || fence.language === 'jsx'
         ? fence.language
@@ -146,15 +393,9 @@ export function planExampleRepairs(root: string, content: string) {
           ? 'js'
           : 'ts'
     const filename = `example.${extension}`
-    const source = ts.createSourceFile(
-      filename,
-      fence.code,
-      ts.ScriptTarget.Latest,
-      true,
-    )
-    const markers = source.statements.flatMap((statement) =>
-      (ts!.getLeadingCommentRanges(fence.code, statement.pos) ?? []).flatMap(
-        (comment) => {
+    const markers = (await parser.statements(filename, fence.code)).flatMap(
+      (position) =>
+        parser.comments(fence.code, position).flatMap((comment) => {
           const label = /^\/\/\s*(BEFORE|AFTER)\b[^\n]*$/i.exec(
             fence.code.slice(comment.pos, comment.end),
           )
@@ -162,8 +403,7 @@ export function planExampleRepairs(root: string, content: string) {
           return label && !fence.code.slice(lineStart, comment.pos).trim()
             ? [{ label: label[1]!.toUpperCase(), pos: lineStart }]
             : []
-        },
-      ),
+        }),
     )
     if (
       markers.length !== 2 ||
@@ -174,24 +414,10 @@ export function planExampleRepairs(root: string, content: string) {
       continue
     const split = markers[1]!.pos
     const halves = [fence.code.slice(0, split), fence.code.slice(split)]
-    if (
-      halves.some((code) =>
-        (
-          ts!.transpileModule(code, {
-            fileName: filename,
-            reportDiagnostics: true,
-            compilerOptions: {
-              target: ts!.ScriptTarget.ESNext,
-              module: ts!.ModuleKind.ESNext,
-              jsx: ts!.JsxEmit.Preserve,
-            },
-          }).diagnostics ?? []
-        ).some(
-          (diagnostic) => diagnostic.category === ts!.DiagnosticCategory.Error,
-        ),
-      )
-    )
-      continue
+    let parses = true
+    for (const code of halves)
+      if (parses) parses = await parser.parses(filename, code)
+    if (!parses) continue
     const at =
       fence.start + 1 + fence.code.slice(0, split).split('\n').length - 1
     const eol = lines[fence.start]!.endsWith('\r\n') ? '\r\n' : '\n'
@@ -373,7 +599,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export function checkSkillBlocks(
+export async function checkSkillBlocks(
   options: {
     root: string
     packageDir: string
@@ -381,7 +607,7 @@ export function checkSkillBlocks(
     skills: Array<{ file: string; content: string }>
   },
   ts?: typeof TS | null,
-): SkillBlockCheck {
+): Promise<SkillBlockCheck> {
   const { root, packageDir, library } = options
   const findings = options.skills.flatMap((skill) =>
     checkSkillLinks(root, skill.file, skill.content),
@@ -402,6 +628,12 @@ export function checkSkillBlocks(
     return result(
       `TypeScript ${ts.version} is installed; 5.0 or newer is required`,
     )
+  // TypeScript 7 without @typescript/typescript6 beside it.
+  const native = hasCompilerApi(ts) ? null : await loadNativeTypeScript(root)
+  if (!hasCompilerApi(ts) && !native)
+    return result(
+      `TypeScript ${ts.version} has no compiler API that Intent can use; install @typescript/typescript6 beside it`,
+    )
   const entry = libraryEntry(packageDir)
   const ownsLibrary = packageName(packageDir) === library
   if (ownsLibrary && !entry)
@@ -414,25 +646,8 @@ export function checkSkillBlocks(
   blocks.forEach((block, index) =>
     virtual.set(`${virtualDir}/block-${index}.${block.extension}`, block),
   )
-  const compilerOptions: TS.CompilerOptions = {
-    noEmit: true,
-    strict: false,
-    // Router and other conditional APIs require null and undefined to stay
-    // distinct. Partial examples still tolerate omitted names and implicit any.
-    strictNullChecks: true,
-    skipLibCheck: true,
-    allowJs: true,
-    checkJs: true,
-    resolveJsonModule: true,
-    esModuleInterop: true,
-    allowSyntheticDefaultImports: true,
-    target: ts.ScriptTarget.ESNext,
-    module: ts.ModuleKind.ESNext,
-    // Each fence is a standalone example, even when it has no imports.
-    moduleDetection: ts.ModuleDetectionKind.Force,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    jsx: ts.JsxEmit.Preserve,
-    lib: ['lib.esnext.d.ts', 'lib.dom.d.ts'],
+  const compilerOptions = {
+    ...exampleCompilerOptions,
     paths: {
       ...workspacePaths(root),
       // A skill documenting another package (metadata.library) resolves that
@@ -447,9 +662,37 @@ export function checkSkillBlocks(
           }
         : {}),
     },
-    types: [],
   }
-  const host = ts.createCompilerHost(compilerOptions, true)
+  const fromLibrary = (specifier: string) =>
+    specifier === library || specifier.startsWith(`${library}/`)
+
+  if (native) {
+    // The native API is unstable, so a failure reports the skipped checks
+    // instead of stopping validation.
+    try {
+      findings.push(
+        ...(await checkNativeBlocks(
+          native,
+          root,
+          virtualDir,
+          virtual,
+          compilerOptions,
+          fromLibrary,
+        )),
+      )
+    } catch (error) {
+      return result(
+        `TypeScript ${ts.version} could not check the examples: ${errorMessage(error)}`,
+      )
+    }
+    return result()
+  }
+
+  const parsedOptions = ts.convertCompilerOptionsFromJson(
+    compilerOptions,
+    root,
+  ).options
+  const host = ts.createCompilerHost(parsedOptions, true)
   const readFile = host.readFile.bind(host)
   const fileExists = host.fileExists.bind(host)
   host.fileExists = (path) => virtual.has(path) || fileExists(path)
@@ -460,10 +703,8 @@ export function checkSkillBlocks(
       ? undefined
       : ts.createSourceFile(path, code, languageVersion, true)
   }
-  const program = ts.createProgram([...virtual.keys()], compilerOptions, host)
+  const program = ts.createProgram([...virtual.keys()], parsedOptions, host)
   const checker = program.getTypeChecker()
-  const fromLibrary = (specifier: string) =>
-    specifier === library || specifier.startsWith(`${library}/`)
 
   for (const [path, block] of virtual) {
     const source = program.getSourceFile(path)
@@ -474,22 +715,14 @@ export function checkSkillBlocks(
       ...program.getSyntacticDiagnostics(source),
       ...program.getSemanticDiagnostics(source),
     ]) {
-      if (partialSnippetCodes.has(diagnostic.code)) continue
-      const message = ts.flattenDiagnosticMessageText(
-        diagnostic.messageText,
-        ' ',
+      const finding = diagnosticFinding(
+        block,
+        diagnostic.start === undefined ? block.line : at(diagnostic.start),
+        diagnostic.code,
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, ' '),
+        fromLibrary,
       )
-      if (missingModuleCodes.has(diagnostic.code)) {
-        const specifier = /Cannot find module '([^']+)'/.exec(message)?.[1]
-        if (!specifier || !fromLibrary(specifier)) continue
-      }
-      findings.push({
-        file: block.file,
-        line:
-          diagnostic.start === undefined ? block.line : at(diagnostic.start),
-        message: `TS${diagnostic.code}: ${message}`,
-        severity: 'error',
-      })
+      if (finding) findings.push(finding)
     }
     for (const statement of source.statements) {
       if (
@@ -507,27 +740,143 @@ export function checkSkillBlocks(
         const tag = symbol
           ?.getJsDocTags(checker)
           .find((entry) => entry.name === 'deprecated')
-        if (!tag) continue
-        const detail = ts.displayPartsToString(tag.text).trim()
-        findings.push({
-          file: block.file,
-          line: at(element.getStart(source)),
-          message: `${element.name.text} is deprecated${detail ? `: ${detail}` : ''}`,
-          severity: 'warning',
-        })
+        if (tag)
+          findings.push(
+            deprecationFinding(
+              block,
+              at(element.getStart(source)),
+              element.name.text,
+              ts.displayPartsToString(tag.text),
+            ),
+          )
       }
     }
   }
   return result()
 }
 
+function checkNativeBlocks(
+  native: NativeTypeScript,
+  root: string,
+  virtualDir: string,
+  virtual: Map<string, CodeBlock>,
+  compilerOptions: Record<string, unknown>,
+  fromLibrary: (specifier: string) => boolean,
+): Promise<Array<SkillBlockFinding>> {
+  return withNativeCompiler(native, root, virtualDir, async (open) => {
+    const findings: Array<SkillBlockFinding> = []
+    const { program, checker } = await open(
+      new Map([...virtual].map(([path, block]) => [path, block.code])),
+      compilerOptions,
+    )
+    for (const [path, block] of virtual) {
+      const source = await program.getSourceFile(path)
+      if (!source) continue
+      // The same line breaks as getLineAndCharacterOfPosition in TypeScript 6.
+      const lineStarts = native.scanner.computeLineStarts(block.code)
+      const at = (position: number) => {
+        let line = 0
+        while (
+          lineStarts[line + 1] !== undefined &&
+          lineStarts[line + 1]! <= position
+        )
+          line++
+        return block.line + line
+      }
+      for (const diagnostic of [
+        ...(await program.getSyntacticDiagnostics(path)),
+        ...(await program.getSemanticDiagnostics(path)),
+      ]) {
+        const finding = diagnosticFinding(
+          block,
+          // A native diagnostic's pos is where the error starts, like start
+          // in TypeScript 6; it does not include leading trivia.
+          at(diagnostic.pos),
+          diagnostic.code,
+          nativeMessage(diagnostic),
+          fromLibrary,
+        )
+        if (finding) findings.push(finding)
+      }
+      for (const statement of source.statements) {
+        if (
+          !native.is.isImportDeclaration(statement) ||
+          !native.is.isStringLiteral(statement.moduleSpecifier) ||
+          !fromLibrary(statement.moduleSpecifier.text)
+        )
+          continue
+        const bindings = statement.importClause?.namedBindings
+        if (!bindings || !native.is.isNamedImports(bindings)) continue
+        for (const element of bindings.elements) {
+          let symbol = await checker.getSymbolAtLocation(element.name)
+          if (symbol && symbol.flags & native.api.SymbolFlags.Alias)
+            symbol = await checker.getAliasedSymbol(symbol)
+          const tag = symbol
+            ? (await symbol.getJsDocTags(checker)).find(
+                (entry) => entry.name === 'deprecated',
+              )
+            : undefined
+          if (tag)
+            findings.push(
+              deprecationFinding(
+                block,
+                // Skips leading trivia, like getStart in TypeScript 6.
+                at(native.ast.getTokenPosOfNode(element, source)),
+                element.name.text,
+                tag.text ?? '',
+              ),
+            )
+        }
+      }
+    }
+    return findings
+  })
+}
+
+// Partial examples leave out names, globals, and external modules on purpose;
+// only a missing module from the documented library is reported.
+function diagnosticFinding(
+  block: CodeBlock,
+  line: number,
+  code: number,
+  message: string,
+  fromLibrary: (specifier: string) => boolean,
+): SkillBlockFinding | null {
+  if (partialSnippetCodes.has(code)) return null
+  if (missingModuleCodes.has(code)) {
+    const specifier = /Cannot find module '([^']+)'/.exec(message)?.[1]
+    if (!specifier || !fromLibrary(specifier)) return null
+  }
+  return {
+    file: block.file,
+    line,
+    message: `TS${code}: ${message}`,
+    severity: 'error',
+  }
+}
+
+function deprecationFinding(
+  block: CodeBlock,
+  line: number,
+  name: string,
+  detail: string,
+): SkillBlockFinding {
+  detail = detail.trim()
+  return {
+    file: block.file,
+    line,
+    message: `${name} is deprecated${detail ? `: ${detail}` : ''}`,
+    severity: 'warning',
+  }
+}
+
 // One-line summary per skill for review items, in one program per package.
 // Skills without code blocks, or whose blocks could not be checked, are left
 // out of the result.
-export function describeSkillExamples(
+export async function describeSkillExamples(
   root: string,
   files: Array<string>,
-): Map<string, string> {
+): Promise<Map<string, string>> {
   const groups = new Map<
     string,
     { packageDir: string; library: string; files: Array<string> }
@@ -568,7 +917,7 @@ export function describeSkillExamples(
       file,
       content: readFileSync(resolve(root, file), 'utf8'),
     }))
-    const result = checkSkillBlocks({
+    const result = await checkSkillBlocks({
       root,
       packageDir: group.packageDir,
       library: group.library,

@@ -36,6 +36,7 @@
     "semver": "^7.8.4",
     "std-env": "^4.1.0",
     "tsdown": "^0.22.2",
+    "typescript7": "npm:typescript@7.0.2",
     "verdaccio": "^6.7.2",
     "yaml": "2.9.0"
   },
@@ -46,7 +47,7 @@
     "test:lib": "vitest run --exclude 'tests/integration/**'",
     "test:integration": "vitest run tests/integration/",
     "test:distribution": "pnpm run build && vitest run tests/integration/distribution-installers.test.ts",
-    "test:types": "tsc --noEmit",
+    "test:types": "node ../../node_modules/typescript/bin/tsc --noEmit",
     "test:eslint": "eslint ."
   }
 }

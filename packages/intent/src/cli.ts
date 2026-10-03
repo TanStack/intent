@@ -113,7 +113,7 @@ function createCli(
     .option('--patch', 'Print a reviewable patch without editing skill files')
     .action(async (dir: string | undefined, options: RepairCommandOptions) => {
       const { runRepairCommand } = await import('./commands/repair.js')
-      runRepairCommand(dir, options)
+      await runRepairCommand(dir, options)
     })
 
   cli
