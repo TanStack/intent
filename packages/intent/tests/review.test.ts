@@ -188,9 +188,7 @@ it('retains a hidden skill through review state without explicit declaration or 
 
   const initial = createReview(root)
 
-  expect(initial.items.map((item) => item.id)).toContain(
-    `skill:${skillPath}`,
-  )
+  expect(initial.items.map((item) => item.id)).toContain(`skill:${skillPath}`)
 
   expect(
     initial.items.find((item) => item.id === `skill:${skillPath}`)?.problems,
@@ -203,16 +201,16 @@ it('retains a hidden skill through review state without explicit declaration or 
     'library: { name: library }\nskills: []\n',
   )
 
-write('src/hidden.ts', 'export const hidden = false\n')
+  write('src/hidden.ts', 'export const hidden = false\n')
 
-const retained = createReview(root)
-const retainedSkill = retained.items.find(
-  (item) => item.id === `skill:${skillPath}`,
-)
+  const retained = createReview(root)
+  const retainedSkill = retained.items.find(
+    (item) => item.id === `skill:${skillPath}`,
+  )
 
-expect(retainedSkill).toBeDefined()
-expect(retainedSkill?.problems).toEqual([])
-expect(retainedSkill?.changedFiles).toContain('src/hidden.ts')
+  expect(retainedSkill).toBeDefined()
+  expect(retainedSkill?.problems).toEqual([])
+  expect(retainedSkill?.changedFiles).toContain('src/hidden.ts')
 })
 it('reviews a repository-root skill without including its own review state', () => {
   renameSync(join(root, 'skills/request/SKILL.md'), join(root, 'SKILL.md'))
@@ -810,7 +808,7 @@ it('still tracks an ignored path when a skill maps it as a source', () => {
 })
 
 it('rejects a review record that annotates nothing instead of silently recording zero outcomes', async () => {
-  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   const report = join(root, '.intent/review.json')
   write('.intent/review.json', JSON.stringify(createReview(root)))
   expect(await main(['review', root, '--record', report])).toBe(1)
@@ -845,7 +843,7 @@ it('accepts a single evidence string when recording', () => {
   for (const item of report.items) {
     item.outcome = 'no-change'
     item.reason = 'Compared the source with the documented request behavior.'
-      ; (item as { evidence: unknown }).evidence = 'src/request.ts'
+    ;(item as { evidence: unknown }).evidence = 'src/request.ts'
   }
   expect(recordReview(root, report)).toBe(1)
   expect(

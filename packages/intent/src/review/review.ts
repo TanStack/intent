@@ -648,10 +648,10 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     const dirs = existingArtifactDirs.length
       ? existingArtifactDirs
       : [
-        resolveProjectContext({ cwd: root }).isMonorepo
-          ? '_artifacts'
-          : 'skills/_artifacts',
-      ]
+          resolveProjectContext({ cwd: root }).isMonorepo
+            ? '_artifacts'
+            : 'skills/_artifacts',
+        ]
     for (const dir of dirs) {
       const paths = artifactNames.map((name) =>
         join(dir, name).replaceAll('\\', '/'),
