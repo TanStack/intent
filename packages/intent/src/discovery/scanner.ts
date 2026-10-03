@@ -310,11 +310,12 @@ function readSkillEntry(
     const opened = readFs.fstatSync(fd)
     // Compare the opened file with the checked entry before reading any bytes.
     // The descriptor then survives pathname replacement, including parent swaps.
-    if (
-      !opened.isFile() ||
-      opened.dev !== expected.dev ||
-      opened.ino !== expected.ino
-    )
+    // Node 23 and 24.0 through 24.1 report `dev: 0` from lstat on Windows
+    // while fstat reports the real volume id, so a zero device id carries no
+    // identity and only the inode is compared.
+    const sameDevice =
+      opened.dev === expected.dev || opened.dev === 0 || expected.dev === 0
+    if (!opened.isFile() || !sameDevice || opened.ino !== expected.ino)
       return null
     fm = parseFrontmatter(fd, readFs)
   } catch {
