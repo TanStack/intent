@@ -1,5 +1,13 @@
 # @tanstack/intent
 
+## 0.5.1
+
+### Patch Changes
+
+- [#295](https://github.com/TanStack/intent/pull/295) [`0d053a3`](https://github.com/TanStack/intent/commit/0d053a3a7ee2a78ed68c718462cb8823fc82252b) - Fix maintainer review discovering skills inside hidden agent directories
+
+- [#302](https://github.com/TanStack/intent/pull/302) [`f6e6286`](https://github.com/TanStack/intent/commit/f6e6286c1ba113551be9c98f2a5c5fc8c076b961) - Match a skill source in `review` when its path is nested. Git dropped the matches when the source came before the `node_modules` exclude, so a valid source reported no available files.
+
 ## 0.5.0
 
 ### Minor Changes
