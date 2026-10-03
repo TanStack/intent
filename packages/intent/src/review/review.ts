@@ -404,8 +404,8 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
         '--exclude-standard',
         '-z',
         '--',
-        ...patterns,
         dependencyExclude,
+        ...patterns,
       ]),
     )
   const diff = (patterns: Array<string> = [], from = base) =>
