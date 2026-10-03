@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { basename, dirname, relative } from 'node:path'
 import { resolveProjectContext } from '../core/project-context.js'
 import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
-import { parseFrontmatter } from '../shared/utils.js'
+import { isDefaultSkillPath, parseFrontmatter } from '../shared/utils.js'
 import { stringList } from './add.js'
 import {
   isObject,
@@ -76,9 +76,7 @@ export function findExistingSkills(
       (path) =>
         basename(path) === 'SKILL.md' &&
         /(^|\/)skills\//.test(path) &&
-        !path
-          .split('/')
-          .some((part) => part.startsWith('.') || part === 'node_modules') &&
+        isDefaultSkillPath(path) &&
         !registered.has(path),
     )
     .sort()

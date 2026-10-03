@@ -147,7 +147,71 @@ it('does not classify shipped meta skills or unrelated agent instructions as lib
   accept()
   expect(createReview(root).items).toEqual([])
 })
+it('ignores hidden agent directories during default skill discovery', () => {
+  write(
+    '.claude/skills/deploy/SKILL.md',
+    '---\nname: deploy\ndescription: Deploy safely\n---\nDeploy guidance.\n',
+  )
+  write(
+    '.cursor/skills/review/SKILL.md',
+    '---\nname: review\ndescription: Review safely\n---\nReview guidance.\n',
+  )
+  write(
+    '.agents/skills/hidden/SKILL.md',
+    '---\nname: hidden\ndescription: Hidden guidance\n---\nHidden guidance.\n',
+  )
 
+  git('add', '.')
+  git('commit', '-qm', 'hidden agent skills')
+
+  expect(createReview(root).items.map((item) => item.id)).toEqual([
+    'skill:skills/request/SKILL.md',
+  ])
+})
+it('retains a hidden skill through review state without explicit declaration or custom root', () => {
+  const skillPath = '.agents/skills/hidden/SKILL.md'
+
+  write(
+    skillPath,
+    '---\nname: hidden\nsources: [src/hidden.ts]\n---\nHidden guidance.\n',
+  )
+  write('src/hidden.ts', 'export const hidden = true\n')
+
+  planningRecords('_artifacts')
+  write(
+    '_artifacts/skill_tree.yaml',
+    `library: { name: library }\nskills: [{path: ${skillPath}}]\n`,
+  )
+
+  git('add', '.')
+  git('commit', '-qm', 'record hidden skill')
+
+  const initial = createReview(root)
+
+  expect(initial.items.map((item) => item.id)).toContain(`skill:${skillPath}`)
+
+  expect(
+    initial.items.find((item) => item.id === `skill:${skillPath}`)?.problems,
+  ).toEqual([])
+
+  accept(initial)
+
+  write(
+    '_artifacts/skill_tree.yaml',
+    'library: { name: library }\nskills: []\n',
+  )
+
+  write('src/hidden.ts', 'export const hidden = false\n')
+
+  const retained = createReview(root)
+  const retainedSkill = retained.items.find(
+    (item) => item.id === `skill:${skillPath}`,
+  )
+
+  expect(retainedSkill).toBeDefined()
+  expect(retainedSkill?.problems).toEqual([])
+  expect(retainedSkill?.changedFiles).toContain('src/hidden.ts')
+})
 it('reviews a repository-root skill without including its own review state', () => {
   renameSync(join(root, 'skills/request/SKILL.md'), join(root, 'SKILL.md'))
   planningRecords('_artifacts')
