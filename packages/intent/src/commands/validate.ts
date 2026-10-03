@@ -569,7 +569,7 @@ async function runValidateCommandInternal(
         if (library) (byLibrary[library] ??= []).push(skill)
       }
       for (const [library, skills] of Object.entries(byLibrary)) {
-        const result = checkSkillBlocks({
+        const result = await checkSkillBlocks({
           root: process.cwd(),
           packageDir: validateContext.packageRoot,
           library,
