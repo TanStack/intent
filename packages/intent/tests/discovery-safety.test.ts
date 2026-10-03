@@ -309,8 +309,6 @@ describe('discovered metadata containment', () => {
   )
 
   it('accepts a skill when lstat reports no device id', () => {
-    // Node 23 and 24.0 through 24.1 return dev 0 from lstat on Windows while
-    // fstat on the descriptor returns the real volume id.
     const file = join(packageRoot(), 'skills', 'core', 'SKILL.md')
     write(file, skillFile('Internal'))
     const lstat = nodeReadFs.lstatSync
@@ -335,8 +333,7 @@ describe('discovered metadata containment', () => {
         const stats = lstat(...args) as Stats
         if (args[0] === file) {
           stats.dev = 0
-          // Real inodes exceed 2^53 on Windows, so adding one would be lost.
-          stats.ino = stats.ino === 1 ? 2 : 1
+          stats.ino = 0
         }
         return stats
       },

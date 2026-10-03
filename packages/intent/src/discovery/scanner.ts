@@ -310,9 +310,7 @@ function readSkillEntry(
     const opened = readFs.fstatSync(fd)
     // Compare the opened file with the checked entry before reading any bytes.
     // The descriptor then survives pathname replacement, including parent swaps.
-    // Node 23 and 24.0 through 24.1 report `dev: 0` from lstat on Windows
-    // while fstat reports the real volume id, so a zero device id carries no
-    // identity and only the inode is compared.
+    // Node 23 and 24.0 to 24.1 report dev 0 from lstat on Windows.
     const sameDevice =
       opened.dev === expected.dev || opened.dev === 0 || expected.dev === 0
     if (!opened.isFile() || !sameDevice || opened.ino !== expected.ino)
