@@ -1,5 +1,11 @@
 # @tanstack/intent
 
+## 0.5.2
+
+### Patch Changes
+
+- [#305](https://github.com/TanStack/intent/pull/305) [`8948aac`](https://github.com/TanStack/intent/commit/8948aac8b24b17948978201bb8d7fa50007f79a0) - Discover skills on Windows under Node 23 and Node 24.0 through 24.1. Those versions report a zero device id from `lstat` while the opened descriptor reports the real one, so the skill identity check rejected every skill and `intent list` and the session catalog reported none even though `intent load` worked. A zero device id now carries no identity and only the inode is compared.
+
 ## 0.5.1
 
 ### Patch Changes
