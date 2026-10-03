@@ -20,6 +20,7 @@ import { buildIntentSkillsBlock } from '../src/commands/install/guidance.js'
 import { formatRuntimeSkillLookupHint } from '../src/skills/paths.js'
 import { nodeReadFs } from '../src/shared/utils.js'
 import { formatIntentCommand } from '../src/shared/command-runner.js'
+import type { Stats } from 'node:fs'
 
 const packageName = '@scope/library'
 let root: string
@@ -306,6 +307,41 @@ describe('discovered metadata containment', () => {
       expect(JSON.stringify(result)).not.toContain('EXTERNAL_METADATA_SENTINEL')
     },
   )
+
+  it('accepts a skill when lstat reports no device id', () => {
+    const file = join(packageRoot(), 'skills', 'core', 'SKILL.md')
+    write(file, skillFile('Internal'))
+    const lstat = nodeReadFs.lstatSync
+    vi.spyOn(nodeReadFs, 'lstatSync').mockImplementation(
+      (...args: Parameters<typeof lstat>) => {
+        const stats = lstat(...args) as Stats
+        if (args[0] === file) stats.dev = 0
+        return stats
+      },
+    )
+    expect(listIntentSkills({ cwd: root }).skills[0]?.description).toBe(
+      'Internal',
+    )
+  })
+
+  it('still rejects a different inode when lstat reports no device id', () => {
+    const file = join(packageRoot(), 'skills', 'core', 'SKILL.md')
+    write(file, skillFile('Internal'))
+    const lstat = nodeReadFs.lstatSync
+    vi.spyOn(nodeReadFs, 'lstatSync').mockImplementation(
+      (...args: Parameters<typeof lstat>) => {
+        const stats = lstat(...args) as Stats
+        if (args[0] === file) {
+          stats.dev = 0
+          stats.ino = 0
+        }
+        return stats
+      },
+    )
+    const read = vi.spyOn(nodeReadFs, 'readSync')
+    expect(listIntentSkills({ cwd: root }).skills).toEqual([])
+    expect(read).not.toHaveBeenCalled()
+  })
 
   it('closes the descriptor when reading frontmatter fails', () => {
     write(
