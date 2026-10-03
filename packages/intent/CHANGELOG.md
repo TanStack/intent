@@ -1,5 +1,11 @@
 # @tanstack/intent
 
+## 0.5.3
+
+### Patch Changes
+
+- [#308](https://github.com/TanStack/intent/pull/308) [`9e4a28d`](https://github.com/TanStack/intent/commit/9e4a28dcbbf58c3673f5cabe41a893907d94a811) - Check code examples in repositories that use TypeScript 7.0. `intent validate`, `intent repair`, and maintainer review summaries crashed there because the TypeScript 7 `typescript` package exports no compiler API. Intent now checks examples through the native compiler API that TypeScript 7 publishes, or through `@typescript/typescript6` when it is installed beside TypeScript 7. If neither API can run, Intent reports that the examples were not typechecked and runs the other checks. TypeScript 7.1 is not supported at this time.
+
 ## 0.5.2
 
 ### Patch Changes
