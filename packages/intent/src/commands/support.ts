@@ -4,6 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { fail } from '../shared/cli-error.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
+import {
+  findWorkspacePackages,
+  findWorkspaceRoot,
+} from '../setup/workspace-patterns.js'
 import type { IntentCoreOptions } from '../core/index.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type {
@@ -192,8 +196,6 @@ export async function resolveStaleTargets(
     }
   }
 
-  const { findWorkspaceRoot, findWorkspacePackages } =
-    await import('../setup/workspace-patterns.js')
   const workspaceRoot = findWorkspaceRoot(resolvedRoot)
   if (workspaceRoot) {
     const packageDirs = findWorkspacePackages(workspaceRoot)

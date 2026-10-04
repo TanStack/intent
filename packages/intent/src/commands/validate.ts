@@ -6,7 +6,9 @@ import {
   statSync,
 } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
+import { parseDocument, parse as parseYaml } from 'yaml'
 import { fail, isCliFailure } from '../shared/cli-error.js'
+import { readScalarField } from '../shared/utils.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
@@ -280,11 +282,7 @@ function applyFrontmatterFixes(plans: Array<FrontmatterFixPlan>): void {
   )
 }
 
-async function applySetVersion(
-  plans: Array<SetVersionPlan>,
-  version: string,
-): Promise<void> {
-  const { parseDocument } = await import('yaml')
+function applySetVersion(plans: Array<SetVersionPlan>, version: string): void {
   const root = repairRoot()
   const changes: Array<FileChange> = []
 
@@ -433,10 +431,6 @@ async function runValidateCommandInternal(
   additionalDirs: Array<string> = [],
   exampleSummaries?: Map<string, string>,
 ): Promise<void> {
-  const [{ parse: parseYaml }, { readScalarField }] = await Promise.all([
-    import('yaml'),
-    import('../shared/utils.js'),
-  ])
   const { findSkillFiles } = createIntentFsCache()
   // Explicit directories are validated in one run, so a caller with several
   // skills roots gets every error in one report and one summary.
@@ -845,7 +839,7 @@ async function runValidateCommandInternal(
       console.log(`✅ Fixed ${fixPlans.length} skill files`)
     }
     if (willSetVersion) {
-      await applySetVersion(setVersionPlans, options.setVersion!)
+      applySetVersion(setVersionPlans, options.setVersion!)
       console.log(
         `✅ Set library_version to "${options.setVersion}" on ${setVersionPlans.length} skill files`,
       )
