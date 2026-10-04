@@ -448,8 +448,6 @@ export async function main(
     }
 
     if (cli.options.version) {
-      // Read on demand so no other invocation pays for it. `../package.json`
-      // is the package root from both src/cli.ts and dist/cli.mjs.
       console.log(
         JSON.parse(
           readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
