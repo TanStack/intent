@@ -242,13 +242,24 @@ export function applySourcePolicy(
   }
 
   if (config.mode === 'explicit') {
-    for (const matcher of sourcePolicy.matchers) {
-      const notDiscovered = !scanResult.packages.some((pkg) =>
-        matcher.matchesPackage(pkg.name, pkg.kind),
+    for (const { source, matchesPackage } of sourcePolicy.matchers) {
+      // The scanner keeps one package per name, so an exact selector has no
+      // second match to check.
+      const pkg = scanResult.packages.find((candidate) =>
+        matchesPackage(candidate.name, candidate.kind),
       )
-      if (notDiscovered) {
+      if (!pkg) {
         emit(
-          `"${matcher.source.raw}" is declared in intent.skills but was not discovered.`,
+          `"${source.raw}" is declared in intent.skills but was not discovered.`,
+        )
+      } else if (
+        'skill' in source &&
+        source.skill !== undefined &&
+        !pkg.skills.some((skill) => skill.name === source.skill) &&
+        !isSkillExcluded(pkg.name, source.skill, excludeMatchers)
+      ) {
+        emit(
+          `"${source.raw}" is declared in intent.skills but ${pkg.name} has no skill named "${source.skill}".`,
         )
       }
     }
