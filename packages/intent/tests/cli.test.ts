@@ -261,6 +261,17 @@ describe('cli commands', () => {
     expect(exitCode).toBe(0)
     expect(output).toContain('Usage:')
     expect(output).toContain('$ intent <command> [options]')
+    expect(output).toContain('-v, --version')
+  })
+
+  it('prints the package version for --version and -v', async () => {
+    const { version } = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+
+    for (const flag of ['--version', '-v']) {
+      logSpy.mockClear()
+      expect(await main([flag])).toBe(0)
+      expect(logSpy.mock.calls).toEqual([[version]])
+    }
   })
 
   it('prints top-level help for unknown commands', async () => {

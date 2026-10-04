@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { realpathSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { cac } from 'cac'
 import { fail, isCliFailure } from './shared/cli-error.js'
@@ -404,6 +404,7 @@ function createCli(
     })
 
   cli.help()
+  cli.option('-v, --version', 'Display version number')
 
   return cli
 }
@@ -443,6 +444,17 @@ export async function main(
     cli.parse(['intent', 'intent', ...argv], { run: false })
 
     if (cli.options.help) {
+      return 0
+    }
+
+    if (cli.options.version) {
+      // Read on demand so no other invocation pays for it. `../package.json`
+      // is the package root from both src/cli.ts and dist/cli.mjs.
+      console.log(
+        JSON.parse(
+          readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+        ).version,
+      )
       return 0
     }
 
