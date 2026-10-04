@@ -136,6 +136,7 @@ export interface IntentArtifactSkill {
   packages: Array<string>
   sources: Array<string>
   covers: Array<string>
+  references?: unknown
 }
 
 export interface IntentArtifactCoverageIgnore {

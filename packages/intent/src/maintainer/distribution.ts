@@ -139,9 +139,7 @@ export function planDistributionChoice(
       throw new Error(`Repository distribution needs: ${missing.join('; ')}.`)
     const entries = skillEntries(project, tree)
     for (const selected of skills) {
-      const entry = entries.find(
-        (skill) => (skill.slug ?? skill.name) === selected,
-      )
+      const entry = distributionEntry(entries, selected)
       if (!entry || ['planned', 'retired'].includes(String(entry.status)))
         throw new Error(
           `Distribution skill is not an implemented tree entry: ${selected}`,
@@ -158,6 +156,22 @@ export function planDistributionChoice(
     source: tree.source,
     content: tree.document.toString(),
   }
+}
+
+function distributionEntry(
+  entries: ReadonlyArray<SkillEntry>,
+  name: string,
+): SkillEntry | undefined {
+  const matches = entries.filter((skill) => (skill.slug ?? skill.name) === name)
+  if (matches.length > 1)
+    throw new Error(
+      `Distribution skill ${name} is registered in more than one package: ${matches
+        .map((skill) => skill.package ?? '.')
+        .join(
+          ', ',
+        )}. Repository distribution installs skills by name, so the name must belong to one package.`,
+    )
+  return matches[0]
 }
 
 function jsonChange(
@@ -212,9 +226,7 @@ export function planDistribution(
   const selected = config.mode === 'repo' ? config.skills! : []
   const exported: Array<{ name: string; path: string }> = []
   for (const selectedName of selected) {
-    const entry = entries.find(
-      (skill) => (skill.slug ?? skill.name) === selectedName,
-    )
+    const entry = distributionEntry(entries, selectedName)
     if (!entry || ['planned', 'retired'].includes(String(entry.status)))
       throw new Error(`Distribution skill is not implemented: ${selectedName}`)
     const path = skillPath(project, entry)
@@ -234,7 +246,11 @@ export function planDistribution(
       `${selectedName} requires`,
     )) {
       if (
-        entries.some((skill) => (skill.slug ?? skill.name) === dependency) &&
+        entries.some(
+          (skill) =>
+            skill.package === entry.package &&
+            (skill.slug ?? skill.name) === dependency,
+        ) &&
         !selected.includes(dependency)
       )
         throw new Error(

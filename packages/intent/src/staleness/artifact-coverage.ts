@@ -97,6 +97,7 @@ function parseSkills(
       packages: [...new Set(packages)].sort((a, b) => a.localeCompare(b)),
       sources: stringArray(skill.sources),
       covers: stringArray(skill.covers),
+      ...('references' in skill ? { references: skill.references } : {}),
     })
   }
 

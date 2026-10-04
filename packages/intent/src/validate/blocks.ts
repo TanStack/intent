@@ -33,6 +33,7 @@ interface CodeBlock {
   // Virtual file extension: a plain ts block must not parse as JSX, or a
   // generic arrow like <T>(x: T) => x reads as an unclosed element.
   extension: 'ts' | 'tsx' | 'js' | 'jsx'
+  expectError?: Array<string>
 }
 
 // Scan whole fences before selecting languages: a Markdown example can contain
@@ -43,6 +44,7 @@ function codeFences(content: string) {
     start: number
     end: number
     language: string
+    properties: Array<string>
     code: string
   }> = []
   for (let start = 0; start < lines.length; start++) {
@@ -61,10 +63,12 @@ function codeFences(content: string) {
         break
     }
     const dedent = new RegExp(`^ {0,${opening[1]!.length}}`)
+    const [language, ...properties] = opening[3]!.trim().split(/\s+/)
     fences.push({
       start,
       end,
-      language: opening[3]!.trim().split(/\s+/)[0]!.toLowerCase(),
+      language: language!.toLowerCase(),
+      properties,
       code: lines
         .slice(start + 1, end)
         .map((line) => line.replace(dedent, ''))
@@ -245,6 +249,12 @@ function extractCodeBlocks(file: string, content: string): Array<CodeBlock> {
   for (const fence of codeFences(content)) {
     const language = fence.language
     if (!checkedLanguages.has(language)) continue
+    if (fence.properties.includes('no-check')) continue
+    const expectError = fence.properties
+      .map((property) =>
+        /^expect-error(?:="?(TS\d+(?:,TS\d+)*)"?)?$/.exec(property),
+      )
+      .find(Boolean)
     const line = fence.start + 2
     const extension =
       language === 'tsx' || language === 'jsx'
@@ -252,7 +262,13 @@ function extractCodeBlocks(file: string, content: string): Array<CodeBlock> {
         : language.startsWith('j')
           ? 'js'
           : 'ts'
-    blocks.push({ file, line, code: fence.code, extension })
+    blocks.push({
+      file,
+      line,
+      code: fence.code,
+      extension,
+      ...(expectError ? { expectError: expectError[1]?.split(',') ?? [] } : {}),
+    })
   }
   return blocks
 }
@@ -432,14 +448,10 @@ async function splitExamples(
   return { content: lines.join(''), suggestions }
 }
 
-function checkSkillLinks(
-  root: string,
-  packageDir: string,
-  file: string,
+export function skillLinks(
   content: string,
-): Array<SkillBlockFinding> {
-  const findings: Array<SkillBlockFinding> = []
-  const absolute = resolve(root, file)
+): Array<{ target: string; path: string; line: number }> {
+  const links: Array<{ target: string; path: string; line: number }> = []
   // Blank out fenced examples, keeping newlines so line numbers still match.
   const lines = content.split(/\r?\n/)
   for (const fence of codeFences(content))
@@ -455,12 +467,30 @@ function checkSkillLinks(
     if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) continue
     const path = target.replace(/[#?].*$/, '')
     if (!path) continue
+    links.push({
+      target,
+      path,
+      line: prose.slice(0, match.index).split('\n').length,
+    })
+  }
+  return links
+}
+
+function checkSkillLinks(
+  root: string,
+  packageDir: string,
+  file: string,
+  content: string,
+): Array<SkillBlockFinding> {
+  const findings: Array<SkillBlockFinding> = []
+  const absolute = resolve(root, file)
+  for (const { target, path, line } of skillLinks(content)) {
     const resolved = resolve(dirname(absolute), path)
     const outside = relative(packageDir, resolved).startsWith('..')
     if (outside || !existsSync(resolved))
       findings.push({
         file,
-        line: prose.slice(0, match.index).split('\n').length,
+        line,
         message: outside
           ? `Link target is outside the package: ${target}`
           : `Link target not found: ${target}`,
@@ -604,21 +634,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+export interface SkillBlockCache {
+  workspacePaths?: Record<string, Array<string>>
+  sourceFiles?: Map<string, TS.SourceFile>
+}
+
 export async function checkSkillBlocks(
   options: {
     root: string
     packageDir: string
     library: string
     skills: Array<{ file: string; content: string }>
+    references?: Array<{ file: string; content: string }>
+    cache?: SkillBlockCache
   },
   ts?: typeof TS | null,
 ): Promise<SkillBlockCheck> {
-  const { root, packageDir, library } = options
+  const { root, packageDir, library, cache = {} } = options
   const findings = options.skills.flatMap((skill) =>
     checkSkillLinks(root, packageDir, skill.file, skill.content),
   )
-  const blocks = options.skills.flatMap((skill) =>
-    extractCodeBlocks(skill.file, skill.content),
+  const blocks = [...options.skills, ...(options.references ?? [])].flatMap(
+    (skill) => extractCodeBlocks(skill.file, skill.content),
   )
   const result = (skipped?: string): SkillBlockCheck => ({
     blocks: blocks.length,
@@ -654,7 +691,7 @@ export async function checkSkillBlocks(
   const compilerOptions = {
     ...exampleCompilerOptions,
     paths: {
-      ...workspacePaths(root),
+      ...(cache.workspacePaths ??= workspacePaths(root)),
       // A skill documenting another package (metadata.library) resolves that
       // package through the workspace or node_modules, not this package's entry.
       ...(ownsLibrary
@@ -702,11 +739,15 @@ export async function checkSkillBlocks(
   const fileExists = host.fileExists.bind(host)
   host.fileExists = (path) => virtual.has(path) || fileExists(path)
   host.readFile = (path) => virtual.get(path)?.code ?? readFile(path)
+  const sourceFiles = (cache.sourceFiles ??= new Map())
   host.getSourceFile = (path, languageVersion) => {
-    const code = virtual.get(path)?.code ?? readFile(path)
-    return code === undefined
-      ? undefined
-      : ts.createSourceFile(path, code, languageVersion, true)
+    const block = virtual.get(path)
+    if (!block && sourceFiles.has(path)) return sourceFiles.get(path)
+    const code = block?.code ?? readFile(path)
+    if (code === undefined) return undefined
+    const source = ts.createSourceFile(path, code, languageVersion, true)
+    if (!block) sourceFiles.set(path, source)
+    return source
   }
   const program = ts.createProgram([...virtual.keys()], parsedOptions, host)
   const checker = program.getTypeChecker()
@@ -714,6 +755,7 @@ export async function checkSkillBlocks(
   for (const [path, block] of virtual) {
     const source = program.getSourceFile(path)
     if (!source) continue
+    const found: Array<SkillBlockFinding> = []
     const at = (position: number) =>
       block.line + source.getLineAndCharacterOfPosition(position).line
     for (const diagnostic of [
@@ -727,7 +769,7 @@ export async function checkSkillBlocks(
         ts.flattenDiagnosticMessageText(diagnostic.messageText, ' '),
         fromLibrary,
       )
-      if (finding) findings.push(finding)
+      if (finding) found.push(finding)
     }
     for (const statement of source.statements) {
       if (
@@ -746,7 +788,7 @@ export async function checkSkillBlocks(
           ?.getJsDocTags(checker)
           .find((entry) => entry.name === 'deprecated')
         if (tag)
-          findings.push(
+          found.push(
             deprecationFinding(
               block,
               at(element.getStart(source)),
@@ -756,6 +798,7 @@ export async function checkSkillBlocks(
           )
       }
     }
+    findings.push(...expectedFindings(block, found))
   }
   return result()
 }
@@ -777,6 +820,7 @@ function checkNativeBlocks(
     for (const [path, block] of virtual) {
       const source = await program.getSourceFile(path)
       if (!source) continue
+      const found: Array<SkillBlockFinding> = []
       // The same line breaks as getLineAndCharacterOfPosition in TypeScript 6.
       const lineStarts = native.scanner.computeLineStarts(block.code)
       const at = (position: number) => {
@@ -801,7 +845,7 @@ function checkNativeBlocks(
           nativeMessage(diagnostic),
           fromLibrary,
         )
-        if (finding) findings.push(finding)
+        if (finding) found.push(finding)
       }
       for (const statement of source.statements) {
         if (
@@ -822,7 +866,7 @@ function checkNativeBlocks(
               )
             : undefined
           if (tag)
-            findings.push(
+            found.push(
               deprecationFinding(
                 block,
                 // Skips leading trivia, like getStart in TypeScript 6.
@@ -833,6 +877,7 @@ function checkNativeBlocks(
             )
         }
       }
+      findings.push(...expectedFindings(block, found))
     }
     return findings
   })
@@ -858,6 +903,36 @@ function diagnosticFinding(
     message: `TS${code}: ${message}`,
     severity: 'error',
   }
+}
+
+function expectedFindings(
+  block: CodeBlock,
+  found: Array<SkillBlockFinding>,
+): Array<SkillBlockFinding> {
+  if (!block.expectError) return found
+  const reported = [
+    ...new Set(
+      found
+        .filter((finding) => finding.severity === 'error')
+        .map((finding) => finding.message.split(':')[0]!),
+    ),
+  ]
+  const expected = block.expectError
+  if (reported.length && expected.every((code) => reported.includes(code)))
+    return []
+  const outcome = reported.length
+    ? `the example reported ${reported.join(', ')}.`
+    : 'the example compiles.'
+  return [
+    {
+      file: block.file,
+      line: block.line - 1,
+      message: expected.length
+        ? `Expected ${expected.join(', ')}, but ${outcome}`
+        : `Expected an error, but ${outcome} Remove expect-error or correct the example.`,
+      severity: 'error',
+    },
+  ]
 }
 
 function deprecationFinding(
@@ -917,6 +992,7 @@ export async function describeSkillExamples(
     groups.set(key, group)
   }
   const summaries = new Map<string, string>()
+  const cache: SkillBlockCache = {}
   for (const group of groups.values()) {
     const skills = group.files.map((file) => ({
       file,
@@ -927,6 +1003,7 @@ export async function describeSkillExamples(
       packageDir: group.packageDir,
       library: group.library,
       skills,
+      cache,
     })
     for (const [file, summary] of summarizeSkillExamples(result, skills))
       summaries.set(file, summary)

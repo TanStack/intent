@@ -75,6 +75,7 @@ export async function runStaleCommand(
       for (const skill of stale) {
         console.log(`  ⚠ ${skill.name}: ${skill.reasons.join(', ')}`)
       }
+      const printed = new Set<string>()
       for (const signal of signals) {
         const subject =
           signal.packageName ??
@@ -83,7 +84,10 @@ export async function runStaleCommand(
           signal.artifactPath ??
           signal.subject ??
           report.library
-        console.log(`  ⚠ ${subject}: ${signal.reasons.join(', ')}`)
+        const line = `  ⚠ ${subject}: ${signal.reasons.join(', ')}`
+        if (printed.has(line)) continue
+        printed.add(line)
+        console.log(line)
       }
     }
 

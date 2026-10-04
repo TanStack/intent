@@ -117,6 +117,8 @@ Correct:
 Source: [doc page or source file:line]
 ````
 
+When the wrong version is TypeScript or JavaScript that fails to compile, open its fence with `expect-error`, or `expect-error=TS2322` to require a specific code, so `intent validate` reports the pair if the wrong version starts to compile. Open a fragment that is not a complete source file with `no-check`.
+
 Priority levels:
 
 - **CRITICAL** — Breaks in production. Security risk or data loss.

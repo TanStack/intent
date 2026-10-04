@@ -94,11 +94,54 @@ TypeScript and JavaScript fences (`ts`, `tsx`, `typescript`, `js`, `jsx`, and `j
 
 The checker enables strict null checks because some library APIs require them, while tolerating omitted names, shorthand values, and implicit parameter types. Each code fence represents one example. Separate before/after implementations into distinct fences; use `diff` or `text` for deliberately invalid code or fragments that cannot be checked as a source file. The checker does not infer those distinctions from prose or comments.
 
+A property after the fence language changes how one example is checked:
+
+| Fence | Behavior |
+| --- | --- |
+| ` ```ts no-check ` | The example is not typechecked. Use it for a fragment that is not a complete source file, such as a single class member. |
+| ` ```ts expect-error ` | The example must report at least one error. Validation fails when it compiles, so a `Wrong:` example that a library change made valid is reported. |
+| ` ```ts expect-error=TS2322 ` | The example must report that error code. List several codes with commas (`expect-error=TS2322,TS2345`); quotes around the value are optional. |
+
+An `expect-error` example reports nothing else: its errors and deprecation warnings are the expected result. Errors that Intent tolerates in partial examples, such as an undeclared name, do not count as the expected error. A syntax error satisfies the plain `expect-error`, so name the code when the example must fail for a specific reason.
+
 Module augmentations and global declarations still share the package compiler context. Two examples that pass separately can conflict when checked together. Verify those examples in isolated fixtures before treating the combined diagnostics as defects in the guidance; separate fences alone do not isolate their augmentations.
 
 TypeScript 5.0 or newer must be available in the repository for code checking. If it or the library type entry is unavailable, Intent reports why those checks were skipped; this is not a successful typecheck. Prose-only skills do not load TypeScript. With TypeScript 7.0, Intent checks examples through the compiler API that TypeScript 7 publishes as unstable; Node.js 24 or newer is supported. When `@typescript/typescript6` is installed beside TypeScript 7, Intent uses that package instead. If neither API can run, Intent reports that the checks were skipped. TypeScript 7.1 is not supported at this time.
 
 Relative Markdown links outside fenced examples must point to an existing file or directory. The target must also be inside the package that owns the skill. Only the package is installed in a consumer project, so a link to a file elsewhere in the repository fails with `Link target is outside the package: <target>` even when the file exists. The boundary is the package root directory; the `files` list in `package.json` is not consulted. External URLs and anchors are not checked. Link checks still run when TypeScript is unavailable. Repeated validations read current source files and link targets.
+
+### Reference files
+
+Every `.md` file under a skill's `references/` directory, at any depth, is checked with its skill. No planning artifacts are required.
+
+- The file is plain Markdown: it does not begin with YAML frontmatter
+- The body of the owning `SKILL.md` links to the file with a direct relative Markdown link outside fenced examples, such as `[retry behavior](references/retries.md)`. A path in backticks or a link from another reference file does not count, because an agent finds a reference only through that link. A reference file can also link to another reference file
+- TypeScript and JavaScript fences are checked with the skill's fences, under the rules in [Code examples and links](#code-examples-and-links). Errors name the reference file and line. Relative links inside a reference file are not checked
+
+A `skill_tree.yaml` entry lists the skill's reference files in a `references` key, as paths relative to the skill directory:
+
+```yaml
+skills:
+  - name: React Table State
+    slug: table-state
+    package: packages/react-table
+    path: skills/table-state/SKILL.md
+    references:
+      - references/reactivity.md
+```
+
+Intent reads the tree from `<dir>/_artifacts` and, in a monorepo, from `_artifacts` at the workspace root. It matches an entry to a skill by the resolved `path`, so two packages can use the same slug. When a skill has a tree entry, the entry must agree with the files:
+
+- An entry for a skill that has reference files has a `references` key. The error shows the YAML lines to add
+- `references`, when present, is a list of strings
+
+- Each path has the form `references/<name>.md`, stays inside the skill directory (no absolute path and no `..` segment), and is listed once
+- Each listed file exists
+- Each `.md` file under `references/` is listed
+
+A skill without reference files needs no `references` key. A skill without a tree entry, or a repository without planning artifacts, gets only the file checks above.
+
+Upgrade impact: a repository that already has reference files fails validation when a reference file is not linked directly from its `SKILL.md`, begins with frontmatter, or contains a code example that does not typecheck, or when a matching `skill_tree.yaml` entry does not list the skill's reference files.
 
 ### Artifacts
 
