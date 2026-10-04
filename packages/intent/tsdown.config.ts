@@ -9,6 +9,10 @@ export default defineConfig({
   format: 'esm',
   platform: 'node',
   dts: { entry: ['src/index.ts', 'src/core.ts'] },
+  minify: {
+    compress: { keepNames: { function: true, class: true } },
+    mangle: { keepNames: true },
+  },
   onSuccess(config) {
     const packageDir = fileURLToPath(new URL('.', import.meta.url))
     const root = join(packageDir, '../..')
