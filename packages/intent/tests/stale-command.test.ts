@@ -60,6 +60,38 @@ describe('runStaleCommand', () => {
     expect(output).not.toContain('All skills up-to-date')
   })
 
+  it('prints a review signal raised by two artifact files once in non-json output', async () => {
+    const reason =
+      'artifact library.version (1.2.0) differs from SKILL.md library_version (1.0.0)'
+    await runStaleCommand(undefined, {}, () =>
+      Promise.resolve({
+        reports: [
+          {
+            library: '@tanstack/router',
+            currentVersion: '1.1.0',
+            skillVersion: '1.0.0',
+            versionDrift: 'minor',
+            skills: [],
+            signals: ['domain_map.yaml', 'skill_tree.yaml'].map((file) => ({
+              type: 'artifact-library-version-drift',
+              library: '@tanstack/router',
+              subject: 'routing',
+              reasons: [reason],
+              needsReview: true,
+              artifactPath: `_artifacts/${file}`,
+              skill: 'routing',
+            })),
+          },
+        ],
+      }),
+    )
+
+    const lines = logSpy.mock.calls.map((call) => String(call[0]))
+    expect(lines.filter((line) => line.includes(reason))).toEqual([
+      `  ⚠ routing: ${reason}`,
+    ])
+  })
+
   it('prints workflow update advisories in non-json output', async () => {
     await runStaleCommand(undefined, {}, () =>
       Promise.resolve({
