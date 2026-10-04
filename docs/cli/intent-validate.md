@@ -100,6 +100,39 @@ TypeScript 5.0 or newer must be available in the repository for code checking. I
 
 Relative Markdown links outside fenced examples must point to an existing file or directory. External URLs and anchors are not checked. Link checks still run when TypeScript is unavailable. Repeated validations read current source files and link targets.
 
+### Reference files
+
+Every `.md` file under a skill's `references/` directory, at any depth, is checked with its skill. No planning artifacts are required.
+
+- The file is plain Markdown: it does not begin with YAML frontmatter
+- The body of the owning `SKILL.md` links to the file with a direct relative Markdown link outside fenced examples, such as `[retry behavior](references/retries.md)`. A path in backticks or a link from another reference file does not count, because an agent finds a reference only through that link. A reference file can also link to another reference file
+- TypeScript and JavaScript fences are checked with the skill's fences, under the rules in [Code examples and links](#code-examples-and-links). Errors name the reference file and line. Relative links inside a reference file are not checked
+
+A `skill_tree.yaml` entry lists the skill's reference files in a `references` key, as paths relative to the skill directory:
+
+```yaml
+skills:
+  - name: React Table State
+    slug: table-state
+    package: packages/react-table
+    path: skills/table-state/SKILL.md
+    references:
+      - references/reactivity.md
+```
+
+Intent reads the tree from `<dir>/_artifacts` and, in a monorepo, from `_artifacts` at the workspace root. It matches an entry to a skill by the resolved `path`, so two packages can use the same slug. When a skill has a tree entry, the entry must agree with the files:
+
+- An entry for a skill that has reference files has a `references` key. The error shows the YAML lines to add
+- `references`, when present, is a list of strings
+
+- Each path has the form `references/<name>.md`, stays inside the skill directory (no absolute path and no `..` segment), and is listed once
+- Each listed file exists
+- Each `.md` file under `references/` is listed
+
+A skill without reference files needs no `references` key. A skill without a tree entry, or a repository without planning artifacts, gets only the file checks above.
+
+Upgrade impact: a repository that already has reference files fails validation when a reference file is not linked directly from its `SKILL.md`, begins with frontmatter, or contains a code example that does not typecheck, or when a matching `skill_tree.yaml` entry does not list the skill's reference files.
+
 ### Artifacts
 
 When `<dir>/_artifacts` exists, Intent also checks:

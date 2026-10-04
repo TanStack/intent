@@ -1,10 +1,21 @@
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+} from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fail, isCliFailure } from '../shared/cli-error.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
-import { checkSkillBlocks, summarizeSkillExamples } from '../validate/blocks.js'
+import {
+  checkSkillBlocks,
+  skillLinks,
+  summarizeSkillExamples,
+} from '../validate/blocks.js'
+import { readIntentArtifacts } from '../staleness/artifact-coverage.js'
 import { writeChanges } from '../maintainer/files.js'
 import { repositoryWritePath } from '../shared/write-path.js'
 import {
@@ -14,6 +25,7 @@ import {
 import { printWarnings } from './support.js'
 import type { FileChange } from '../maintainer/files.js'
 import type { ProjectContext } from '../core/project-context.js'
+import type { IntentArtifactSkill } from '../shared/types.js'
 
 interface ValidationError {
   file: string
@@ -181,6 +193,47 @@ function collectPackagingWarnings(
   }
 
   return warnings
+}
+
+function findReferenceFiles(skillDir: string): Array<string> {
+  const referencesDir = join(skillDir, 'references')
+  if (!statSync(referencesDir, { throwIfNoEntry: false })?.isDirectory())
+    return []
+  return readdirSync(referencesDir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+    .map((entry) =>
+      relative(skillDir, join(entry.parentPath, entry.name)).replaceAll(
+        '\\',
+        '/',
+      ),
+    )
+    .sort()
+}
+
+function readTreeEntries(
+  context: ProjectContext,
+  skillsDir: string,
+  artifacts: Map<string, ReturnType<typeof readIntentArtifacts>>,
+): Map<string, IntentArtifactSkill> {
+  const entries = new Map<string, IntentArtifactSkill>()
+  for (const [artifactRoot, root] of [
+    [skillsDir, context.packageRoot ?? context.cwd],
+    [context.workspaceRoot, context.workspaceRoot],
+  ]) {
+    if (!artifactRoot || !root) continue
+    if (!artifacts.has(artifactRoot))
+      artifacts.set(artifactRoot, readIntentArtifacts(artifactRoot))
+    for (const entry of artifacts.get(artifactRoot)?.skills ?? []) {
+      if (entry.artifactKind !== 'skill-tree' || !entry.path) continue
+      entries.set(
+        entry.package && !entry.path.startsWith(`${entry.package}/`)
+          ? resolve(root, entry.package, entry.path)
+          : resolve(root, entry.path),
+        entry,
+      )
+    }
+  }
+  return entries
 }
 
 function formatWarning({ file, message }: ValidationWarning): string {
@@ -402,6 +455,7 @@ async function runValidateCommandInternal(
   const setVersionPlans: Array<SetVersionPlan> = []
   let validatedCount = 0
   const validatedFiles = new Set<string>()
+  const artifacts = new Map<string, ReturnType<typeof readIntentArtifacts>>()
 
   if (skillsDirs.length === 0) {
     console.log('No skills/ directory found — skipping validation.')
@@ -423,7 +477,9 @@ async function runValidateCommandInternal(
       file: string
       content: string
       library: string | undefined
+      references: Array<{ file: string; content: string }>
     }> = []
+    const treeEntries = readTreeEntries(validateContext, skillsDir, artifacts)
     for (const filePath of skillFiles) {
       const rel = relative(process.cwd(), filePath)
       const content = readFileSync(filePath, 'utf8')
@@ -536,10 +592,99 @@ async function runValidateCommandInternal(
         ...collectAgentSkillSpecWarnings({ fm, rel }).map(formatWarning),
       )
 
+      const skillDir = dirname(filePath)
+      const skillName = basename(skillDir)
+      const linked = new Set(
+        skillLinks(match[2]!).map((link) => resolve(skillDir, link.path)),
+      )
+      const referenceFiles = findReferenceFiles(skillDir)
+      const references = referenceFiles.map((reference) => {
+        const referencePath = join(skillDir, reference)
+        const file = relative(process.cwd(), referencePath)
+        const referenceContent = readFileSync(referencePath, 'utf8')
+        if (
+          /^---\r?\n(?:[\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/.test(
+            referenceContent,
+          )
+        )
+          errors.push({
+            file,
+            message:
+              'Reference files must be plain Markdown without YAML frontmatter',
+          })
+        if (!linked.has(referencePath))
+          errors.push({
+            file,
+            message: `Not linked from SKILL.md — add a direct relative Markdown link such as [${basename(reference, '.md')}](${reference}) so an agent can find it`,
+          })
+        return { file, content: referenceContent }
+      })
+
+      const declared = treeEntries.get(filePath)?.references
+      if (declared === undefined) {
+        if (treeEntries.has(filePath) && referenceFiles.length)
+          errors.push({
+            file: rel,
+            message: `The skill_tree.yaml entry for skill "${skillName}" must list its reference files. Add to the entry:\n${[
+              'references:',
+              ...referenceFiles.map((reference) => `  - ${reference}`),
+            ]
+              .map((line) => `      ${line}`)
+              .join('\n')}`,
+          })
+      } else if (
+        !Array.isArray(declared) ||
+        declared.some((reference) => typeof reference !== 'string')
+      ) {
+        errors.push({
+          file: rel,
+          message: `The "references" value of the skill_tree.yaml entry for skill "${skillName}" must be a list of reference file paths`,
+        })
+      } else {
+        const seen = new Set<string>()
+        for (const reference of declared as Array<string>) {
+          if (seen.has(reference)) {
+            errors.push({
+              file: rel,
+              message: `Reference "${reference}" is declared more than once in skill_tree.yaml`,
+            })
+            continue
+          }
+          seen.add(reference)
+          if (
+            !/^references\/.+\.md$/.test(reference) ||
+            reference.includes('\\') ||
+            reference
+              .split('/')
+              .some((part) => part === '' || part === '.' || part === '..')
+          ) {
+            errors.push({
+              file: rel,
+              message: `Declared reference "${reference}" must be a references/<name>.md path inside the skill directory`,
+            })
+          } else if (!existsSync(join(skillDir, reference))) {
+            errors.push({
+              file: relative(process.cwd(), join(skillDir, reference)),
+              message:
+                'Declared in skill_tree.yaml but the file does not exist',
+            })
+          }
+        }
+        for (const reference of referenceFiles) {
+          if (!seen.has(reference))
+            errors.push({
+              file: relative(process.cwd(), join(skillDir, reference)),
+              message:
+                'Not declared in the "references" list of its skill_tree.yaml entry',
+            })
+        }
+      }
+
       checkedSkills.push({
         file: rel,
         content,
         library: readScalarField(fm, 'library'),
+        references,
       })
 
       const lineCount = content.split(/\r?\n/).length
@@ -574,6 +719,7 @@ async function runValidateCommandInternal(
           packageDir: validateContext.packageRoot,
           library,
           skills,
+          references: skills.flatMap((skill) => skill.references),
         })
         if (exampleSummaries)
           for (const [file, summary] of summarizeSkillExamples(result, skills))

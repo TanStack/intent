@@ -432,13 +432,10 @@ async function splitExamples(
   return { content: lines.join(''), suggestions }
 }
 
-function checkSkillLinks(
-  root: string,
-  file: string,
+export function skillLinks(
   content: string,
-): Array<SkillBlockFinding> {
-  const findings: Array<SkillBlockFinding> = []
-  const absolute = resolve(root, file)
+): Array<{ target: string; path: string; line: number }> {
+  const links: Array<{ target: string; path: string; line: number }> = []
   // Blank out fenced examples, keeping newlines so line numbers still match.
   const lines = content.split(/\r?\n/)
   for (const fence of codeFences(content))
@@ -454,10 +451,27 @@ function checkSkillLinks(
     if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) continue
     const path = target.replace(/[#?].*$/, '')
     if (!path) continue
+    links.push({
+      target,
+      path,
+      line: prose.slice(0, match.index).split('\n').length,
+    })
+  }
+  return links
+}
+
+function checkSkillLinks(
+  root: string,
+  file: string,
+  content: string,
+): Array<SkillBlockFinding> {
+  const findings: Array<SkillBlockFinding> = []
+  const absolute = resolve(root, file)
+  for (const { target, path, line } of skillLinks(content)) {
     if (!existsSync(resolve(dirname(absolute), path)))
       findings.push({
         file,
-        line: prose.slice(0, match.index).split('\n').length,
+        line,
         message: `Link target not found: ${target}`,
         severity: 'error',
       })
@@ -605,6 +619,7 @@ export async function checkSkillBlocks(
     packageDir: string
     library: string
     skills: Array<{ file: string; content: string }>
+    references?: Array<{ file: string; content: string }>
   },
   ts?: typeof TS | null,
 ): Promise<SkillBlockCheck> {
@@ -612,8 +627,8 @@ export async function checkSkillBlocks(
   const findings = options.skills.flatMap((skill) =>
     checkSkillLinks(root, skill.file, skill.content),
   )
-  const blocks = options.skills.flatMap((skill) =>
-    extractCodeBlocks(skill.file, skill.content),
+  const blocks = [...options.skills, ...(options.references ?? [])].flatMap(
+    (skill) => extractCodeBlocks(skill.file, skill.content),
   )
   const result = (skipped?: string): SkillBlockCheck => ({
     blocks: blocks.length,

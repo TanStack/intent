@@ -3595,6 +3595,282 @@ describe('cli commands', () => {
     expect(output).toContain('"!skills/_artifacts" is not in the "files" array')
   })
 
+  describe('validate reference files', () => {
+    function writeReferenceFixture({
+      body,
+      references = {},
+      tree,
+    }: {
+      body: string
+      references?: Record<string, string>
+      tree?: string
+    }): void {
+      const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-refs-'))
+      tempDirs.push(root)
+      writeJson(join(root, 'package.json'), {
+        name: '@acme/library',
+        devDependencies: { '@tanstack/intent': '^0.0.18' },
+        keywords: ['tanstack-intent'],
+        files: ['skills', '!skills/_artifacts'],
+      })
+      mkdirSync(join(root, 'src'))
+      writeFileSync(
+        join(root, 'src', 'index.ts'),
+        'export declare function retry(options: { max: number }): void\n',
+      )
+      const skillDir = join(root, 'skills', 'core')
+      mkdirSync(skillDir, { recursive: true })
+      writeFileSync(
+        join(skillDir, 'SKILL.md'),
+        `---\nname: core\ndescription: Core guidance\n---\n\n${body}\n`,
+      )
+      for (const [path, content] of Object.entries(references)) {
+        mkdirSync(dirname(join(skillDir, path)), { recursive: true })
+        writeFileSync(join(skillDir, path), content)
+      }
+      if (tree !== undefined) {
+        const artifacts = join(root, 'skills', '_artifacts')
+        mkdirSync(artifacts)
+        writeFileSync(join(artifacts, 'domain_map.yaml'), 'skills: []\n')
+        writeFileSync(join(artifacts, 'skill_spec.md'), '# Spec\n')
+        writeFileSync(
+          join(artifacts, 'skill_tree.yaml'),
+          `skills:\n  - name: Core\n    slug: core\n    path: skills/core/SKILL.md\n${tree}`,
+        )
+      }
+      process.chdir(root)
+    }
+
+    const retries = join('skills', 'core', 'references', 'retries.md')
+    const linked = 'Read [retries](references/retries.md) before retrying.'
+    const passed = '✅ Validated 1 skill files — all passed'
+
+    it('rejects a reference file that begins with frontmatter', async () => {
+      writeReferenceFixture({
+        body: linked,
+        references: {
+          'references/retries.md': '---\nname: retries\n---\n\n# Retries\n',
+        },
+      })
+
+      expect(await main(['validate'])).toBe(1)
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+        `${retries}: Reference files must be plain Markdown without YAML frontmatter`,
+      )
+    })
+
+    it('rejects a reference file that SKILL.md does not link to', async () => {
+      writeReferenceFixture({
+        body: 'See `references/retries.md` and\n\n```md\n[retries](references/retries.md)\n```',
+        references: { 'references/retries.md': '# Retries\n' },
+      })
+
+      expect(await main(['validate'])).toBe(1)
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+        `${retries}: Not linked from SKILL.md — add a direct relative Markdown link such as [retries](references/retries.md) so an agent can find it`,
+      )
+    })
+
+    it('rejects a reference file linked only from another reference', async () => {
+      writeReferenceFixture({
+        body: linked,
+        references: {
+          'references/retries.md': 'Then read [backoff](backoff.md).\n',
+          'references/backoff.md': '# Backoff\n',
+        },
+      })
+
+      expect(await main(['validate'])).toBe(1)
+      const errors = errorSpy.mock.calls.flat().join('\n')
+      expect(errors).toContain('Validation failed with 1 error(s)')
+      expect(errors).toContain(
+        `${join('skills', 'core', 'references', 'backoff.md')}: Not linked from SKILL.md — add a direct relative Markdown link such as [backoff](references/backoff.md) so an agent can find it`,
+      )
+    })
+
+    it('accepts references that link to each other when SKILL.md links to both', async () => {
+      writeReferenceFixture({
+        body: `${linked} Then read [backoff](references/backoff.md).`,
+        references: {
+          'references/retries.md': 'Then read [backoff](backoff.md).\n',
+          'references/backoff.md': '# Backoff\n',
+        },
+      })
+
+      expect(await main(['validate'])).toBe(0)
+      expect(logSpy.mock.calls.flat().join('\n')).toBe(passed)
+    })
+
+    it('typechecks code blocks in a reference file', async () => {
+      writeReferenceFixture({
+        body: linked,
+        references: {
+          'references/retries.md':
+            "# Retries\n\n```ts\nimport { retry } from '@acme/library'\nretry({ max: 'many' })\n```\n",
+        },
+      })
+
+      expect(await main(['validate'])).toBe(1)
+      expect(errorSpy.mock.calls.flat().join('\n')).toMatch(
+        /references[\\/]retries\.md:5: TS2322/,
+      )
+    })
+
+    it('rejects declared reference paths outside references/ and duplicates', async () => {
+      writeReferenceFixture({
+        body: linked,
+        references: { 'references/retries.md': '# Retries\n' },
+        tree: '    references:\n      - references/retries.md\n      - references/retries.md\n      - ../other/SKILL.md\n      - /tmp/notes.md\n      - references/../notes.md\n      - references/notes.txt\n',
+      })
+
+      expect(await main(['validate'])).toBe(1)
+      const errors = errorSpy.mock.calls.flat().join('\n')
+      const skill = join('skills', 'core', 'SKILL.md')
+      expect(errors).toContain('Validation failed with 5 error(s)')
+      expect(errors).toContain(
+        `${skill}: Reference "references/retries.md" is declared more than once in skill_tree.yaml`,
+      )
+      for (const path of [
+        '../other/SKILL.md',
+        '/tmp/notes.md',
+        'references/../notes.md',
+        'references/notes.txt',
+      ])
+        expect(errors).toContain(
+          `${skill}: Declared reference "${path}" must be a references/<name>.md path inside the skill directory`,
+        )
+    })
+
+    it('rejects a declared reference file that does not exist', async () => {
+      writeReferenceFixture({
+        body: linked,
+        references: { 'references/retries.md': '# Retries\n' },
+        tree: '    references:\n      - references/retries.md\n      - references/caching.md\n',
+      })
+
+      expect(await main(['validate'])).toBe(1)
+      const errors = errorSpy.mock.calls.flat().join('\n')
+      expect(errors).toContain('Validation failed with 1 error(s)')
+      expect(errors).toContain(
+        `${join('skills', 'core', 'references', 'caching.md')}: Declared in skill_tree.yaml but the file does not exist`,
+      )
+    })
+
+    it('rejects a reference file missing from a declared references list', async () => {
+      writeReferenceFixture({
+        body: `${linked} Then read [caching](references/caching.md).`,
+        references: {
+          'references/retries.md': '# Retries\n',
+          'references/caching.md': '# Caching\n',
+        },
+        tree: '    references:\n      - references/retries.md\n',
+      })
+
+      expect(await main(['validate'])).toBe(1)
+      const errors = errorSpy.mock.calls.flat().join('\n')
+      expect(errors).toContain('Validation failed with 1 error(s)')
+      expect(errors).toContain(
+        `${join('skills', 'core', 'references', 'caching.md')}: Not declared in the "references" list of its skill_tree.yaml entry`,
+      )
+    })
+
+    it('accepts declared, linked, plain references whose examples compile', async () => {
+      writeReferenceFixture({
+        body: `${linked} Then read [caching](./references/nested/caching.md#keys).`,
+        references: {
+          'references/retries.md':
+            "# Retries\n\n```ts\nimport { retry } from '@acme/library'\nretry({ max: 3 })\n```\n",
+          'references/nested/caching.md': '# Caching\n\n---\n\n## Keys\n',
+        },
+        tree: '    references:\n      - references/retries.md\n      - references/nested/caching.md\n',
+      })
+
+      expect(await main(['validate'])).toBe(0)
+      expect(logSpy.mock.calls.flat().join('\n')).toBe(passed)
+    })
+
+    it('rejects a tree entry that does not list the reference files of its skill', async () => {
+      writeReferenceFixture({
+        body: `${linked} Then read [caching](references/caching.md).`,
+        references: {
+          'references/retries.md': '# Retries\n',
+          'references/caching.md': '# Caching\n',
+        },
+        tree: '',
+      })
+
+      expect(await main(['validate'])).toBe(1)
+      const errors = errorSpy.mock.calls.flat().join('\n')
+      expect(errors).toContain('Validation failed with 1 error(s)')
+      expect(errors).toContain(
+        `${join('skills', 'core', 'SKILL.md')}: The skill_tree.yaml entry for skill "core" must list its reference files. Add to the entry:\n      references:\n        - references/caching.md\n        - references/retries.md`,
+      )
+    })
+
+    it.each(['references/retries.md', '[{ path: references/retries.md }]'])(
+      'rejects a tree entry whose references value is %s',
+      async (value) => {
+        writeReferenceFixture({
+          body: linked,
+          references: { 'references/retries.md': '# Retries\n' },
+          tree: `    references: ${value}\n`,
+        })
+
+        expect(await main(['validate'])).toBe(1)
+        const errors = errorSpy.mock.calls.flat().join('\n')
+        expect(errors).toContain('Validation failed with 1 error(s)')
+        expect(errors).toContain(
+          `${join('skills', 'core', 'SKILL.md')}: The "references" value of the skill_tree.yaml entry for skill "core" must be a list of reference file paths`,
+        )
+      },
+    )
+
+    it('leaves a skill without a references directory unaffected', async () => {
+      writeReferenceFixture({ body: 'Skill content here.', tree: '' })
+
+      expect(await main(['validate'])).toBe(0)
+      expect(logSpy.mock.calls.flat().join('\n')).toBe(passed)
+    })
+
+    it('matches tree entries by path when two packages share a slug', async () => {
+      const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-refs-'))
+      tempDirs.push(root)
+      writeJson(join(root, 'package.json'), { private: true })
+      writeFileSync(
+        join(root, 'pnpm-workspace.yaml'),
+        'packages:\n  - packages/*\n',
+      )
+      mkdirSync(join(root, '_artifacts'))
+      writeFileSync(
+        join(root, '_artifacts', 'skill_tree.yaml'),
+        'skills:\n  - slug: state\n    package: packages/react\n    path: packages/react/skills/state/SKILL.md\n    references:\n      - references/reactivity.md\n  - slug: state\n    package: packages/solid\n    path: skills/state/SKILL.md\n    references: []\n',
+      )
+      for (const name of ['react', 'solid']) {
+        const skillDir = join(root, 'packages', name, 'skills', 'state')
+        writeJson(join(root, 'packages', name, 'package.json'), {
+          name: `@acme/${name}`,
+        })
+        mkdirSync(join(skillDir, 'references'), { recursive: true })
+        writeFileSync(
+          join(skillDir, 'SKILL.md'),
+          '---\nname: state\ndescription: State guidance\n---\n\nRead [reactivity](references/reactivity.md).\n',
+        )
+        writeFileSync(
+          join(skillDir, 'references', 'reactivity.md'),
+          '# Reactivity\n',
+        )
+      }
+      process.chdir(root)
+
+      expect(await main(['validate'])).toBe(1)
+      const errors = errorSpy.mock.calls.flat().join('\n')
+      expect(errors).toContain('Validation failed with 1 error(s)')
+      expect(errors).toContain(
+        `${join('packages', 'solid', 'skills', 'state', 'references', 'reactivity.md')}: Not declared in the "references" list of its skill_tree.yaml entry`,
+      )
+    })
+  })
+
   it('skips cleanly when validate is run without a skills directory', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-missing-skills-'))
     tempDirs.push(root)
