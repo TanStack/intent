@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
-import semver from 'semver'
+import coerce from 'semver/functions/coerce.js'
+import diff from 'semver/functions/diff.js'
+import eq from 'semver/functions/eq.js'
+import gt from 'semver/functions/gt.js'
+import parse from 'semver/functions/parse.js'
+import valid from 'semver/functions/valid.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
   parseFrontmatter,
@@ -36,11 +41,11 @@ function classifyVersionDrift(
   const newVersion = normalizeVersion(newVer)
 
   if (!oldVersion || !newVersion) return null
-  if (semver.eq(oldVersion, newVersion)) return null
-  if (!semver.gt(newVersion, oldVersion)) return null
+  if (eq(oldVersion, newVersion)) return null
+  if (!gt(newVersion, oldVersion)) return null
 
-  const oldParsed = semver.parse(oldVersion)
-  const newParsed = semver.parse(newVersion)
+  const oldParsed = parse(oldVersion)
+  const newParsed = parse(newVersion)
   if (
     oldParsed &&
     newParsed &&
@@ -52,7 +57,7 @@ function classifyVersionDrift(
     return 'patch'
   }
 
-  const drift = semver.diff(oldVersion, newVersion)
+  const drift = diff(oldVersion, newVersion)
   switch (drift) {
     case 'major':
     case 'premajor':
@@ -70,10 +75,10 @@ function classifyVersionDrift(
 }
 
 function normalizeVersion(version: string): string | null {
-  const validVersion = semver.valid(version)
+  const validVersion = valid(version)
   if (validVersion) return validVersion
 
-  return semver.coerce(version)?.version ?? null
+  return coerce(version)?.version ?? null
 }
 
 // ---------------------------------------------------------------------------
