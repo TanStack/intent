@@ -456,7 +456,7 @@ function checkSkillLinks(
     const path = target.replace(/[#?].*$/, '')
     if (!path) continue
     const resolved = resolve(dirname(absolute), path)
-    const outside = /^\.\.([\\/]|$)/.test(relative(packageDir, resolved))
+    const outside = relative(packageDir, resolved).startsWith('..')
     if (outside || !existsSync(resolved))
       findings.push({
         file,
