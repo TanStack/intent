@@ -59,6 +59,8 @@ Repeat `--task <text>` to record the developer tasks the skill covers in `domain
 
 To register existing guidance, supply its name, domain, package, and path. The command reads its frontmatter and preserves the file. To change an already registered skill, edit its guidance and run `maintainer sync`.
 
+A tree entry's `path` is relative to its `package`. When a hand-written entry repeats the package directory in `path`, such as `package: packages/client` with `path: packages/client/skills/query/SKILL.md`, `maintainer status` lists `skill_tree.yaml` as a file to synchronize and `maintainer sync` rewrites the path as `skills/query/SKILL.md`.
+
 Registration updates the tree and domain map and appends an entry to the spec. The command prints every file it wrote. Write the task coverage, source-backed guidance, and consequential decisions; the command does not infer them.
 
 ## Remove a skill
@@ -72,6 +74,8 @@ Registration updates the tree and domain map and appends an entry to the spec. T
 Removal retires the skill: its tree entry gets `status: retired` and `skill_spec.md` gains a note to record why the guidance is no longer needed. The command never deletes `SKILL.md`. It prints the path so you can delete the file once its guidance is no longer needed, then run `maintainer sync` and `maintainer review`.
 
 The command refuses while the skill is selected for repository distribution or required by another active skill, and names what to change first. Reselect the remaining skills with `maintainer setup --distribution repo --skill <name>`, or update the dependent skill's prerequisites, then retry.
+
+A skill name is unique within its owning package, so two workspace packages can register the same name. A prerequisite name refers to a skill in the same package. When more than one package registers the name, the command lists those packages; pass `--package <directory>` to select the skill to retire. A name that more than one package registers cannot be selected for repository distribution.
 
 ## Choose repository distribution
 

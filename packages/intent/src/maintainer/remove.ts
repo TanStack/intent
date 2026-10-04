@@ -11,16 +11,27 @@ import type { FileChange } from './files.js'
 export function retireSkill(
   project: MaintainerProject,
   name: string | undefined,
+  packageDir?: string,
 ): { path: string; files: Array<string>; exists: boolean } {
   if (!name)
     throw new Error('Name the skill to remove: maintainer remove <name>.')
   const tree = readRecord(project, 'skill_tree.yaml')
   const entries = skillEntries(project, tree)
-  const index = entries.findIndex(
-    (entry) => (entry.slug ?? entry.name) === name,
+  const owner = packageDir === '.' ? undefined : packageDir
+  const matches = entries.filter(
+    (entry) =>
+      (entry.slug ?? entry.name) === name &&
+      (packageDir === undefined || entry.package === owner),
   )
-  const entry = entries[index]
+  if (matches.length > 1)
+    throw new Error(
+      `Skill ${name} is registered in more than one package: ${matches
+        .map((entry) => entry.package ?? '.')
+        .join(', ')}. Select one with --package <directory>.`,
+    )
+  const entry = matches[0]
   if (!entry) throw new Error(`Skill ${name} is not registered.`)
+  const index = entries.indexOf(entry)
   if (entry.status === 'retired')
     throw new Error(`Skill ${name} is already retired.`)
   const distribution = readDistribution(tree)
@@ -31,6 +42,7 @@ export function retireSkill(
   const dependents = entries.filter(
     (other) =>
       other !== entry &&
+      other.package === entry.package &&
       !['planned', 'retired'].includes(String(other.status)) &&
       Array.isArray(other.requires) &&
       other.requires.includes(name),

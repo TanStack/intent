@@ -12,6 +12,7 @@ import {
   readRecord,
   recordPath,
   skillEntries,
+  skillKey,
   skillPath,
 } from './project.js'
 import type { ParseError } from 'jsonc-parser'
@@ -30,7 +31,9 @@ export function planMaintainerSync(project: MaintainerProject) {
   const names = new Set(
     entries
       .filter((entry) => !['planned', 'retired'].includes(String(entry.status)))
-      .map((entry) => String(entry.slug ?? entry.name)),
+      .map((entry) =>
+        skillKey(entry.package, String(entry.slug ?? entry.name)),
+      ),
   )
   const dependencies = new Map<string, Array<string>>()
   tree.document.setIn(
@@ -49,6 +52,15 @@ export function planMaintainerSync(project: MaintainerProject) {
   )
   for (const [index, entry] of entries.entries()) {
     if (['planned', 'retired'].includes(String(entry.status))) continue
+    if (
+      entry.package &&
+      entry.path.startsWith(`${entry.package}/`) &&
+      !existsSync(skillPath(project, entry)) &&
+      existsSync(projectPath(project.root, entry.path))
+    ) {
+      entry.path = entry.path.slice(entry.package.length + 1)
+      tree.document.setIn(['skills', index, 'path'], entry.path)
+    }
     const path = skillPath(project, entry)
     if (!existsSync(path)) {
       problems.push(`Missing skill: ${entry.path}`)
@@ -69,13 +81,15 @@ export function planMaintainerSync(project: MaintainerProject) {
     const sources = stringList(fm.sources ?? [], `${name} sources`)
     const requires = stringList(fm.requires ?? [], `${name} requires`)
     dependencies.set(
-      name,
-      requires.filter((dependency) => names.has(dependency)),
+      skillKey(entry.package, name),
+      requires
+        .map((dependency) => skillKey(entry.package, dependency))
+        .filter((dependency) => names.has(dependency)),
     )
     for (const dependency of requires) {
       if (
         /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(dependency) &&
-        !names.has(dependency)
+        !names.has(skillKey(entry.package, dependency))
       )
         problems.push(
           `${name}: prerequisite ${dependency} is not an implemented skill in this tree.`,
@@ -93,9 +107,11 @@ export function planMaintainerSync(project: MaintainerProject) {
     }
     if (readFileSync(path, 'utf8').includes(authoringMarker))
       problems.push(`${name}: skill still needs authoring.`)
-    const mapped = map.skills.find(
+    const candidates: Array<Record<string, unknown>> = map.skills.filter(
       (skill: unknown) => isObject(skill) && skill.slug === name,
     )
+    const mapped =
+      candidates.find((skill) => skill.domain === entry.domain) ?? candidates[0]
     if (!mapped || mapped.domain !== entry.domain)
       problems.push(
         `${name}: reconcile its task/domain entry in domain_map.yaml.`,

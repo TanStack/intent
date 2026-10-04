@@ -10,6 +10,7 @@ import {
   readRecord,
   recordPath,
   skillEntries,
+  skillKey,
   skillPath,
 } from './project.js'
 import { writeChanges } from './files.js'
@@ -60,7 +61,9 @@ export function planAddSkills(
   const tree = readRecord(project, 'skill_tree.yaml', changes)
   const entries = skillEntries(project, tree)
   const names = new Set(
-    entries.map((entry) => String(entry.slug ?? entry.name)),
+    entries.map((entry) =>
+      skillKey(entry.package, String(entry.slug ?? entry.name)),
+    ),
   )
   const registeredPaths = new Set(
     entries.map((entry) => skillPath(project, entry)),
@@ -86,7 +89,7 @@ export function planAddSkills(
     }
     const { entry, path, packageDir, manifestName, tasks, change } = addition
     if (change) changes.push(change)
-    names.add(String(entry.slug ?? entry.name))
+    names.add(skillKey(entry.package, String(entry.slug ?? entry.name)))
     registeredPaths.add(path)
     tree.document.addIn(['skills'], entry)
     if (!mappedNames.has(name)) {
@@ -137,11 +140,11 @@ function prepareAddition(
     )
   if (!options.domain?.trim())
     throw new Error('Choose the task domain with --domain <slug>.')
-  if (names.has(name))
+  const packageDir = options.package === '.' ? undefined : options.package
+  if (names.has(skillKey(packageDir, name)))
     throw new Error(
       `Skill ${name} is already registered. Edit its SKILL.md, then run intent maintainer sync.`,
     )
-  const packageDir = options.package === '.' ? undefined : options.package
   const entry: SkillEntry = {
     name,
     slug: name,

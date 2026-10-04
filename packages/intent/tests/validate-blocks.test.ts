@@ -480,6 +480,31 @@ describe.each(['TypeScript 6', 'TypeScript 7'])('with %s', (compiler) => {
     ])
   })
 
+  it('checks each example on its own when one run shares a cache', async () => {
+    const cache = {}
+    const run = (max: string) =>
+      checkSkillBlocks({
+        root,
+        packageDir: root,
+        library: '@acme/client',
+        cache,
+        skills: [
+          {
+            file: 'skills/retries/SKILL.md',
+            content: `\`\`\`ts\nimport { retry } from '@acme/client'\nretry(async () => 1, { max: ${max} })\n\`\`\`\n`,
+          },
+        ],
+      })
+    expect((await run('1')).findings).toEqual([])
+    expect((await run("'many'")).findings).toEqual([
+      expect.objectContaining({
+        line: 3,
+        message: expect.stringMatching(/TS2322/),
+      }),
+    ])
+    expect((await run('2')).findings).toEqual([])
+  })
+
   it('checks imports from sibling workspace packages against their own source', async () => {
     write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n')
     write('packages/client/package.json', '{"name":"@acme/client"}\n')

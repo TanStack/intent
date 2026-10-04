@@ -242,13 +242,18 @@ export function applySourcePolicy(
   }
 
   if (config.mode === 'explicit') {
-    for (const matcher of sourcePolicy.matchers) {
-      const notDiscovered = !scanResult.packages.some((pkg) =>
-        matcher.matchesPackage(pkg.name, pkg.kind),
+    for (const { source, matchesPackage } of sourcePolicy.matchers) {
+      const pkg = scanResult.packages.find((candidate) =>
+        matchesPackage(candidate.name, candidate.kind),
       )
-      if (notDiscovered) {
+      if (
+        !pkg ||
+        ('skill' in source &&
+          source.skill &&
+          !pkg.skills.some((skill) => skill.name === source.skill))
+      ) {
         emit(
-          `"${matcher.source.raw}" is declared in intent.skills but was not discovered.`,
+          `"${source.raw}" is declared in intent.skills but was not discovered.`,
         )
       }
     }
