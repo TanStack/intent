@@ -1222,3 +1222,40 @@ it('rejects a repository distribution skill name that more than one package regi
     ]),
   ).toBe(0)
 })
+
+it('rewrites a tree path that repeats the package directory', async () => {
+  write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n')
+  write('packages/core/package.json', '{"name":"@library/core"}\n')
+  expect(await main(['maintainer', 'setup', '--distribution', 'none'])).toBe(0)
+  expect(await addPackageSkill('packages/core', 'table-state')).toBe(0)
+  expect(await addPackageSkill('packages/core', 'rows')).toBe(0)
+  write(
+    '_artifacts/skill_tree.yaml',
+    read('_artifacts/skill_tree.yaml')
+      .replace(
+        'path: skills/table-state/SKILL.md',
+        'path: packages/core/skills/table-state/SKILL.md',
+      )
+      .replace(
+        'path: skills/rows/SKILL.md',
+        'path: packages/core/skills/gone/SKILL.md',
+      ),
+  )
+  vi.mocked(console.log).mockClear()
+  expect(await main(['maintainer', 'status'])).toBe(0)
+  const status = vi.mocked(console.log).mock.calls.flat().join('\n')
+  expect(status).toContain('1 skill(s)')
+  expect(status).not.toContain(
+    'Missing skill: packages/core/skills/table-state',
+  )
+  expect(status).toContain('Missing skill: packages/core/skills/gone/SKILL.md')
+  expect(await main(['maintainer', 'sync'])).toBe(0)
+  expect(
+    parse(read('_artifacts/skill_tree.yaml')).skills.map(
+      (skill: { path: string }) => skill.path,
+    ),
+  ).toEqual([
+    'skills/table-state/SKILL.md',
+    'packages/core/skills/gone/SKILL.md',
+  ])
+})

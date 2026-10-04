@@ -59,6 +59,8 @@ Repeat `--task <text>` to record the developer tasks the skill covers in `domain
 
 To register existing guidance, supply its name, domain, package, and path. The command reads its frontmatter and preserves the file. To change an already registered skill, edit its guidance and run `maintainer sync`.
 
+A tree entry's `path` is relative to its `package`. When a hand-written entry repeats the package directory in `path`, such as `package: packages/client` with `path: packages/client/skills/query/SKILL.md`, `maintainer status` lists `skill_tree.yaml` as a file to synchronize and `maintainer sync` rewrites the path as `skills/query/SKILL.md`.
+
 Registration updates the tree and domain map and appends an entry to the spec. The command prints every file it wrote. Write the task coverage, source-backed guidance, and consequential decisions; the command does not infer them.
 
 ## Remove a skill
