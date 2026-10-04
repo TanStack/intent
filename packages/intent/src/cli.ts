@@ -448,7 +448,7 @@ export async function main(
       }
     }
 
-    // ponytail: cac 7 parses argv once per registered command, drop when cac parses only the matched command
+    // cac parses argv once per registered command, so give it only the one being run
     const { commands } = cli
     const matched = commands.filter((command) => command.isMatched(argv[0]!))
     if (matched.length > 0) cli.commands = matched
