@@ -33,6 +33,7 @@ interface CodeBlock {
   // Virtual file extension: a plain ts block must not parse as JSX, or a
   // generic arrow like <T>(x: T) => x reads as an unclosed element.
   extension: 'ts' | 'tsx' | 'js' | 'jsx'
+  expectError?: Array<string>
 }
 
 // Scan whole fences before selecting languages: a Markdown example can contain
@@ -43,6 +44,7 @@ function codeFences(content: string) {
     start: number
     end: number
     language: string
+    properties: Array<string>
     code: string
   }> = []
   for (let start = 0; start < lines.length; start++) {
@@ -61,10 +63,12 @@ function codeFences(content: string) {
         break
     }
     const dedent = new RegExp(`^ {0,${opening[1]!.length}}`)
+    const [language, ...properties] = opening[3]!.trim().split(/\s+/)
     fences.push({
       start,
       end,
-      language: opening[3]!.trim().split(/\s+/)[0]!.toLowerCase(),
+      language: language!.toLowerCase(),
+      properties,
       code: lines
         .slice(start + 1, end)
         .map((line) => line.replace(dedent, ''))
@@ -245,6 +249,12 @@ function extractCodeBlocks(file: string, content: string): Array<CodeBlock> {
   for (const fence of codeFences(content)) {
     const language = fence.language
     if (!checkedLanguages.has(language)) continue
+    if (fence.properties.includes('no-check')) continue
+    const expectError = fence.properties
+      .map((property) =>
+        /^expect-error(?:="?(TS\d+(?:,TS\d+)*)"?)?$/.exec(property),
+      )
+      .find(Boolean)
     const line = fence.start + 2
     const extension =
       language === 'tsx' || language === 'jsx'
@@ -252,7 +262,13 @@ function extractCodeBlocks(file: string, content: string): Array<CodeBlock> {
         : language.startsWith('j')
           ? 'js'
           : 'ts'
-    blocks.push({ file, line, code: fence.code, extension })
+    blocks.push({
+      file,
+      line,
+      code: fence.code,
+      extension,
+      ...(expectError ? { expectError: expectError[1]?.split(',') ?? [] } : {}),
+    })
   }
   return blocks
 }
@@ -719,6 +735,7 @@ export async function checkSkillBlocks(
   for (const [path, block] of virtual) {
     const source = program.getSourceFile(path)
     if (!source) continue
+    const found: Array<SkillBlockFinding> = []
     const at = (position: number) =>
       block.line + source.getLineAndCharacterOfPosition(position).line
     for (const diagnostic of [
@@ -732,7 +749,7 @@ export async function checkSkillBlocks(
         ts.flattenDiagnosticMessageText(diagnostic.messageText, ' '),
         fromLibrary,
       )
-      if (finding) findings.push(finding)
+      if (finding) found.push(finding)
     }
     for (const statement of source.statements) {
       if (
@@ -751,7 +768,7 @@ export async function checkSkillBlocks(
           ?.getJsDocTags(checker)
           .find((entry) => entry.name === 'deprecated')
         if (tag)
-          findings.push(
+          found.push(
             deprecationFinding(
               block,
               at(element.getStart(source)),
@@ -761,6 +778,7 @@ export async function checkSkillBlocks(
           )
       }
     }
+    findings.push(...expectedFindings(block, found))
   }
   return result()
 }
@@ -782,6 +800,7 @@ function checkNativeBlocks(
     for (const [path, block] of virtual) {
       const source = await program.getSourceFile(path)
       if (!source) continue
+      const found: Array<SkillBlockFinding> = []
       // The same line breaks as getLineAndCharacterOfPosition in TypeScript 6.
       const lineStarts = native.scanner.computeLineStarts(block.code)
       const at = (position: number) => {
@@ -806,7 +825,7 @@ function checkNativeBlocks(
           nativeMessage(diagnostic),
           fromLibrary,
         )
-        if (finding) findings.push(finding)
+        if (finding) found.push(finding)
       }
       for (const statement of source.statements) {
         if (
@@ -827,7 +846,7 @@ function checkNativeBlocks(
               )
             : undefined
           if (tag)
-            findings.push(
+            found.push(
               deprecationFinding(
                 block,
                 // Skips leading trivia, like getStart in TypeScript 6.
@@ -838,6 +857,7 @@ function checkNativeBlocks(
             )
         }
       }
+      findings.push(...expectedFindings(block, found))
     }
     return findings
   })
@@ -863,6 +883,36 @@ function diagnosticFinding(
     message: `TS${code}: ${message}`,
     severity: 'error',
   }
+}
+
+function expectedFindings(
+  block: CodeBlock,
+  found: Array<SkillBlockFinding>,
+): Array<SkillBlockFinding> {
+  if (!block.expectError) return found
+  const reported = [
+    ...new Set(
+      found
+        .filter((finding) => finding.severity === 'error')
+        .map((finding) => finding.message.split(':')[0]!),
+    ),
+  ]
+  const expected = block.expectError
+  if (reported.length && expected.every((code) => reported.includes(code)))
+    return []
+  const outcome = reported.length
+    ? `the example reported ${reported.join(', ')}.`
+    : 'the example compiles.'
+  return [
+    {
+      file: block.file,
+      line: block.line - 1,
+      message: expected.length
+        ? `Expected ${expected.join(', ')}, but ${outcome}`
+        : `Expected an error, but ${outcome} Remove expect-error or correct the example.`,
+      severity: 'error',
+    },
+  ]
 }
 
 function deprecationFinding(

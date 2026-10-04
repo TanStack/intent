@@ -94,6 +94,16 @@ TypeScript and JavaScript fences (`ts`, `tsx`, `typescript`, `js`, `jsx`, and `j
 
 The checker enables strict null checks because some library APIs require them, while tolerating omitted names, shorthand values, and implicit parameter types. Each code fence represents one example. Separate before/after implementations into distinct fences; use `diff` or `text` for deliberately invalid code or fragments that cannot be checked as a source file. The checker does not infer those distinctions from prose or comments.
 
+A property after the fence language changes how one example is checked:
+
+| Fence | Behavior |
+| --- | --- |
+| ` ```ts no-check ` | The example is not typechecked. Use it for a fragment that is not a complete source file, such as a single class member. |
+| ` ```ts expect-error ` | The example must report at least one error. Validation fails when it compiles, so a `Wrong:` example that a library change made valid is reported. |
+| ` ```ts expect-error=TS2322 ` | The example must report that error code. List several codes with commas (`expect-error=TS2322,TS2345`); quotes around the value are optional. |
+
+An `expect-error` example reports nothing else: its errors and deprecation warnings are the expected result. Errors that Intent tolerates in partial examples, such as an undeclared name, do not count as the expected error. A syntax error satisfies the plain `expect-error`, so name the code when the example must fail for a specific reason.
+
 Module augmentations and global declarations still share the package compiler context. Two examples that pass separately can conflict when checked together. Verify those examples in isolated fixtures before treating the combined diagnostics as defects in the guidance; separate fences alone do not isolate their augmentations.
 
 TypeScript 5.0 or newer must be available in the repository for code checking. If it or the library type entry is unavailable, Intent reports why those checks were skipped; this is not a successful typecheck. Prose-only skills do not load TypeScript. With TypeScript 7.0, Intent checks examples through the compiler API that TypeScript 7 publishes as unstable; Node.js 24 or newer is supported. When `@typescript/typescript6` is installed beside TypeScript 7, Intent uses that package instead. If neither API can run, Intent reports that the checks were skipped. TypeScript 7.1 is not supported at this time.
