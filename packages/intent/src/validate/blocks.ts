@@ -456,7 +456,6 @@ function checkSkillLinks(
     const path = target.replace(/[#?].*$/, '')
     if (!path) continue
     const resolved = resolve(dirname(absolute), path)
-    // A consumer project installs only the package, not the files around it.
     const outside = /^\.\.([\\/]|$)/.test(relative(packageDir, resolved))
     if (outside || !existsSync(resolved))
       findings.push({
