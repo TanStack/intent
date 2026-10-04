@@ -1,5 +1,39 @@
 # @tanstack/intent
 
+## 0.5.4
+
+### Patch Changes
+
+- [#324](https://github.com/TanStack/intent/pull/324) [`755bd33`](https://github.com/TanStack/intent/commit/755bd33ef3b1b050a026c393a63fce850ade6206) - Make the installed package 28 kB smaller by bundling `yaml` from its ES module build instead of its CommonJS build. A YAML warning, such as an unresolved tag in skill frontmatter, is now written to stderr by `console.warn`, with a stack trace; before, it went through `process.emitWarning`, and `intent list` and `intent stale` exited before Node printed it. The `LOG_STREAM` and `LOG_TOKENS` environment variables no longer make the YAML parser print its tokens to stdout.
+
+- [#322](https://github.com/TanStack/intent/pull/322) [`71cd72c`](https://github.com/TanStack/intent/commit/71cd72ce8bb119adf020e01425d3210ecb80ffee) - Start each command faster. The command-line parser processed the arguments one time for each registered command; Intent now gives it only the command being run. A call saves between 0.1 and 0.2 ms.
+
+- [#314](https://github.com/TanStack/intent/pull/314) [`29ac2d1`](https://github.com/TanStack/intent/commit/29ac2d1d6d585efe8330f7b663a8d2072c999b85) - Print the installed version for `intent --version`. The CLI had no version flag, so it printed the help text and exited with code 1. It now prints the version alone and exits with code 0.
+
+- [#325](https://github.com/TanStack/intent/pull/325) [`594fd9d`](https://github.com/TanStack/intent/commit/594fd9d4f00a476238e000a0dd8062fd91755a93) - Stop shipping a type declaration file for the CLI entry. Nothing could import `dist/cli.d.mts`, so the installed package is 2,655 bytes smaller. The types for `@tanstack/intent` and `@tanstack/intent/core` do not change.
+
+- [#319](https://github.com/TanStack/intent/pull/319) [`9d8a463`](https://github.com/TanStack/intent/commit/9d8a4630d04355ee9110452faa81ab11679a27b8) - Add fence properties that control how `intent validate` checks one code example. `no-check` after the language skips a fragment that is not a complete source file. `expect-error` requires the example to report an error, and `expect-error=TS2322` requires that error code, so a deliberately wrong example fails validation once it compiles.
+
+- [#326](https://github.com/TanStack/intent/pull/326) [`cd5a024`](https://github.com/TanStack/intent/commit/cd5a024a59fbc5c72eace6469b4b0442adc06916) - Write the command parser in the hook script as fixed text, so the script content no longer changes with the build tooling. Hook behavior does not change. The next `intent hooks install` rewrites the installed script once and reports `Updated Intent hooks`; later runs report no changes.
+
+- [#313](https://github.com/TanStack/intent/pull/313) [`39d2af8`](https://github.com/TanStack/intent/commit/39d2af8501977debf65ab055053159094bf9ac3d) - Allow workspace packages to register skills with the same name. `intent maintainer` commands failed with `Duplicate skill identity or path` in a monorepo where two packages each had, for example, a `getting-started` skill; a skill name is now unique within its owning package, a prerequisite name refers to a skill in the same package, and `maintainer remove <name>` accepts `--package <directory>` when more than one package registers the name.
+
+- [#317](https://github.com/TanStack/intent/pull/317) [`894ab61`](https://github.com/TanStack/intent/commit/894ab611f0ed018b04cb46d8b28ec31179074e50) - Recognize a `skill_tree.yaml` entry whose `path` repeats its `package` directory. `intent maintainer status` and `check` reported every such skill as `Missing skill` although the file existed; they now find the skill and list the tree as a file to synchronize, and `intent maintainer sync` rewrites the path relative to the package.
+
+- [#315](https://github.com/TanStack/intent/pull/315) [`f7619bf`](https://github.com/TanStack/intent/commit/f7619bf896e68dcd74a23c1ed7c632efccae69b9) - Report `intent.skills` entries that name a skill the package does not ship. An exact entry such as `@tanstack/query#fetching` yielded no skill and no message when the installed package had removed or renamed that skill; Intent now reports the entry as not discovered.
+
+- [#323](https://github.com/TanStack/intent/pull/323) [`5a0ec60`](https://github.com/TanStack/intent/commit/5a0ec605b6b18bac367a9aa867f3277a3eabf34d) - Make the installed package 35 kB smaller. `intent stale` now bundles only the `semver` functions it uses instead of the whole library; behavior does not change.
+
+- [#310](https://github.com/TanStack/intent/pull/310) [`c16a6a8`](https://github.com/TanStack/intent/commit/c16a6a8bcb7022c12ee616073cc816ba444ea3be) - Stop `intent stale` from reporting artifact library version drift for a skill whose `library_version` matches the current version of its own package. Monorepos that version packages independently no longer get this false warning, and a review signal raised by more than one artifact file now prints once in the text output.
+
+- [#327](https://github.com/TanStack/intent/pull/327) [`a7c93e0`](https://github.com/TanStack/intent/commit/a7c93e02f9520b4d980e5fe56a25fbdb4d1ba857) - Make the installed package 16 kB smaller and load fewer files in each command. `intent validate` and `intent stale` imported modules a second time through a deferred import, although the same files had already loaded them. Those modules are now imported directly, so the bundle keeps only the parts of `yaml` that Intent uses; behavior does not change.
+
+- [#312](https://github.com/TanStack/intent/pull/312) [`d346d64`](https://github.com/TanStack/intent/commit/d346d64ca15da78e06e33caa2f43df985a6c9007) - Make `intent validate` faster in workspaces that check examples for more than one library. The workspace package map is now resolved once per run, and parsed library and TypeScript lib files are reused between libraries instead of being parsed again for each one. Validation results are unchanged.
+
+- [#316](https://github.com/TanStack/intent/pull/316) [`9212c2d`](https://github.com/TanStack/intent/commit/9212c2d5487ae54d774d9b616208d3ef35b20114) - `validate` reports an error when a relative Markdown link in a `SKILL.md` resolves to a path outside the package that owns the skill, even when the target exists in the repository. Only the package is installed in a consumer project, so such a link is dead for every consumer.
+
+- [#318](https://github.com/TanStack/intent/pull/318) [`db658f7`](https://github.com/TanStack/intent/commit/db658f748827a97c003b74da9119105c99e98d46) - `intent validate` now checks every Markdown file under a skill's `references/` directory: the file must not begin with frontmatter, the `SKILL.md` body must link to it directly, and its TypeScript and JavaScript examples are checked with the skill's examples. A `skill_tree.yaml` entry for a skill with reference files must list them in a `references` key, and the list must match the files. Existing repositories now fail validation for reference files that `SKILL.md` does not link to directly, reference frontmatter, reference examples that do not typecheck, and tree entries that do not list their skill's reference files.
+
 ## 0.5.3
 
 ### Patch Changes
