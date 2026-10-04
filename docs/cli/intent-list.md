@@ -75,7 +75,7 @@ Only exact names and `*` wildcards are supported. Excluded packages do not trigg
 
 Packages outside an explicit allowlist are omitted from the available catalog. In a human session, a policy notice names them; `--show-hidden` adds their names and skill counts to the text output. This does not enable them.
 
-In agent sessions, hidden sources are reported by count only. `--show-hidden` cannot reveal their identities there; run it outside the agent session to review candidates. A configured package or package pattern that was not discovered also produces a notice.
+In agent sessions, hidden sources are reported by count only. `--show-hidden` cannot reveal their identities there; run it outside the agent session to review candidates. A configured package or package pattern that was not discovered also produces a notice. So does an exact skill entry whose discovered package has no skill with that name.
 
 ## Default output
 
