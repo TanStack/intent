@@ -3763,6 +3763,20 @@ describe('cli commands', () => {
       )
     })
 
+    it('rejects a declared reference when the skill has no reference files', async () => {
+      writeReferenceFixture({
+        body: 'Core guidance.',
+        tree: '    references:\n      - references/caching.md\n',
+      })
+
+      expect(await main(['validate'])).toBe(1)
+      const errors = errorSpy.mock.calls.flat().join('\n')
+      expect(errors).toContain('Validation failed with 1 error(s)')
+      expect(errors).toContain(
+        `${join('skills', 'core', 'references', 'caching.md')}: Declared in skill_tree.yaml but the file does not exist`,
+      )
+    })
+
     it('rejects a reference file missing from a declared references list', async () => {
       writeReferenceFixture({
         body: `${linked} Then read [caching](references/caching.md).`,

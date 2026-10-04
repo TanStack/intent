@@ -211,6 +211,21 @@ function findReferenceFiles(skillDir: string): Array<string> {
     .sort()
 }
 
+function treeDeclaresReferences(artifactRoot: string): boolean {
+  const artifactsDir = join(artifactRoot, '_artifacts')
+  return (
+    existsSync(artifactsDir) &&
+    readdirSync(artifactsDir, { withFileTypes: true }).some(
+      (entry) =>
+        entry.isFile() &&
+        entry.name.endsWith('skill_tree.yaml') &&
+        readFileSync(join(artifactsDir, entry.name), 'utf8').includes(
+          'references',
+        ),
+    )
+  )
+}
+
 function readTreeEntries(
   context: ProjectContext,
   skillsDir: string,
@@ -481,7 +496,10 @@ async function runValidateCommandInternal(
       library: string | undefined
       references: Array<{ file: string; content: string }>
     }> = []
-    const treeEntries = readTreeEntries(validateContext, skillsDir, artifacts)
+    let treeEntries: Map<string, IntentArtifactSkill> | undefined
+    const declaresReferences = [skillsDir, validateContext.workspaceRoot].some(
+      (root) => root && treeDeclaresReferences(root),
+    )
     for (const filePath of skillFiles) {
       const rel = relative(process.cwd(), filePath)
       const content = readFileSync(filePath, 'utf8')
@@ -624,9 +642,17 @@ async function runValidateCommandInternal(
         return { file, content: referenceContent }
       })
 
-      const declared = treeEntries.get(filePath)?.references
+      const entry =
+        referenceFiles.length || declaresReferences
+          ? (treeEntries ??= readTreeEntries(
+              validateContext,
+              skillsDir,
+              artifacts,
+            )).get(filePath)
+          : undefined
+      const declared = entry?.references
       if (declared === undefined) {
-        if (treeEntries.has(filePath) && referenceFiles.length)
+        if (entry && referenceFiles.length)
           errors.push({
             file: rel,
             message: `The skill_tree.yaml entry for skill "${skillName}" must list its reference files. Add to the entry:\n${[
