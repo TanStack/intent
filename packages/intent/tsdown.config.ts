@@ -61,5 +61,10 @@ export default defineConfig({
     'jsonc-parser': fileURLToPath(
       new URL('./node_modules/jsonc-parser/lib/esm/main.js', import.meta.url),
     ),
+    // yaml's `node` export condition is a CommonJS build that rolldown cannot
+    // tree-shake; point at the ES module build its `default` condition serves.
+    yaml: fileURLToPath(
+      new URL('./node_modules/yaml/browser/index.js', import.meta.url),
+    ),
   },
 })
