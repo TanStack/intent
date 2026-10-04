@@ -437,6 +437,49 @@ describe.each(['TypeScript 6', 'TypeScript 7'])('with %s', (compiler) => {
     ])
   })
 
+  it('skips a no-check example and requires an expect-error example to fail', async () => {
+    const example = (info: string, max: string) =>
+      `\`\`\`${info}\nimport { retry } from '@acme/client'\nretry(async () => 1, { max: ${max} })\n\`\`\`\n`
+    const findings = async (body: string) => {
+      skill(body)
+      return (await check()).findings
+    }
+
+    expect(
+      await findings('```ts no-check\nreadonly retries = retry(\n```\n'),
+    ).toEqual([])
+    expect(await findings(example('ts expect-error', "'many'"))).toEqual([])
+    expect(await findings(example('ts expect-error=TS2322', "'many'"))).toEqual(
+      [],
+    )
+    expect(
+      await findings(example('ts expect-error="TS2322"', "'many'")),
+    ).toEqual([])
+    expect(await findings(example('ts expect-error', '1'))).toEqual([
+      {
+        file: 'skills/retries/SKILL.md',
+        line: 8,
+        message:
+          'Expected an error, but the example compiles. Remove expect-error or correct the example.',
+        severity: 'error',
+      },
+    ])
+    expect(await findings(example('ts expect-error=TS2345', "'many'"))).toEqual(
+      [
+        expect.objectContaining({
+          line: 8,
+          message: 'Expected TS2345, but the example reported TS2322.',
+        }),
+      ],
+    )
+    expect(await findings(example('ts expect-error=TS2322', '1'))).toEqual([
+      expect.objectContaining({
+        line: 8,
+        message: 'Expected TS2322, but the example compiles.',
+      }),
+    ])
+  })
+
   it('checks imports from sibling workspace packages against their own source', async () => {
     write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n')
     write('packages/client/package.json', '{"name":"@acme/client"}\n')
