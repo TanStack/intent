@@ -243,8 +243,6 @@ export function applySourcePolicy(
 
   if (config.mode === 'explicit') {
     for (const { source, matchesPackage } of sourcePolicy.matchers) {
-      // The scanner keeps one package per name, so an exact selector has no
-      // second match to check.
       const pkg = scanResult.packages.find((candidate) =>
         matchesPackage(candidate.name, candidate.kind),
       )
