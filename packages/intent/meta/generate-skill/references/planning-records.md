@@ -35,11 +35,13 @@ skills:
     purpose: '[descriptive explanation; synchronized from metadata.purpose]'
     requires: ['[other skill slugs]'] # omit if none
     sources: ['src/[path].ts', 'owner/repo:docs/[path].md']
+    references: ['references/[file].md'] # required when the skill has reference files; relative to the skill directory
 ```
 
 - `domain_map.yaml` owns the domain/task relationships, supported failure modes, cross-references, tensions, and knowledge gaps. Keep task slugs and package ownership aligned with the skills.
 - `skill_spec.md` is the human-readable coverage and decision record. Retain the existing inventories and add a **Coverage and batch history** section recording the assessed scope, each completed batch or behavior change, its source revision/version, consequential decisions and reasons, check outcomes, and remaining work. Keep entries concise; do not store transcripts. Distinguish implemented guidance from planned work and unassessed areas.
 - `skill_tree.yaml` owns skill identities, paths, prerequisites, source mappings, and package placement. Keep existing planned entries and their status or explanatory notes. Add each new skill, and update entries when their names, paths, dependencies, or sources change. Resolve `path` relative to the owning package when `package` is present; otherwise resolve it relative to the library root. Keep `generated_from` links accurate for the actual artifact location.
+- `references` lists the `.md` files under the skill's `references/` directory. `intent validate` requires the key when the skill has reference files, and requires the list to match those files: each path has the form `references/<name>.md`, is listed once, and exists, and no file is left out. Omit the key, or use an empty list, for a skill without reference files. `intent validate` also checks every reference file as described in [the skill format](skill-format.md).
 
 Keep each tree entry's `description` aligned with its skill's activation description and its `purpose` aligned with `metadata.purpose`. Existing map/spec task explanations retain their meaning; do not replace them with trigger text. Record a purpose migration and its preserved source text in the batch review without discarding prior decisions.
 

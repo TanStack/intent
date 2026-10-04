@@ -61,6 +61,8 @@ Example pointer (create the reference only for a real retry branch):
 When configuring retries, read [retry behavior](references/retries.md) before choosing a policy.
 ```
 
+`intent validate` checks every `.md` file under `references/`. Write each reference as plain Markdown without frontmatter. Link to it from the `SKILL.md` body with a direct relative Markdown link; a link from another reference file is not sufficient. Its TypeScript and JavaScript fences are checked with the skill's fences.
+
 For a verification task (security, go-live, migration audit), use checks instead of setup/patterns: state what to inspect, the expected result, the failure condition, and the remediation. Include sourced mistakes and a final completion check. Use the applicable checklist template in [tree-generator's writing reference](../../tree-generator/references/write-skills.md#step-7--write-checklistaudit-skills-where-applicable) only when that detailed format is needed.
 
 For an entry selected from a full-library tree, retain its package placement, dependencies, failure-mode status, and cross-skill relationships. Read the applicable type template in [the tree writing reference](../../tree-generator/references/write-skills.md) when generating overview registries, framework trees, compositions, or cross-domain tension notes. The focused procedure remains in [generate-skill](../SKILL.md).
