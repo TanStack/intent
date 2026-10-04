@@ -8,7 +8,7 @@ export default defineConfig({
   entry: ['src/index.ts', 'src/cli.ts', 'src/core.ts'],
   format: 'esm',
   platform: 'node',
-  dts: true,
+  dts: { entry: ['src/index.ts', 'src/core.ts'] },
   onSuccess(config) {
     const packageDir = fileURLToPath(new URL('.', import.meta.url))
     const root = join(packageDir, '../..')
@@ -60,6 +60,11 @@ export default defineConfig({
     // requires './impl/*' at runtime); point at its ESM build instead.
     'jsonc-parser': fileURLToPath(
       new URL('./node_modules/jsonc-parser/lib/esm/main.js', import.meta.url),
+    ),
+    // yaml's `node` export condition is a CommonJS build that rolldown cannot
+    // tree-shake; point at the ES module build its `default` condition serves.
+    yaml: fileURLToPath(
+      new URL('./node_modules/yaml/browser/index.js', import.meta.url),
     ),
   },
 })
