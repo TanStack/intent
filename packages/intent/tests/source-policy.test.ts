@@ -264,11 +264,11 @@ describe('applySourcePolicy — allowlist matrix', () => {
       'fetching',
     ])
     expect(result.notices).toEqual([
-      '"@tanstack/query#removed" is declared in intent.skills but @tanstack/query has no skill named "removed".',
+      '"@tanstack/query#removed" is declared in intent.skills but was not discovered.',
     ])
   })
 
-  it('reports an exact selector for an undiscovered package only as not discovered', () => {
+  it('reports an exact selector for an undiscovered package once', () => {
     const result = applySourcePolicy(
       { packages: [pkg('@scope/a', ['x'])] },
       {
@@ -447,21 +447,6 @@ describe('applySourcePolicy — exclude interaction', () => {
     expect(result.packages[0]?.skills.map((entry) => entry.name)).toEqual([
       'keep',
     ])
-    expect(result.notices).toEqual([])
-  })
-
-  it('does not report a missing exact skill that an exclude blocks anyway', () => {
-    const result = applySourcePolicy(
-      { packages: [pkg('@scope/a', ['keep']), pkg('@scope/bad', ['y'])] },
-      {
-        config: config(['@scope/a#removed', '@scope/bad#removed']),
-        excludeMatchers: compileExcludePatterns([
-          '@scope/a#removed',
-          '@scope/bad',
-        ]),
-      },
-    )
-
     expect(result.notices).toEqual([])
   })
 })

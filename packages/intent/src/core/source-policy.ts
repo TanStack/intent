@@ -246,18 +246,14 @@ export function applySourcePolicy(
       const pkg = scanResult.packages.find((candidate) =>
         matchesPackage(candidate.name, candidate.kind),
       )
-      if (!pkg) {
-        emit(
-          `"${source.raw}" is declared in intent.skills but was not discovered.`,
-        )
-      } else if (
-        'skill' in source &&
-        source.skill !== undefined &&
-        !pkg.skills.some((skill) => skill.name === source.skill) &&
-        !isSkillExcluded(pkg.name, source.skill, excludeMatchers)
+      if (
+        !pkg ||
+        ('skill' in source &&
+          source.skill &&
+          !pkg.skills.some((skill) => skill.name === source.skill))
       ) {
         emit(
-          `"${source.raw}" is declared in intent.skills but ${pkg.name} has no skill named "${source.skill}".`,
+          `"${source.raw}" is declared in intent.skills but was not discovered.`,
         )
       }
     }
