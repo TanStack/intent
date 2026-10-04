@@ -88,9 +88,9 @@ describe('discovered command arguments', () => {
 
       const hint = formatRuntimeSkillLookupHint({ packageName, skillName })
       const hintCommand = hint.split('`')[1]!
-      const runners = ['npm', 'pnpm', 'yarn', 'bun', 'unknown'] as const
+      const runners = ['npm', 'pnpm', 'yarn', 'bun', 'nub', 'unknown'] as const
       const stubs =
-        'npm() { printf "%s\\n" "$@"; }; pnpm() { printf "%s\\n" "$@"; }; yarn() { printf "%s\\n" "$@"; }; bunx() { printf "%s\\n" "$@"; }; '
+        'npm() { printf "%s\\n" "$@"; }; pnpm() { printf "%s\\n" "$@"; }; yarn() { printf "%s\\n" "$@"; }; bunx() { printf "%s\\n" "$@"; }; nub() { printf "%s\\n" "$@"; }; '
       for (const shell of ['/bin/sh', '/bin/bash', '/bin/zsh'].filter(
         existsSync,
       )) {
@@ -108,7 +108,7 @@ describe('discovered command arguments', () => {
           expect(actual).toEqual([
             ...(runner === 'bun'
               ? ['--no-install', '--package', '@tanstack/intent', 'intent']
-              : runner === 'pnpm' || runner === 'yarn'
+              : runner === 'pnpm' || runner === 'yarn' || runner === 'nub'
                 ? ['exec', 'intent']
                 : ['exec', '--no', '--', 'intent']),
             'load',

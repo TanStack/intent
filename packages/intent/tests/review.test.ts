@@ -771,6 +771,7 @@ it('ignores Intent-owned files and lockfiles unless a skill maps them, and honor
   write('.claude-plugin/plugin.json', '{"name":"library"}\n')
   write('.github/workflows/check-skills.yml', 'name: Check Skills\n')
   write('pnpm-lock.yaml', 'lockfileVersion: 9\n')
+  write('nub.lock', '{}\n')
   write('packages/client/package.json', '{"name":"client"}\n')
   write(
     'package.json',

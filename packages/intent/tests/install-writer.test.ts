@@ -492,6 +492,28 @@ tanstackIntent:
     ).toEqual({ errors: [], ok: true })
   })
 
+  it('accepts a compact block whose mappings run through nub exec', () => {
+    const root = tempRoot()
+    const agentsPath = join(root, 'AGENTS.md')
+    const block = `<!-- intent-skills:start -->
+# TanStack Intent - before editing files, run the matching guidance command.
+tanstackIntent:
+  - id: "@tanstack/query#fetching"
+    run: "nub exec intent load @tanstack/query#fetching"
+    for: "Query data fetching"
+<!-- intent-skills:end -->
+`
+    writeFileSync(agentsPath, block)
+
+    expect(
+      verifyIntentSkillsBlockFile({
+        expectedBlock: block,
+        expectedMappingCount: 1,
+        targetPath: agentsPath,
+      }),
+    ).toEqual({ errors: [], ok: true })
+  })
+
   it('rejects when target file does not exist', () => {
     const root = tempRoot()
     const missingPath = join(root, 'AGENTS.md')

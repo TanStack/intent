@@ -114,7 +114,7 @@ Brace expansion and extglobs are unsupported. Ignored files, submodules, externa
 
 ### Ignored paths
 
-Files that Intent writes or that carry no library guidance do not appear as unmapped changes. The default list covers the agent instruction files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`), `.claude-plugin/**`, `.cursor-plugin/**`, `.github/workflows/check-skills.yml`, `.intent/**`, `**/package.json`, and the lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock`, `bun.lock`).
+Files that Intent writes or that carry no library guidance do not appear as unmapped changes. The default list covers the agent instruction files (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`), `.claude-plugin/**`, `.cursor-plugin/**`, `.github/workflows/check-skills.yml`, `.intent/**`, `**/package.json`, and the lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock`, `bun.lock`, `nub.lock`).
 
 The list only stops these paths from surfacing as unmapped changes. A skill that lists one of them in `sources` still tracks it.
 

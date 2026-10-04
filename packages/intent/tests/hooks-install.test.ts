@@ -52,6 +52,8 @@ describe('hook installer', () => {
         ['yarn exec intent load @tanstack/router#routing', true],
         ['bunx --no-install --package @tanstack/intent intent list', true],
         ['pnpm exec intent load @tanstack/router#routing', true],
+        ['nub exec intent load @tanstack/router#routing', true],
+        ['nub exec intent list', true],
         ['pnpm dlx @tanstack/intent@latest list --json', true],
         ['npx @tanstack/intent@latest load @tanstack/router#routing', true],
         ['yarn dlx @tanstack/intent list', true],
