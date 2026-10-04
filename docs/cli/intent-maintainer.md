@@ -73,6 +73,8 @@ Removal retires the skill: its tree entry gets `status: retired` and `skill_spec
 
 The command refuses while the skill is selected for repository distribution or required by another active skill, and names what to change first. Reselect the remaining skills with `maintainer setup --distribution repo --skill <name>`, or update the dependent skill's prerequisites, then retry.
 
+A skill name is unique within its owning package, so two workspace packages can register the same name. A prerequisite name refers to a skill in the same package. When more than one package registers the name, the command lists those packages; pass `--package <directory>` to select the skill to retire. A name that more than one package registers cannot be selected for repository distribution.
+
 ## Choose repository distribution
 
 Package skills can also be offered through GitHub installers and native plugins. Select the registered skills explicitly:
