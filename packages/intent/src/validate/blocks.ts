@@ -478,17 +478,22 @@ export function skillLinks(
 
 function checkSkillLinks(
   root: string,
+  packageDir: string,
   file: string,
   content: string,
 ): Array<SkillBlockFinding> {
   const findings: Array<SkillBlockFinding> = []
   const absolute = resolve(root, file)
   for (const { target, path, line } of skillLinks(content)) {
-    if (!existsSync(resolve(dirname(absolute), path)))
+    const resolved = resolve(dirname(absolute), path)
+    const outside = relative(packageDir, resolved).startsWith('..')
+    if (outside || !existsSync(resolved))
       findings.push({
         file,
         line,
-        message: `Link target not found: ${target}`,
+        message: outside
+          ? `Link target is outside the package: ${target}`
+          : `Link target not found: ${target}`,
         severity: 'error',
       })
   }
@@ -647,7 +652,7 @@ export async function checkSkillBlocks(
 ): Promise<SkillBlockCheck> {
   const { root, packageDir, library, cache = {} } = options
   const findings = options.skills.flatMap((skill) =>
-    checkSkillLinks(root, skill.file, skill.content),
+    checkSkillLinks(root, packageDir, skill.file, skill.content),
   )
   const blocks = [...options.skills, ...(options.references ?? [])].flatMap(
     (skill) => extractCodeBlocks(skill.file, skill.content),
