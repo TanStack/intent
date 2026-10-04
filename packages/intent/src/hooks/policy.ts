@@ -15,6 +15,9 @@ export const EDIT_TOOLS_BY_AGENT: Record<HookAgent, ReadonlySet<string>> = {
 export const GATE_DENY_REASON =
   'Blocked: check TanStack guidance before editing. If a listed skill matches, load it, then retry the edit.'
 
+export const INTENT_INVOCATION_PATTERN =
+  /(?:^|&&|\|\||;|\|)\s*((?:bunx\s+--no-install\s+--package\s+@tanstack\/intent\s+intent)|(?:npm\s+exec\s+--no\s+--\s+intent)|(?:yarn\s+exec\s+intent)|(?:bunx\s+@tanstack\/intent(?:@latest)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:(?:[^\s|;&]*[\\/])?intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i
+
 export function parseIntentInvocation(
   command: unknown,
 ): IntentInvocation | undefined {
@@ -25,9 +28,7 @@ export function parseIntentInvocation(
   // The bare `intent` form also accepts a path prefix such as
   // `node_modules/.bin/intent`, which the session catalog suggests when the
   // project has the CLI installed.
-  const match = command.match(
-    /(?:^|&&|\|\||;|\|)\s*((?:bunx\s+--no-install\s+--package\s+@tanstack\/intent\s+intent)|(?:npm\s+exec\s+--no\s+--\s+intent)|(?:yarn\s+exec\s+intent)|(?:bunx\s+@tanstack\/intent(?:@latest)?)|(?:pnpm\s+exec\s+intent)|(?:pnpm\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:npx\s+@tanstack\/intent(?:@latest)?)|(?:yarn\s+dlx\s+@tanstack\/intent(?:@latest)?)|(?:(?:[^\s|;&]*[\\/])?intent))\s+(list|load)(?:\s+([^\s|;&]+))?/i,
-  )
+  const match = command.match(INTENT_INVOCATION_PATTERN)
 
   if (!match?.[1] || !match[2]) {
     return undefined
