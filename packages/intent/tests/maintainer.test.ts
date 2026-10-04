@@ -641,7 +641,9 @@ it('reports invalid and conflicting existing skills without registering them', a
       name: 'taken',
       path: 'elsewhere/taken/SKILL.md',
     }),
+    expect.objectContaining({ name: 'query', package: 'packages/client' }),
     expect.objectContaining({ name: 'blank', domain: 'uncategorized' }),
+    expect.objectContaining({ name: 'query', path: 'skills/query/SKILL.md' }),
   ])
   const output = vi.mocked(console.log).mock.calls.flat().join('\n')
   expect(output).toContain(
@@ -650,12 +652,7 @@ it('reports invalid and conflicting existing skills without registering them', a
   expect(output).toContain(
     'Skipped skills/broken/SKILL.md: Skill name must match',
   )
-  expect(output).toContain(
-    'Skipped skills/query/SKILL.md: Another skill has the same name',
-  )
-  expect(output).toContain(
-    'Skipped packages/client/skills/query/SKILL.md: Another skill has the same name',
-  )
+  expect(output).not.toContain('skills/query/SKILL.md: Another skill')
 })
 
 it('keeps valid registrations when the planner rejects a candidate in the batch', async () => {
