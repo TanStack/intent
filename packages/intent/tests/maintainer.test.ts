@@ -641,7 +641,9 @@ it('reports invalid and conflicting existing skills without registering them', a
       name: 'taken',
       path: 'elsewhere/taken/SKILL.md',
     }),
+    expect.objectContaining({ name: 'query', package: 'packages/client' }),
     expect.objectContaining({ name: 'blank', domain: 'uncategorized' }),
+    expect.objectContaining({ name: 'query', path: 'skills/query/SKILL.md' }),
   ])
   const output = vi.mocked(console.log).mock.calls.flat().join('\n')
   expect(output).toContain(
@@ -650,12 +652,7 @@ it('reports invalid and conflicting existing skills without registering them', a
   expect(output).toContain(
     'Skipped skills/broken/SKILL.md: Skill name must match',
   )
-  expect(output).toContain(
-    'Skipped skills/query/SKILL.md: Another skill has the same name',
-  )
-  expect(output).toContain(
-    'Skipped packages/client/skills/query/SKILL.md: Another skill has the same name',
-  )
+  expect(output).not.toContain('skills/query/SKILL.md: Another skill')
 })
 
 it('keeps valid registrations when the planner rejects a candidate in the batch', async () => {
@@ -1055,4 +1052,173 @@ it('refuses to retire a skill selected for repository distribution', async () =>
   expect(
     parse(read('skills/_artifacts/skill_tree.yaml')).skills[0].status,
   ).toBeUndefined()
+})
+
+function addPackageSkill(
+  packageDir: string,
+  name: string,
+  requires: Array<string> = [],
+  domain = 'state',
+) {
+  return main([
+    'maintainer',
+    'add',
+    name,
+    '--package',
+    packageDir,
+    '--domain',
+    domain,
+    '--description',
+    `Use ${name} in ${packageDir}.`,
+    '--source',
+    'package.json',
+    ...requires.flatMap((dependency) => ['--requires', dependency]),
+  ])
+}
+
+it('scopes skill identity and prerequisites to the owning package', async () => {
+  const errors = () => vi.mocked(console.error).mock.calls.flat().map(String)
+  write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n')
+  write('packages/core/package.json', '{"name":"@library/core"}\n')
+  write('packages/react/package.json', '{"name":"@library/react"}\n')
+  expect(await main(['maintainer', 'setup', '--distribution', 'none'])).toBe(0)
+  expect(await addPackageSkill('packages/core', 'table-state')).toBe(0)
+  expect(await addPackageSkill('packages/react', 'table-state')).toBe(0)
+  expect(
+    await addPackageSkill('packages/react', 'adapter', ['table-state']),
+  ).toBe(0)
+  expect(await addPackageSkill('packages/core', 'rows', ['adapter'])).toBe(0)
+  expect(
+    parse(read('_artifacts/skill_tree.yaml')).skills.map(
+      (skill: { package: string; name: string }) =>
+        `${skill.package}:${skill.name}`,
+    ),
+  ).toEqual([
+    'packages/core:table-state',
+    'packages/react:table-state',
+    'packages/react:adapter',
+    'packages/core:rows',
+  ])
+  expect(await addPackageSkill('packages/react', 'table-state')).toBe(1)
+  expect(errors().at(-1)).toContain('Skill table-state is already registered')
+
+  vi.mocked(console.log).mockClear()
+  expect(await main(['maintainer', 'status'])).toBe(0)
+  const status = vi.mocked(console.log).mock.calls.flat().join('\n')
+  expect(status).toContain('4 skill(s)')
+  expect(status).toContain(
+    'rows: prerequisite adapter is not an implemented skill in this tree.',
+  )
+  expect(status).not.toContain('prerequisite table-state')
+  expect(await main(['maintainer', 'sync'])).toBe(0)
+
+  expect(await main(['maintainer', 'remove', 'table-state'])).toBe(1)
+  expect(errors().at(-1)).toBe(
+    'Skill table-state is registered in more than one package: packages/core, packages/react. Select one with --package <directory>.',
+  )
+  expect(
+    await main([
+      'maintainer',
+      'remove',
+      'table-state',
+      '--package',
+      'packages/react',
+    ]),
+  ).toBe(1)
+  expect(errors().at(-1)).toContain('is required by adapter')
+  expect(
+    await main([
+      'maintainer',
+      'remove',
+      'table-state',
+      '--package',
+      'packages/core',
+    ]),
+  ).toBe(0)
+  expect(
+    parse(read('_artifacts/skill_tree.yaml')).skills.map(
+      (skill: { status?: string }) => skill.status,
+    ),
+  ).toEqual(['retired', undefined, undefined, undefined])
+})
+
+it('matches a shared slug to the domain map entry in the same domain', async () => {
+  write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n')
+  write('packages/core/package.json', '{"name":"@library/core"}\n')
+  write('packages/react/package.json', '{"name":"@library/react"}\n')
+  expect(await main(['maintainer', 'setup', '--distribution', 'none'])).toBe(0)
+  expect(await addPackageSkill('packages/core', 'table-state')).toBe(0)
+  expect(
+    await addPackageSkill('packages/react', 'table-state', [], 'adapters'),
+  ).toBe(0)
+  write(
+    '_artifacts/domain_map.yaml',
+    'skills:\n  - slug: table-state\n    domain: state\n    tasks: [Own state]\n  - slug: table-state\n    domain: adapters\n    tasks: [Read state]\n',
+  )
+  vi.mocked(console.log).mockClear()
+  expect(await main(['maintainer', 'status'])).toBe(0)
+  const status = vi.mocked(console.log).mock.calls.flat().join('\n')
+  expect(status).toContain('2 skill(s)')
+  expect(status).not.toContain('table-state: reconcile')
+})
+
+it('rejects a repeated skill identity or path within one package', async () => {
+  write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n')
+  write('packages/core/package.json', '{"name":"@library/core"}\n')
+  write('packages/react/package.json', '{"name":"@library/react"}\n')
+  expect(await main(['maintainer', 'setup', '--distribution', 'none'])).toBe(0)
+  const entry = (packageDir: string, name: string, path: string) =>
+    `  - name: ${name}\n    slug: ${name}\n    domain: state\n    package: ${packageDir}\n    path: ${path}\n`
+  const shared =
+    entry('packages/core', 'table-state', 'skills/table-state/SKILL.md') +
+    entry('packages/react', 'table-state', 'skills/table-state/SKILL.md')
+  for (const repeated of [
+    entry('packages/core', 'table-state', 'skills/other/table-state/SKILL.md'),
+    entry('packages/core', 'renamed', 'skills/table-state/SKILL.md'),
+  ]) {
+    write('_artifacts/skill_tree.yaml', `skills:\n${shared}${repeated}`)
+    expect(await main(['maintainer', 'status'])).toBe(1)
+    expect(
+      vi.mocked(console.error).mock.calls.flat().map(String).at(-1),
+    ).toContain('Duplicate skill identity or path')
+  }
+})
+
+it('rejects a repository distribution skill name that more than one package registers', async () => {
+  write(
+    'package.json',
+    '{"name":"library","version":"1.0.0","repository":"https://github.com/acme/library"}\n',
+  )
+  write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n')
+  write('packages/core/package.json', '{"name":"@library/core"}\n')
+  write('packages/react/package.json', '{"name":"@library/react"}\n')
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  expect(await addPackageSkill('packages/core', 'table-state')).toBe(0)
+  expect(await addPackageSkill('packages/react', 'table-state')).toBe(0)
+  expect(await addPackageSkill('packages/react', 'adapter')).toBe(0)
+  const tree = read('_artifacts/skill_tree.yaml')
+  expect(
+    await main([
+      'maintainer',
+      'setup',
+      '--distribution',
+      'repo',
+      '--skill',
+      'table-state',
+    ]),
+  ).toBe(1)
+  expect(vi.mocked(console.error).mock.calls.flat().map(String).at(-1)).toBe(
+    'Distribution skill table-state is registered in more than one package: packages/core, packages/react. Repository distribution installs skills by name, so the name must belong to one package.',
+  )
+  expect(read('_artifacts/skill_tree.yaml')).toBe(tree)
+  expect(
+    await main([
+      'maintainer',
+      'setup',
+      '--distribution',
+      'repo',
+      '--skill',
+      'adapter',
+    ]),
+  ).toBe(0)
 })

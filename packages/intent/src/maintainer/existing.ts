@@ -11,6 +11,7 @@ import {
   readRecord,
   recordPath,
   skillEntries,
+  skillKey,
   skillPath,
 } from './project.js'
 import type { MaintainerProject } from './project.js'
@@ -57,7 +58,9 @@ export function findExistingSkills(
     ),
   )
   const registeredNames = new Set(
-    entries.map((entry) => String(entry.slug ?? entry.name)),
+    entries.map((entry) =>
+      skillKey(entry.package, String(entry.slug ?? entry.name)),
+    ),
   )
   const mapPath = recordPath(project, 'domain_map.yaml')
   const mapped: Array<unknown> =
@@ -131,8 +134,13 @@ export function findExistingSkills(
     })
   for (const skill of skills) {
     if (
-      registeredNames.has(skill.name) ||
-      skills.some((other) => other.id !== skill.id && other.name === skill.name)
+      registeredNames.has(skillKey(skill.package, skill.name)) ||
+      skills.some(
+        (other) =>
+          other.id !== skill.id &&
+          other.package === skill.package &&
+          other.name === skill.name,
+      )
     )
       skill.problems.push(
         'Another skill has the same name. Rename one before it can be registered.',

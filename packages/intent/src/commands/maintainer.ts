@@ -125,11 +125,11 @@ export const maintainerActions: Record<string, MaintainerAction> = {
     ].map((key) => optionHelp[key]!),
   },
   remove: {
-    usage: 'maintainer remove <name>',
+    usage: 'maintainer remove <name> [--package <directory>]',
     summary: 'Retire a registered skill without deleting its guidance.',
     writes:
       'The entry status in skill_tree.yaml and a note in skill_spec.md. Delete the SKILL.md yourself once its guidance is no longer needed.',
-    options: ['artifacts'].map((key) => optionHelp[key]!),
+    options: ['artifacts', 'package'].map((key) => optionHelp[key]!),
   },
   status: {
     usage: 'maintainer status [--json] [--base <ref>]',
@@ -255,7 +255,7 @@ export async function runMaintainerCommand(
       'requires',
       'task',
     ],
-    remove: ['artifacts'],
+    remove: ['artifacts', 'package'],
     status: ['artifacts', 'base', 'json'],
     sync: ['artifacts'],
     review: ['base', 'json', 'record', 'interactive', 'unchanged', 'updated'],
@@ -420,7 +420,7 @@ export async function runMaintainerCommand(
           `Next: author the guidance with intent meta generate-skill, record its developer tasks in ${project.artifacts}/domain_map.yaml, then run intent maintainer sync, intent maintainer review, and intent maintainer check.`,
         )
       } else if (action === 'remove') {
-        const retired = retireSkill(project, name)
+        const retired = retireSkill(project, name, options.package)
         console.log(`Retired ${name}.`)
         console.log(`Updated: ${retired.files.join(', ')}`)
         console.log(
