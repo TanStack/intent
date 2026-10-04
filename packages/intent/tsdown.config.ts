@@ -8,7 +8,7 @@ export default defineConfig({
   entry: ['src/index.ts', 'src/cli.ts', 'src/core.ts'],
   format: 'esm',
   platform: 'node',
-  dts: true,
+  dts: { entry: ['src/index.ts', 'src/core.ts'] },
   onSuccess(config) {
     const packageDir = fileURLToPath(new URL('.', import.meta.url))
     const root = join(packageDir, '../..')
