@@ -434,6 +434,7 @@ async function splitExamples(
 
 function checkSkillLinks(
   root: string,
+  packageDir: string,
   file: string,
   content: string,
 ): Array<SkillBlockFinding> {
@@ -454,11 +455,16 @@ function checkSkillLinks(
     if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) continue
     const path = target.replace(/[#?].*$/, '')
     if (!path) continue
-    if (!existsSync(resolve(dirname(absolute), path)))
+    const resolved = resolve(dirname(absolute), path)
+    // A consumer project installs only the package, not the files around it.
+    const outside = /^\.\.([\\/]|$)/.test(relative(packageDir, resolved))
+    if (outside || !existsSync(resolved))
       findings.push({
         file,
         line: prose.slice(0, match.index).split('\n').length,
-        message: `Link target not found: ${target}`,
+        message: outside
+          ? `Link target is outside the package: ${target}`
+          : `Link target not found: ${target}`,
         severity: 'error',
       })
   }
@@ -610,7 +616,7 @@ export async function checkSkillBlocks(
 ): Promise<SkillBlockCheck> {
   const { root, packageDir, library } = options
   const findings = options.skills.flatMap((skill) =>
-    checkSkillLinks(root, skill.file, skill.content),
+    checkSkillLinks(root, packageDir, skill.file, skill.content),
   )
   const blocks = options.skills.flatMap((skill) =>
     extractCodeBlocks(skill.file, skill.content),

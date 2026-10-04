@@ -98,7 +98,7 @@ Module augmentations and global declarations still share the package compiler co
 
 TypeScript 5.0 or newer must be available in the repository for code checking. If it or the library type entry is unavailable, Intent reports why those checks were skipped; this is not a successful typecheck. Prose-only skills do not load TypeScript. With TypeScript 7.0, Intent checks examples through the compiler API that TypeScript 7 publishes as unstable; Node.js 24 or newer is supported. When `@typescript/typescript6` is installed beside TypeScript 7, Intent uses that package instead. If neither API can run, Intent reports that the checks were skipped. TypeScript 7.1 is not supported at this time.
 
-Relative Markdown links outside fenced examples must point to an existing file or directory. External URLs and anchors are not checked. Link checks still run when TypeScript is unavailable. Repeated validations read current source files and link targets.
+Relative Markdown links outside fenced examples must point to an existing file or directory. The target must also be inside the package that owns the skill. Only the package is installed in a consumer project, so a link to a file elsewhere in the repository fails with `Link target is outside the package: <target>` even when the file exists. The boundary is the package root directory; the `files` list in `package.json` is not consulted. External URLs and anchors are not checked. Link checks still run when TypeScript is unavailable. Repeated validations read current source files and link targets.
 
 ### Artifacts
 

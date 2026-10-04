@@ -685,6 +685,58 @@ it('checks prose links without loading TypeScript', async () => {
   expect(existsSync(join(root, 'typescript-loaded'))).toBe(false)
 })
 
+it('rejects links that leave the package, even when the target exists', async () => {
+  write('docs/guide.md', '# Guide\n')
+  write('packages/client/README.md', '# Client\n')
+  write(
+    'packages/client/skills/run/SKILL.md',
+    [
+      '---',
+      'name: run',
+      'description: Use when running.',
+      '---',
+      'See the [guide](../../../../docs/guide.md#setup).',
+      'See the [readme](../../README.md).',
+      'See [missing](references/missing.md).',
+      'See the [missing guide](../../../../docs/missing.md).',
+      '',
+    ].join('\n'),
+  )
+  expect(
+    (
+      await checkSkillBlocks({
+        root,
+        packageDir: join(root, 'packages/client'),
+        library: '@acme/client',
+        skills: [
+          {
+            file: 'packages/client/skills/run/SKILL.md',
+            content: read('packages/client/skills/run/SKILL.md'),
+          },
+        ],
+      })
+    ).findings,
+  ).toEqual([
+    expect.objectContaining({
+      line: 5,
+      severity: 'error',
+      message:
+        'Link target is outside the package: ../../../../docs/guide.md#setup',
+    }),
+    expect.objectContaining({
+      line: 7,
+      severity: 'error',
+      message: 'Link target not found: references/missing.md',
+    }),
+    expect.objectContaining({
+      line: 8,
+      severity: 'error',
+      message:
+        'Link target is outside the package: ../../../../docs/missing.md',
+    }),
+  ])
+})
+
 it('skips typechecking with a reason when TypeScript 7 has no compiler API Intent can use', async () => {
   fakeTypeScript7()
   skill(
