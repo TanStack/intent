@@ -404,7 +404,6 @@ function createCli(
     })
 
   cli.help()
-  cli.option('-v, --version', 'Display version number')
 
   return cli
 }
@@ -414,6 +413,15 @@ export async function main(
   runtime: InstallCommandRuntime & MaintainerCommandRuntime = {},
 ) {
   try {
+    if (argv[0] === '--version') {
+      console.log(
+        JSON.parse(
+          readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+        ).version,
+      )
+      return 0
+    }
+
     const cli = createCli(runtime)
 
     if (argv.length === 0) {
@@ -444,15 +452,6 @@ export async function main(
     cli.parse(['intent', 'intent', ...argv], { run: false })
 
     if (cli.options.help) {
-      return 0
-    }
-
-    if (cli.options.version) {
-      console.log(
-        JSON.parse(
-          readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-        ).version,
-      )
       return 0
     }
 
