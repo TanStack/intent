@@ -251,6 +251,46 @@ describe('applySourcePolicy — allowlist matrix', () => {
     expect(result.notices).toEqual([])
   })
 
+  it('reports an exact selector whose package has no skill with that name', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@tanstack/query', ['fetching'])] },
+      {
+        config: config(['@tanstack/query#fetching', '@tanstack/query#removed']),
+        excludeMatchers: [],
+      },
+    )
+
+    expect(result.packages[0]?.skills.map((entry) => entry.name)).toEqual([
+      'fetching',
+    ])
+    expect(result.notices).toEqual([
+      '"@tanstack/query#removed" is declared in intent.skills but was not discovered.',
+    ])
+  })
+
+  it('reports an exact selector for an undiscovered package once', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/a', ['x'])] },
+      {
+        config: config(['@scope/a', '@scope/missing#removed']),
+        excludeMatchers: [],
+      },
+    )
+
+    expect(result.notices).toEqual([
+      '"@scope/missing#removed" is declared in intent.skills but was not discovered.',
+    ])
+  })
+
+  it('does not report a package selector for a package without skills', () => {
+    const result = applySourcePolicy(
+      { packages: [pkg('@scope/a', [])] },
+      { config: config(['@scope/a']), excludeMatchers: [] },
+    )
+
+    expect(result.notices).toEqual([])
+  })
+
   it('lets a package selector take precedence over exact selectors', () => {
     const result = applySourcePolicy(
       { packages: [pkg('@tanstack/query', ['fetching', 'mutations'])] },
@@ -407,6 +447,7 @@ describe('applySourcePolicy — exclude interaction', () => {
     expect(result.packages[0]?.skills.map((entry) => entry.name)).toEqual([
       'keep',
     ])
+    expect(result.notices).toEqual([])
   })
 })
 

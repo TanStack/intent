@@ -267,12 +267,14 @@ function findMatchingSkill(
 function buildArtifactSignals({
   artifactRoot,
   artifacts,
+  currentVersion,
   library,
   packageDir,
   skillMetas,
 }: {
   artifactRoot: string
   artifacts: IntentArtifactSet | null
+  currentVersion: string | null
   library: string
   packageDir: string
   skillMetas: Array<SkillMeta>
@@ -355,7 +357,8 @@ function buildArtifactSignals({
     if (
       artifactVersion &&
       matchingSkill.libraryVersion &&
-      artifactVersion !== matchingSkill.libraryVersion
+      artifactVersion !== matchingSkill.libraryVersion &&
+      matchingSkill.libraryVersion !== currentVersion
     ) {
       signals.push({
         type: 'artifact-library-version-drift',
@@ -550,6 +553,7 @@ export async function checkStaleness(
     signals: buildArtifactSignals({
       artifactRoot,
       artifacts,
+      currentVersion,
       library,
       packageDir,
       skillMetas,

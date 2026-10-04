@@ -143,12 +143,17 @@ export function skillEntries(
     const skill = entry as SkillEntry
     const path = skillPath(project, skill)
     const identity = typeof skill.slug === 'string' ? skill.slug : skill.name
-    if (names.has(identity) || paths.has(path))
+    const key = skillKey(skill.package, identity)
+    if (names.has(key) || paths.has(path))
       throw new Error(`Duplicate skill identity or path: ${identity}`)
-    names.add(identity)
+    names.add(key)
     paths.add(path)
     return skill
   })
+}
+
+export function skillKey(packageDir: string | undefined, name: string): string {
+  return packageDir ? `${packageDir}:${name}` : name
 }
 
 export function skillPath(

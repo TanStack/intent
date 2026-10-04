@@ -115,6 +115,7 @@ Reason generation:
 - Report header format: `<library> (<skillVersion> → <currentVersion>) [<versionDrift> drift]`
 - When no skill reasons exist: `All skills up-to-date`
 - Otherwise: one warning line per stale skill or review signal (`⚠ <name>: <reason1>, <reason2>, ...`)
+- Review signals that produce the same line, such as one raised by both `domain_map.yaml` and `skill_tree.yaml`, print once; JSON output keeps each signal with its `artifactPath`
 
 ## Generated review files
 

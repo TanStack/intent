@@ -613,6 +613,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+export interface SkillBlockCache {
+  workspacePaths?: Record<string, Array<string>>
+  sourceFiles?: Map<string, TS.SourceFile>
+}
+
 export async function checkSkillBlocks(
   options: {
     root: string
@@ -620,10 +625,11 @@ export async function checkSkillBlocks(
     library: string
     skills: Array<{ file: string; content: string }>
     references?: Array<{ file: string; content: string }>
+    cache?: SkillBlockCache
   },
   ts?: typeof TS | null,
 ): Promise<SkillBlockCheck> {
-  const { root, packageDir, library } = options
+  const { root, packageDir, library, cache = {} } = options
   const findings = options.skills.flatMap((skill) =>
     checkSkillLinks(root, skill.file, skill.content),
   )
@@ -664,7 +670,7 @@ export async function checkSkillBlocks(
   const compilerOptions = {
     ...exampleCompilerOptions,
     paths: {
-      ...workspacePaths(root),
+      ...(cache.workspacePaths ??= workspacePaths(root)),
       // A skill documenting another package (metadata.library) resolves that
       // package through the workspace or node_modules, not this package's entry.
       ...(ownsLibrary
@@ -712,11 +718,15 @@ export async function checkSkillBlocks(
   const fileExists = host.fileExists.bind(host)
   host.fileExists = (path) => virtual.has(path) || fileExists(path)
   host.readFile = (path) => virtual.get(path)?.code ?? readFile(path)
+  const sourceFiles = (cache.sourceFiles ??= new Map())
   host.getSourceFile = (path, languageVersion) => {
-    const code = virtual.get(path)?.code ?? readFile(path)
-    return code === undefined
-      ? undefined
-      : ts.createSourceFile(path, code, languageVersion, true)
+    const block = virtual.get(path)
+    if (!block && sourceFiles.has(path)) return sourceFiles.get(path)
+    const code = block?.code ?? readFile(path)
+    if (code === undefined) return undefined
+    const source = ts.createSourceFile(path, code, languageVersion, true)
+    if (!block) sourceFiles.set(path, source)
+    return source
   }
   const program = ts.createProgram([...virtual.keys()], parsedOptions, host)
   const checker = program.getTypeChecker()
@@ -927,6 +937,7 @@ export async function describeSkillExamples(
     groups.set(key, group)
   }
   const summaries = new Map<string, string>()
+  const cache: SkillBlockCache = {}
   for (const group of groups.values()) {
     const skills = group.files.map((file) => ({
       file,
@@ -937,6 +948,7 @@ export async function describeSkillExamples(
       packageDir: group.packageDir,
       library: group.library,
       skills,
+      cache,
     })
     for (const [file, summary] of summarizeSkillExamples(result, skills))
       summaries.set(file, summary)
