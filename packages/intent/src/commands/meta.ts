@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fail } from '../shared/cli-error.js'
+import { parseFrontmatter } from '../shared/utils.js'
 import { rewriteLoadedSkillMarkdownDestinations } from '../core/markdown.js'
 
 export async function runMetaCommand(
@@ -40,7 +41,6 @@ export async function runMetaCommand(
     return
   }
 
-  const { parseFrontmatter } = await import('../shared/utils.js')
   const entries = readdirSync(metaDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .filter((entry) => existsSync(join(metaDir, entry.name, 'SKILL.md')))
