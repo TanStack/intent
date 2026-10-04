@@ -52,6 +52,15 @@ export function planMaintainerSync(project: MaintainerProject) {
   )
   for (const [index, entry] of entries.entries()) {
     if (['planned', 'retired'].includes(String(entry.status))) continue
+    if (
+      entry.package &&
+      entry.path.startsWith(`${entry.package}/`) &&
+      !existsSync(skillPath(project, entry)) &&
+      existsSync(projectPath(project.root, entry.path))
+    ) {
+      entry.path = entry.path.slice(entry.package.length + 1)
+      tree.document.setIn(['skills', index, 'path'], entry.path)
+    }
     const path = skillPath(project, entry)
     if (!existsSync(path)) {
       problems.push(`Missing skill: ${entry.path}`)
