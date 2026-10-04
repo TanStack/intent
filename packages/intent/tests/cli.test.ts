@@ -263,6 +263,13 @@ describe('cli commands', () => {
     expect(output).toContain('$ intent <command> [options]')
   })
 
+  it('prints the package version for --version', async () => {
+    const { version } = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+
+    expect(await main(['--version'])).toBe(0)
+    expect(logSpy.mock.calls).toEqual([[version]])
+  })
+
   it('prints top-level help for unknown commands', async () => {
     const exitCode = await main(['wat'])
     const output = getHelpOutput()

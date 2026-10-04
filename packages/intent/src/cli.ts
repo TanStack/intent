@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { realpathSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { cac } from 'cac'
 import { fail, isCliFailure } from './shared/cli-error.js'
@@ -413,6 +413,15 @@ export async function main(
   runtime: InstallCommandRuntime & MaintainerCommandRuntime = {},
 ) {
   try {
+    if (argv[0] === '--version') {
+      console.log(
+        JSON.parse(
+          readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+        ).version,
+      )
+      return 0
+    }
+
     const cli = createCli(runtime)
 
     if (argv.length === 0) {
