@@ -358,7 +358,6 @@ function buildArtifactSignals({
       artifactVersion &&
       matchingSkill.libraryVersion &&
       artifactVersion !== matchingSkill.libraryVersion &&
-      // One artifact version cannot match every independently versioned package
       matchingSkill.libraryVersion !== currentVersion
     ) {
       signals.push({
