@@ -12,6 +12,7 @@ import {
   planFrontmatterRepair,
 } from '../validate/repairs.js'
 import { printWarnings } from './support.js'
+import type { SkillBlockCache } from '../validate/blocks.js'
 import type { FileChange } from '../maintainer/files.js'
 import type { ProjectContext } from '../core/project-context.js'
 
@@ -398,6 +399,7 @@ async function runValidateCommandInternal(
   const errors: Array<ValidationError> = []
   const warnings: Array<string> = []
   const skippedBlockChecks = new Set<string>()
+  const blockCache: SkillBlockCache = {}
   const fixPlans: Array<FrontmatterFixPlan> = []
   const setVersionPlans: Array<SetVersionPlan> = []
   let validatedCount = 0
@@ -574,6 +576,7 @@ async function runValidateCommandInternal(
           packageDir: validateContext.packageRoot,
           library,
           skills,
+          cache: blockCache,
         })
         if (exampleSummaries)
           for (const [file, summary] of summarizeSkillExamples(result, skills))
