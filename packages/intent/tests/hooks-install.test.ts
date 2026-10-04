@@ -16,6 +16,7 @@ import {
   formatHookInstallResult,
   runInstallHooks,
 } from '../src/hooks/install.js'
+import { parseIntentInvocation } from '../src/hooks/policy.js'
 
 const tempDirs: Array<string> = []
 
@@ -36,6 +37,22 @@ function readJson(filePath: string): Record<string, any> {
 }
 
 describe('hook installer', () => {
+  const commands = [
+    ['intent list', true],
+    ['npm exec --no -- intent list', true],
+    ['yarn exec intent load @tanstack/router#routing', true],
+    ['bunx --no-install --package @tanstack/intent intent list', true],
+    ['pnpm exec intent load @tanstack/router#routing', true],
+    ['pnpm dlx @tanstack/intent@latest list --json', true],
+    ['npx @tanstack/intent@latest load @tanstack/router#routing', true],
+    ['yarn dlx @tanstack/intent list', true],
+    ['bunx @tanstack/intent list', true],
+    ['npm test || intent load @tanstack/router#routing', true],
+    ['echo intent load @tanstack/router#routing', false],
+    ['# intent list', false],
+    ['intent load', false],
+  ] as const
+
   it.each(['claude', 'codex', 'copilot'] as const)(
     'preserves invocation parsing in the standalone %s runner',
     (agent) => {
@@ -46,21 +63,6 @@ describe('hook installer', () => {
         agent === 'copilot'
           ? { permissionDecision: 'deny' }
           : { hookSpecificOutput: { permissionDecision: 'deny' } }
-      const commands = [
-        ['intent list', true],
-        ['npm exec --no -- intent list', true],
-        ['yarn exec intent load @tanstack/router#routing', true],
-        ['bunx --no-install --package @tanstack/intent intent list', true],
-        ['pnpm exec intent load @tanstack/router#routing', true],
-        ['pnpm dlx @tanstack/intent@latest list --json', true],
-        ['npx @tanstack/intent@latest load @tanstack/router#routing', true],
-        ['yarn dlx @tanstack/intent list', true],
-        ['bunx @tanstack/intent list', true],
-        ['npm test || intent load @tanstack/router#routing', true],
-        ['echo intent load @tanstack/router#routing', false],
-        ['# intent list', false],
-        ['intent load', false],
-      ] as const
       for (const [index, [command, checked]] of commands.entries()) {
         const event = {
           cwd: root,
@@ -89,6 +91,25 @@ describe('hook installer', () => {
     },
     // Each case launches 39 real Node processes, including three for each runner.
     30_000,
+  )
+
+  it.each(['claude', 'codex', 'copilot'] as const)(
+    'parses commands in the %s runner exactly like the source parser',
+    (agent) => {
+      const parseInScript = parserFromScript(buildHookRunnerScript(agent))
+      const inputs = [
+        ...commands.map(([command]) => command),
+        'INTENT LOAD @tanstack/router#routing',
+        'cd packages/app && ../../node_modules/.bin/intent load @tanstack/x#y',
+        'node_modules\\.bin\\intent load @tanstack/x#y',
+        'my-intent load @tanstack/x#y',
+        ['intent list'],
+        undefined,
+      ]
+      for (const input of inputs) {
+        expect(parseInScript(input)).toStrictEqual(parseIntentInvocation(input))
+      }
+    },
   )
 
   it('declares supported scopes in the adapter registry', () => {
@@ -722,6 +743,16 @@ function runHookScript(scriptPath: string, event: Record<string, unknown>) {
     input: JSON.stringify(event),
     timeout: 5_000,
   })
+}
+
+function parserFromScript(script: string): (command: unknown) => unknown {
+  const pattern = /^const INTENT_INVOCATION_PATTERN = .+$/m.exec(script)
+  const parser = /^function parseIntentInvocation\(command\) \{$.+?^\}$/ms.exec(
+    script,
+  )
+  return new Function(
+    `${pattern?.[0]}\n${parser?.[0]}\nreturn parseIntentInvocation`,
+  )()
 }
 
 function writeFakeIntentListCommand(root: string): string {

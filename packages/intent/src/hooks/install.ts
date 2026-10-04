@@ -8,7 +8,7 @@ import { ALL_HOOK_AGENTS, HOOK_AGENT_ADAPTERS } from './adapters.js'
 import {
   EDIT_TOOLS_BY_AGENT,
   GATE_DENY_REASON,
-  parseIntentInvocation,
+  INTENT_INVOCATION_PATTERN,
 } from './policy.js'
 import type { HookAgent, HookInstallScope } from './types.js'
 
@@ -89,7 +89,7 @@ const CATALOG_COMMAND = ${JSON.stringify(catalogCommand)}
 const LOAD_COMMAND = ${JSON.stringify(loadCommand)}
 const EDIT_TOOLS = new Set(${JSON.stringify(editTools)})
 const GATE_DENY_REASON = ${JSON.stringify(GATE_DENY_REASON)}
-const parseIntentInvocation = ${parseIntentInvocation.toString()}
+const INTENT_INVOCATION_PATTERN = ${INTENT_INVOCATION_PATTERN}
 
 try {
   await main()
@@ -277,6 +277,17 @@ function stateFileForEvent(event) {
   const cwd = typeof event?.cwd === 'string' ? event.cwd : process.cwd()
   const key = createHash('sha256').update(AGENT + '\\0' + cwd + '\\0' + sessionId).digest('hex')
   return join(tmpdir(), 'tanstack-intent-hooks', key + '.jsonl')
+}
+
+function parseIntentInvocation(command) {
+  if (typeof command !== 'string') return undefined
+  const match = command.match(INTENT_INVOCATION_PATTERN)
+  if (!match?.[1] || !match[2]) return undefined
+  const action = match[2].toLowerCase()
+  if (action !== 'list' && action !== 'load') return undefined
+  const skillUse = action === 'load' ? match[3] : undefined
+  if (action === 'load' && !skillUse) return undefined
+  return action === 'load' ? { action, skillUse } : { action }
 }
 
 function observationFromEvent(event) {
