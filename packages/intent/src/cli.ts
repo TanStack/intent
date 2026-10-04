@@ -448,8 +448,13 @@ export async function main(
       }
     }
 
+    // cac parses argv once per registered command, so give it only the one being run
+    const { commands } = cli
+    const matched = commands.filter((command) => command.isMatched(argv[0]!))
+    if (matched.length > 0) cli.commands = matched
     // cac expects process.argv format: first two entries (binary + script) are ignored
     cli.parse(['intent', 'intent', ...argv], { run: false })
+    cli.commands = commands
 
     if (cli.options.help) {
       return 0
