@@ -596,10 +596,12 @@ async function runValidateCommandInternal(
 
       const skillDir = dirname(filePath)
       const skillName = basename(skillDir)
-      const linked = new Set(
-        skillLinks(match[2]!).map((link) => resolve(skillDir, link.path)),
-      )
       const referenceFiles = findReferenceFiles(skillDir)
+      const linked = new Set(
+        referenceFiles.length
+          ? skillLinks(match[2]!).map((link) => resolve(skillDir, link.path))
+          : [],
+      )
       const references = referenceFiles.map((reference) => {
         const referencePath = join(skillDir, reference)
         const file = relative(process.cwd(), referencePath)
