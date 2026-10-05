@@ -129,7 +129,7 @@ review:
 
 Entries use the same Git glob syntax as source mappings. An entry that is not a non-empty string fails review with the path of the tree file.
 
-A `skills/**/SKILL.md` that matches `review.ignore` is not a library skill: review and `maintainer setup` skip it unless the skill tree declares its path. Use this for agent skills kept beside the library, such as the skills of a Claude Code plugin.
+A `skills/**/SKILL.md` that matches `review.ignore` is not a library skill: `maintainer setup` does not register it, and review skips it unless the skill tree declares its path, a custom root holds it, or the review state already records it. Use this for agent skills kept beside the library, such as the skills of a Claude Code plugin.
 
 ### Required planning documents
 
