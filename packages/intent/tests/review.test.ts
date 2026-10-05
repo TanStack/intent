@@ -168,6 +168,36 @@ it('ignores hidden agent directories during default skill discovery', () => {
     'skill:skills/request/SKILL.md',
   ])
 })
+it('leaves skills that review.ignore matches out of default skill discovery', () => {
+  const pluginSkill = 'plugins/review/skills/review-code/SKILL.md'
+  write('plugins/review/.claude-plugin/plugin.json', '{"name":"review"}\n')
+  write(
+    pluginSkill,
+    '---\nname: review-code\ndescription: Review code\n---\nReview guidance.\n',
+  )
+  planningRecords('_artifacts')
+  git('add', '.')
+  git('commit', '-qm', 'plugin skill')
+  expect(createReview(root).items.map((item) => item.id)).toContain(
+    `skill:${pluginSkill}`,
+  )
+
+  write(
+    '_artifacts/skill_tree.yaml',
+    'library: { name: library }\nreview:\n  ignore: [plugins/**]\nskills: []\n',
+  )
+  expect(createReview(root).items.map((item) => item.id)).not.toContain(
+    `skill:${pluginSkill}`,
+  )
+
+  write(
+    '_artifacts/skill_tree.yaml',
+    `library: { name: library }\nreview:\n  ignore: [plugins/**]\nskills: [{path: ${pluginSkill}}]\n`,
+  )
+  expect(createReview(root).items.map((item) => item.id)).toContain(
+    `skill:${pluginSkill}`,
+  )
+})
 it('retains a hidden skill through review state without explicit declaration or custom root', () => {
   const skillPath = '.agents/skills/hidden/SKILL.md'
 

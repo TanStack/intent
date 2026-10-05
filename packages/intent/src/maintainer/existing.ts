@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { basename, dirname, relative } from 'node:path'
 import { resolveProjectContext } from '../core/project-context.js'
+import { reviewIgnorePatterns } from '../review/review.js'
 import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
 import { isDefaultSkillPath, parseFrontmatter } from '../shared/utils.js'
 import { stringList } from './add.js'
@@ -35,22 +36,33 @@ export function findExistingSkills(
   project: MaintainerProject,
   changes: ReadonlyArray<FileChange> = [],
 ): Array<ExistingSkill> {
-  const files = execFileSync(
-    'git',
-    [
-      '-c',
-      'core.fsmonitor=false',
-      'ls-files',
-      '--cached',
-      '--others',
-      '--exclude-standard',
-      '-z',
-    ],
-    { cwd: project.root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
-  )
-    .split('\0')
-    .filter(Boolean)
+  const listFiles = (patterns: Array<string> = []) =>
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'core.fsmonitor=false',
+        'ls-files',
+        '--cached',
+        '--others',
+        '--exclude-standard',
+        '-z',
+        '--',
+        ...patterns,
+      ],
+      { cwd: project.root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
+    )
+      .split('\0')
+      .filter(Boolean)
+  const files = listFiles()
   const tree = readRecord(project, 'skill_tree.yaml', changes)
+  const ignorePatterns = reviewIgnorePatterns(
+    tree.document.toJS(),
+    relative(project.root, tree.path).replaceAll('\\', '/'),
+  )
+  const ignored = new Set(
+    ignorePatterns.length > 0 ? listFiles(ignorePatterns) : [],
+  )
   const entries = skillEntries(project, tree)
   const registered = new Set(
     entries.map((entry) =>
@@ -80,6 +92,7 @@ export function findExistingSkills(
         basename(path) === 'SKILL.md' &&
         /(^|\/)skills\//.test(path) &&
         isDefaultSkillPath(path) &&
+        !ignored.has(path) &&
         !registered.has(path),
     )
     .sort()

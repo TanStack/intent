@@ -362,7 +362,10 @@ function globPattern(path: string, label: string, kind: string): string {
   return `:(top,glob)${path}`
 }
 
-function reviewIgnorePatterns(tree: Record<string, unknown>, path: string) {
+export function reviewIgnorePatterns(
+  tree: Record<string, unknown>,
+  path: string,
+) {
   if (tree.review === undefined) return []
   const ignore = isObject(tree.review) ? tree.review.ignore : undefined
   if (
@@ -531,9 +534,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     .map((dir) => dirname(dir))
     .filter((dir) => dir !== '.' && !files.includes(`${dir}/package.json`))
   const declaredSkills = new Set<string>()
-  const ignorePatterns = defaultReviewIgnore.map((pattern) =>
-    globPattern(pattern, pattern, 'review.ignore'),
-  )
+  const treeIgnorePatterns: Array<string> = []
   for (const dir of existingArtifactDirs) {
     const treePath = join(dir, 'skill_tree.yaml').replaceAll('\\', '/')
     let tree: unknown
@@ -544,7 +545,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       continue
     }
     if (!isObject(tree)) continue
-    ignorePatterns.push(...reviewIgnorePatterns(tree, treePath))
+    treeIgnorePatterns.push(...reviewIgnorePatterns(tree, treePath))
     if (Array.isArray(tree.skills)) {
       for (const entry of tree.skills) {
         if (!isObject(entry) || typeof entry.path !== 'string') continue
@@ -556,16 +557,27 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       }
     }
   }
+  const ignorePatterns = [
+    ...defaultReviewIgnore.map((pattern) =>
+      globPattern(pattern, pattern, 'review.ignore'),
+    ),
+    ...treeIgnorePatterns,
+  ]
   // Query Git for ignored paths only when an uncovered change needs classifying.
   let ignored: Set<string> | undefined
   const isIgnored = (path: string) => {
     ignored ??= new Set([...list(ignorePatterns), ...diff(ignorePatterns)])
     return ignored.has(path)
   }
+  const treeIgnored = new Set(
+    treeIgnorePatterns.length > 0 ? list(treeIgnorePatterns) : [],
+  )
   const skillFiles = files.filter(
     (path) =>
       basename(path) === 'SKILL.md' &&
-      ((/(^|\/)skills\//.test(path) && isDefaultSkillPath(path)) ||
+      ((/(^|\/)skills\//.test(path) &&
+        isDefaultSkillPath(path) &&
+        !treeIgnored.has(path)) ||
         customRoots.some((dir) => path.startsWith(`${dir}/`)) ||
         declaredSkills.has(path) ||
         state?.items[`skill:${path}`]),
