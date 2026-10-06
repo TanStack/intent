@@ -198,6 +198,18 @@ it('leaves skills that review.ignore matches out of default skill discovery', ()
     `skill:${pluginSkill}`,
   )
 })
+it('leaves an ignored skill under the root skills directory out of review', () => {
+  planningRecords()
+  write(
+    'skills/_artifacts/skill_tree.yaml',
+    "library: { name: library }\nreview:\n  ignore: ['**/*.md']\nskills: []\n",
+  )
+  git('add', '.')
+  git('commit', '-qm', 'ignore markdown')
+  expect(createReview(root).items.map((item) => item.id)).not.toContain(
+    'skill:skills/request/SKILL.md',
+  )
+})
 it('retains a hidden skill through review state without explicit declaration or custom root', () => {
   const skillPath = '.agents/skills/hidden/SKILL.md'
 

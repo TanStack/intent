@@ -575,10 +575,9 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
   const skillFiles = files.filter(
     (path) =>
       basename(path) === 'SKILL.md' &&
-      ((/(^|\/)skills\//.test(path) &&
-        isDefaultSkillPath(path) &&
-        !treeIgnored.has(path)) ||
-        customRoots.some((dir) => path.startsWith(`${dir}/`)) ||
+      ((!treeIgnored.has(path) &&
+        ((/(^|\/)skills\//.test(path) && isDefaultSkillPath(path)) ||
+          customRoots.some((dir) => path.startsWith(`${dir}/`)))) ||
         declaredSkills.has(path) ||
         state?.items[`skill:${path}`]),
   )
