@@ -655,6 +655,27 @@ it('reports invalid and conflicting existing skills without registering them', a
   expect(output).not.toContain('skills/query/SKILL.md: Another skill')
 })
 
+it('does not register existing skills that review.ignore matches', async () => {
+  write(
+    'skills/query/SKILL.md',
+    '---\nname: query\ndescription: Query\n---\nGuidance.\n',
+  )
+  write(
+    'plugins/review/skills/review-code/SKILL.md',
+    '---\nname: review-code\ndescription: Review code\n---\nGuidance.\n',
+  )
+  write(
+    'skills/_artifacts/skill_tree.yaml',
+    'library: { name: library }\nreview:\n  ignore: [plugins/**]\nskills: []\n',
+  )
+  expect(await main(['maintainer', 'setup'])).toBe(0)
+  expect(
+    parse(read('skills/_artifacts/skill_tree.yaml')).skills.map(
+      (entry: { name: string }) => entry.name,
+    ),
+  ).toEqual(['query'])
+})
+
 it('keeps valid registrations when the planner rejects a candidate in the batch', async () => {
   const contents = new Map(
     ['alpha', 'broken', 'omega'].map((name) => [

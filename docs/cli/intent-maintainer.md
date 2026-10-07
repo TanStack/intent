@@ -43,7 +43,7 @@ The three records have separate jobs:
 
 Generated skeletons remain unfinished. Author their contents and remove the `intent:needs-authoring` marker after completing that work. A successful setup command does not mean the skills are ready to publish.
 
-Setup automatically registers valid, Git-visible `skills/**/SKILL.md` files in the root package and workspace packages, preserving their content. It skips dependencies, hidden agent directories, invalid skills, and conflicting names, reporting each skipped candidate. Domains come from `metadata.domain`, the existing domain map, a parent directory under `skills/`, or `uncategorized`; review that placeholder and complete task coverage. For custom locations outside `skills/`, use `maintainer add --path`. Repeating setup preserves existing registrations and workflow files. Reviewers can use [interactive review](./intent-review#interactive-review) in a human terminal; CI uses the noninteractive checks.
+Setup automatically registers valid, Git-visible `skills/**/SKILL.md` files in the root package and workspace packages, preserving their content. It skips dependencies, hidden agent directories, and paths that [`review.ignore`](./intent-review#ignored-paths) matches. It also skips invalid skills and conflicting names, and reports each one. Domains come from `metadata.domain`, the existing domain map, a parent directory under `skills/`, or `uncategorized`; review that placeholder and complete task coverage. For custom locations outside `skills/`, use `maintainer add --path`. Repeating setup preserves existing registrations and workflow files. Reviewers can use [interactive review](./intent-review#interactive-review) in a human terminal; CI uses the noninteractive checks.
 
 ## Add a skill
 
