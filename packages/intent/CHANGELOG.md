@@ -1,5 +1,11 @@
 # @tanstack/intent
 
+## 0.5.5
+
+### Patch Changes
+
+- [#330](https://github.com/TanStack/intent/pull/330) [`0365fc6`](https://github.com/TanStack/intent/commit/0365fc66a23bafbccda0a1ea748429cd83fd118d) - Leave a `SKILL.md` that `review.ignore` matches out of the skills that `review` and `maintainer setup` discover. A Claude Code plugin kept beside the library, such as `plugins/<name>/skills/`, was reviewed as a library skill and reported `No source paths declared`, and `maintainer setup` registered it. A skill that the tree declares is still reviewed.
+
 ## 0.5.4
 
 ### Patch Changes
