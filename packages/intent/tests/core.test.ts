@@ -968,6 +968,41 @@ describe('loadIntentSkill', () => {
     )
   })
 
+  it('loads a nested dependency copy when the root has a different copy', () => {
+    const barDir = join(root, 'packages', 'bar')
+    writeJson(join(root, 'package.json'), {
+      name: 'test-monorepo',
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeJson(join(barDir, 'package.json'), {
+      name: 'bar',
+      dependencies: {
+        '@tanstack/query': '5.0.0',
+      },
+    })
+    writeJson(
+      join(root, 'node_modules', '@tanstack', 'query', 'package.json'),
+      {
+        name: '@tanstack/query',
+        version: '4.0.0',
+      },
+    )
+    writeInstalledIntentPackage(barDir, {
+      name: '@tanstack/query',
+      version: '5.0.0',
+      skillName: 'fetching',
+      description: 'Query data fetching patterns',
+    })
+
+    const result = loadIntentSkill('@tanstack/query#fetching', { cwd: root })
+
+    expect(result.version).toBe('5.0.0')
+    expect(result.path).toBe(
+      'packages/bar/node_modules/@tanstack/query/skills/fetching/SKILL.md',
+    )
+  })
+
   it('rewrites relative markdown destinations in loaded content', () => {
     const pkgDir = join(root, 'node_modules', '@tanstack', 'query')
     const skillDir = join(pkgDir, 'skills', 'fetching')

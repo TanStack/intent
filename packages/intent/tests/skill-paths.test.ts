@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -79,11 +79,73 @@ describe('skill path helpers', () => {
     expect(isStableLoadPath('')).toBe(false)
   })
 
-  it('rewrites to stable node_modules load paths when a top-level package path exists', () => {
+  it('rewrites to stable node_modules load paths when the package root is the top-level entry', () => {
     const root = tempRoot()
     const packageRoot = join(root, 'node_modules', '@tanstack', 'query')
     const skillPath = join(packageRoot, 'skills', 'core', 'SKILL.md')
     mkdirSync(join(packageRoot, 'skills', 'core'), { recursive: true })
+    const skills = [skill(skillPath)]
+
+    rewriteSkillLoadPaths({
+      packageName: '@tanstack/query',
+      packageRoot,
+      projectRoot: root,
+      skills,
+    })
+
+    expect(skills[0]!.path).toBe(
+      'node_modules/@tanstack/query/skills/core/SKILL.md',
+    )
+  })
+
+  it('keeps the project-relative path when the top-level package is a different copy', () => {
+    const root = tempRoot()
+    mkdirSync(join(root, 'node_modules', '@tanstack', 'query'), {
+      recursive: true,
+    })
+    const packageRoot = join(
+      root,
+      'packages',
+      'bar',
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    const skillPath = join(packageRoot, 'skills', 'core', 'SKILL.md')
+    mkdirSync(join(packageRoot, 'skills', 'core'), { recursive: true })
+    const skills = [skill(skillPath)]
+
+    rewriteSkillLoadPaths({
+      packageName: '@tanstack/query',
+      packageRoot,
+      projectRoot: root,
+      skills,
+    })
+
+    expect(skills[0]!.path).toBe(
+      'packages/bar/node_modules/@tanstack/query/skills/core/SKILL.md',
+    )
+  })
+
+  it('rewrites a symlinked store copy to the top-level link that targets it', () => {
+    const root = tempRoot()
+    const packageRoot = join(
+      root,
+      'node_modules',
+      '.pnpm',
+      '@tanstack+query@5.0.0',
+      'node_modules',
+      '@tanstack',
+      'query',
+    )
+    const skillPath = join(packageRoot, 'skills', 'core', 'SKILL.md')
+    mkdirSync(join(packageRoot, 'skills', 'core'), { recursive: true })
+    mkdirSync(join(root, 'node_modules', '@tanstack'))
+    symlinkSync(
+      packageRoot,
+      join(root, 'node_modules', '@tanstack', 'query'),
+      'dir',
+    )
     const skills = [skill(skillPath)]
 
     rewriteSkillLoadPaths({
