@@ -1908,6 +1908,103 @@ describe('scanIntentPackageAtRoot', () => {
   })
 })
 
+describe('nested dependency variants', () => {
+  function writeFoo(pkgDir: string, version: string): void {
+    writeJson(join(createDir(pkgDir), 'package.json'), {
+      name: 'foo',
+      version,
+      repository: 'https://github.com/x/foo',
+    })
+  }
+
+  function writeMonorepo({ rootCopyHasSkill }: { rootCopyHasSkill: boolean }): {
+    rootCopy: string
+    nestedCopy: string
+  } {
+    writeJson(join(root, 'package.json'), {
+      name: 'root',
+      private: true,
+      workspaces: ['packages/*'],
+      dependencies: { foo: '1.0.0' },
+    })
+    writeJson(join(createDir(root, 'packages', 'a'), 'package.json'), {
+      name: 'a',
+      dependencies: { foo: '2.0.0' },
+    })
+    const rootCopy = join(root, 'node_modules', 'foo')
+    const nestedCopy = join(root, 'packages', 'a', 'node_modules', 'foo')
+    writeFoo(rootCopy, '1.0.0')
+    writeFoo(nestedCopy, '2.0.0')
+    writeSkillMd(createDir(nestedCopy, 'skills', 'core'), {
+      name: 'core',
+      description: 'foo v2 core',
+    })
+    if (rootCopyHasSkill) {
+      writeSkillMd(createDir(rootCopy, 'skills', 'core'), {
+        name: 'core',
+        description: 'foo v1 core',
+      })
+    }
+    return { rootCopy, nestedCopy }
+  }
+
+  it('lists a nested variant with a path into its own copy, not the root link', () => {
+    const { nestedCopy } = writeMonorepo({ rootCopyHasSkill: false })
+
+    const result = scanForIntents(root)
+
+    const foo = result.packages.find((pkg) => pkg.name === 'foo')
+    expect(foo?.packageRoot).toBe(nestedCopy)
+    expect(foo?.skills.map((skill) => skill.path)).toEqual([
+      'packages/a/node_modules/foo/skills/core/SKILL.md',
+    ])
+  })
+
+  it('never points a nested variant at the root copy of the same package', () => {
+    const { nestedCopy } = writeMonorepo({ rootCopyHasSkill: true })
+
+    const result = scanIntentPackageAtRoot(nestedCopy, {
+      fallbackName: 'foo',
+      projectRoot: root,
+    })
+
+    expect(result.package?.version).toBe('2.0.0')
+    expect(result.package?.skills).toEqual([
+      expect.objectContaining({
+        name: 'core',
+        path: 'packages/a/node_modules/foo/skills/core/SKILL.md',
+        description: 'foo v2 core',
+      }),
+    ])
+  })
+
+  it('keeps the stable root path for a root link that targets the same copy', () => {
+    const storeCopy = join(
+      root,
+      'node_modules',
+      '.pnpm',
+      'foo@2.0.0',
+      'node_modules',
+      'foo',
+    )
+    writeFoo(storeCopy, '2.0.0')
+    writeSkillMd(createDir(storeCopy, 'skills', 'core'), {
+      name: 'core',
+      description: 'foo core',
+    })
+    symlinkSync(storeCopy, join(root, 'node_modules', 'foo'), 'dir')
+
+    const result = scanIntentPackageAtRoot(storeCopy, {
+      fallbackName: 'foo',
+      projectRoot: root,
+    })
+
+    expect(result.package?.skills.map((skill) => skill.path)).toEqual([
+      'node_modules/foo/skills/core/SKILL.md',
+    ])
+  })
+})
+
 describe('back-compat frontmatter reader (metadata.* fallback)', () => {
   function writeRawSkillMd(dir: string, frontmatter: string): void {
     mkdirSync(dir, { recursive: true })

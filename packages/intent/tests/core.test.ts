@@ -78,6 +78,39 @@ function writeInstalledIntentPackage(
   })
 }
 
+function writeNestedVariantMonorepo(
+  root: string,
+  { rootCopyHasSkill }: { rootCopyHasSkill: boolean },
+): void {
+  writeJson(join(root, 'package.json'), {
+    name: 'root',
+    private: true,
+    workspaces: ['packages/*'],
+    dependencies: { foo: '1.0.0' },
+  })
+  writeJson(join(root, 'packages', 'a', 'package.json'), {
+    name: 'a',
+    dependencies: { foo: '2.0.0' },
+  })
+  for (const [pkgDir, version, hasSkill] of [
+    [join(root, 'node_modules', 'foo'), '1.0.0', rootCopyHasSkill],
+    [join(root, 'packages', 'a', 'node_modules', 'foo'), '2.0.0', true],
+  ] as const) {
+    writeJson(join(pkgDir, 'package.json'), {
+      name: 'foo',
+      version,
+      repository: 'https://github.com/x/foo',
+    })
+    if (hasSkill) {
+      writeSkillMd({
+        content: `foo v${version[0]} content`,
+        dir: join(pkgDir, 'skills', 'core'),
+        frontmatter: { name: 'core', description: `foo v${version[0]} core` },
+      })
+    }
+  }
+}
+
 let root: string
 let originalCwd: string
 
@@ -966,6 +999,30 @@ describe('loadIntentSkill', () => {
     expect(result.path).toBe(
       'packages/app/node_modules/@tanstack/query/skills/fetching/SKILL.md',
     )
+  })
+
+  it('loads a nested workspace dependency variant when the root link is a different copy', () => {
+    writeNestedVariantMonorepo(root, { rootCopyHasSkill: false })
+
+    const listed = listIntentSkills({ audience: 'human', cwd: root })
+    const nestedRoot = join(root, 'packages', 'a', 'node_modules', 'foo')
+    expect(listed.skills).toEqual([
+      expect.objectContaining({
+        use: 'foo#core',
+        packageRoot: nestedRoot,
+        packageVersion: '2.0.0',
+      }),
+    ])
+
+    const resolved = resolveIntentSkill('foo#core', { cwd: root })
+    expect(resolved.packageRoot).toBe(nestedRoot)
+    expect(resolved.path).toBe(
+      'packages/a/node_modules/foo/skills/core/SKILL.md',
+    )
+
+    const loaded = loadIntentSkill('foo#core', { cwd: root })
+    expect(loaded.version).toBe('2.0.0')
+    expect(loaded.content).toContain('foo v2 content')
   })
 
   it('rewrites relative markdown destinations in loaded content', () => {
