@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync, execSync, spawnSync } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
@@ -37,9 +37,8 @@ function run(args: Array<string>) {
 beforeAll(() => {
   root = realpathSync(mkdtempSync(join(tmpdir(), 'intent-packed-release-')))
   const packed = JSON.parse(
-    execFileSync(
-      'npm',
-      ['pack', '--ignore-scripts', '--json', '--pack-destination', root],
+    execSync(
+      `npm pack --ignore-scripts --json --pack-destination=${JSON.stringify(root)}`,
       {
         cwd: packageRoot,
         encoding: 'utf8',
@@ -348,7 +347,7 @@ describe('packed release', () => {
     expect(synced.status, synced.stderr).toBe(0)
     expect(run(['maintainer', 'check']).status).toBe(1)
     const packed = JSON.parse(
-      execFileSync('npm', ['pack', '--dry-run', '--ignore-scripts', '--json'], {
+      execSync('npm pack --dry-run --ignore-scripts --json', {
         cwd,
         encoding: 'utf8',
         timeout,

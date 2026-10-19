@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'yaml'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -261,7 +261,7 @@ it('runs the PR gate for maintainer instructions before any review state exists'
     cwd: root,
     env: {
       ...process.env,
-      PATH: `${join(root, 'bin')}:${process.env.PATH}`,
+      PATH: [join(root, 'bin'), process.env.PATH].join(delimiter),
       INTENT_REVIEW_BASE: 'fixture-base',
     },
   }

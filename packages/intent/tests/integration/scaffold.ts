@@ -36,7 +36,7 @@ function getFreePort(): Promise<number> {
 
 export interface Registry {
   url: string
-  stop: () => void
+  stop: () => Promise<void>
 }
 
 export async function startRegistry(): Promise<Registry> {
@@ -70,26 +70,23 @@ export async function startRegistry(): Promise<Registry> {
     ].join('\n'),
   )
 
-  const isWindows = process.platform === 'win32'
   const verdaccioBin = join(
     thisDir,
     '..',
     '..',
     'node_modules',
-    '.bin',
+    'verdaccio',
+    'bin',
     'verdaccio',
   )
 
   return new Promise((resolve, reject) => {
     const child = spawn(
-      isWindows ? `"${verdaccioBin}"` : verdaccioBin,
-      isWindows
-        ? ['--config', `"${configPath}"`, '--listen', `127.0.0.1:${port}`]
-        : ['--config', configPath, '--listen', `127.0.0.1:${port}`],
+      process.execPath,
+      [verdaccioBin, '--config', configPath, '--listen', `127.0.0.1:${port}`],
       {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false,
-        shell: isWindows,
       },
     )
 
@@ -109,8 +106,14 @@ export async function startRegistry(): Promise<Registry> {
           clearTimeout(timeout)
           resolve({
             url: `http://127.0.0.1:${port}`,
-            stop: () => {
-              child.kill('SIGTERM')
+            stop: async () => {
+              if (child.exitCode === null) {
+                const closed = new Promise<void>((done) =>
+                  child.once('close', () => done()),
+                )
+                child.kill('SIGTERM')
+                await closed
+              }
               rmSync(storageDir, { recursive: true, force: true })
             },
           })

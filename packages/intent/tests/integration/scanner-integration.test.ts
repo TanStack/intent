@@ -56,10 +56,10 @@ function expectLeafCoreSkill(parsed: CliResult['parsed']): void {
 beforeAll(async () => {
   registry = await startRegistry()
   publishFixtures(registry.url)
-}, 30_000)
+}, 60_000)
 
-afterAll(() => {
-  registry?.stop()
+afterAll(async () => {
+  await registry?.stop()
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true })
   }
