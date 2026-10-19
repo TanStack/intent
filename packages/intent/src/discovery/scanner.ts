@@ -624,6 +624,10 @@ function createPackageKindResolver(
   workspacePackageKeys: Set<string>,
   getFsIdentity: (path: string) => string,
 ): (packageRoot: string) => IntentPackage['kind'] {
+  if (workspacePackageKeys.size === 0) {
+    return () => 'npm'
+  }
+
   return (packageRoot: string): IntentPackage['kind'] => {
     return workspacePackageKeys.has(getFsIdentity(packageRoot))
       ? 'workspace'

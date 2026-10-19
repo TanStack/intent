@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -30,6 +31,7 @@ vi.mock('node:fs', async (importOriginal) => {
   const fs = await importOriginal<typeof NodeFs>()
   return {
     ...fs,
+    existsSync: vi.fn(fs.existsSync),
     readFileSync: vi.fn(fs.readFileSync),
     readdirSync: vi.fn(fs.readdirSync),
     lstatSync: vi.fn(fs.lstatSync),
@@ -91,10 +93,39 @@ describe('command work budgets', () => {
     expect(resolveIntentSkill('example#core', { cwd: root }).skillName).toBe(
       'core',
     )
+    expect(
+      vi
+        .mocked(existsSync)
+        .mock.calls.filter(
+          ([path]) => path === join(root, 'node_modules', 'example'),
+        ),
+    ).toHaveLength(0)
     expect(loadIntentSkill('example#core', { cwd: root }).content).toContain(
       'Guide.',
     )
     expect(metadataRead).not.toHaveBeenCalled()
+  })
+
+  it('skips lstat on node_modules packages without a skills directory during list', () => {
+    write(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: 'consumer',
+        dependencies: { example: '1.0.0', plain: '1.0.0' },
+      }),
+    )
+    writePackage(join(root, 'node_modules', 'example'), 'example')
+    const plainDir = join(root, 'node_modules', 'plain')
+    write(
+      join(plainDir, 'package.json'),
+      JSON.stringify({ name: 'plain', version: '1.0.0' }),
+    )
+    vi.clearAllMocks()
+
+    expect(listIntentSkills({ cwd: root }).skills).toHaveLength(1)
+    expect(
+      vi.mocked(lstatSync).mock.calls.filter(([path]) => path === plainDir),
+    ).toHaveLength(0)
   })
 
   it('indexes each skill path once when matching many artifact entries by name', async () => {

@@ -42,10 +42,12 @@ export interface CreatePackageRegistrarOptions {
 
 export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
   const attemptedPackageRoots = new Set<string>()
+  const attemptedRawDirs = new Set<string>()
   const scannedNodeModulesDirs = new Set<string>()
 
   function shouldAttemptPackageRoot(dirPath: string): boolean {
     const key = opts.getFsIdentity(dirPath)
+    attemptedRawDirs.add(key)
     if (attemptedPackageRoots.has(key)) return false
     attemptedPackageRoots.add(key)
     return true
@@ -80,10 +82,13 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     fallbackName: string,
     source: IntentPackage['source'] = 'local',
   ): boolean {
-    if (!shouldAttemptPackageRoot(dirPath)) return false
+    if (attemptedRawDirs.has(dirPath)) return false
+    attemptedRawDirs.add(dirPath)
 
     const skillsDir = join(dirPath, 'skills')
     if (!opts.exists(skillsDir)) return false
+
+    if (!shouldAttemptPackageRoot(dirPath)) return false
 
     const pkgJson = opts.readPkgJson(dirPath)
     if (!pkgJson) {
