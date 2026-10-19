@@ -17,6 +17,11 @@ export type ProjectContext = {
   targetSkillsDir: string | null
 }
 
+const packageRootCaches = new WeakMap<
+  IntentFsCache,
+  Map<string, string | null>
+>()
+
 /**
  * Resolves project structure by walking up from targetPath (or cwd) to find the
  * owning package.json, then searches for a workspace root from the package root.
@@ -35,7 +40,7 @@ export function resolveProjectContext({
   const resolvedTargetPath = targetPath
     ? resolve(resolvedCwd, targetPath)
     : resolvedCwd
-  const packageRoot = findOwningPackageRoot(resolvedTargetPath)
+  const packageRoot = findOwningPackageRoot(resolvedTargetPath, fsCache)
   const workspaceRoot = findWorkspaceRoot(
     packageRoot ?? resolvedTargetPath,
     fsCache,
@@ -57,30 +62,51 @@ export function resolveProjectContext({
   }
 }
 
-function findOwningPackageRoot(startPath: string): string | null {
+function findOwningPackageRoot(
+  startPath: string,
+  fsCache?: IntentFsCache,
+): string | null {
+  let cache = fsCache ? packageRootCaches.get(fsCache) : undefined
+  if (fsCache && !cache) {
+    cache = new Map()
+    packageRootCaches.set(fsCache, cache)
+  }
+  const cachedStart = cache?.get(startPath)
+  if (cachedStart !== undefined) return cachedStart
+
   let dir = toSearchDir(startPath)
   let prev: string | undefined
+  const visited: Array<string> = [startPath]
 
   while (dir !== prev) {
+    const cached = cache?.get(dir)
+    if (cached !== undefined) {
+      for (const visitedDir of visited) cache?.set(visitedDir, cached)
+      return cached
+    }
+    visited.push(dir)
     if (existsSync(join(dir, 'package.json'))) {
+      for (const visitedDir of visited) cache?.set(visitedDir, dir)
       return dir
     }
 
-    if (existsSync(join(dir, '.git'))) return null
+    if (existsSync(join(dir, '.git'))) break
 
     prev = dir
     dir = dirname(dir)
   }
 
+  for (const visitedDir of visited) cache?.set(visitedDir, null)
   return null
 }
 
 function toSearchDir(path: string): string {
-  if (!existsSync(path)) {
+  const stat = statSync(path, { throwIfNoEntry: false })
+  if (!stat) {
     return path
   }
 
-  return statSync(path).isDirectory() ? path : dirname(path)
+  return stat.isDirectory() ? path : dirname(path)
 }
 
 function resolveTargetSkillsDir(

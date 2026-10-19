@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { basename, dirname, relative } from 'node:path'
 import { resolveProjectContext } from '../core/project-context.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { reviewIgnorePatterns } from '../review/review.js'
 import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
 import { isDefaultSkillPath, parseFrontmatter } from '../shared/utils.js'
@@ -15,6 +16,7 @@ import {
   skillKey,
   skillPath,
 } from './project.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { MaintainerProject } from './project.js'
 import type { FileChange } from './files.js'
 
@@ -24,6 +26,7 @@ export interface ExistingSkill {
   package: string
   path: string
   domain: string
+  frontmatter?: Record<string, unknown>
   problems: Array<string>
 }
 
@@ -35,6 +38,8 @@ const defaultDomain = 'uncategorized'
 export function findExistingSkills(
   project: MaintainerProject,
   changes: ReadonlyArray<FileChange> = [],
+  fsCache: IntentFsCache = createIntentFsCache(),
+  checked: Set<string> = new Set(),
 ): Array<ExistingSkill> {
   const listFiles = (patterns: Array<string> = []) =>
     execFileSync(
@@ -55,7 +60,7 @@ export function findExistingSkills(
       .split('\0')
       .filter(Boolean)
   const files = listFiles()
-  const tree = readRecord(project, 'skill_tree.yaml', changes)
+  const tree = readRecord(project, 'skill_tree.yaml', changes, checked)
   const ignorePatterns = reviewIgnorePatterns(
     tree.document.toJS(),
     relative(project.root, tree.path).replaceAll('\\', '/'),
@@ -63,10 +68,13 @@ export function findExistingSkills(
   const ignored = new Set(
     ignorePatterns.length > 0 ? listFiles(ignorePatterns) : [],
   )
-  const entries = skillEntries(project, tree)
+  const entries = skillEntries(project, tree, checked)
   const registered = new Set(
     entries.map((entry) =>
-      relative(project.root, skillPath(project, entry)).replaceAll('\\', '/'),
+      relative(project.root, skillPath(project, entry, checked)).replaceAll(
+        '\\',
+        '/',
+      ),
     ),
   )
   const registeredNames = new Set(
@@ -74,16 +82,17 @@ export function findExistingSkills(
       skillKey(entry.package, String(entry.slug ?? entry.name)),
     ),
   )
-  const mapPath = recordPath(project, 'domain_map.yaml')
+  const mapPath = recordPath(project, 'domain_map.yaml', checked)
   const mapped: Array<unknown> =
     existsSync(mapPath) || changes.some((change) => change.path === mapPath)
-      ? readRecord(project, 'domain_map.yaml', changes).document.toJS().skills
+      ? readRecord(project, 'domain_map.yaml', changes, checked).document.toJS()
+          .skills
       : []
   const packageRoots = new Set([
     project.root,
     ...resolveWorkspacePackages(
       project.root,
-      resolveProjectContext({ cwd: project.root }).workspacePatterns,
+      resolveProjectContext({ cwd: project.root, fsCache }).workspacePatterns,
     ),
   ])
   const skills = files
@@ -106,10 +115,11 @@ export function findExistingSkills(
         problems: [],
       }
       try {
-        const absolute = projectPath(project.root, id)
+        const absolute = projectPath(project.root, id, checked)
         const context = resolveProjectContext({
           cwd: project.root,
           targetPath: absolute,
+          fsCache,
         })
         if (!context.packageRoot || !packageRoots.has(context.packageRoot))
           return []
@@ -137,6 +147,7 @@ export function findExistingSkills(
           throw new Error('Skill needs a non-empty description.')
         stringList(frontmatter.sources ?? [], 'sources')
         stringList(frontmatter.requires ?? [], 'requires')
+        skill.frontmatter = frontmatter
         skill.domain = inferDomain(frontmatter, mapped, id)
       } catch (error) {
         skill.problems.push(
@@ -145,16 +156,14 @@ export function findExistingSkills(
       }
       return [skill]
     })
+  const counts = new Map<string, number>()
   for (const skill of skills) {
-    if (
-      registeredNames.has(skillKey(skill.package, skill.name)) ||
-      skills.some(
-        (other) =>
-          other.id !== skill.id &&
-          other.package === skill.package &&
-          other.name === skill.name,
-      )
-    )
+    const key = skillKey(skill.package, skill.name)
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  for (const skill of skills) {
+    const key = skillKey(skill.package, skill.name)
+    if (registeredNames.has(key) || (counts.get(key) ?? 0) > 1)
       skill.problems.push(
         'Another skill has the same name. Rename one before it can be registered.',
       )
