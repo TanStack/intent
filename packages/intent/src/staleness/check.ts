@@ -439,11 +439,13 @@ export function buildWorkspaceCoverageSignals({
 
     const hasGeneratedSkill =
       fsCache.findSkillFiles(join(packageDir, 'skills')).length > 0
+    if (hasGeneratedSkill) continue
+
     const hasArtifactCoverage = artifacts.skills.some((artifact) =>
       artifactCoversPackage(artifact, packageDir, packageName, artifactRoot),
     )
 
-    if (hasGeneratedSkill || hasArtifactCoverage) continue
+    if (hasArtifactCoverage) continue
 
     signals.push({
       type: 'missing-package-coverage',
