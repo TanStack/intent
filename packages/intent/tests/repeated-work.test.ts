@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { main } from '../src/cli.js'
 import {
@@ -38,7 +38,11 @@ vi.mock('node:fs', async (importOriginal) => {
 
 vi.mock('node:path', async (importOriginal) => {
   const path = await importOriginal<typeof NodePath>()
-  return { ...path, resolve: vi.fn(path.resolve) }
+  return {
+    ...path,
+    relative: vi.fn(path.relative),
+    resolve: vi.fn(path.resolve),
+  }
 })
 
 let root: string
@@ -353,6 +357,18 @@ describe('command work budgets', () => {
     expect(
       vi
         .mocked(readFileSync)
+        .mock.calls.filter(([path]) => path === join(root, 'package.json')),
+    ).toHaveLength(1)
+    expect(
+      vi
+        .mocked(readFileSync)
+        .mock.calls.filter(
+          ([path]) => path === join(root, 'pnpm-workspace.yaml'),
+        ),
+    ).toHaveLength(1)
+    expect(
+      vi
+        .mocked(readFileSync)
         .mock.calls.filter(
           ([path]) => path === join(packageDir, 'package.json'),
         ),
@@ -392,6 +408,23 @@ describe('command work budgets', () => {
     expect(
       vi
         .mocked(readFileSync)
+        .mock.calls.filter(
+          ([path]) => path === join(root, 'pnpm-workspace.yaml'),
+        ),
+    ).toHaveLength(1)
+    expect(
+      vi
+        .mocked(readFileSync)
+        .mock.calls.filter(([path]) => path === join(root, 'package.json')),
+    ).toHaveLength(1)
+    expect(
+      vi
+        .mocked(readdirSync)
+        .mock.calls.filter(([path]) => path === join(root, 'packages')),
+    ).toHaveLength(1)
+    expect(
+      vi
+        .mocked(readFileSync)
         .mock.calls.filter(([path]) => path === artifactPath),
     ).toHaveLength(1)
     for (const dir of packageDirs) {
@@ -404,6 +437,11 @@ describe('command work budgets', () => {
         vi
           .mocked(readdirSync)
           .mock.calls.filter(([path]) => path === join(dir, 'skills')),
+      ).toHaveLength(1)
+      expect(
+        vi
+          .mocked(relative)
+          .mock.calls.filter(([from, to]) => from === root && to === dir),
       ).toHaveLength(1)
     }
     const reports = JSON.parse(

@@ -307,12 +307,11 @@ export function scanForPolicedIntents(params: {
   context?: ProjectContext
 }): PolicedScan {
   const { cwd, scanOptions, coreOptions } = params
-  const context = params.context ?? resolveProjectContext({ cwd })
-  const audience = detectIntentAudience(coreOptions.audience)
-
   const fsCache =
     (scanOptions as ScanOptions & { fsCache?: IntentFsCache }).fsCache ??
     createIntentFsCache()
+  const context = params.context ?? resolveProjectContext({ cwd, fsCache })
+  const audience = detectIntentAudience(coreOptions.audience)
   const cachedScanOptions = { ...scanOptions, fsCache }
   const scanResult = scanForIntents(cwd, cachedScanOptions)
   const config = readSkillSourcesConfig(cwd, context, fsCache)

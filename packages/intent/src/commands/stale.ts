@@ -7,7 +7,7 @@ import {
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
-  isSourcePermitted,
+  compileSkillSourcePolicy,
   readSkillSourcesConfig,
 } from '../core/source-policy.js'
 import { isCliFailure } from '../shared/cli-error.js'
@@ -15,6 +15,7 @@ import {
   detectIntentCommandPackageManager,
   formatIntentCommand,
 } from '../shared/command-runner.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { StalenessReport } from '../shared/types.js'
 
 export interface StaleCommandOptions {
@@ -26,7 +27,10 @@ export interface StaleCommandOptions {
 export async function runStaleCommand(
   targetDir: string | undefined,
   options: StaleCommandOptions,
-  resolveStaleTargets: (targetDir?: string) => Promise<{
+  resolveStaleTargets: (
+    targetDir?: string,
+    fsCache?: IntentFsCache,
+  ) => Promise<{
     reports: Array<StalenessReport>
     workflowAdvisories?: Array<string>
   }>,
@@ -36,9 +40,10 @@ export async function runStaleCommand(
     return
   }
 
+  const fsCache = createIntentFsCache()
   const { reports: unfilteredReports, workflowAdvisories = [] } =
-    await resolveStaleTargets(targetDir)
-  const reports = filterStaleReportSkills(unfilteredReports, targetDir)
+    await resolveStaleTargets(targetDir, fsCache)
+  const reports = filterStaleReportSkills(unfilteredReports, targetDir, fsCache)
 
   if (options.json) {
     console.log(JSON.stringify(reports, null, 2))
@@ -114,7 +119,10 @@ export async function runStaleCommand(
 async function runGithubReview(
   targetDir: string | undefined,
   options: StaleCommandOptions,
-  resolveStaleTargets: (targetDir?: string) => Promise<{
+  resolveStaleTargets: (
+    targetDir?: string,
+    fsCache?: IntentFsCache,
+  ) => Promise<{
     reports: Array<StalenessReport>
     workflowAdvisories?: Array<string>
   }>,
@@ -128,9 +136,14 @@ async function runGithubReview(
   const packageLabel = options.packageLabel ?? 'workspace'
 
   try {
+    const fsCache = createIntentFsCache()
     const { reports: unfilteredReports, workflowAdvisories = [] } =
-      await resolveStaleTargets(targetDir)
-    const reports = filterStaleReportSkills(unfilteredReports, targetDir)
+      await resolveStaleTargets(targetDir, fsCache)
+    const reports = filterStaleReportSkills(
+      unfilteredReports,
+      targetDir,
+      fsCache,
+    )
     const items = [
       ...collectStaleReviewItems(reports),
       ...createWorkflowAdvisoryReviewItems(packageLabel, workflowAdvisories),
@@ -157,11 +170,13 @@ async function runGithubReview(
 function filterStaleReportSkills(
   reports: Array<StalenessReport>,
   targetDir: string | undefined,
+  fsCache = createIntentFsCache(),
 ): Array<StalenessReport> {
   const cwd = resolve(process.cwd(), targetDir ?? process.cwd())
-  const context = resolveProjectContext({ cwd })
-  const fsCache = createIntentFsCache()
-  const config = readSkillSourcesConfig(cwd, context, fsCache)
+  const context = resolveProjectContext({ cwd, fsCache })
+  const sourcePolicy = compileSkillSourcePolicy(
+    readSkillSourcesConfig(cwd, context, fsCache),
+  )
   const excludeMatchers = compileExcludePatterns(
     getEffectiveExcludePatterns({}, context, fsCache),
   )
@@ -170,7 +185,7 @@ function filterStaleReportSkills(
     ...report,
     skills: report.skills.filter(
       (skill) =>
-        isSourcePermitted(config, report.library, undefined, skill.name) &&
+        sourcePolicy.permits(report.library, undefined, skill.name) &&
         !isSkillExcluded(report.library, skill.name, excludeMatchers),
     ),
   }))
