@@ -214,13 +214,23 @@ async function withNativeCompiler<T>(
     return await run(async (sources, compilerOptions) => {
       // A new configuration per call opens a new project that lists only
       // this call's files, whatever the compiler process kept from earlier.
+      const first = projects === 0
       const config = `${virtualDir}/tsconfig-${projects++}.json`
       for (const [path, code] of sources) files.set(path, code)
       files.set(
         config,
         JSON.stringify({ compilerOptions, files: [...sources.keys()] }),
       )
-      const snapshot = await api.updateSnapshot({ openProjects: [config] })
+      // Spawn tsgo from the parent directory so Windows does not lock root
+      // while the child process closes its stdio pipe after api.close().
+      const cwd = process.cwd()
+      if (first) process.chdir(dirname(root))
+      let snapshot: NativeApi.Snapshot
+      try {
+        snapshot = await api.updateSnapshot({ openProjects: [config] })
+      } finally {
+        if (first) process.chdir(cwd)
+      }
       const project = snapshot.getProject(config)
       if (!project) throw new Error(`could not open ${config}`)
       return project

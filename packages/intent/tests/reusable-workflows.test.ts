@@ -9,7 +9,8 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
@@ -37,7 +38,7 @@ function run(script: string, env: Record<string, string> = {}) {
       encoding: 'utf8',
       env: {
         ...process.env,
-        PATH: `${join(root, 'bin')}:${process.env.PATH}`,
+        PATH: [join(root, 'bin'), process.env.PATH].join(delimiter),
         GITHUB_OUTPUT: join(root, 'output'),
         GITHUB_PATH: join(root, 'path'),
         RUNNER_TEMP: join(root, 'temp'),
@@ -78,7 +79,7 @@ esac
     expect(installed.status, installed.stdout + installed.stderr).toBe(0)
     const intentPath = readFileSync(join(root, 'path'), 'utf8').trim()
     const invoked = run('intent validate --github-summary', {
-      PATH: `${intentPath}:${join(root, 'bin')}:${process.env.PATH}`,
+      PATH: [intentPath, join(root, 'bin'), process.env.PATH].join(delimiter),
     })
     expect(invoked.status, invoked.stderr).toBe(0)
     expect(readFileSync(join(root, 'invoked'), 'utf8')).toBe(
@@ -173,7 +174,7 @@ it.each(['', 'planning records/$(touch injected)'])(
     const trace = join(root, 'arguments.json')
     writeFileSync(
       join(root, 'intent'),
-      `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(trace)}, JSON.stringify(process.argv.slice(2)))\n`,
+      `#!/usr/bin/env node\nrequire('node:fs').writeFileSync(${JSON.stringify(trace)}, JSON.stringify(process.argv.slice(2)))\n`,
       { mode: 0o755 },
     )
     const check = workflow(
@@ -186,7 +187,9 @@ it.each(['', 'planning records/$(touch injected)'])(
       encoding: 'utf8',
       env: {
         ...process.env,
-        PATH: `${root}:${process.env.PATH}`,
+        PATH: [root, dirname(process.execPath), process.env.PATH].join(
+          delimiter,
+        ),
         INTENT_REVIEW_BASE: 'base-sha',
         INTENT_ARTIFACTS: artifacts,
       },
@@ -243,7 +246,7 @@ it.each([
     const argumentsPath = join(root, 'arguments.jsonl')
     writeFileSync(
       join(bin, 'intent'),
-      `#!${process.execPath}
+      `#!/usr/bin/env node
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(argumentsPath)}, JSON.stringify(args) + '\\n');
@@ -262,7 +265,9 @@ if (args.includes('--patch')) process.stdout.write('suggested patch\\n');
       encoding: 'utf8',
       env: {
         ...process.env,
-        PATH: `${bin}:${process.env.PATH}`,
+        PATH: [bin, dirname(process.execPath), process.env.PATH].join(
+          delimiter,
+        ),
         RUNNER_TEMP: temporary,
         GITHUB_OUTPUT: output,
         INTENT_ARTIFACTS: 'planning records/$(touch injected)',
@@ -357,7 +362,7 @@ function publish(
   )
   const result = spawnSync(
     process.execPath,
-    ['--import', preload, '--input-type=module'],
+    ['--import', pathToFileURL(preload).href, '--input-type=module'],
     {
       input: script.split("<<'NODE'\n")[1]!.replace(/\nNODE\s*$/, ''),
       encoding: 'utf8',
