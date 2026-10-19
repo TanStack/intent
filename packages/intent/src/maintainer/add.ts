@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
 import { stringify } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { parseFrontmatter } from '../shared/utils.js'
 import {
   authoringMarker,
@@ -14,6 +15,7 @@ import {
   skillPath,
 } from './project.js'
 import { writeChanges } from './files.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { MaintainerProject, SkillEntry } from './project.js'
 import type { FileChange } from './files.js'
 
@@ -25,6 +27,11 @@ export interface AddSkillOptions {
   source?: string | Array<string>
   requires?: string | Array<string>
   task?: string | Array<string>
+}
+
+interface PackageTarget {
+  packageRoot: string
+  manifestName: unknown
 }
 
 export function stringList(value: unknown, label: string): Array<string> {
@@ -53,35 +60,52 @@ export function addSkill(
 
 export function planAddSkills(
   project: MaintainerProject,
-  additions: Array<{ name: string | undefined; options: AddSkillOptions }>,
+  additions: Array<{
+    name: string | undefined
+    options: AddSkillOptions
+    frontmatter?: Record<string, unknown>
+  }>,
   initialChanges: Array<FileChange> = [],
   onInvalid?: (index: number, error: unknown) => void,
+  fsCache: IntentFsCache = createIntentFsCache(),
+  checked: Set<string> = new Set(),
 ) {
   const changes = [...initialChanges]
-  const tree = readRecord(project, 'skill_tree.yaml', changes)
-  const entries = skillEntries(project, tree)
+  const tree = readRecord(project, 'skill_tree.yaml', changes, checked)
+  const entries = skillEntries(project, tree, checked)
   const names = new Set(
     entries.map((entry) =>
       skillKey(entry.package, String(entry.slug ?? entry.name)),
     ),
   )
   const registeredPaths = new Set(
-    entries.map((entry) => skillPath(project, entry)),
+    entries.map((entry) => skillPath(project, entry, checked)),
   )
-  const map = readRecord(project, 'domain_map.yaml', changes)
+  const map = readRecord(project, 'domain_map.yaml', changes, checked)
   const mapSkills: Array<Record<string, unknown>> = map.document.toJS().skills
   const mappedNames = new Set(mapSkills.map((skill) => skill.slug))
-  const specPath = recordPath(project, 'skill_spec.md')
+  const specPath = recordPath(project, 'skill_spec.md', checked)
   const specChange = changes.find((change) => change.path === specPath)
   const spec = existsSync(specPath) ? readFileSync(specPath, 'utf8') : null
   let nextSpec = specChange?.content ?? spec
   if (nextSpec === null)
     throw new Error('Missing skill_spec.md. Run intent maintainer setup.')
+  const packages = new Map<string, PackageTarget>()
   const paths: Array<string> = []
-  for (const [index, { name, options }] of additions.entries()) {
+  for (const [index, { name, options, frontmatter }] of additions.entries()) {
     let addition: ReturnType<typeof prepareAddition>
     try {
-      addition = prepareAddition(project, name, options, names, registeredPaths)
+      addition = prepareAddition(
+        project,
+        name,
+        options,
+        names,
+        registeredPaths,
+        packages,
+        fsCache,
+        checked,
+        frontmatter,
+      )
     } catch (error) {
       if (!onInvalid) throw error
       onInvalid(index, error)
@@ -133,6 +157,10 @@ function prepareAddition(
   options: AddSkillOptions,
   names: Set<string>,
   registeredPaths: Set<string>,
+  packages: Map<string, PackageTarget>,
+  fsCache: IntentFsCache,
+  checked: Set<string>,
+  existingFrontmatter?: Record<string, unknown>,
 ) {
   if (!name || name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name))
     throw new Error(
@@ -152,32 +180,41 @@ function prepareAddition(
     ...(packageDir ? { package: packageDir } : {}),
     path: options.path ?? `skills/${name}/SKILL.md`,
   }
-  const path = skillPath(project, entry)
+  const path = skillPath(project, entry, checked)
   if (basename(dirname(path)) !== name)
     throw new Error('The skill name must match its parent directory.')
   if (registeredPaths.has(path))
     throw new Error(`Skill path is already registered: ${entry.path}`)
-  const packageRoot = packageDir
-    ? projectPath(project.root, packageDir)
-    : project.root
-  const manifestPath = projectPath(
-    project.root,
-    packageDir ? `${packageDir}/package.json` : 'package.json',
-  )
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  let pkg = packages.get(packageDir ?? '')
+  if (!pkg) {
+    const packageRoot = packageDir
+      ? projectPath(project.root, packageDir, checked)
+      : project.root
+    projectPath(
+      project.root,
+      packageDir ? `${packageDir}/package.json` : 'package.json',
+      checked,
+    )
+    const { packageJson: manifest, error } =
+      fsCache.readPackageJsonResult(packageRoot)
+    if (!manifest)
+      throw error ?? new Error(`Invalid package.json: ${packageRoot}`)
+    pkg = { packageRoot, manifestName: manifest.name }
+    packages.set(packageDir ?? '', pkg)
+  }
   if (
-    resolveProjectContext({ cwd: project.root, targetPath: path })
-      .packageRoot !== packageRoot
+    resolveProjectContext({ cwd: project.root, targetPath: path, fsCache })
+      .packageRoot !== pkg.packageRoot
   )
     throw new Error('The skill path must belong to the selected package.')
   let change: FileChange | undefined
   let frontmatter: Record<string, unknown>
-  if (existsSync(path)) {
+  if (existingFrontmatter !== undefined || existsSync(path)) {
     if (options.description || options.source || options.requires)
       throw new Error(
         'To register an existing skill, supply its --path and --domain; edit its frontmatter directly before running sync.',
       )
-    const parsed = parseFrontmatter(path)
+    const parsed = existingFrontmatter ?? parseFrontmatter(path)
     if (!isObject(parsed) || parsed.name !== name)
       throw new Error(
         'Existing skill has invalid frontmatter or a different name.',
@@ -195,7 +232,7 @@ function prepareAddition(
     frontmatter = {
       name,
       description: options.description,
-      metadata: { library: manifest.name },
+      metadata: { library: pkg.manifestName },
       sources,
       ...(options.requires
         ? { requires: stringList([options.requires].flat(), 'requires') }
@@ -224,5 +261,12 @@ function prepareAddition(
     options.task === undefined ? [] : [options.task].flat(),
     'tasks',
   )
-  return { entry, path, packageDir, manifestName: manifest.name, tasks, change }
+  return {
+    entry,
+    path,
+    packageDir,
+    manifestName: pkg.manifestName,
+    tasks,
+    change,
+  }
 }

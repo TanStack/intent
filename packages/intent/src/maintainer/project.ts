@@ -3,6 +3,8 @@ import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { parseDocument, stringify } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { FileChange } from './files.js'
 
 export const authoringMarker = '<!-- intent:needs-authoring -->'
@@ -13,7 +15,11 @@ export interface MaintainerProject {
   artifacts: string
 }
 
-export function projectPath(root: string, path: string): string {
+export function projectPath(
+  root: string,
+  path: string,
+  checked?: Set<string>,
+): string {
   if (!path || path.includes('\\') || path.includes('\0') || path.includes(':'))
     throw new Error(
       `Expected a repository-relative path: ${JSON.stringify(path)}`,
@@ -23,9 +29,11 @@ export function projectPath(root: string, path: string): string {
     if (!part || ['.', '..', '.git', 'node_modules'].includes(part))
       throw new Error(`Unsafe maintainer path: ${JSON.stringify(path)}`)
     current = join(current, part)
+    if (checked?.has(current)) continue
     try {
       if (lstatSync(current).isSymbolicLink())
         throw new Error(`Maintainer paths cannot use symbolic links: ${path}`)
+      checked?.add(current)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
@@ -81,10 +89,15 @@ export function resolveMaintainerProject(
   return { root, artifacts }
 }
 
-export function recordPath(project: MaintainerProject, name: string): string {
+export function recordPath(
+  project: MaintainerProject,
+  name: string,
+  checked?: Set<string>,
+): string {
   return projectPath(
     project.root,
     join(project.artifacts, name).replaceAll('\\', '/'),
+    checked,
   )
 }
 
@@ -92,8 +105,9 @@ export function readRecord(
   project: MaintainerProject,
   name: string,
   changes: ReadonlyArray<FileChange> = [],
+  checked?: Set<string>,
 ) {
-  const path = recordPath(project, name)
+  const path = recordPath(project, name, checked)
   const pending = changes.find((change) => change.path === path)
   const source = existsSync(path) ? readFileSync(path, 'utf8') : null
   const content = pending?.content ?? source
@@ -125,6 +139,7 @@ export interface SkillEntry extends Record<string, unknown> {
 export function skillEntries(
   project: MaintainerProject,
   tree: ReturnType<typeof readRecord>,
+  checked: Set<string> = new Set(),
 ): Array<SkillEntry> {
   const entries: Array<unknown> = tree.document.toJS().skills
   const names = new Set<string>()
@@ -141,7 +156,7 @@ export function skillEntries(
         'Each skill tree entry requires name, path, and an optional package directory.',
       )
     const skill = entry as SkillEntry
-    const path = skillPath(project, skill)
+    const path = skillPath(project, skill, checked)
     const identity = typeof skill.slug === 'string' ? skill.slug : skill.name
     const key = skillKey(skill.package, identity)
     if (names.has(key) || paths.has(path))
@@ -159,10 +174,12 @@ export function skillKey(packageDir: string | undefined, name: string): string {
 export function skillPath(
   project: MaintainerProject,
   entry: SkillEntry,
+  checked?: Set<string>,
 ): string {
   const path = projectPath(
     project.root,
     entry.package ? `${entry.package}/${entry.path}` : entry.path,
+    checked,
   )
   if (basename(path) !== 'SKILL.md')
     throw new Error(`Skill path must end in SKILL.md: ${entry.path}`)
@@ -171,16 +188,20 @@ export function skillPath(
 
 export function planSetupRecords(
   project: MaintainerProject,
+  fsCache: IntentFsCache = createIntentFsCache(),
+  checked: Set<string> = new Set(),
 ): Array<FileChange> {
   const { root } = project
-  const context = resolveProjectContext({ cwd: root })
+  const context = resolveProjectContext({ cwd: root, fsCache })
   if (!context.packageRoot)
     throw new Error(
       'Maintainer setup requires package.json at the library root.',
     )
-  const manifest = JSON.parse(
-    readFileSync(join(context.packageRoot, 'package.json'), 'utf8'),
+  const { packageJson: manifest, error } = fsCache.readPackageJsonResult(
+    context.packageRoot,
   )
+  if (!manifest)
+    throw error ?? new Error(`Invalid package.json: ${context.packageRoot}`)
   const library = {
     name: manifest.name ?? basename(root),
     ...(manifest.version ? { version: manifest.version } : {}),
@@ -197,11 +218,11 @@ export function planSetupRecords(
       generated_from: {
         domain_map: relative(
           root,
-          recordPath(project, 'domain_map.yaml'),
+          recordPath(project, 'domain_map.yaml', checked),
         ).replaceAll('\\', '/'),
         skill_spec: relative(
           root,
-          recordPath(project, 'skill_spec.md'),
+          recordPath(project, 'skill_spec.md', checked),
         ).replaceAll('\\', '/'),
       },
       skills: [],
@@ -210,12 +231,15 @@ export function planSetupRecords(
   }
   // Validate surviving records before creating missing companions.
   for (const name of recordNames) {
-    if (name.endsWith('.yaml') && existsSync(recordPath(project, name)))
-      readRecord(project, name)
+    if (
+      name.endsWith('.yaml') &&
+      existsSync(recordPath(project, name, checked))
+    )
+      readRecord(project, name, [], checked)
   }
   const changes: Array<FileChange> = []
   for (const [name, content] of Object.entries(defaults)) {
-    const path = recordPath(project, name)
+    const path = recordPath(project, name, checked)
     if (existsSync(path)) continue
     changes.push({ path, source: null, content })
   }

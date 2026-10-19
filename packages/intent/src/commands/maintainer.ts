@@ -2,6 +2,7 @@ import { appendFileSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
 import { isCI } from 'std-env'
 import { resolveProjectContext } from '../core/project-context.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { fail } from '../shared/cli-error.js'
 import {
   planSetupRecords,
@@ -332,13 +333,16 @@ export async function runMaintainerCommand(
   if (['setup', 'add', 'remove', 'sync'].includes(action)) {
     await withMaintainerLock(project.root, () => {
       if (action === 'setup') {
-        const created = planSetupRecords(project)
-        const existing = findExistingSkills(project, created)
+        const fsCache = createIntentFsCache()
+        const checked = new Set<string>()
+        const created = planSetupRecords(project, fsCache, checked)
+        const existing = findExistingSkills(project, created, fsCache, checked)
         const candidates = existing.filter((skill) => !skill.problems.length)
         const registered = planAddSkills(
           project,
           candidates.map((skill) => ({
             name: skill.name,
+            frontmatter: skill.frontmatter,
             options: {
               package: skill.package || undefined,
               path: skill.path,
@@ -358,6 +362,8 @@ export async function runMaintainerCommand(
                 : `Set a non-empty domain for ${candidate.name} in ${project.artifacts}/domain_map.yaml, then run intent maintainer setup again.`,
             )
           },
+          fsCache,
+          checked,
         )
         const distributionChange = planDistributionChoice(
           project,

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, relative } from 'node:path'
 import { applyEdits, modify, parse } from 'jsonc-parser'
 import { resolveProjectContext } from '../core/project-context.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { parseFrontmatter } from '../shared/utils.js'
 import { stringList } from './add.js'
 import { planDistribution } from './distribution.js'
@@ -20,10 +21,12 @@ import type { MaintainerProject } from './project.js'
 import type { FileChange } from './files.js'
 
 export function planMaintainerSync(project: MaintainerProject) {
+  const fsCache = createIntentFsCache()
+  const checked = new Set<string>()
   const tree = readRecord(project, 'skill_tree.yaml')
   const originalTree = JSON.stringify(tree.document.toJS())
   const map = readRecord(project, 'domain_map.yaml').document.toJS()
-  const entries = skillEntries(project, tree)
+  const entries = skillEntries(project, tree, checked)
   const changes: Array<FileChange> = []
   const problems: Array<string> = []
   const packages = new Map<string, Array<string>>()
@@ -55,13 +58,13 @@ export function planMaintainerSync(project: MaintainerProject) {
     if (
       entry.package &&
       entry.path.startsWith(`${entry.package}/`) &&
-      !existsSync(skillPath(project, entry)) &&
-      existsSync(projectPath(project.root, entry.path))
+      !existsSync(skillPath(project, entry, checked)) &&
+      existsSync(projectPath(project.root, entry.path, checked))
     ) {
       entry.path = entry.path.slice(entry.package.length + 1)
       tree.document.setIn(['skills', index, 'path'], entry.path)
     }
-    const path = skillPath(project, entry)
+    const path = skillPath(project, entry, checked)
     if (!existsSync(path)) {
       problems.push(`Missing skill: ${entry.path}`)
       continue
@@ -131,9 +134,10 @@ export function planMaintainerSync(project: MaintainerProject) {
     const context = resolveProjectContext({
       cwd: project.root,
       targetPath: path,
+      fsCache,
     })
     const packageRoot = entry.package
-      ? projectPath(project.root, entry.package)
+      ? projectPath(project.root, entry.package, checked)
       : project.root
     if (context.packageRoot !== packageRoot)
       throw new Error(
@@ -142,6 +146,7 @@ export function planMaintainerSync(project: MaintainerProject) {
     const packagePath = projectPath(
       project.root,
       entry.package ? `${entry.package}/package.json` : 'package.json',
+      checked,
     )
     const directories = packages.get(packagePath) ?? []
     directories.push(relative(packageRoot, dirname(path)).replaceAll('\\', '/'))

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import {
   lstatSync,
   mkdirSync,
@@ -409,5 +410,45 @@ describe('command work budgets', () => {
         (report: { signals: Array<unknown> }) => report.signals.length === 0,
       ),
     ).toBe(true)
+  })
+
+  it('reads each existing skill frontmatter and shared directory once during maintainer setup', async () => {
+    execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], {
+      cwd: root,
+    })
+    write(
+      join(root, 'package.json'),
+      JSON.stringify({ name: '@bench/library', version: '1.0.0' }),
+    )
+    write(
+      join(root, '.github', 'workflows', 'check-skills.yml'),
+      '# Existing repository workflow\n',
+    )
+    const names = ['alpha', 'beta', 'gamma']
+    for (const name of names) {
+      write(
+        join(root, 'skills', name, 'SKILL.md'),
+        `---\nname: ${name}\ndescription: Use for ${name}.\nsources:\n  - package.json\n---\nGuidance.\n`,
+      )
+    }
+    vi.clearAllMocks()
+    const frontmatterRead = vi.spyOn(nodeReadFs, 'readSync')
+
+    expect(await main(['maintainer', 'setup'])).toBe(0)
+    expect(frontmatterRead).toHaveBeenCalledTimes(names.length)
+    for (const name of names) {
+      expect(
+        vi
+          .mocked(lstatSync)
+          .mock.calls.filter(([path]) => path === join(root, 'skills', name)),
+      ).toHaveLength(1)
+      expect(
+        vi
+          .mocked(lstatSync)
+          .mock.calls.filter(
+            ([path]) => path === join(root, 'skills', name, 'SKILL.md'),
+          ),
+      ).toHaveLength(1)
+    }
   })
 })
