@@ -161,14 +161,15 @@ export function printDebugInfo(
 
 export async function resolveStaleTargets(
   targetDir?: string,
+  fsCache = createIntentFsCache(),
 ): Promise<StaleTargetResult> {
-  const fsCache = createIntentFsCache()
   const resolvedRoot = targetDir
     ? resolve(process.cwd(), targetDir)
     : process.cwd()
   const context = resolveProjectContext({
     cwd: process.cwd(),
     targetPath: targetDir,
+    fsCache,
   })
   const advisoryRoot =
     context.workspaceRoot ?? context.packageRoot ?? resolvedRoot
@@ -196,9 +197,10 @@ export async function resolveStaleTargets(
     }
   }
 
-  const workspaceRoot = findWorkspaceRoot(resolvedRoot)
+  const workspaceRoot =
+    context.workspaceRoot ?? findWorkspaceRoot(resolvedRoot, fsCache)
   if (workspaceRoot) {
-    const packageDirs = findWorkspacePackages(workspaceRoot)
+    const packageDirs = findWorkspacePackages(workspaceRoot, fsCache)
     const packageDirsWithSkills = packageDirs.filter(
       (dir) => fsCache.findSkillFiles(join(dir, 'skills')).length > 0,
     )

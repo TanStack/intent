@@ -211,11 +211,9 @@ function sameStringList(
 
 function artifactPackageMatches(
   artifact: IntentArtifactSkill,
-  packageDir: string,
   packageName: string,
-  artifactRoot: string,
+  relPackageDir: string,
 ): boolean {
-  const relPackageDir = getRelativePackageDir(artifactRoot, packageDir)
   if (!relPackageDir) return true
 
   if (artifact.packages.includes(packageName)) return true
@@ -309,8 +307,10 @@ function buildArtifactSignals({
     artifactPath: warning.artifactPath,
   }))
 
+  const relPackageDir = getRelativePackageDir(artifactRoot, packageDir)
+
   for (const artifact of artifacts.skills) {
-    if (!artifactPackageMatches(artifact, packageDir, library, artifactRoot)) {
+    if (!artifactPackageMatches(artifact, library, relPackageDir)) {
       continue
     }
 
@@ -384,11 +384,9 @@ function buildArtifactSignals({
 
 function artifactCoversPackage(
   artifact: IntentArtifactSkill,
-  packageDir: string,
   packageName: string,
-  artifactRoot: string,
+  relPackageDir: string,
 ): boolean {
-  const relPackageDir = getRelativePackageDir(artifactRoot, packageDir)
   return (
     artifact.packages.includes(packageName) ||
     artifact.packages.includes(relPackageDir) ||
@@ -400,11 +398,9 @@ function artifactCoversPackage(
 
 function artifactIgnoresPackage(
   artifacts: IntentArtifactSet,
-  packageDir: string,
   packageName: string,
-  artifactRoot: string,
+  relPackageDir: string,
 ): boolean {
-  const relPackageDir = getRelativePackageDir(artifactRoot, packageDir)
   return artifacts.ignoredPackages.some(
     (ignored) =>
       ignored.packageName === packageName ||
@@ -430,19 +426,18 @@ export function buildWorkspaceCoverageSignals({
     const packageJson = fsCache.readPackageJson(packageDir)
     if (packageJson?.private === true) continue
 
-    const packageName = readPackageName(packageDir, fsCache)
-    if (
-      artifactIgnoresPackage(artifacts, packageDir, packageName, artifactRoot)
-    ) {
-      continue
-    }
-
     const hasGeneratedSkill =
       fsCache.findSkillFiles(join(packageDir, 'skills')).length > 0
     if (hasGeneratedSkill) continue
 
+    const packageName = readPackageName(packageDir, fsCache)
+    const relPackageDir = getRelativePackageDir(artifactRoot, packageDir)
+    if (artifactIgnoresPackage(artifacts, packageName, relPackageDir)) {
+      continue
+    }
+
     const hasArtifactCoverage = artifacts.skills.some((artifact) =>
-      artifactCoversPackage(artifact, packageDir, packageName, artifactRoot),
+      artifactCoversPackage(artifact, packageName, relPackageDir),
     )
 
     if (hasArtifactCoverage) continue
@@ -456,7 +451,7 @@ export function buildWorkspaceCoverageSignals({
       ],
       needsReview: true,
       packageName,
-      packageRoot: getRelativePackageDir(artifactRoot, packageDir),
+      packageRoot: relPackageDir,
     })
   }
 
