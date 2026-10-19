@@ -21,14 +21,11 @@ import {
 } from '../maintainer/distribution.js'
 import { planSetupGithubActions } from '../setup/index.js'
 import { detectIntentCommandPackageManager } from '../shared/command-runner.js'
-import { describeSkillExamples } from '../validate/blocks.js'
 import { getMetaDir } from './support.js'
 import {
   buildMaintainerGuidanceBlock,
   planIntentSkillsBlock,
 } from './install/guidance.js'
-import { runReviewCommand } from './review.js'
-import { runValidateCommand } from './validate.js'
 import type { DistributionOptions } from '../maintainer/distribution.js'
 import type { ReviewPrompts } from '../review/interactive.js'
 
@@ -326,6 +323,7 @@ export async function runMaintainerCommand(
       await runInteractiveReview(process.cwd(), options.base, prompts)
       return
     }
+    const { runReviewCommand } = await import('./review.js')
     runReviewCommand(undefined, options)
     return
   }
@@ -474,6 +472,7 @@ export async function runMaintainerCommand(
   const validatedExamples = new Map<string, string>()
   let validation: unknown
   if (action === 'check') {
+    const { runValidateCommand } = await import('./validate.js')
     // Include default workspace skills and any custom registered roots. Their errors land in
     // one report and one summary section, and the failure is rethrown after
     // the check summary below so the two sections keep their order.
@@ -494,7 +493,9 @@ export async function runMaintainerCommand(
       ? validatedExamples
       : options.json
         ? new Map<string, string>()
-        : await describeSkillExamples(
+        : await (
+            await import('../validate/blocks.js')
+          ).describeSkillExamples(
             project.root,
             review.items
               .filter((item) => item.kind === 'skill' && !item.problems.length)
