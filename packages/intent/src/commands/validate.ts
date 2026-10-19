@@ -26,6 +26,7 @@ import {
 } from '../validate/repairs.js'
 import { printWarnings } from './support.js'
 import type { SkillBlockCache } from '../validate/blocks.js'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { FileChange } from '../maintainer/files.js'
 import type { ProjectContext } from '../core/project-context.js'
 import type { IntentArtifactSkill } from '../shared/types.js'
@@ -120,34 +121,46 @@ function collectPackagingWarnings(
   context: ProjectContext,
   skillsDir: string,
   skillFiles: ReadonlyArray<string>,
+  fsCache: IntentFsCache,
 ): Array<string> {
   if (!context.packageRoot || !context.targetPackageJsonPath) return []
 
-  const pkgJsonPath = context.targetPackageJsonPath
-  if (!existsSync(pkgJsonPath)) return []
+  const pkgResult = fsCache.readPackageJsonResult(context.packageRoot)
+  if (!pkgResult.packageJson) {
+    if (pkgResult.error) {
+      const code = (pkgResult.error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT') return []
+      const msg =
+        pkgResult.error instanceof Error
+          ? pkgResult.error.message
+          : String(pkgResult.error)
+      return [`Could not parse package.json: ${msg}`]
+    }
+    return []
+  }
 
-  let pkgJson: Record<string, unknown>
-  let devDeps: Record<string, string> | undefined
-  try {
-    pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8'))
-    devDeps = pkgJson.devDependencies as Record<string, string> | undefined
-    if (
-      !devDeps?.['@tanstack/intent'] &&
-      context.workspaceRoot &&
-      context.workspaceRoot !== context.packageRoot
-    ) {
-      const workspaceManifestPath = join(context.workspaceRoot, 'package.json')
-      if (existsSync(workspaceManifestPath)) {
-        const workspaceManifest = JSON.parse(
-          readFileSync(workspaceManifestPath, 'utf8'),
-        ) as Record<string, unknown>
-        devDeps = workspaceManifest.devDependencies as
-          Record<string, string> | undefined
+  const pkgJson = pkgResult.packageJson
+  let devDeps = pkgJson.devDependencies as Record<string, string> | undefined
+  if (
+    !devDeps?.['@tanstack/intent'] &&
+    context.workspaceRoot &&
+    context.workspaceRoot !== context.packageRoot
+  ) {
+    const wsResult = fsCache.readPackageJsonResult(context.workspaceRoot)
+    if (!wsResult.packageJson && wsResult.error) {
+      const code = (wsResult.error as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT') {
+        const msg =
+          wsResult.error instanceof Error
+            ? wsResult.error.message
+            : String(wsResult.error)
+        return [`Could not parse package.json: ${msg}`]
       }
     }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    return [`Could not parse package.json: ${msg}`]
+    if (wsResult.packageJson) {
+      devDeps = wsResult.packageJson.devDependencies as
+        Record<string, string> | undefined
+    }
   }
 
   const warnings: Array<string> = []
@@ -266,13 +279,15 @@ function normalizeLineEndings(value: string, lineEnding: string): string {
   return lineEnding === '\r\n' ? value.replace(/\r?\n/g, '\r\n') : value
 }
 
-function repairRoot(): string {
-  const context = resolveProjectContext({ cwd: process.cwd() })
+function repairRoot(fsCache?: IntentFsCache): string {
+  const context = resolveProjectContext({ cwd: process.cwd(), fsCache })
   return context.workspaceRoot ?? context.packageRoot ?? context.cwd
 }
 
-function applyFrontmatterFixes(plans: Array<FrontmatterFixPlan>): void {
-  const root = repairRoot()
+function applyFrontmatterFixes(
+  plans: Array<FrontmatterFixPlan>,
+  root = repairRoot(),
+): void {
   writeChanges(
     root,
     plans.map((plan) => ({
@@ -282,8 +297,11 @@ function applyFrontmatterFixes(plans: Array<FrontmatterFixPlan>): void {
   )
 }
 
-function applySetVersion(plans: Array<SetVersionPlan>, version: string): void {
-  const root = repairRoot()
+function applySetVersion(
+  plans: Array<SetVersionPlan>,
+  version: string,
+  root = repairRoot(),
+): void {
   const changes: Array<FileChange> = []
 
   for (const plan of plans) {
@@ -431,22 +449,24 @@ async function runValidateCommandInternal(
   additionalDirs: Array<string> = [],
   exampleSummaries?: Map<string, string>,
 ): Promise<void> {
-  const { findSkillFiles } = createIntentFsCache()
+  const fsCache = createIntentFsCache()
+  const { findSkillFiles } = fsCache
   // Explicit directories are validated in one run, so a caller with several
   // skills roots gets every error in one report and one summary.
   const explicitDirs = [
     ...new Set([...(dir === undefined ? [] : [dir].flat()), ...additionalDirs]),
   ].map(
     (target) =>
-      resolveProjectContext({ cwd: process.cwd(), targetPath: target })
+      resolveProjectContext({ cwd: process.cwd(), targetPath: target, fsCache })
         .targetSkillsDir ?? resolve(process.cwd(), target),
   )
   const skillsDirs = [
     ...new Set([
       ...(dir === undefined
         ? collectDefaultSkillsDirs(
-            resolveProjectContext({ cwd: process.cwd() }),
+            resolveProjectContext({ cwd: process.cwd(), fsCache }),
             findSkillFiles,
+            fsCache,
           )
         : []),
       ...explicitDirs,
@@ -482,6 +502,7 @@ async function runValidateCommandInternal(
     const validateContext = resolveProjectContext({
       cwd: process.cwd(),
       targetPath: skillsDir,
+      fsCache,
     })
 
     const checkedSkills: Array<{
@@ -723,14 +744,8 @@ async function runValidateCommandInternal(
     // Code blocks and links are checked against the owning package's own
     // source, so a renamed export or option fails here with a skill line.
     if (validateContext.packageRoot && checkedSkills.length) {
-      let packageName: string | undefined
-      try {
-        packageName = JSON.parse(
-          readFileSync(validateContext.targetPackageJsonPath!, 'utf8'),
-        ).name
-      } catch {
-        packageName = undefined
-      }
+      const pkgName = fsCache.readPackageJson(validateContext.packageRoot)?.name
+      const packageName = typeof pkgName === 'string' ? pkgName : undefined
       const byLibrary: Record<string, typeof checkedSkills> =
         Object.create(null)
       for (const skill of checkedSkills) {
@@ -807,7 +822,12 @@ async function runValidateCommandInternal(
     validatedCount += skillFiles.length
     if (skillFiles.length) {
       warnings.push(
-        ...collectPackagingWarnings(validateContext, skillsDir, skillFiles),
+        ...collectPackagingWarnings(
+          validateContext,
+          skillsDir,
+          skillFiles,
+          fsCache,
+        ),
       )
     }
   }
@@ -829,17 +849,17 @@ async function runValidateCommandInternal(
   const willFix = options.fix === true && fixPlans.length > 0
 
   if (willSetVersion || willFix) {
+    const root = repairRoot(fsCache)
     if (willFix && willSetVersion) {
-      const root = repairRoot()
       for (const plan of setVersionPlans)
         repositoryWritePath(root, plan.filePath)
     }
     if (willFix) {
-      applyFrontmatterFixes(fixPlans)
+      applyFrontmatterFixes(fixPlans, root)
       console.log(`✅ Fixed ${fixPlans.length} skill files`)
     }
     if (willSetVersion) {
-      applySetVersion(setVersionPlans, options.setVersion!)
+      applySetVersion(setVersionPlans, options.setVersion!, root)
       console.log(
         `✅ Set library_version to "${options.setVersion}" on ${setVersionPlans.length} skill files`,
       )
@@ -915,6 +935,7 @@ function writeGithubValidationSummary({
 export function collectDefaultSkillsDirs(
   context: ProjectContext,
   findSkillFiles: (dir: string) => Array<string>,
+  fsCache?: IntentFsCache,
 ): Array<string> {
   const skillsDirs: Array<string> = []
   const addSkillsDir = (skillsDir: string): void => {
@@ -925,7 +946,10 @@ export function collectDefaultSkillsDirs(
 
   if (context.workspaceRoot && context.cwd === context.workspaceRoot) {
     addSkillsDir(join(context.workspaceRoot, 'skills'))
-    for (const packageDir of findWorkspacePackages(context.workspaceRoot)) {
+    for (const packageDir of findWorkspacePackages(
+      context.workspaceRoot,
+      fsCache,
+    )) {
       addSkillsDir(join(packageDir, 'skills'))
     }
     return [...new Set(skillsDirs)].sort((a, b) => a.localeCompare(b))

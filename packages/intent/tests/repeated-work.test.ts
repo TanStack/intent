@@ -313,6 +313,11 @@ describe('command work budgets', () => {
       expect(
         vi
           .mocked(readFileSync)
+          .mock.calls.filter(([path]) => path === join(root, 'package.json')),
+      ).toHaveLength(1)
+      expect(
+        vi
+          .mocked(readFileSync)
           .mock.calls.filter(
             ([path]) => path === join(root, 'skills', 'core', 'SKILL.md'),
           ),
