@@ -23,15 +23,19 @@ export async function runRepairCommand(
 ) {
   if (options.patch && (options.write || options.json))
     fail('Cannot combine --patch with --write or --json')
-  const context = resolveProjectContext({ cwd: process.cwd() })
+  const fsCache = createIntentFsCache()
+  const { findSkillFiles } = fsCache
+  const context = resolveProjectContext({ cwd: process.cwd(), fsCache })
   const root = context.workspaceRoot ?? context.packageRoot ?? context.cwd
-  const { findSkillFiles } = createIntentFsCache()
   const directories =
     dir === undefined
-      ? collectDefaultSkillsDirs(context, findSkillFiles)
+      ? collectDefaultSkillsDirs(context, findSkillFiles, fsCache)
       : [
-          resolveProjectContext({ cwd: process.cwd(), targetPath: dir })
-            .targetSkillsDir ?? resolve(dir),
+          resolveProjectContext({
+            cwd: process.cwd(),
+            targetPath: dir,
+            fsCache,
+          }).targetSkillsDir ?? resolve(dir),
         ]
   if (dir !== undefined && !existsSync(directories[0]!))
     fail(`Skills directory not found: ${dir}`)
