@@ -1,10 +1,10 @@
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { parse as parseJsonc } from 'jsonc-parser'
+import { parse as parseJsonc } from 'jsonc-parser/lib/esm/main.js'
 import { parse as parseYaml } from 'yaml'
 import { hasAnySkillFile } from '../shared/utils.js'
 import { readPackageJson } from '../core/package-json.js'
-import type { ParseError } from 'jsonc-parser'
+import type { ParseError } from 'jsonc-parser/lib/esm/main.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 
 function normalizeWorkspacePattern(pattern: string): string {
