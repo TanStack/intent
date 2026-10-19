@@ -50,9 +50,11 @@ export function rewriteSkillLoadPaths({
   projectRoot: string
   skills: Array<SkillEntry>
 }): void {
+  const topLevelPackageRoot =
+    packageName !== '' ? join(projectRoot, 'node_modules', packageName) : ''
   const hasStableSymlink =
-    packageName !== '' &&
-    existsSync(join(projectRoot, 'node_modules', packageName))
+    topLevelPackageRoot !== '' &&
+    (packageRoot === topLevelPackageRoot || existsSync(topLevelPackageRoot))
 
   for (const skill of skills) {
     if (hasStableSymlink) {
