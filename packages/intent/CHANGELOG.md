@@ -1,5 +1,25 @@
 # @tanstack/intent
 
+## 0.5.6
+
+### Patch Changes
+
+- [#344](https://github.com/TanStack/intent/pull/344) [`597771f`](https://github.com/TanStack/intent/commit/597771f5b56cd5afd6a3a5c2219fe0663ed7f936) - Skip redundant filesystem probes when scanning packages and rewriting skill load paths during `intent list` and `intent load`; behavior does not change.
+
+- [#345](https://github.com/TanStack/intent/pull/345) [`fbabfec`](https://github.com/TanStack/intent/commit/fbabfecb46581cea59147e4e7fca5af0197b3c6e) - Load `validate` and `review` command modules in `intent maintainer` only when the requested action uses them. `maintainer setup`, `add`, `remove`, and `sync` no longer evaluate the validation, example-checking, and review command bundles at startup; behavior does not change.
+
+- [#337](https://github.com/TanStack/intent/pull/337) [`79d7cc2`](https://github.com/TanStack/intent/commit/79d7cc2694dd95ad438afef9d85836835a140885) - Make `intent maintainer setup` faster when a repository already has skills. Discovery and registration now share package context, checked paths, and parsed `SKILL.md` frontmatter across the batch instead of repeating them per skill; behavior does not change.
+
+- [#343](https://github.com/TanStack/intent/pull/343) [`8b2e645`](https://github.com/TanStack/intent/commit/8b2e645560127a27d66a8468fd8f79fae9b167b5) - Keep `jsonc-parser`'s editing and formatting modules out of the shared `project-context` chunk so read-only commands (`intent list`, `intent load`, `intent stale`, and `intent validate`) do not load JSONC edit and format code on startup; behavior does not change.
+
+- [#341](https://github.com/TanStack/intent/pull/341) [`1ff7b0f`](https://github.com/TanStack/intent/commit/1ff7b0f87a1c4db006eed10742e56cc60b517c1a) - Make `intent stale` reuse its per-run filesystem cache across target discovery, workspace enumeration, and skill-policy filtering, and compute each package's relative path to `_artifacts` once per package instead of once per artifact entry; behavior does not change.
+
+- [#336](https://github.com/TanStack/intent/pull/336) [`da10e09`](https://github.com/TanStack/intent/commit/da10e09150942b0c81c7144456ef4c7fc55d10e2) - Skip the `_artifacts` coverage scan in `intent stale` when a workspace package already has a generated `SKILL.md`. `buildWorkspaceCoverageSignals` checked whether each package had a generated skill and then still searched `artifacts.skills` before using that result; continuing as soon as a generated skill is found avoids scanning the artifact list for covered packages without changing reported signals.
+
+- [#340](https://github.com/TanStack/intent/pull/340) [`cb45f14`](https://github.com/TanStack/intent/commit/cb45f14ef6a6ba452ee85f5e2c4a3d98a90c8a05) - Make `intent validate` and `intent repair` reuse their per-run filesystem cache across project-context resolution, workspace discovery, and `package.json` reads instead of repeating those walks and reads within a single run; behavior does not change.
+
+- [#342](https://github.com/TanStack/intent/pull/342) [`9400b3e`](https://github.com/TanStack/intent/commit/9400b3ea5ad5c378f04993fa197cacfe7c1c05ac) - Spawn the TypeScript 7 `tsgo` compiler process from the parent directory in `withNativeCompiler` while keeping `--cwd` set to the project root, so Windows callers can remove or rename the checked directory immediately after `intent validate` or `intent repair` without hitting `EPERM`.
+
 ## 0.5.5
 
 ### Patch Changes
