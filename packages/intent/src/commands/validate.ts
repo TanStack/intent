@@ -7,6 +7,7 @@ import {
 } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { parseDocument, parse as parseYaml } from 'yaml'
+import { readTransformDeclaration } from '../transforms/runtime.js'
 import { fail, isCliFailure } from '../shared/cli-error.js'
 import { readScalarField } from '../shared/utils.js'
 import { resolveProjectContext } from '../core/project-context.js'
@@ -544,6 +545,17 @@ async function runValidateCommandInternal(
         const meta = fm.metadata
         if (meta === undefined || isRecord(meta)) {
           setVersionPlans.push({ file: rel, filePath })
+        }
+      }
+
+      if (fm['intent-transform'] !== undefined) {
+        try {
+          readTransformDeclaration(content)
+        } catch (error) {
+          errors.push({
+            file: rel,
+            message: error instanceof Error ? error.message : String(error),
+          })
         }
       }
 

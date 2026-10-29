@@ -2,14 +2,37 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { defineConfig } from 'tsdown'
+import { build, defineConfig } from 'tsdown'
 
 export default defineConfig({
   entry: ['src/index.ts', 'src/cli.ts', 'src/core.ts'],
   format: 'esm',
   platform: 'node',
   dts: { entry: ['src/index.ts', 'src/core.ts'] },
-  onSuccess(config) {
+  async onSuccess(config) {
+    // A single bundle is passed via stdin so the restricted child needs no
+    // filesystem grants, including for loading the VFS implementation.
+    await build({
+      config: false,
+      entry: { 'transform-worker': 'src/transforms/worker.ts' },
+      outDir: config.outDir,
+      clean: false,
+      format: 'esm',
+      platform: 'node',
+      target: 'node22',
+      dts: false,
+      minify: true,
+      // Avoid loading the unused SQLite/real-filesystem providers.
+      alias: {
+        '@platformatic/vfs': fileURLToPath(
+          new URL(
+            './node_modules/@platformatic/vfs/lib/file_system.js',
+            import.meta.url,
+          ),
+        ),
+      },
+      deps: { alwaysBundle: ['@platformatic/vfs'] },
+    })
     const packageDir = fileURLToPath(new URL('.', import.meta.url))
     const root = join(packageDir, '../..')
     const version = JSON.parse(

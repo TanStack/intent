@@ -1,7 +1,13 @@
-import { isAbsolute, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { ResolveSkillUseError, resolveSkillUse } from '../skills/resolver.js'
 import { formatSkillUse, parseSkillUse } from '../skills/use.js'
+import { transformCommands } from '../transforms/commands.js'
+import {
+  readTransformDeclaration,
+  runTransform,
+  skillConfigDirectory,
+} from '../transforms/runtime.js'
 import {
   compileExcludePatterns,
   getEffectiveExcludePatterns,
@@ -16,6 +22,7 @@ import {
   readSkillSourcesConfig,
   scanForPolicedIntents,
 } from './source-policy.js'
+import type { TransformAnswer } from '../transforms/types.js'
 import type { ResolveSkillResult } from '../skills/resolver.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { ReadFs } from '../shared/utils.js'
@@ -386,11 +393,34 @@ export function resolveIntentSkill(
 export function loadIntentSkill(
   use: string,
   options: IntentCoreOptions = {},
+  args: Array<string> = [],
 ): LoadedIntentSkill {
   const cwd = resolveCoreCwd(options)
   const resolved = resolveIntentSkillInCwd(cwd, use, options)
+  const source = resolved.readFs.readFileSync(resolved.realResolvedPath, 'utf8')
+  const declaration = readTransformDeclaration(source)
   const content = rewriteLoadedSkillMarkdownDestinations({
-    content: resolved.readFs.readFileSync(resolved.realResolvedPath, 'utf8'),
+    content: declaration
+      ? runTransform({
+          skillDir: dirname(resolved.realResolvedPath),
+          configDir: skillConfigDirectory(
+            resolveProjectContext({ cwd }).packageRoot ?? cwd,
+            resolved.result.packageName,
+            resolved.result.skillName,
+          ),
+          declaration,
+          operation: 'load',
+          args,
+          commands: transformCommands(
+            formatSkillUse(
+              resolved.result.packageName,
+              resolved.result.skillName,
+            ),
+            options,
+          ),
+          readFs: resolved.readFs,
+        })
+      : source,
     cwd,
     packageRoot: resolved.realPackageRoot,
     skillFilePath: resolved.realResolvedPath,
@@ -399,5 +429,49 @@ export function loadIntentSkill(
   return {
     ...resolved.result,
     content,
+  }
+}
+
+/** Configure uses the same source policy and canonical identity as load. */
+export function configureIntentSkill(
+  use: string,
+  input: {
+    answers?: Array<TransformAnswer>
+    stdin?: string
+    reset?: boolean
+  } = {},
+  options: IntentCoreOptions = {},
+): LoadedIntentSkill {
+  const cwd = resolveCoreCwd(options)
+  const resolved = resolveIntentSkillInCwd(cwd, use, options)
+  const declaration = readTransformDeclaration(
+    resolved.readFs.readFileSync(resolved.realResolvedPath, 'utf8'),
+  )
+  if (!declaration)
+    throw new Error(`Skill "${use}" does not declare intent-transform`)
+  const content = runTransform({
+    skillDir: dirname(resolved.realResolvedPath),
+    configDir: skillConfigDirectory(
+      resolveProjectContext({ cwd }).packageRoot ?? cwd,
+      resolved.result.packageName,
+      resolved.result.skillName,
+    ),
+    declaration,
+    operation: 'configure',
+    commands: transformCommands(
+      formatSkillUse(resolved.result.packageName, resolved.result.skillName),
+      options,
+    ),
+    readFs: resolved.readFs,
+    ...input,
+  })
+  return {
+    ...resolved.result,
+    content: rewriteLoadedSkillMarkdownDestinations({
+      content,
+      cwd,
+      packageRoot: resolved.realPackageRoot,
+      skillFilePath: resolved.realResolvedPath,
+    }),
   }
 }

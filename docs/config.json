@@ -37,6 +37,10 @@
         {
           "label": "Configuration",
           "to": "concepts/configuration"
+        },
+        {
+          "label": "Skill Transforms",
+          "to": "concepts/skill-transforms"
         }
       ]
     },
@@ -62,6 +66,10 @@
         {
           "label": "intent load",
           "to": "cli/intent-load"
+        },
+        {
+          "label": "intent configure",
+          "to": "cli/intent-configure"
         },
         {
           "label": "intent meta",

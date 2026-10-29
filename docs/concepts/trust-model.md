@@ -58,9 +58,15 @@ A review inside a workspace starts with inherited permissions. Confirmed edits c
 
 ## Static discovery
 
-Intent reads package data as files. It never imports, requires, or executes the code of a discovered package to find or load a skill. Adding a package to your dependency tree cannot run that package's code through Intent.
+Intent reads package data as files during discovery. Listing skills and resolving their paths never execute package-provided transforms. Loading an ordinary skill only reads its Markdown.
 
-One exception is sanctioned: in Yarn Plug'n'Play projects, Intent loads Yarn's PnP runtime (`.pnp.cjs`) to map package identities to readable locations. It loads no package entry points, bins, lifecycle scripts, or other package-provided JavaScript. An ESLint rule enforces this invariant in the discovery code.
+In Yarn Plug'n'Play projects, Intent loads Yarn's PnP runtime (`.pnp.cjs`) to map package identities to readable locations. Discovery loads no package entry points, bins, lifecycle scripts, or other package-provided JavaScript. An ESLint rule enforces this invariant in the discovery code.
+
+## Transform execution
+
+When a permitted skill declares `intent-transform`, `load` and `configure` execute that specific script in a separate permission-restricted Node process and VM. Enabling a source permits this behavior for its skills, including transforms introduced by updates. `load --path` does not execute scripts.
+
+Transforms receive read-only skill files and writable, project-scoped config through in-memory filesystems. The VM exposes no networking APIs and blocks imports. Node 25+ additionally denies network access at the process boundary; Node 22–24 rely on the VM restrictions for best-effort tracking prevention. These are best-effort restrictions for trusted dependency scripts, not a security boundary against malicious code. See [Skill transforms](./skill-transforms) for the complete contract and limits.
 
 ## Lifecycle boundaries
 

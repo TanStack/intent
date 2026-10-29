@@ -13,6 +13,7 @@ import type {
 } from './commands/install/command.js'
 import type { ListCommandOptions } from './commands/list.js'
 import type { LoadCommandOptions } from './commands/load.js'
+import type { ConfigureCommandOptions } from './commands/configure.js'
 import type { StaleCommandOptions } from './commands/stale.js'
 import type {
   MaintainerCommandOptions,
@@ -76,8 +77,13 @@ function createCli(
     )
 
   cli
-    .command('load [use]', 'Load a compact skill use and print its SKILL.md')
-    .usage('load <use> [--path] [--json] [--debug] [--global] [--global-only]')
+    .command(
+      'load [use] [...args]',
+      'Load a compact skill use and print its SKILL.md',
+    )
+    .usage(
+      'load <use> [...args] [--path] [--json] [--debug] [--global] [--global-only]',
+    )
     .option('--path', 'Print the resolved skill path instead of file content')
     .option('--json', 'Output JSON')
     .option('--debug', 'Print resolution debug details to stderr')
@@ -85,10 +91,37 @@ function createCli(
     .option('--global-only', 'Load from global packages only')
     .example('load @tanstack/query#core')
     .example('load @tanstack/query#core --path')
-    .action(async (use: string | undefined, options: LoadCommandOptions) => {
-      const { runLoadCommand } = await import('./commands/load.js')
-      await runLoadCommand(use, options)
-    })
+    .action(
+      async (
+        use: string | undefined,
+        args: Array<string>,
+        options: LoadCommandOptions,
+      ) => {
+        const { runLoadCommand } = await import('./commands/load.js')
+        await runLoadCommand(use, options, args)
+      },
+    )
+
+  cli
+    .command(
+      'configure [use]',
+      'Configure a skill transform with answers and stdin',
+    )
+    .option(
+      '--answer <question=value>',
+      'Answer a question; repeat for multiple answers',
+      { type: [String], default: [] },
+    )
+    .option('--reset', 'Clear saved configuration before configuring the skill')
+    .option('--global', 'Resolve project packages, then global packages')
+    .option('--global-only', 'Resolve global packages only')
+    .example('configure @apollo/client#apollo-client --answer Q1=closures')
+    .action(
+      async (use: string | undefined, options: ConfigureCommandOptions) => {
+        const { runConfigureCommand } = await import('./commands/configure.js')
+        await runConfigureCommand(use, options)
+      },
+    )
 
   cli
     .command('meta [name]', 'List meta-skills, or print one by name')

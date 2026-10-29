@@ -7,6 +7,8 @@ import type {
 } from '../shared/types.js'
 
 export interface IntentCoreOptions {
+  /** Launcher prefix used in transform instructions; defaults to `intent`. */
+  commandPrefix?: string
   audience?: IntentAudience
   cwd?: string
   debug?: boolean

@@ -1,4 +1,5 @@
 import { fail } from '../shared/cli-error.js'
+import { detectInvocationPrefix } from '../transforms/commands.js'
 import {
   IntentCoreError,
   loadIntentSkill,
@@ -9,6 +10,7 @@ import type { LoadedIntentSkill, ResolvedIntentSkill } from '../core/index.js'
 import type { GlobalScanFlags } from './support.js'
 
 export interface LoadCommandOptions extends GlobalScanFlags {
+  '--'?: Array<string>
   json?: boolean
   path?: boolean
 }
@@ -35,6 +37,7 @@ function printLoadDebug(loaded: LoadedIntentSkill | ResolvedIntentSkill): void {
 export function runLoadCommand(
   use: string | undefined,
   options: LoadCommandOptions,
+  args: Array<string> = [],
 ): void {
   if (!use) {
     fail('Missing skill use. Expected: intent load <package>#<skill>')
@@ -67,7 +70,11 @@ export function runLoadCommand(
 
   let loaded: LoadedIntentSkill
   try {
-    loaded = loadIntentSkill(use, coreOptions)
+    coreOptions.commandPrefix = detectInvocationPrefix()
+    loaded = loadIntentSkill(use, coreOptions, [
+      ...args,
+      ...(options['--'] ?? []),
+    ])
   } catch (err) {
     if (err instanceof IntentCoreError) {
       fail(err.message)
