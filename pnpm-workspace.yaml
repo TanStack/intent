@@ -14,7 +14,7 @@ overrides:
   pino: 10.3.1
   'qs@>=2.2.5 <6.16.0': 6.16.0
   'smol-toml@<=1.7.0': 1.9.0
-  'undici@>=7.0.0 <7.29.1': 7.29.1
+  'undici@>=7.0.0 <7.29.1': 7.30.1
   undici-types: 8.4.1
 
 packageExtensions:
@@ -41,3 +41,5 @@ minimumReleaseAgeExclude:
   - smol-toml@1.9.0
   # Renovate security update: fast-uri@3.1.9
   - fast-uri@3.1.9
+  # Renovate security update: undici@7.30.1
+  - undici@7.30.1
