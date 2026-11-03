@@ -43,7 +43,7 @@ jobs:
         if: steps.changesets.outputs.has_changesets == 'true'
         run: npx nx-cloud start-ci-run --distribute-on=".nx/workflows/dynamic-changesets.yaml"
       - name: Setup Tools
-        uses: TanStack/config/.github/setup@466151b2d479656b38942cd84a0a3dce29d48de3 # main
+        uses: TanStack/config/.github/setup@15c61ed484fc4bf635aea6e3059c523002f8c9af # main
       - name: Run Tests
         if: steps.changesets.outputs.has_changesets == 'true'
         run: pnpm run test:ci --parallel=3
