@@ -23,7 +23,7 @@ Check repository instructions and Git status before edits; preserve unrelated ch
 
 Before choosing or changing repository exports, follow [repository distribution](references/distribution.md). For an export-only change, complete that procedure against existing skill records; use the authoring steps below only if guidance must change.
 
-For an initial skill set or a request spanning several developer tasks, read [initial batches](references/initial-batches.md). Reuse scope already approved in the conversation. For one concrete task, proceed directly below. During ordinary library work, keep the code change as the primary task. Read [source review](references/source-review.md) to identify affected guidance from actual changes and record completed reviews before handing off any of these workflows.
+For an initial skill set or a request spanning several developer tasks, read [initial batches](references/initial-batches.md). Reuse scope already approved in the conversation. For one concrete task, proceed directly below. During ordinary library work, keep the code change as the primary task. Read [source review](references/source-review.md) to identify affected guidance from the changes and record completed reviews before handing off any of these workflows.
 
 For every authoring batch or update, read [the planning record procedure](references/planning-records.md) and create or incrementally maintain `domain_map.yaml`, `skill_spec.md`, and `skill_tree.yaml`. Read existing records first and preserve prior scope and decisions. These records grow with the batches; maintaining them does not require a full-library interview or generating every planned skill.
 
@@ -31,7 +31,7 @@ When the input is an `intent stale` report or generated review PR, read [review-
 
 ## 2. Read the evidence and choose the owner
 
-Read the relevant source, types, tests, docs, examples, and existing skills with their required references. Follow imports or related guidance where they affect the task. Record the source revision or package version used. For an update, inspect the supplied change and the existing skill's claims; use an actual diff or documented before/after behavior when available. A version change alone does not establish changed behavior or a baseline.
+Read the relevant source, types, tests, docs, examples, and existing skills with their required references. Follow imports or related guidance where they affect the task. Record the source revision or package version used. For an update, inspect the supplied change and the existing skill's claims; use a diff or documented before/after behavior when available. A version change alone does not establish changed behavior or a baseline.
 
 Prefer updating guidance that already owns the task. Create one new skill only when developers would benefit from discovering that task independently. Clarify an ambiguous boundary with a concrete example: would a developer trying this task need the same guidance, or a different prerequisite or workflow? Keep the library's established names and terminology.
 
@@ -49,7 +49,7 @@ No fixed interview or review-preference question is needed for one task.
 
 Apply the writing rules below to each task in the agreed batch. For a **new skill**, read [the skill format](references/skill-format.md) for frontmatter, body, and prerequisite conventions. Source documentation can establish the batch’s evidence; create or extend its required planning record alongside the skills.
 
-For an **update**, preserve established names, layout, terminology, and scope unless the actual change requires otherwise. Edit only affected sections and references. Add a sourced old/new example when a changed pattern would otherwise mislead users. Reconcile all three planning documents with the change using the planning record procedure; update affected entries and preserve accurate, unrelated decisions. Change `metadata.library_version` only when the revised guidance is verified for that version; do not fabricate historical versions or rewrite unrelated metadata to clear a staleness signal.
+For an **update**, preserve established names, layout, terminology, and scope unless the change requires otherwise. Edit only affected sections and references. Add a sourced old/new example when a changed pattern would otherwise mislead users. Reconcile all three planning documents with the change using the planning record procedure; update affected entries and preserve accurate, unrelated decisions. Change `metadata.library_version` only when the revised guidance is verified for that version; do not fabricate historical versions or rewrite unrelated metadata to clear a staleness signal.
 
 ### Writing rules
 
@@ -72,11 +72,11 @@ For new guidance and updates that change a recommended behavior, follow [task qu
 
 For new or changed descriptions, also follow [discovery checks](references/task-quality.md#check-discovery-separately). Keep activation evidence separate from task correctness.
 
-Run `npm exec --no -- intent validate <skills-root>` with the actual owning package's skill directory (or the repository's installed `intent`). Fix errors without weakening validation. Keep every SKILL.md within the 500-line limit. Review packaging warnings separately; they do not require installing dependencies or changing publishing configuration during authoring.
+Run `npm exec --no -- intent validate <skills-root>` with the owning package's skill directory (or the repository's installed `intent`). Fix errors without weakening validation. Keep every SKILL.md within the 500-line limit. Review packaging warnings separately; they do not require installing dependencies or changing publishing configuration during authoring.
 
-Check that every reference and prerequisite resolves, every changed claim matches the cited source/version, and examples use actual supported APIs. Exercise the relevant example or package check where available. Intent's structural validation does not prove semantic correctness or agent behavior. If a check cannot run, report it as not verified with the reason.
+Check that every reference and prerequisite resolves, every changed claim matches the cited source/version, and examples use supported APIs. Exercise the relevant example or package check where available. Intent's structural validation does not prove semantic correctness or agent behavior. If a check cannot run, report it as not verified with the reason.
 
-Inspect the actual `SKILL.md` output and matching tree entry before handoff: the description makes the use conditions clear, purpose explains the skill, and both stay within supported behavior. Check migrated purpose text against the pre-edit description and preserve established purpose on later updates. Do not imply stronger guarantees to attract more requests. Check that references have reading conditions and independently discoverable tasks justify any new skills.
+Inspect the `SKILL.md` output and matching tree entry before handoff: the description makes the use conditions clear, purpose explains the skill, and both stay within supported behavior. Check migrated purpose text against the pre-edit description and preserve established purpose on later updates. Do not imply stronger guarantees to attract more requests. Check that references have reading conditions and independently discoverable tasks justify any new skills.
 
 Verify all three planning documents against the resulting skills and prior record, then record completed skill and planning outcomes using the [source review procedure](references/source-review.md), then inspect the final diff for unrelated edits and run `git diff --check` for touched files. Return the changed library behavior, affected skill/reference paths, all three planning document paths and their changes or justified no-op, source/version evidence, structural and task-check results, and any remaining maintainer decision. Distinguish updated guidance, verified no change, and missing evidence for each reviewed task. Report whether a fresh consumer session completed the representative task; if that check could not run, mark it unverified rather than treating the authoring session as independent evidence. The result is ready for maintainer review when the task is usable end to end and those checks pass.
 

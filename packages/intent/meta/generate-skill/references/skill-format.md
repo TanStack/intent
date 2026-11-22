@@ -22,13 +22,13 @@ sources:
 
 Replace template values with evidence from the library. `name` uses only lowercase letters, numbers, and hyphens, matches its parent directory, and is at most 64 characters. `description` is at most 1024 characters. Intent-specific scalars belong under `metadata`, whose values are strings. Intent supports top-level `sources` and `requires` arrays. Source entries use `Owner/repo:relative-path`; globs are supported, but select paths relevant to the task. If the repository or target version cannot be established, report that uncertainty instead of inventing provenance.
 
-Follow [Agent Skills description guidance](https://agentskills.io/skill-creation/optimizing-descriptions). Keep library context and explicit use conditions in `description`; it must communicate the supported task without requiring custom metadata. Check actual discovery using [discovery checks](task-quality.md#check-discovery-separately).
+Follow [Agent Skills description guidance](https://agentskills.io/skill-creation/optimizing-descriptions). Keep library context and explicit use conditions in `description`; it must communicate the supported task without requiring custom metadata. Check discovery using [discovery checks](task-quality.md#check-discovery-separately).
 
 ### Purpose and activation
 
 `description` is the standard agent-discovery field. Write concrete “Use when…” conditions that identify what the agent can accomplish and distinguish adjacent tasks. `metadata.purpose` is Intent's descriptive explanation of what the skill is for, stored as a string in the standard [metadata extension point](https://agentskills.io/specification#metadata-field).
 
-For a new skill, author both fields. For an existing skill without `metadata.purpose`, read its description before editing and preserve that text unchanged as purpose, then write the activation description. Use the actual pre-edit content, not a rewritten draft or a newly invented summary. If purpose already exists, preserve it; subsequent edits to activation conditions do not replace it. If the source proves that a preserved purpose is inaccurate, report the conflict and propose the smallest correction explicitly rather than silently changing its meaning during migration.
+For a new skill, author both fields. For an existing skill without `metadata.purpose`, read its description before editing and preserve that text unchanged as purpose, then write the activation description. Use the pre-edit content, not a rewritten draft or a newly invented summary. If purpose already exists, preserve it; subsequent edits to activation conditions do not replace it. If the source proves that a preserved purpose is inaccurate, report the conflict and propose the smallest correction explicitly rather than silently changing its meaning during migration.
 
 Keep purpose and activation scope aligned when maintaining the skill. Existing third-party skills without purpose remain valid; the field is an Intent authoring convention, not a universal Agent Skills requirement. Structural validation checks its string type through the metadata contract, not the quality of the prose or a literal “Use when” prefix.
 
