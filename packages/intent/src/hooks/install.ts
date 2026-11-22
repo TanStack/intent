@@ -4,7 +4,7 @@ import { dirname, relative } from 'node:path'
 import { detectPackageManager } from '../discovery/package-manager.js'
 import { fail } from '../shared/cli-error.js'
 import { formatIntentCommand } from '../shared/command-runner.js'
-import { errorMessage, isRecord } from '../shared/utils.js'
+import { errorMessage, isRecord } from '../shared/guards.js'
 import { ALL_HOOK_AGENTS, HOOK_AGENT_ADAPTERS } from './adapters.js'
 import {
   EDIT_TOOLS_BY_AGENT,

@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
-import { errorMessage } from '../shared/utils.js'
+import { errorMessage } from '../shared/guards.js'
 
 /**
  * Reads a project policy manifest, returning null only when the file is absent.

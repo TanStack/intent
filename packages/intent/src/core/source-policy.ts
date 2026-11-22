@@ -2,7 +2,7 @@ import { scanForIntents } from '../discovery/scanner.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { detectIntentAudience } from '../shared/environment.js'
 import { ALLOW_ALL_NOTICE } from '../shared/cli-output.js'
-import { isRecord } from '../shared/utils.js'
+import { isRecord } from '../shared/guards.js'
 import {
   compileExcludePatterns,
   compileWildcardPattern,

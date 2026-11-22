@@ -9,11 +9,8 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  createDepDirCache,
-  normalizeReadlinkTarget,
-  resolveDepDir,
-} from '../src/shared/utils.js'
+import { normalizeReadlinkTarget } from '../src/shared/paths.js'
+import { createDepDirCache, resolveDepDir } from '../src/shared/node-modules.js'
 
 let root: string
 

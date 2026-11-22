@@ -6,12 +6,8 @@ import { pathToFileURL } from 'node:url'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { resolveWorkspacePackages } from '../core/workspace-patterns.js'
-import {
-  errorMessage,
-  isRecord,
-  parseFrontmatter,
-  readScalarField,
-} from '../shared/utils.js'
+import { errorMessage, isRecord } from '../shared/guards.js'
+import { parseFrontmatter, readScalarField } from '../shared/frontmatter.js'
 import type TS from 'typescript'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type * as NativeApi from 'typescript7/unstable/async'

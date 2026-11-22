@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { errorMessage, isRecord, stringArray } from '../shared/utils.js'
+import { errorMessage, isRecord, stringArray } from '../shared/guards.js'
 import type {
   IntentArtifactCoverageIgnore,
   IntentArtifactFile,

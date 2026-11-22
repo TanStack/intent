@@ -4,7 +4,7 @@ import { isCI } from 'std-env'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { fail } from '../shared/cli-error.js'
-import { errorMessage } from '../shared/utils.js'
+import { errorMessage } from '../shared/guards.js'
 import {
   planSetupRecords,
   readRecord,

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fail } from '../shared/cli-error.js'
-import { errorMessage } from '../shared/utils.js'
+import { errorMessage } from '../shared/guards.js'
 import { compileExcludePatterns } from '../core/excludes.js'
 
 export interface ExcludeCommandOptions {

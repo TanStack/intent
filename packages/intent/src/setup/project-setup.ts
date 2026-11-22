@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { basename, join, relative } from 'node:path'
 import { repositoryWritePath } from '../shared/write-path.js'
-import { errorMessage, isRecord } from '../shared/utils.js'
+import { errorMessage, isRecord } from '../shared/guards.js'
 import { writeChanges } from '../maintainer/files.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'

@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fail } from '../shared/cli-error.js'
-import { errorMessage, parseFrontmatter } from '../shared/utils.js'
+import { errorMessage } from '../shared/guards.js'
+import { parseFrontmatter } from '../shared/frontmatter.js'
 import { rewriteLoadedSkillMarkdownDestinations } from '../core/markdown.js'
 
 export function runMetaCommand(

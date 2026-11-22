@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, relative } from 'node:path'
 import { applyEdits, modify } from 'jsonc-parser'
-import { isRecord, parseFrontmatter } from '../shared/utils.js'
+import { isRecord } from '../shared/guards.js'
+import { parseFrontmatter } from '../shared/frontmatter.js'
 import { stringList } from './add.js'
 import {
   authoringMarker,

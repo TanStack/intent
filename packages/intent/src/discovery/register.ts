@@ -1,6 +1,6 @@
 import { join, sep } from 'node:path'
 import { rewriteSkillLoadPaths } from '../skills/paths.js'
-import { listNodeModulesPackageDirs } from '../shared/utils.js'
+import { listNodeModulesPackageDirs } from '../shared/node-modules.js'
 import type {
   IntentConfig,
   IntentPackage,

@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
-import { parseFrontmatter } from '../../src/shared/utils.js'
+import { parseFrontmatter } from '../../src/shared/frontmatter.js'
 
 const gh = process.env.INTENT_GH_SKILL_BIN
 const skills = process.env.INTENT_SKILLS_BIN

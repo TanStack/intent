@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { isWithinOrEqual } from '../shared/utils.js'
+import { isWithinOrEqual } from '../shared/paths.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
   findWorkspaceRoot,

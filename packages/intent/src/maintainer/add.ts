@@ -3,7 +3,8 @@ import { basename, dirname, join, relative } from 'node:path'
 import { stringify } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
-import { isRecord, parseFrontmatter } from '../shared/utils.js'
+import { isRecord } from '../shared/guards.js'
+import { parseFrontmatter } from '../shared/frontmatter.js'
 import {
   authoringMarker,
   projectPath,

@@ -1,3 +1,6 @@
+export { findSkillFiles } from './shared/skill-files.js'
+export { getDeps, resolveDepDir } from './shared/node-modules.js'
+export { parseFrontmatter } from './shared/frontmatter.js'
 export { scanForIntents } from './discovery/scanner.js'
 export { checkStaleness } from './staleness/index.js'
 export { readIntentArtifacts } from './staleness/artifact-coverage.js'
@@ -7,12 +10,6 @@ export {
   createFailedStaleReviewItem,
   type StaleReviewItem,
 } from './staleness/workflow-review.js'
-export {
-  findSkillFiles,
-  getDeps,
-  parseFrontmatter,
-  resolveDepDir,
-} from './shared/utils.js'
 export {
   formatSkillUse,
   isSkillUseParseError,

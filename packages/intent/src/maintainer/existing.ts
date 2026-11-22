@@ -5,12 +5,9 @@ import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { reviewIgnorePatterns } from '../review/review.js'
 import { resolveWorkspacePackages } from '../core/workspace-patterns.js'
-import {
-  errorMessage,
-  isDefaultSkillPath,
-  isRecord,
-  parseFrontmatter,
-} from '../shared/utils.js'
+import { errorMessage, isRecord } from '../shared/guards.js'
+import { isDefaultSkillPath } from '../shared/paths.js'
+import { parseFrontmatter } from '../shared/frontmatter.js'
 import { stringList } from './add.js'
 import {
   projectPath,

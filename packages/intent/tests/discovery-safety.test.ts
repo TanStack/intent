@@ -18,7 +18,7 @@ import { listIntentSkills, loadIntentSkill } from '../src/core/index.js'
 import { scanForIntents } from '../src/discovery/scanner.js'
 import { buildIntentSkillsBlock } from '../src/commands/install/guidance.js'
 import { formatRuntimeSkillLookupHint } from '../src/skills/paths.js'
-import { nodeReadFs } from '../src/shared/utils.js'
+import { nodeReadFs } from '../src/shared/fs-identity.js'
 import { formatIntentCommand } from '../src/shared/command-runner.js'
 import type { Stats } from 'node:fs'
 

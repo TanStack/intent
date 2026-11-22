@@ -7,11 +7,8 @@ import gt from 'semver/functions/gt.js'
 import parse from 'semver/functions/parse.js'
 import valid from 'semver/functions/valid.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
-import {
-  parseFrontmatter,
-  readScalarField,
-  toPosixPath,
-} from '../shared/utils.js'
+import { toPosixPath } from '../shared/paths.js'
+import { parseFrontmatter, readScalarField } from '../shared/frontmatter.js'
 import { readIntentArtifacts } from './artifact-coverage.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type {

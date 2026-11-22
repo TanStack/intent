@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createReview, recordReview } from '../review/review.js'
 import { fail, isCliFailure } from '../shared/cli-error.js'
-import { errorMessage, isRecord } from '../shared/utils.js'
+import { errorMessage, isRecord } from '../shared/guards.js'
 import { writeStaleReviewWorkflowFiles } from '../staleness/workflow-review.js'
 
 export interface ReviewCommandOptions {

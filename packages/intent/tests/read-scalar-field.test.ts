@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readScalarField } from '../src/shared/utils.js'
+import { readScalarField } from '../src/shared/frontmatter.js'
 
 describe('readScalarField', () => {
   it('reads a top-level scalar (old shape)', () => {

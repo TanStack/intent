@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fail, isCliFailure } from '../shared/cli-error.js'
-import { errorMessage } from '../shared/utils.js'
+import { errorMessage } from '../shared/guards.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {

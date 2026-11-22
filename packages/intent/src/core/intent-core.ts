@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
-import { errorMessage, isWithinOrEqual } from '../shared/utils.js'
+import { errorMessage } from '../shared/guards.js'
+import { isWithinOrEqual } from '../shared/paths.js'
 import { ResolveSkillUseError, resolveSkillUse } from '../skills/resolver.js'
 import { formatSkillUse, parseSkillUse } from '../skills/use.js'
 import {
@@ -18,7 +19,7 @@ import {
   scanForPolicedIntents,
 } from './source-policy.js'
 import type { ResolveSkillResult } from '../skills/resolver.js'
-import type { ReadFs } from '../shared/utils.js'
+import type { ReadFs } from '../shared/fs-identity.js'
 import type { ScanScope } from '../shared/types.js'
 import type {
   IntentCoreErrorCode,

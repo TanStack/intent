@@ -1,5 +1,5 @@
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
-import { toPosixPath } from '../shared/utils.js'
+import { toPosixPath } from '../shared/paths.js'
 
 /**
  * A character that does not occur in `text`, taken from the Unicode private

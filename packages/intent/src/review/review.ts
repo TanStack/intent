@@ -15,12 +15,9 @@ import { basename, dirname, join, relative, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
-import {
-  errorMessage,
-  isDefaultSkillPath,
-  isRecord,
-  parseFrontmatter,
-} from '../shared/utils.js'
+import { errorMessage, isRecord } from '../shared/guards.js'
+import { isDefaultSkillPath } from '../shared/paths.js'
+import { parseFrontmatter } from '../shared/frontmatter.js'
 
 type Snapshot = Record<string, string | null>
 type Outcome = 'updated' | 'no-change' | 'out-of-scope' | 'unresolved'

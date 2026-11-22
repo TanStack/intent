@@ -1,7 +1,7 @@
 import { basename, dirname } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { parseDocument } from 'yaml'
-import { errorMessage, isRecord } from '../shared/utils.js'
+import { errorMessage, isRecord } from '../shared/guards.js'
 import type { FileChange } from '../maintainer/files.js'
 
 export const agentSkillNamePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/

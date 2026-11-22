@@ -1,5 +1,6 @@
 import { dirname, resolve } from 'node:path'
-import { isRecord, isWithinOrEqual } from '../shared/utils.js'
+import { isRecord } from '../shared/guards.js'
+import { isWithinOrEqual } from '../shared/paths.js'
 import { getPackageShortName } from '../skills/use.js'
 import { resolveProjectContext } from './project-context.js'
 import { readPackageJson } from './package-json.js'

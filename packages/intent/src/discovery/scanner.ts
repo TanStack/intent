@@ -13,15 +13,10 @@ import {
   resolve,
   sep,
 } from 'node:path'
-import {
-  detectGlobalNodeModules,
-  errorMessage,
-  isRecord,
-  isWithinOrEqual,
-  parseFrontmatter,
-  readScalarField,
-  toPosixPath,
-} from '../shared/utils.js'
+import { errorMessage, isRecord } from '../shared/guards.js'
+import { isWithinOrEqual, toPosixPath } from '../shared/paths.js'
+import { detectGlobalNodeModules } from '../shared/node-modules.js'
+import { parseFrontmatter, readScalarField } from '../shared/frontmatter.js'
 import {
   findWorkspacePackages,
   findWorkspaceRoot,
@@ -34,7 +29,7 @@ import { detectPackageManager } from './package-manager.js'
 import { createPackageRegistrar } from './register.js'
 import { createDependencyWalker } from './walk.js'
 import type { IntentFsCache } from './fs-cache.js'
-import type { ReadFs } from '../shared/utils.js'
+import type { ReadFs } from '../shared/fs-identity.js'
 import type {
   InstalledVariant,
   IntentConfig,
