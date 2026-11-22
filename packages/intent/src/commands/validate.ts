@@ -740,6 +740,7 @@ async function runValidateCommandInternal(
           skills,
           references: skills.flatMap((skill) => skill.references),
           cache: blockCache,
+          fsCache,
         })
         if (exampleSummaries)
           for (const [file, summary] of summarizeSkillExamples(result, skills))

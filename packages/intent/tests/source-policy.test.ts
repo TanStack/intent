@@ -12,8 +12,8 @@ import {
   compileExcludePatterns,
   compileWildcardPattern,
 } from '../src/core/excludes.js'
+import { ALLOW_ALL_NOTICE } from '../src/shared/cli-output.js'
 import {
-  ALLOW_ALL_NOTICE,
   EMPTY_NOTE,
   MIGRATION_NOTICE,
   applySourcePolicy,

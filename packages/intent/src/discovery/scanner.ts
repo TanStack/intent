@@ -15,6 +15,7 @@ import {
 } from 'node:path'
 import {
   detectGlobalNodeModules,
+  errorMessage,
   isRecord,
   isWithinOrEqual,
   parseFrontmatter,
@@ -27,9 +28,11 @@ import {
   readWorkspacePatterns,
 } from '../setup/workspace-patterns.js'
 import { compareVersions, normalizeVersion } from '../shared/version.js'
+import { getPackageShortName } from '../skills/use.js'
 import { createIntentFsCache } from './fs-cache.js'
 import { detectPackageManager } from './package-manager.js'
-import { createDependencyWalker, createPackageRegistrar } from './index.js'
+import { createPackageRegistrar } from './register.js'
+import { createDependencyWalker } from './walk.js'
 import type { IntentFsCache } from './fs-cache.js'
 import type { ReadFs } from '../shared/utils.js'
 import type {
@@ -169,9 +172,8 @@ function loadPnpApi(root: string): LoadedPnp | null {
       // Ignore and report the project PnP load error below.
     }
 
-    const msg = err instanceof Error ? err.message : String(err)
     throw new Error(
-      `Yarn PnP project detected, but Intent could not load Yarn's PnP API from ${pnpPath}: ${msg}`,
+      `Yarn PnP project detected, but Intent could not load Yarn's PnP API from ${pnpPath}: ${errorMessage(err)}`,
     )
   }
 }
@@ -255,7 +257,7 @@ function deriveIntentConfig(
 /**
  * Real path of the package root that owns `skillsDir`, or null when it cannot
  * be resolved. Computed once per package: every skill entry is checked against
- * the same root, so resolving it per skill only repeated the same syscalls.
+ * the same root.
  */
 function resolveRealPackageRoot(
   skillsDir: string,
@@ -394,10 +396,6 @@ function discoverSkills(
     }
     return [skill]
   })
-}
-
-function getPackageShortName(packageName: string): string {
-  return packageName.split('/').pop() ?? packageName
 }
 
 function resolveSkillNameHintPath(
@@ -829,7 +827,6 @@ export interface ScanIntentPackageAtRootOptions {
   fsCache?: IntentFsCache
   includeSkillMetadata?: boolean
   projectRoot?: string
-  source?: IntentPackage['source']
   skillNameHint?: string
 }
 
@@ -883,11 +880,7 @@ export function scanIntentPackageAtRoot(
     warnings,
   })
 
-  tryRegister(
-    packageRoot,
-    options.fallbackName ?? 'unknown',
-    options.source ?? 'local',
-  )
+  tryRegister(packageRoot, options.fallbackName ?? 'unknown')
 
   return {
     package: packages[0] ?? null,

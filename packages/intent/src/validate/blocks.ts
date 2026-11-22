@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolveProjectContext } from '../core/project-context.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
 import {
   errorMessage,
@@ -12,6 +13,7 @@ import {
   readScalarField,
 } from '../shared/utils.js'
 import type TS from 'typescript'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type * as NativeApi from 'typescript7/unstable/async'
 import type * as NativeAst from 'typescript7/unstable/ast'
 import type * as NativeIs from 'typescript7/unstable/ast/is'
@@ -520,17 +522,6 @@ function checkSkillLinks(
   return findings
 }
 
-function readManifest(packageDir: string): Record<string, unknown> | null {
-  try {
-    const manifest: unknown = JSON.parse(
-      readFileSync(join(packageDir, 'package.json'), 'utf8'),
-    )
-    return isRecord(manifest) ? manifest : null
-  } catch {
-    return null
-  }
-}
-
 // The entry the manifest declares for the library's public types.
 function declaredEntry(manifest: Record<string, unknown>): string | undefined {
   const exportsRoot = isRecord(manifest.exports)
@@ -608,7 +599,10 @@ function libraryEntry(
 // Every workspace package mapped to its own entry, so an example that imports
 // a sibling package (an adapter, a framework binding) is checked against it
 // instead of silently resolving to nothing.
-function workspacePaths(root: string): Record<string, Array<string>> {
+function workspacePaths(
+  root: string,
+  fsCache: IntentFsCache,
+): Record<string, Array<string>> {
   const context = resolveProjectContext({ cwd: root })
   const workspaceRoot = context.workspaceRoot ?? root
   const paths: Record<string, Array<string>> = {}
@@ -616,7 +610,7 @@ function workspacePaths(root: string): Record<string, Array<string>> {
     workspaceRoot,
     context.workspacePatterns,
   )) {
-    const manifest = readManifest(dir)
+    const manifest = fsCache.readPackageJson(dir)
     if (!manifest || typeof manifest.name !== 'string') continue
     const { name } = manifest
     const entry = libraryEntry(dir, manifest)
@@ -660,10 +654,17 @@ export async function checkSkillBlocks(
     skills: Array<{ file: string; content: string }>
     references?: Array<{ file: string; content: string }>
     cache?: SkillBlockCache
+    fsCache?: IntentFsCache
   },
   ts?: typeof TS | null,
 ): Promise<SkillBlockCheck> {
-  const { root, packageDir, library, cache = {} } = options
+  const {
+    root,
+    packageDir,
+    library,
+    cache = {},
+    fsCache = createIntentFsCache(),
+  } = options
   const findings: Array<SkillBlockFinding> = []
   const blocks: Array<CodeBlock> = []
   for (const skill of options.skills) {
@@ -696,7 +697,7 @@ export async function checkSkillBlocks(
     return result(
       `TypeScript ${ts.version} has no compiler API that Intent can use; install @typescript/typescript6 beside it`,
     )
-  const manifest = readManifest(packageDir) ?? {}
+  const manifest = fsCache.readPackageJson(packageDir) ?? {}
   const entry = libraryEntry(packageDir, manifest)
   const ownsLibrary = manifest.name === library
   if (ownsLibrary && !entry)
@@ -712,7 +713,7 @@ export async function checkSkillBlocks(
   const compilerOptions = {
     ...exampleCompilerOptions,
     paths: {
-      ...(cache.workspacePaths ??= workspacePaths(root)),
+      ...(cache.workspacePaths ??= workspacePaths(root, fsCache)),
       // A skill documenting another package (metadata.library) resolves that
       // package through the workspace or node_modules, not this package's entry.
       ...(ownsLibrary
@@ -978,6 +979,7 @@ export async function describeSkillExamples(
   root: string,
   files: Array<string>,
 ): Promise<Map<string, string>> {
+  const fsCache = createIntentFsCache()
   const groups = new Map<
     string,
     { packageDir: string; library: string; files: Array<string> }
@@ -991,7 +993,7 @@ export async function describeSkillExamples(
     if (!packageRoot) continue
     let library = readScalarField(parseFrontmatter(absolute), 'library')
     if (!library) {
-      const name = readManifest(packageRoot)?.name
+      const name = fsCache.readPackageJson(packageRoot)?.name
       if (typeof name !== 'string') continue
       library = name
     }
@@ -1017,6 +1019,7 @@ export async function describeSkillExamples(
       library: group.library,
       skills,
       cache,
+      fsCache,
     })
     for (const [file, summary] of summarizeSkillExamples(result, skills))
       summaries.set(file, summary)

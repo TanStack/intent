@@ -65,14 +65,14 @@ export function resolveProjectContext({
 
 function findOwningPackageRoot(
   startPath: string,
-  fsCache?: IntentFsCache,
+  fsCache: IntentFsCache,
 ): string | null {
-  let cache = fsCache ? packageRootCaches.get(fsCache) : undefined
-  if (fsCache && !cache) {
+  let cache = packageRootCaches.get(fsCache)
+  if (!cache) {
     cache = new Map()
     packageRootCaches.set(fsCache, cache)
   }
-  const cachedStart = cache?.get(startPath)
+  const cachedStart = cache.get(startPath)
   if (cachedStart !== undefined) return cachedStart
 
   let dir = toSearchDir(startPath)
@@ -80,14 +80,14 @@ function findOwningPackageRoot(
   const visited: Array<string> = [startPath]
 
   while (dir !== prev) {
-    const cached = cache?.get(dir)
+    const cached = cache.get(dir)
     if (cached !== undefined) {
-      for (const visitedDir of visited) cache?.set(visitedDir, cached)
+      for (const visitedDir of visited) cache.set(visitedDir, cached)
       return cached
     }
     visited.push(dir)
     if (existsSync(join(dir, 'package.json'))) {
-      for (const visitedDir of visited) cache?.set(visitedDir, dir)
+      for (const visitedDir of visited) cache.set(visitedDir, dir)
       return dir
     }
 
@@ -97,7 +97,7 @@ function findOwningPackageRoot(
     dir = dirname(dir)
   }
 
-  for (const visitedDir of visited) cache?.set(visitedDir, null)
+  for (const visitedDir of visited) cache.set(visitedDir, null)
   return null
 }
 

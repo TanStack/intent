@@ -4,7 +4,7 @@ import { dirname, relative } from 'node:path'
 import { detectPackageManager } from '../discovery/package-manager.js'
 import { fail } from '../shared/cli-error.js'
 import { formatIntentCommand } from '../shared/command-runner.js'
-import { errorMessage } from '../shared/utils.js'
+import { errorMessage, isRecord } from '../shared/utils.js'
 import { ALL_HOOK_AGENTS, HOOK_AGENT_ADAPTERS } from './adapters.js'
 import {
   EDIT_TOOLS_BY_AGENT,
@@ -614,10 +614,8 @@ function parseJsonObject(
   content: string,
 ): Record<string, unknown> {
   try {
-    const parsed = JSON.parse(content) as unknown
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>
-    }
+    const parsed: unknown = JSON.parse(content)
+    if (isRecord(parsed)) return parsed
   } catch (err) {
     fail(`Failed to parse ${formatPath(filePath)}: ${errorMessage(err)}`)
   }
@@ -626,9 +624,7 @@ function parseJsonObject(
 }
 
 function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? { ...(value as Record<string, unknown>) }
-    : {}
+  return isRecord(value) ? { ...value } : {}
 }
 
 function arrayValue(value: unknown): Array<unknown> {

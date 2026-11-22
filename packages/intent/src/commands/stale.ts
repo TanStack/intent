@@ -10,10 +10,8 @@ import {
   compileSkillSourcePolicy,
   readSkillSourcesConfig,
 } from '../core/source-policy.js'
-import {
-  detectIntentCommandPackageManager,
-  formatIntentCommand,
-} from '../shared/command-runner.js'
+import { detectPackageManager } from '../discovery/package-manager.js'
+import { formatIntentCommand } from '../shared/command-runner.js'
 import { failureMessage } from './support.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { StalenessReport } from '../shared/types.js'
@@ -105,7 +103,7 @@ export async function runStaleCommand(
 
   if (needsReview) {
     const command = formatIntentCommand(
-      detectIntentCommandPackageManager(targetDir),
+      detectPackageManager(targetDir),
       'meta generate-skill',
     )
     console.log(

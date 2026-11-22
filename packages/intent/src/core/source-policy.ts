@@ -28,8 +28,6 @@ import type {
   IntentHiddenSourceSummary,
 } from './types.js'
 
-export { ALLOW_ALL_NOTICE }
-
 export const MIGRATION_NOTICE =
   'intent.skills is not set — all discovered skill sources are surfaced. A future version will require an explicit intent.skills allowlist; add one to opt in to specific sources.'
 
@@ -203,14 +201,7 @@ export function applySourcePolicy(
   const { config, excludeMatchers } = options
   const audience = options.audience ?? 'human'
   const sourcePolicy = compileSkillSourcePolicy(config)
-  const seen = new Set<string>()
   const notices: Array<string> = []
-
-  const emit = (notice: string): void => {
-    if (seen.has(notice)) return
-    seen.add(notice)
-    notices.push(notice)
-  }
 
   const packages: Array<IntentPackage> = []
   const hiddenSources: Array<IntentHiddenSourceSummary> = []
@@ -236,7 +227,7 @@ export function applySourcePolicy(
   }
 
   if (hiddenSources.length > 0) {
-    emit(formatUnlistedNotice(hiddenSources, audience))
+    notices.push(formatUnlistedNotice(hiddenSources, audience))
   }
 
   if (config.mode === 'explicit') {
@@ -250,16 +241,16 @@ export function applySourcePolicy(
           source.skill &&
           !pkg.skills.some((skill) => skill.name === source.skill))
       ) {
-        emit(
+        notices.push(
           `"${source.raw}" is declared in intent.skills but was not discovered.`,
         )
       }
     }
   }
 
-  if (config.mode === 'absent') emit(MIGRATION_NOTICE)
-  else if (config.mode === 'allow-all') emit(ALLOW_ALL_NOTICE)
-  else if (config.mode === 'empty') emit(EMPTY_NOTE)
+  if (config.mode === 'absent') notices.push(MIGRATION_NOTICE)
+  else if (config.mode === 'allow-all') notices.push(ALLOW_ALL_NOTICE)
+  else if (config.mode === 'empty') notices.push(EMPTY_NOTE)
 
   return {
     hiddenSourceCount: hiddenSources.length,

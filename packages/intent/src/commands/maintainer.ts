@@ -21,7 +21,7 @@ import {
   readDistribution,
 } from '../maintainer/distribution.js'
 import { planSetupGithubActions } from '../setup/index.js'
-import { detectIntentCommandPackageManager } from '../shared/command-runner.js'
+import { detectPackageManager } from '../discovery/package-manager.js'
 import { getMetaDir } from './support.js'
 import {
   buildMaintainerGuidanceBlock,
@@ -346,9 +346,7 @@ export async function runMaintainerCommand(
           project.artifacts,
         )
         const guidance = planIntentSkillsBlock({
-          ...buildMaintainerGuidanceBlock(
-            detectIntentCommandPackageManager(project.root),
-          ),
+          ...buildMaintainerGuidanceBlock(detectPackageManager(project.root)),
           root: project.root,
           namespace: 'intent-maintainer',
           skipWhenEmpty: false,

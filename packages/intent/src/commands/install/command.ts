@@ -1,10 +1,8 @@
 import { relative } from 'node:path'
 import { readSkillSourcesConfig } from '../../core/source-policy.js'
 import { fail } from '../../shared/cli-error.js'
-import {
-  detectIntentCommandPackageManager,
-  formatIntentCommand,
-} from '../../shared/command-runner.js'
+import { detectPackageManager } from '../../discovery/package-manager.js'
+import { formatIntentCommand } from '../../shared/command-runner.js'
 import {
   coreOptionsFromGlobalFlags,
   noticeOptionsFromGlobalFlags,
@@ -231,9 +229,7 @@ export async function runInstallCommand(
         '--maintainer cannot be combined with --map, --review, --print-prompt, --global, or --global-only.',
       )
     }
-    const generated = buildMaintainerGuidanceBlock(
-      detectIntentCommandPackageManager(),
-    )
+    const generated = buildMaintainerGuidanceBlock(detectPackageManager())
     const namespace = 'intent-maintainer'
     if (options.dryRun) {
       const targetPath = resolveIntentSkillsBlockTargetPath(
@@ -333,7 +329,7 @@ export async function runInstallCommand(
       )
     }
 
-    const packageManager = detectIntentCommandPackageManager()
+    const packageManager = detectPackageManager()
     const generated = buildIntentSkillGuidanceBlock(packageManager)
 
     if (options.dryRun) {
