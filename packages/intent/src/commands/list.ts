@@ -9,12 +9,7 @@ import {
   printWarnings,
 } from './support.js'
 import type { GlobalScanFlags } from './support.js'
-import type {
-  IntentPackageSummary,
-  IntentSkillList,
-  IntentSkillSummary,
-} from '../core/index.js'
-import type { ScanResult } from '../shared/types.js'
+import type { IntentSkillList, IntentSkillSummary } from '../core/index.js'
 
 export interface ListCommandOptions extends GlobalScanFlags {
   json?: boolean
@@ -72,25 +67,6 @@ function groupSkillsByPackageRoot(
   }
 
   return grouped
-}
-
-function getPackageSkills(
-  pkg: IntentPackageSummary,
-  skillsByPackageRoot: Map<string, Array<IntentSkillSummary>>,
-): Array<IntentSkillSummary> {
-  return skillsByPackageRoot.get(pkg.packageRoot) ?? []
-}
-
-function formatLoadCommand(
-  skill: IntentSkillSummary,
-  packageManager: ScanResult['packageManager'],
-  scopeFlag: string,
-): string {
-  return formatIntentCommand(packageManager, [
-    'load',
-    `${skill.packageName}#${skill.skillName}`,
-    ...(scopeFlag ? [scopeFlag.trim()] : []),
-  ])
 }
 
 function printHiddenSources(result: IntentSkillList, audience: string): void {
@@ -168,7 +144,7 @@ export async function runListCommand(
 
   const skillsByPackageRoot = groupSkillsByPackageRoot(result.skills)
   const allSkills = result.packages.map((pkg) =>
-    getPackageSkills(pkg, skillsByPackageRoot).map((skill) => ({
+    (skillsByPackageRoot.get(pkg.packageRoot) ?? []).map((skill) => ({
       name: skill.skillName,
       description: skill.description,
       type: skill.type,
@@ -177,19 +153,23 @@ export async function runListCommand(
   const nameWidth = computeSkillNameWidth(allSkills)
   const showTypes = result.skills.some((skill) => skill.type)
   const scopeFlag = options.globalOnly
-    ? ' --global-only'
+    ? '--global-only'
     : options.global
-      ? ' --global'
-      : ''
+      ? '--global'
+      : undefined
 
   console.log(`\nSkills:\n`)
   for (const pkg of result.packages) {
     console.log(`  ${pkg.name}`)
     printSkillTree(
-      getPackageSkills(pkg, skillsByPackageRoot).map((skill) => ({
+      (skillsByPackageRoot.get(pkg.packageRoot) ?? []).map((skill) => ({
         name: skill.skillName,
         description: skill.description,
-        loadCommand: formatLoadCommand(skill, result.packageManager, scopeFlag),
+        loadCommand: formatIntentCommand(result.packageManager, [
+          'load',
+          `${skill.packageName}#${skill.skillName}`,
+          ...(scopeFlag ? [scopeFlag] : []),
+        ]),
         type: skill.type,
       })),
       { nameWidth, packageName: pkg.name, showTypes },

@@ -24,10 +24,6 @@ function isPackageManagerInternalSegment(segment: string): boolean {
   return segment === '.pnpm' || segment === '.bun' || segment === '.yarn'
 }
 
-export function hasPackageManagerInternalPath(path: string): boolean {
-  return getPathSegments(path).some(isPackageManagerInternalSegment)
-}
-
 export function isStableLoadPath(path: string): boolean {
   const normalized = path.trim()
   const segments = getPathSegments(normalized)

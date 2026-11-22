@@ -13,10 +13,6 @@ function pickPlaceholder(text: string): string {
   return String.fromCharCode(codePoint)
 }
 
-function resolveFromCwd(path: string): string {
-  return resolve(process.cwd(), path)
-}
-
 function splitDestinationSuffix(destination: string): {
   pathPart: string
   suffix: string
@@ -305,7 +301,7 @@ export function rewriteLoadedSkillMarkdownDestinations({
 }): string {
   const context: MarkdownDestinationRewriteContext = {
     cwd,
-    resolvedPackageRoot: resolveFromCwd(packageRoot),
+    resolvedPackageRoot: resolve(cwd, packageRoot),
     skillDir: dirname(skillFilePath),
     rewrittenDestinations: new Map(),
   }

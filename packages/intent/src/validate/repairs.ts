@@ -1,6 +1,7 @@
 import { basename, dirname } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { parseDocument } from 'yaml'
+import { errorMessage, isRecord } from '../shared/utils.js'
 import type { FileChange } from '../maintainer/files.js'
 
 export const agentSkillNamePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -33,14 +34,12 @@ export function planFrontmatterRepair(path: string, source: string) {
   } catch (error) {
     return {
       changes,
-      problems: [
-        `Invalid YAML frontmatter: ${error instanceof Error ? error.message : String(error)}`,
-      ],
+      problems: [`Invalid YAML frontmatter: ${errorMessage(error)}`],
     }
   }
-  if (!fields || typeof fields !== 'object' || Array.isArray(fields))
+  if (!isRecord(fields))
     return { changes, problems: ['Frontmatter must be a mapping'] }
-  const fm = fields as Record<string, unknown>
+  const fm = fields
   const expected = { ...fm }
   const metadata = fm.metadata
   const canMove =

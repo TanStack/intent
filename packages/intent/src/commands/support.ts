@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { fail } from '../shared/cli-error.js'
+import { fail, isCliFailure } from '../shared/cli-error.js'
+import { errorMessage } from '../shared/utils.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
@@ -23,7 +24,6 @@ export interface GlobalScanFlags {
   global?: boolean
   globalOnly?: boolean
   notices?: boolean
-  noNotices?: boolean
 }
 
 export interface StaleTargetResult {
@@ -33,30 +33,21 @@ export interface StaleTargetResult {
 
 export const INTENT_CHECK_SKILLS_WORKFLOW_VERSION = 5
 
+// Startup keeps shared/cli-error.ts free of imports, so this lives with the commands.
+export function failureMessage(err: unknown): string {
+  return isCliFailure(err) ? err.message : errorMessage(err)
+}
+
 export function getMetaDir(): string {
   return findMetaDir(dirname(fileURLToPath(import.meta.url)))
 }
 
-/**
- * Resolve the package `meta/` directory by walking up from `startDir`.
- *
- * The CLI module sits at `src/commands/` in source but is bundled flat into
- * `dist/` in the published package, so the depth from the module to the
- * package root differs between the two layouts. A hardcoded `..` count is
- * correct for only one of them and breaks `setup` / `meta` / `scaffold` in the
- * other. Walking up to the first `meta/` directory handles both layouts (and
- * symlinked installs such as pnpm) without depending on the build output
- * depth. Falls back to the historical `../../meta` resolution if no `meta/`
- * is found, so behaviour is never worse than before.
- */
+// Walks up to the first meta/ directory so the same code works from
+// src/commands/ and the flat bundled dist/. Falls back to ../../meta.
 export function findMetaDir(startDir: string): string {
   let dir = startDir
-  // Sanity cap: a package is never this many dirs deep; the root check below
-  // also stops the walk at the filesystem root.
   for (let limit = 0; limit < 10; limit++) {
     const candidate = join(dir, 'meta')
-    // Check it's a directory, not just that something named `meta` exists — a
-    // stray file named `meta` in an ancestor must not short-circuit the walk.
     if (existsSync(candidate) && statSync(candidate).isDirectory())
       return candidate
     const parent = dirname(dir)
@@ -68,8 +59,6 @@ export function findMetaDir(startDir: string): string {
 
 export function getCheckSkillsWorkflowAdvisories(root: string): Array<string> {
   const workflowPath = join(root, '.github', 'workflows', 'check-skills.yml')
-  if (!existsSync(workflowPath)) return []
-
   let content: string
   try {
     content = readFileSync(workflowPath, 'utf8')
@@ -101,15 +90,11 @@ export async function scanIntentsOrFail(
     })
     return scan
   } catch (err) {
-    fail(err instanceof Error ? err.message : String(err))
+    fail(errorMessage(err))
   }
 }
 
 function scanOptionsFromGlobalFlags(options: GlobalScanFlags): ScanOptions {
-  if (options.global && options.globalOnly) {
-    fail('Use either --global or --global-only, not both.')
-  }
-
   if (options.globalOnly) {
     return { scope: 'global' }
   }
@@ -138,7 +123,7 @@ export function coreOptionsFromGlobalFlags(
 export function noticeOptionsFromGlobalFlags(options: GlobalScanFlags): {
   noNotices?: boolean
 } {
-  return { noNotices: options.noNotices || options.notices === false }
+  return { noNotices: options.notices === false }
 }
 
 function formatDebugValue(value: string | number | Array<string>): string {

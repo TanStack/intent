@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { parseDocument, stringify } from 'yaml'
+import { isRecord } from '../shared/utils.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
@@ -117,17 +118,13 @@ export function readRecord(
   const parsed: unknown = document.toJS()
   if (
     document.errors.length ||
-    !isObject(parsed) ||
+    !isRecord(parsed) ||
     !Array.isArray(parsed.skills)
   )
     throw new Error(
       `Invalid ${name}: expected a YAML object with a skills array.`,
     )
   return { path, source, document }
-}
-
-export function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export interface SkillEntry extends Record<string, unknown> {
@@ -146,7 +143,7 @@ export function skillEntries(
   const paths = new Set<string>()
   return entries.map((entry) => {
     if (
-      !isObject(entry) ||
+      !isRecord(entry) ||
       typeof entry.name !== 'string' ||
       !entry.name ||
       typeof entry.path !== 'string' ||
@@ -204,7 +201,7 @@ export function planSetupRecords(
     throw error ?? new Error(`Invalid package.json: ${context.packageRoot}`)
   const library = {
     name: manifest.name ?? basename(root),
-    ...(manifest.version ? { version: manifest.version } : {}),
+    version: manifest.version || undefined,
   }
   const defaults: Record<string, string> = {
     'domain_map.yaml': stringify({

@@ -9,21 +9,13 @@ function readPackageManagerField(
   fsCache: IntentFsCache,
 ): PackageManager | null {
   if (!existsSync(join(dir, 'package.json'))) return null
-  try {
-    const parsed = fsCache.readPackageJson(dir)
-    if (!parsed) return null
+  const value = fsCache.readPackageJson(dir)?.packageManager
+  if (typeof value !== 'string') return null
 
-    const value = parsed.packageManager
-    if (typeof value !== 'string') return null
-
-    if (value.startsWith('pnpm@')) return 'pnpm'
-    if (value.startsWith('yarn@')) return 'yarn'
-    if (value.startsWith('bun@')) return 'bun'
-    if (value.startsWith('npm@')) return 'npm'
-  } catch {
-    return null
-  }
-
+  if (value.startsWith('pnpm@')) return 'pnpm'
+  if (value.startsWith('yarn@')) return 'yarn'
+  if (value.startsWith('bun@')) return 'bun'
+  if (value.startsWith('npm@')) return 'npm'
   return null
 }
 

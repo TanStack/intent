@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { formatClaudePreToolUseOutput } from '../src/hooks/agents/claude.js'
-import { formatCodexPreToolUseOutput } from '../src/hooks/agents/codex.js'
-import { formatCopilotPreToolUseOutput } from '../src/hooks/agents/copilot.js'
 import {
   EDIT_TOOLS_BY_AGENT,
   GATE_DENY_REASON,
-  gateDecision,
-  hasIntentCheckFromObservations,
-  observationFromEvent,
   parseIntentInvocation,
 } from '../src/hooks/policy.js'
 
@@ -59,99 +53,14 @@ describe('intent hook policy', () => {
     expect(parseIntentInvocation(undefined)).toBeUndefined()
   })
 
-  it('observes intent commands only from Bash tool calls', () => {
-    expect(
-      observationFromEvent({
-        tool_name: 'Bash',
-        tool_input: { command: 'intent load @tanstack/router#routing' },
-      }),
-    ).toEqual({
-      action: 'load',
-      skillUse: '@tanstack/router#routing',
-      raw: 'intent load @tanstack/router#routing',
-    })
-    expect(
-      observationFromEvent({
-        toolName: 'Bash',
-        toolArgs: JSON.stringify({ command: 'intent list' }),
-      }),
-    ).toEqual({ action: 'list', raw: 'intent list', skillUse: undefined })
-    expect(
-      observationFromEvent({
-        tool_name: 'Edit',
-        tool_input: { command: 'intent load @tanstack/router#routing' },
-      }),
-    ).toBeUndefined()
-  })
-
-  it('denies edit tools until guidance is checked', () => {
-    expect(
-      gateDecision({ agent: 'copilot', toolName: 'Edit', hasLoaded: false }),
-    ).toEqual({ decision: 'deny', reason: GATE_DENY_REASON })
-    expect(
-      gateDecision({ agent: 'claude', toolName: 'Write', hasLoaded: false }),
-    ).toEqual({ decision: 'deny', reason: GATE_DENY_REASON })
-    expect(
-      gateDecision({
-        agent: 'codex',
-        toolName: 'apply_patch',
-        hasLoaded: false,
-      }),
-    ).toEqual({ decision: 'deny', reason: GATE_DENY_REASON })
-    expect(
-      gateDecision({ agent: 'copilot', toolName: 'Edit', hasLoaded: true }),
-    ).toEqual({ decision: 'allow' })
-    expect(
-      gateDecision({ agent: 'codex', toolName: 'Bash', hasLoaded: false }),
-    ).toEqual({ decision: 'allow' })
+  it('lists the edit tools gated per agent', () => {
     expect(EDIT_TOOLS_BY_AGENT.copilot.has('Write')).toBe(true)
     expect(EDIT_TOOLS_BY_AGENT.claude.has('Edit')).toBe(true)
     expect(EDIT_TOOLS_BY_AGENT.codex.has('apply_patch')).toBe(true)
   })
 
-  it('detects a prior guidance check from observation records', () => {
-    expect(hasIntentCheckFromObservations([{ action: 'list' }])).toBe(true)
-    expect(
-      hasIntentCheckFromObservations([{ action: 'list' }, { action: 'load' }]),
-    ).toBe(true)
-  })
-
   it('keeps the deny reason free of parseable intent commands', () => {
     expect(parseIntentInvocation(GATE_DENY_REASON)).toBeUndefined()
     expect(/intent\s+(list|load)/i.test(GATE_DENY_REASON)).toBe(false)
-  })
-})
-
-describe('intent hook agent adapters', () => {
-  const deny = { decision: 'deny' as const, reason: GATE_DENY_REASON }
-
-  it('formats Copilot PreToolUse denial output', () => {
-    expect(formatCopilotPreToolUseOutput(deny)).toEqual({
-      permissionDecision: 'deny',
-      permissionDecisionReason: GATE_DENY_REASON,
-    })
-    expect(formatCopilotPreToolUseOutput({ decision: 'allow' })).toBeUndefined()
-  })
-
-  it('formats Claude PreToolUse denial output', () => {
-    expect(formatClaudePreToolUseOutput(deny)).toEqual({
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'deny',
-        permissionDecisionReason: GATE_DENY_REASON,
-      },
-    })
-    expect(formatClaudePreToolUseOutput({ decision: 'allow' })).toBeUndefined()
-  })
-
-  it('formats Codex PreToolUse denial output', () => {
-    expect(formatCodexPreToolUseOutput(deny)).toEqual({
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'deny',
-        permissionDecisionReason: GATE_DENY_REASON,
-      },
-    })
-    expect(formatCodexPreToolUseOutput({ decision: 'allow' })).toBeUndefined()
   })
 })

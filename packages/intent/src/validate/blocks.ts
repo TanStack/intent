@@ -5,7 +5,12 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolveProjectContext } from '../core/project-context.js'
 import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
-import { parseFrontmatter, readScalarField } from '../shared/utils.js'
+import {
+  errorMessage,
+  isRecord,
+  parseFrontmatter,
+  readScalarField,
+} from '../shared/utils.js'
 import type TS from 'typescript'
 import type * as NativeApi from 'typescript7/unstable/async'
 import type * as NativeAst from 'typescript7/unstable/ast'
@@ -36,17 +41,22 @@ interface CodeBlock {
   expectError?: Array<string>
 }
 
+interface CodeFence {
+  start: number
+  end: number
+  language: string
+  properties: Array<string>
+  code: string
+}
+
+// Indexed by the opening fence's indentation (0 to 3 spaces).
+const fenceDedents = [/^/, /^ ?/, /^ {0,2}/, /^ {0,3}/]
+
 // Scan whole fences before selecting languages: a Markdown example can contain
 // shorter fences, closing fences may be longer, and EOF also closes a fence.
-function codeFences(content: string) {
+function codeFences(content: string): Array<CodeFence> {
   const lines = content.split(/\r?\n/)
-  const fences: Array<{
-    start: number
-    end: number
-    language: string
-    properties: Array<string>
-    code: string
-  }> = []
+  const fences: Array<CodeFence> = []
   for (let start = 0; start < lines.length; start++) {
     const opening = /^( {0,3})(`{3,}|~{3,})(.*)$/.exec(lines[start]!)
     if (!opening || (opening[2]![0] === '`' && opening[3]!.includes('`')))
@@ -62,7 +72,7 @@ function codeFences(content: string) {
       )
         break
     }
-    const dedent = new RegExp(`^ {0,${opening[1]!.length}}`)
+    const dedent = fenceDedents[opening[1]!.length]!
     const [language, ...properties] = opening[3]!.trim().split(/\s+/)
     fences.push({
       start,
@@ -140,7 +150,7 @@ function loadTypeScript(root: string): typeof TS | null {
     try {
       ts = load('typescript') as typeof TS
     } catch {
-      continue // Try the next location.
+      continue
     }
     if (hasCompilerApi(ts)) return ts
     // TypeScript 7 exports no compiler API. Its documented side-by-side
@@ -175,9 +185,7 @@ async function loadNativeTypeScript(
         is: await entry('ast/is'),
         scanner: await entry('ast/scanner'),
       }
-    } catch {
-      // Try the next location.
-    }
+    } catch {}
   }
   return null
 }
@@ -251,12 +259,12 @@ function nativeMessage(diagnostic: NativeDiagnostic, indent = 0): string {
   ].join('')
 }
 
-const errorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : String(error)
-
-function extractCodeBlocks(file: string, content: string): Array<CodeBlock> {
+function extractCodeBlocks(
+  file: string,
+  fences: Array<CodeFence>,
+): Array<CodeBlock> {
   const blocks: Array<CodeBlock> = []
-  for (const fence of codeFences(content)) {
+  for (const fence of fences) {
     const language = fence.language
     if (!checkedLanguages.has(language)) continue
     if (fence.properties.includes('no-check')) continue
@@ -460,11 +468,12 @@ async function splitExamples(
 
 export function skillLinks(
   content: string,
+  fences = codeFences(content),
 ): Array<{ target: string; path: string; line: number }> {
   const links: Array<{ target: string; path: string; line: number }> = []
   // Blank out fenced examples, keeping newlines so line numbers still match.
   const lines = content.split(/\r?\n/)
-  for (const fence of codeFences(content))
+  for (const fence of fences)
     for (
       let index = fence.start;
       index <= fence.end && index < lines.length;
@@ -472,16 +481,16 @@ export function skillLinks(
     )
       lines[index] = ''
   const prose = lines.join('\n')
+  let line = 1
+  let scanned = 0
   for (const match of prose.matchAll(markdownLink)) {
+    for (; scanned < match.index; scanned++)
+      if (prose.charCodeAt(scanned) === 10) line++
     const target = match[1] ?? match[2]!
     if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) continue
     const path = target.replace(/[#?].*$/, '')
     if (!path) continue
-    links.push({
-      target,
-      path,
-      line: prose.slice(0, match.index).split('\n').length,
-    })
+    links.push({ target, path, line })
   }
   return links
 }
@@ -491,10 +500,11 @@ function checkSkillLinks(
   packageDir: string,
   file: string,
   content: string,
+  fences: Array<CodeFence>,
 ): Array<SkillBlockFinding> {
   const findings: Array<SkillBlockFinding> = []
   const absolute = resolve(root, file)
-  for (const { target, path, line } of skillLinks(content)) {
+  for (const { target, path, line } of skillLinks(content, fences)) {
     const resolved = resolve(dirname(absolute), path)
     const outside = relative(packageDir, resolved).startsWith('..')
     if (outside || !existsSync(resolved))
@@ -510,22 +520,23 @@ function checkSkillLinks(
   return findings
 }
 
-// The file that declares the library's public types. A declared entry that
-// Git tracks is hand-written and used as-is; a missing or ignored one is
-// build output, so the matching source file stands in for it.
-function libraryEntry(packageDir: string): string | null {
-  let manifest: Record<string, unknown> = {}
+function readManifest(packageDir: string): Record<string, unknown> | null {
   try {
-    manifest = JSON.parse(
+    const manifest: unknown = JSON.parse(
       readFileSync(join(packageDir, 'package.json'), 'utf8'),
     )
+    return isRecord(manifest) ? manifest : null
   } catch {
-    // Fall through to the conventional source entry.
+    return null
   }
+}
+
+// The entry the manifest declares for the library's public types.
+function declaredEntry(manifest: Record<string, unknown>): string | undefined {
   const exportsRoot = isRecord(manifest.exports)
     ? (manifest.exports['.'] ?? manifest.exports)
     : manifest.exports
-  const declared = [
+  return [
     manifest.types,
     manifest.typings,
     isRecord(exportsRoot) ? exportsRoot.types : undefined,
@@ -542,10 +553,22 @@ function libraryEntry(packageDir: string): string | null {
     manifest.module,
     manifest.main,
   ].find((value): value is string => typeof value === 'string')
+}
+
+// The file that declares the library's public types. A declared entry that
+// Git tracks is hand-written and used as-is; a missing or ignored one is
+// build output, so the matching source file stands in for it.
+function libraryEntry(
+  packageDir: string,
+  manifest: Record<string, unknown>,
+  tracked?: Set<string>,
+): string | null {
+  const declared = declaredEntry(manifest)
   const candidates: Array<string> = []
   if (declared) {
     const path = resolve(packageDir, declared)
-    if (existsSync(path) && isTracked(packageDir, path)) return path
+    if (existsSync(path) && (tracked?.has(path) || isTracked(packageDir, path)))
+      return path
     const name = declared
       .split('/')
       .at(-1)!
@@ -591,25 +614,55 @@ function workspacePaths(root: string): Record<string, Array<string>> {
   const context = resolveProjectContext({ cwd: root })
   const workspaceRoot = context.workspaceRoot ?? root
   const paths: Record<string, Array<string>> = {}
-  for (const dir of resolveWorkspacePackages(
+  const packages = resolveWorkspacePackages(
     workspaceRoot,
     context.workspacePatterns,
-  )) {
-    let name: unknown
-    try {
-      name = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name
-    } catch {
-      continue
-    }
-    const entry = typeof name === 'string' ? libraryEntry(dir) : null
+  ).flatMap((dir) => {
+    const manifest = readManifest(dir)
+    if (!manifest || typeof manifest.name !== 'string') return []
+    return [{ dir, name: manifest.name, manifest }]
+  })
+  // One git call answers for most declared entries. A package that is its own
+  // repository is not listed by it, so libraryEntry asks from that package.
+  const tracked = trackedFiles(
+    workspaceRoot,
+    packages.flatMap(({ dir, manifest }) => {
+      const declared = declaredEntry(manifest)
+      return declared ? [resolve(dir, declared)] : []
+    }),
+  )
+  for (const { dir, name, manifest } of packages) {
+    const entry = libraryEntry(dir, manifest, tracked)
     if (!entry) continue
-    paths[name as string] = [slash(entry)]
+    paths[name] = [slash(entry)]
     paths[`${name}/*`] = [
       slash(join(dirname(entry), '*')),
       slash(join(dir, '*')),
     ]
   }
   return paths
+}
+
+// The absolute paths among `paths` that Git tracks from `cwd`; none when Git
+// cannot answer there. Git prints paths relative to `cwd`, so each is resolved
+// back against it.
+function trackedFiles(cwd: string, paths: Array<string>): Set<string> {
+  if (paths.length === 0) return new Set()
+  try {
+    const listed = execFileSync(
+      'git',
+      ['-c', 'core.fsmonitor=false', 'ls-files', '-z', '--', ...paths],
+      { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    )
+    return new Set(
+      listed
+        .split('\0')
+        .filter(Boolean)
+        .map((path) => resolve(cwd, path)),
+    )
+  } catch {
+    return new Set()
+  }
 }
 
 function isTracked(packageDir: string, path: string): boolean {
@@ -625,24 +678,9 @@ function isTracked(packageDir: string, path: string): boolean {
   }
 }
 
-function packageName(packageDir: string): string | undefined {
-  try {
-    const name: unknown = JSON.parse(
-      readFileSync(join(packageDir, 'package.json'), 'utf8'),
-    ).name
-    return typeof name === 'string' ? name : undefined
-  } catch {
-    return undefined
-  }
-}
-
 // TypeScript normalizes every path it hands back to forward slashes, so the
 // virtual files and path mappings are keyed the same way on Windows.
 const slash = (path: string) => path.replace(/\\/g, '/')
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 export interface SkillBlockCache {
   workspacePaths?: Record<string, Array<string>>
@@ -661,12 +699,19 @@ export async function checkSkillBlocks(
   ts?: typeof TS | null,
 ): Promise<SkillBlockCheck> {
   const { root, packageDir, library, cache = {} } = options
-  const findings = options.skills.flatMap((skill) =>
-    checkSkillLinks(root, packageDir, skill.file, skill.content),
-  )
-  const blocks = [...options.skills, ...(options.references ?? [])].flatMap(
-    (skill) => extractCodeBlocks(skill.file, skill.content),
-  )
+  const findings: Array<SkillBlockFinding> = []
+  const blocks: Array<CodeBlock> = []
+  for (const skill of options.skills) {
+    const fences = codeFences(skill.content)
+    findings.push(
+      ...checkSkillLinks(root, packageDir, skill.file, skill.content, fences),
+    )
+    blocks.push(...extractCodeBlocks(skill.file, fences))
+  }
+  for (const reference of options.references ?? [])
+    blocks.push(
+      ...extractCodeBlocks(reference.file, codeFences(reference.content)),
+    )
   const result = (skipped?: string): SkillBlockCheck => ({
     blocks: blocks.length,
     findings,
@@ -686,8 +731,9 @@ export async function checkSkillBlocks(
     return result(
       `TypeScript ${ts.version} has no compiler API that Intent can use; install @typescript/typescript6 beside it`,
     )
-  const entry = libraryEntry(packageDir)
-  const ownsLibrary = packageName(packageDir) === library
+  const manifest = readManifest(packageDir) ?? {}
+  const entry = libraryEntry(packageDir, manifest)
+  const ownsLibrary = manifest.name === library
   if (ownsLibrary && !entry)
     return result(
       `no type entry found for ${library} in ${relative(root, packageDir) || '.'}`,
@@ -978,20 +1024,12 @@ export async function describeSkillExamples(
       targetPath: absolute,
     })
     if (!packageRoot) continue
-    let library: unknown = readScalarField(
-      parseFrontmatter(absolute),
-      'library',
-    )
+    let library = readScalarField(parseFrontmatter(absolute), 'library')
     if (!library) {
-      try {
-        library = JSON.parse(
-          readFileSync(join(packageRoot, 'package.json'), 'utf8'),
-        ).name
-      } catch {
-        continue
-      }
+      const name = readManifest(packageRoot)?.name
+      if (typeof name !== 'string') continue
+      library = name
     }
-    if (typeof library !== 'string') continue
     const key = `${packageRoot}\0${library}`
     const group = groups.get(key) ?? {
       packageDir: packageRoot,
@@ -1030,7 +1068,8 @@ export function summarizeSkillExamples(
   const summaries = new Map<string, string>()
   if (result.skipped) return summaries
   for (const skill of skills) {
-    if (!extractCodeBlocks(skill.file, skill.content).length) continue
+    if (!extractCodeBlocks(skill.file, codeFences(skill.content)).length)
+      continue
     const errors = result.findings.filter(
       (finding) => finding.file === skill.file && finding.severity === 'error',
     )

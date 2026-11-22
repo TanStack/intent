@@ -1,5 +1,6 @@
-import { isAbsolute, relative, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
+import { errorMessage, isWithinOrEqual } from '../shared/utils.js'
 import { ResolveSkillUseError, resolveSkillUse } from '../skills/resolver.js'
 import { formatSkillUse, parseSkillUse } from '../skills/use.js'
 import {
@@ -17,9 +18,8 @@ import {
   scanForPolicedIntents,
 } from './source-policy.js'
 import type { ResolveSkillResult } from '../skills/resolver.js'
-import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { ReadFs } from '../shared/utils.js'
-import type { ScanOptions, ScanScope } from '../shared/types.js'
+import type { ScanScope } from '../shared/types.js'
 import type {
   IntentCoreErrorCode,
   IntentCoreOptions,
@@ -60,7 +60,7 @@ export class IntentCoreError extends Error {
   }
 }
 
-function toScanOptions(options: IntentCoreOptions): ScanOptions {
+function toScanScope(options: IntentCoreOptions): ScanScope {
   if (options.global && options.globalOnly) {
     throw new IntentCoreError(
       'invalid-options',
@@ -68,26 +68,9 @@ function toScanOptions(options: IntentCoreOptions): ScanOptions {
     )
   }
 
-  if (options.globalOnly) {
-    return { scope: 'global' }
-  }
-
-  if (options.global) {
-    return { scope: 'local-and-global' }
-  }
-
-  return { scope: 'local' }
-}
-
-function getScanScope(options: ScanOptions): ScanScope {
-  return options.scope ?? (options.includeGlobal ? 'local-and-global' : 'local')
-}
-
-function withFsCache(
-  options: ScanOptions,
-  fsCache: IntentFsCache,
-): ScanOptions & { fsCache: IntentFsCache } {
-  return { ...options, fsCache }
+  if (options.globalOnly) return 'global'
+  if (options.global) return 'local-and-global'
+  return 'local'
 }
 
 function resolveCoreCwd(options: IntentCoreOptions): string {
@@ -98,13 +81,13 @@ export function listIntentSkills(
   options: IntentCoreOptions = {},
 ): IntentSkillList {
   const cwd = resolveCoreCwd(options)
-  const scanOptions = toScanOptions(options)
+  const scope = toScanScope(options)
   const fsCache = createIntentFsCache()
   const projectContext = resolveProjectContext({ cwd, fsCache })
   const { hiddenSourceCount, hiddenSources, scan, excludePatterns } =
     scanForPolicedIntents({
       cwd,
-      scanOptions: withFsCache(scanOptions, fsCache),
+      scanOptions: { scope, fsCache },
       coreOptions: options,
       context: projectContext,
     })
@@ -146,7 +129,7 @@ export function listIntentSkills(
   if (options.debug) {
     result.debug = {
       cwd,
-      scope: getScanScope(scanOptions),
+      scope,
       excludes: excludePatterns,
       packageCount: result.packages.length,
       skillCount: result.skills.length,
@@ -158,21 +141,6 @@ export function listIntentSkills(
   }
 
   return result
-}
-
-function resolveFromCwd(cwd: string, path: string): string {
-  return resolve(cwd, path)
-}
-
-function isResolvedPathInsidePackageRoot(
-  path: string,
-  packageRoot: string,
-): boolean {
-  const relativePath = relative(packageRoot, path)
-  return (
-    relativePath === '' ||
-    (!relativePath.startsWith('..') && !isAbsolute(relativePath))
-  )
 }
 
 function toResolvedIntentSkill(
@@ -189,9 +157,7 @@ function toResolvedIntentSkill(
 } {
   let realResolvedPath: string
   try {
-    realResolvedPath = readFs.realpathSync.native(
-      resolveFromCwd(cwd, resolved.path),
-    )
+    realResolvedPath = readFs.realpathSync.native(resolve(cwd, resolved.path))
   } catch {
     throw new IntentCoreError(
       'skill-file-not-found',
@@ -199,10 +165,10 @@ function toResolvedIntentSkill(
     )
   }
   const realPackageRoot = readFs.realpathSync.native(
-    resolveFromCwd(cwd, resolved.packageRoot),
+    resolve(cwd, resolved.packageRoot),
   )
 
-  if (!isResolvedPathInsidePackageRoot(realResolvedPath, realPackageRoot)) {
+  if (!isWithinOrEqual(realResolvedPath, realPackageRoot)) {
     throw new IntentCoreError(
       'skill-path-outside-package',
       `Resolved skill path for "${use}" is outside package root: ${resolved.path}`,
@@ -276,10 +242,7 @@ function resolveIntentSkillInCwd(
   try {
     parsedUse = parseSkillUse(use)
   } catch (err) {
-    throw new IntentCoreError(
-      'invalid-skill-use',
-      err instanceof Error ? err.message : String(err),
-    )
+    throw new IntentCoreError('invalid-skill-use', errorMessage(err))
   }
 
   const fsCache = createIntentFsCache()
@@ -297,8 +260,7 @@ function resolveIntentSkillInCwd(
     throw new IntentCoreError(refusal.code, refusal.message)
   }
 
-  const scanOptions = toScanOptions(options)
-  const scope = getScanScope(scanOptions)
+  const scope = toScanScope(options)
   const fastPathResolved = resolveSkillUseFastPath(
     parsedUse,
     options,
@@ -338,9 +300,11 @@ function resolveIntentSkillInCwd(
 
   const { scan: scanResult, droppedNames } = scanForPolicedIntents({
     cwd,
-    scanOptions: withFsCache(scanOptions, fsCache),
+    scanOptions: { scope, fsCache },
     coreOptions: options,
     context: projectContext,
+    config,
+    excludePatterns,
   })
   if (droppedNames.includes(parsedUse.packageName)) {
     const lateRefusal = packageNotListedRefusal(use, parsedUse.packageName)

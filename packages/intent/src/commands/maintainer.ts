@@ -4,6 +4,7 @@ import { isCI } from 'std-env'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { fail } from '../shared/cli-error.js'
+import { errorMessage } from '../shared/utils.js'
 import {
   planSetupRecords,
   readRecord,
@@ -35,14 +36,7 @@ export interface MaintainerCommandRuntime {
   reviewPrompts?: ReviewPrompts
 }
 
-interface MaintainerAction {
-  usage: string
-  summary: string
-  writes: string
-  options: Array<[flag: string, description: string]>
-}
-
-const optionHelp: Record<string, [flag: string, description: string]> = {
+const optionHelp = {
   artifacts: [
     '--artifacts <directory>',
     'Planning record directory, relative to the repository root',
@@ -86,6 +80,15 @@ const optionHelp: Record<string, [flag: string, description: string]> = {
     '--github-summary',
     'Write a GitHub Actions step summary when GITHUB_STEP_SUMMARY is set',
   ],
+} satisfies Record<string, [flag: string, description: string]>
+
+type MaintainerOption = keyof typeof optionHelp
+
+interface MaintainerAction {
+  usage: string
+  summary: string
+  writes: string
+  options: Array<MaintainerOption>
 }
 
 // Ordered as a maintainer runs them. `maintainer --help` prints this table and
@@ -97,13 +100,7 @@ export const maintainerActions: Record<string, MaintainerAction> = {
       'Initialize planning records, register existing skills, install agent instructions and CI.',
     writes:
       'skill_tree.yaml, domain_map.yaml, skill_spec.md (registering any SKILL.md under skills/ that is not yet recorded), the intent-maintainer block in AGENTS.md (or the existing agent instruction file), and .github/workflows/check-skills.yml when it does not exist.',
-    options: [
-      'artifacts',
-      'distribution',
-      'repository',
-      'pluginName',
-      'skill',
-    ].map((key) => optionHelp[key]!),
+    options: ['artifacts', 'distribution', 'repository', 'pluginName', 'skill'],
   },
   add: {
     usage:
@@ -120,20 +117,20 @@ export const maintainerActions: Record<string, MaintainerAction> = {
       'source',
       'requires',
       'task',
-    ].map((key) => optionHelp[key]!),
+    ],
   },
   remove: {
     usage: 'maintainer remove <name> [--package <directory>]',
     summary: 'Retire a registered skill without deleting its guidance.',
     writes:
       'The entry status in skill_tree.yaml and a note in skill_spec.md. Delete the SKILL.md yourself once its guidance is no longer needed.',
-    options: ['artifacts', 'package'].map((key) => optionHelp[key]!),
+    options: ['artifacts', 'package'],
   },
   status: {
     usage: 'maintainer status [--json] [--base <ref>]',
     summary: 'Report authoring gaps, files to sync, and pending reviews.',
     writes: 'Nothing.',
-    options: ['artifacts', 'base', 'json'].map((key) => optionHelp[key]!),
+    options: ['artifacts', 'base', 'json'],
   },
   sync: {
     usage: 'maintainer sync',
@@ -141,30 +138,21 @@ export const maintainerActions: Record<string, MaintainerAction> = {
       'Align the skill tree and package metadata with SKILL.md frontmatter.',
     writes:
       'skill_tree.yaml, package.json keywords and files, and generated distribution files when repository distribution is selected.',
-    options: ['artifacts'].map((key) => optionHelp[key]!),
+    options: ['artifacts'],
   },
   review: {
     usage:
       'maintainer review [--unchanged <reason> | --updated <reason> | --json | --interactive | --record <report.json>] [--base <ref>]',
     summary: 'Find guidance affected by Git changes and record outcomes.',
     writes: '.intent/review-state.json when recording; nothing otherwise.',
-    options: [
-      'base',
-      'unchanged',
-      'updated',
-      'json',
-      'record',
-      'interactive',
-    ].map((key) => optionHelp[key]!),
+    options: ['base', 'unchanged', 'updated', 'json', 'record', 'interactive'],
   },
   check: {
     usage: 'maintainer check [--base <ref>] [--github-summary]',
     summary:
       'Fail when authoring issues, stale generated files, or pending reviews remain.',
     writes: 'Nothing. Use it as the CI gate.',
-    options: ['artifacts', 'base', 'githubSummary'].map(
-      (key) => optionHelp[key]!,
-    ),
+    options: ['artifacts', 'base', 'githubSummary'],
   },
 }
 
@@ -187,8 +175,10 @@ export function maintainerHelp(action?: string): string {
     lines.push(`  Writes: ${entry.writes}`)
     if (action) {
       lines.push('', 'Options:')
-      for (const [flag, description] of entry.options)
+      for (const key of entry.options) {
+        const [flag, description] = optionHelp[key]
         lines.push(`  ${flag.padEnd(28)} ${description}`)
+      }
     } else lines.push('')
   }
   if (!action)
@@ -241,32 +231,16 @@ export async function runMaintainerCommand(
   options: MaintainerCommandOptions,
   runtime: MaintainerCommandRuntime = {},
 ): Promise<void> {
-  const allowed: Record<string, Array<string>> = {
-    setup: ['artifacts', 'distribution', 'repository', 'pluginName', 'skill'],
-    add: [
-      'artifacts',
-      'package',
-      'path',
-      'domain',
-      'description',
-      'source',
-      'requires',
-      'task',
-    ],
-    remove: ['artifacts', 'package'],
-    status: ['artifacts', 'base', 'json'],
-    sync: ['artifacts'],
-    review: ['base', 'json', 'record', 'interactive', 'unchanged', 'updated'],
-    check: ['artifacts', 'base', 'githubSummary'],
-  }
-  if (!allowed[action])
+  const allowed: ReadonlyArray<string> | undefined =
+    maintainerActions[action]?.options
+  if (!allowed)
     fail(
       `Unknown maintainer action: ${action}. Expected setup, add, remove, status, sync, review, or check.`,
     )
   if (name !== undefined && action !== 'add' && action !== 'remove')
     fail(`maintainer ${action} does not take a skill name.`)
   for (const key of Object.keys(options)) {
-    if (key !== '--' && !allowed[action].includes(key))
+    if (key !== '--' && !allowed.includes(key))
       fail(
         `--${kebab(key)} is not supported by maintainer ${action}. Run intent maintainer ${action} --help for its options.`,
       )
@@ -302,7 +276,7 @@ export async function runMaintainerCommand(
         )
         console.log(`Recorded ${count} review outcome(s) as ${oneShot}.`)
       } catch (error) {
-        fail(error instanceof Error ? error.message : String(error))
+        fail(errorMessage(error))
       }
       return
     }
@@ -354,9 +328,7 @@ export async function runMaintainerCommand(
             // setup has no --domain flag to point the maintainer at.
             candidate.problems.push(
               candidate.domain.trim()
-                ? error instanceof Error
-                  ? error.message
-                  : String(error)
+                ? errorMessage(error)
                 : `Set a non-empty domain for ${candidate.name} in ${project.artifacts}/domain_map.yaml, then run intent maintainer setup again.`,
             )
           },

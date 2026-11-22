@@ -1,11 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, relative } from 'node:path'
 import { applyEdits, modify } from 'jsonc-parser'
-import { parseFrontmatter } from '../shared/utils.js'
+import { isRecord, parseFrontmatter } from '../shared/utils.js'
 import { stringList } from './add.js'
 import {
   authoringMarker,
-  isObject,
   projectPath,
   readRecord,
   skillEntries,
@@ -32,12 +31,8 @@ const repositoryPattern =
   /^[a-zA-Z0-9][a-zA-Z0-9-]*\/[a-zA-Z0-9][a-zA-Z0-9_.-]*$/
 const namePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
-export function readDistribution(
-  tree: ReturnType<typeof readRecord>,
-): Distribution | undefined {
-  const value: unknown = tree.document.toJS().distribution
-  if (value === undefined) return undefined
-  if (!isObject(value) || !['repo', 'none'].includes(String(value.mode)))
+function isDistribution(value: unknown): value is Distribution {
+  if (!isRecord(value) || !['repo', 'none'].includes(String(value.mode)))
     throw new Error('skill_tree.yaml distribution.mode must be repo or none.')
   if (value.mode === 'repo' || value.name !== undefined) {
     if (
@@ -52,18 +47,26 @@ export function readDistribution(
     if (!stringList(value.skills, 'distribution.skills').length)
       throw new Error('Choose at least one distribution skill.')
   }
-  return value as unknown as Distribution
+  return true
+}
+
+export function readDistribution(
+  tree: ReturnType<typeof readRecord>,
+): Distribution | undefined {
+  const value: unknown = tree.document.toJS().distribution
+  if (value === undefined || !isDistribution(value)) return undefined
+  return value
 }
 
 function readJson(path: string): Record<string, unknown> {
   const value: unknown = JSON.parse(readFileSync(path, 'utf8'))
-  if (!isObject(value)) throw new Error(`Expected a JSON object: ${path}`)
+  if (!isRecord(value)) throw new Error(`Expected a JSON object: ${path}`)
   return value
 }
 
 function inferDistributionRepository(project: MaintainerProject): string {
   const manifest = readJson(projectPath(project.root, 'package.json'))
-  const declared = isObject(manifest.repository)
+  const declared = isRecord(manifest.repository)
     ? manifest.repository.url
     : manifest.repository
   return typeof declared === 'string'
@@ -218,10 +221,9 @@ export function planDistribution(
   // explicit opt-in through maintainer setup --distribution repo.
   const config = readDistribution(tree) ?? { mode: 'none' as const }
   const changes: Array<FileChange> = []
-  const problems: Array<string> = []
   const commands: Array<string> = []
   if (config.mode === 'none' && !config.name)
-    return { changes, problems, commands, mode: config.mode }
+    return { changes, commands, mode: config.mode }
   const { name, repository } = config
   const selected = config.mode === 'repo' ? config.skills! : []
   const exported: Array<{ name: string; path: string }> = []
@@ -232,7 +234,7 @@ export function planDistribution(
     const path = skillPath(project, entry)
     const fm = parseFrontmatter(path)
     if (
-      !isObject(fm) ||
+      !isRecord(fm) ||
       fm.name !== selectedName ||
       !namePattern.test(selectedName)
     )
@@ -288,7 +290,7 @@ export function planDistribution(
       const change = jsonChange(project, marketplacePath, (current) => {
         if (
           current.metadata !== undefined &&
-          (!isObject(current.metadata) ||
+          (!isRecord(current.metadata) ||
             (current.metadata.pluginRoot !== undefined &&
               !['', '.', './'].includes(String(current.metadata.pluginRoot))))
         )
@@ -302,7 +304,7 @@ export function planDistribution(
           throw new Error(`Invalid marketplace name in ${marketplacePath}.`)
         if (
           current.owner !== undefined &&
-          (!isObject(current.owner) ||
+          (!isRecord(current.owner) ||
             typeof current.owner.name !== 'string' ||
             !current.owner.name.trim())
         )
@@ -310,7 +312,7 @@ export function planDistribution(
         if (
           current.plugins !== undefined &&
           (!Array.isArray(current.plugins) ||
-            current.plugins.some((plugin) => !isObject(plugin)))
+            current.plugins.some((plugin) => !isRecord(plugin)))
         )
           throw new Error(`Invalid plugins array in ${marketplacePath}.`)
         const plugins = (current.plugins ?? []) as Array<
@@ -396,5 +398,5 @@ export function planDistribution(
       `/plugin install ${name}@${String(marketplaceName)}`,
     )
   }
-  return { changes, problems, commands, mode: config.mode }
+  return { changes, commands, mode: config.mode }
 }

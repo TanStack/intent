@@ -11,7 +11,15 @@ import {
   readlinkSync,
   realpathSync,
 } from 'node:fs'
-import { basename, dirname, join, resolve, sep } from 'node:path'
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import type { Dirent } from 'node:fs'
 
@@ -51,9 +59,25 @@ export const nodeReadFs: ReadFs = {
   fstatSync,
 }
 
-/**
- * Convert a path to use forward slashes (for cross-platform consistency).
- */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+export function stringArray(value: unknown): Array<string> {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : []
+}
+
+export function isWithinOrEqual(path: string, parentDir: string): boolean {
+  const rel = relative(parentDir, path)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
 export function toPosixPath(p: string): string {
   return p.split(sep).join('/')
 }
@@ -113,9 +137,6 @@ export function createFsIdentityCache(
   return getIdentity
 }
 
-/**
- * Recursively find all SKILL.md files under a directory.
- */
 export function findSkillFiles(
   dir: string,
   fs: ReadFs = nodeReadFs,
@@ -194,63 +215,47 @@ export function getDeps(
   return [...deps]
 }
 
-export function listNodeModulesPackageDirs(
-  nodeModulesDir: string,
-): Array<string> {
-  let topEntries: Array<Dirent<string>>
+function readPackageEntries(dir: string): Array<Dirent<string>> {
   try {
-    topEntries = readdirSync(nodeModulesDir, {
-      withFileTypes: true,
-      encoding: 'utf8',
-    })
+    return readdirSync(dir, { withFileTypes: true, encoding: 'utf8' }).filter(
+      (entry) => entry.isDirectory() || entry.isSymbolicLink(),
+    )
   } catch {
     return []
   }
+}
 
-  const packageDirs: Array<string> = []
-
-  for (const entry of topEntries) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+function forEachPackageDir(
+  nodeModulesDir: string,
+  visit: (packageDir: string) => void,
+): void {
+  for (const entry of readPackageEntries(nodeModulesDir)) {
     const dirPath = join(nodeModulesDir, entry.name)
-
     if (entry.name.startsWith('@')) {
-      let scopedEntries: Array<Dirent<string>>
-      try {
-        scopedEntries = readdirSync(dirPath, {
-          withFileTypes: true,
-          encoding: 'utf8',
-        })
-      } catch {
-        continue
-      }
-
-      for (const scoped of scopedEntries) {
-        if (!scoped.isDirectory() && !scoped.isSymbolicLink()) continue
-        packageDirs.push(join(dirPath, scoped.name))
+      for (const scoped of readPackageEntries(dirPath)) {
+        visit(join(dirPath, scoped.name))
       }
     } else if (!entry.name.startsWith('.')) {
-      packageDirs.push(dirPath)
+      visit(dirPath)
     }
   }
+}
 
+export function listNodeModulesPackageDirs(
+  nodeModulesDir: string,
+): Array<string> {
+  const packageDirs: Array<string> = []
+  forEachPackageDir(nodeModulesDir, (dir) => packageDirs.push(dir))
   return packageDirs
 }
 
 export function listNestedNodeModulesPackageDirs(
   nodeModulesDir: string,
-  getFsIdentity: (path: string) => string = createFsIdentityCache(),
+  getFsIdentity: (path: string) => string,
 ): Array<string> {
   const packageDirs: Array<string> = []
   const visitedNodeModulesDirs = new Set<string>()
   const visitedPackageDirs = new Set<string>()
-
-  function readDir(dir: string): Array<Dirent<string>> {
-    try {
-      return readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
-    } catch {
-      return []
-    }
-  }
 
   function addPackageDir(packageDir: string): void {
     const key = getFsIdentity(packageDir)
@@ -268,21 +273,7 @@ export function listNestedNodeModulesPackageDirs(
     const key = getFsIdentity(dir)
     if (visitedNodeModulesDirs.has(key)) return
     visitedNodeModulesDirs.add(key)
-
-    for (const entry of readDir(dir)) {
-      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
-      const dirPath = join(dir, entry.name)
-
-      if (entry.name.startsWith('@')) {
-        for (const scoped of readDir(dirPath)) {
-          if (!scoped.isDirectory() && !scoped.isSymbolicLink()) continue
-          addPackageDir(join(dirPath, scoped.name))
-        }
-        continue
-      }
-
-      if (!entry.name.startsWith('.')) addPackageDir(dirPath)
-    }
+    forEachPackageDir(dir, addPackageDir)
   }
 
   scanNodeModulesDir(nodeModulesDir)
@@ -295,14 +286,6 @@ export function detectGlobalNodeModules(packageManager: string): {
   path: string | null
   source?: string
 } {
-  const envPath = process.env.INTENT_GLOBAL_NODE_MODULES?.trim()
-  if (envPath) {
-    return {
-      path: envPath,
-      source: 'INTENT_GLOBAL_NODE_MODULES',
-    }
-  }
-
   const commands: Array<{
     command: string
     args: Array<string>

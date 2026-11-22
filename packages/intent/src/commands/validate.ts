@@ -7,8 +7,8 @@ import {
 } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { parseDocument, parse as parseYaml } from 'yaml'
-import { fail, isCliFailure } from '../shared/cli-error.js'
-import { readScalarField } from '../shared/utils.js'
+import { fail } from '../shared/cli-error.js'
+import { errorMessage, isRecord, readScalarField } from '../shared/utils.js'
 import { resolveProjectContext } from '../core/project-context.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
@@ -24,19 +24,14 @@ import {
   agentSkillNamePattern,
   planFrontmatterRepair,
 } from '../validate/repairs.js'
-import { printWarnings } from './support.js'
+import { failureMessage, printWarnings } from './support.js'
 import type { SkillBlockCache } from '../validate/blocks.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { FileChange } from '../maintainer/files.js'
 import type { ProjectContext } from '../core/project-context.js'
 import type { IntentArtifactSkill } from '../shared/types.js'
 
-interface ValidationError {
-  file: string
-  message: string
-}
-
-interface ValidationWarning {
+interface ValidationIssue {
   file: string
   message: string
 }
@@ -81,7 +76,7 @@ function isScalarValue(value: unknown): boolean {
 }
 
 function buildValidationFailure(
-  errors: Array<ValidationError>,
+  errors: Array<ValidationIssue>,
   warnings: Array<string>,
 ): string {
   const lines = ['', `❌ Validation failed with ${errors.length} error(s):`, '']
@@ -130,11 +125,7 @@ function collectPackagingWarnings(
     if (pkgResult.error) {
       const code = (pkgResult.error as NodeJS.ErrnoException).code
       if (code === 'ENOENT') return []
-      const msg =
-        pkgResult.error instanceof Error
-          ? pkgResult.error.message
-          : String(pkgResult.error)
-      return [`Could not parse package.json: ${msg}`]
+      return [`Could not parse package.json: ${errorMessage(pkgResult.error)}`]
     }
     return []
   }
@@ -150,11 +141,7 @@ function collectPackagingWarnings(
     if (!wsResult.packageJson && wsResult.error) {
       const code = (wsResult.error as NodeJS.ErrnoException).code
       if (code !== 'ENOENT') {
-        const msg =
-          wsResult.error instanceof Error
-            ? wsResult.error.message
-            : String(wsResult.error)
-        return [`Could not parse package.json: ${msg}`]
+        return [`Could not parse package.json: ${errorMessage(wsResult.error)}`]
       }
     }
     if (wsResult.packageJson) {
@@ -267,14 +254,6 @@ function readTreeEntries(
   return entries
 }
 
-function formatWarning({ file, message }: ValidationWarning): string {
-  return `${file}: ${message}`
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
-}
-
 function normalizeLineEndings(value: string, lineEnding: string): string {
   return lineEnding === '\r\n' ? value.replace(/\r?\n/g, '\r\n') : value
 }
@@ -286,7 +265,7 @@ function repairRoot(fsCache?: IntentFsCache): string {
 
 function applyFrontmatterFixes(
   plans: Array<FrontmatterFixPlan>,
-  root = repairRoot(),
+  root: string,
 ): void {
   writeChanges(
     root,
@@ -300,7 +279,7 @@ function applyFrontmatterFixes(
 function applySetVersion(
   plans: Array<SetVersionPlan>,
   version: string,
-  root = repairRoot(),
+  root: string,
 ): void {
   const changes: Array<FileChange> = []
 
@@ -312,20 +291,14 @@ function applySetVersion(
     )
     if (!match) continue
 
-    const openingLineEnding = match[1]
-    const frontmatter = match[2]
-    const closingLineEnding = match[3]
-    const afterClose = match[4]
-    const body = match[5]
-    if (
-      openingLineEnding === undefined ||
-      frontmatter === undefined ||
-      closingLineEnding === undefined ||
-      afterClose === undefined ||
-      body === undefined
-    ) {
-      continue
-    }
+    const [
+      ,
+      openingLineEnding = '',
+      frontmatter = '',
+      closingLineEnding = '',
+      afterClose = '',
+      body = '',
+    ] = match
 
     const doc = parseDocument(frontmatter)
     if (doc.errors.length > 0) continue
@@ -348,8 +321,8 @@ function collectAgentSkillSpecWarnings({
 }: {
   fm: Record<string, unknown>
   rel: string
-}): Array<ValidationWarning> {
-  const warnings: Array<ValidationWarning> = []
+}): Array<ValidationIssue> {
+  const warnings: Array<ValidationIssue> = []
 
   if (
     fm.license !== undefined &&
@@ -437,7 +410,7 @@ export async function runValidateCommand(
   } catch (err) {
     writeGithubValidationSummary({
       ok: false,
-      message: validationErrorMessage(err),
+      message: failureMessage(err),
     })
     throw err
   }
@@ -455,11 +428,7 @@ async function runValidateCommandInternal(
   // skills roots gets every error in one report and one summary.
   const explicitDirs = [
     ...new Set([...(dir === undefined ? [] : [dir].flat()), ...additionalDirs]),
-  ].map(
-    (target) =>
-      resolveProjectContext({ cwd: process.cwd(), targetPath: target, fsCache })
-        .targetSkillsDir ?? resolve(process.cwd(), target),
-  )
+  ].map((target) => resolveSkillsDir(target, fsCache))
   const skillsDirs = [
     ...new Set([
       ...(dir === undefined
@@ -478,7 +447,7 @@ async function runValidateCommandInternal(
     if (findSkillFiles(skillsDir).length === 0) fail('No SKILL.md files found')
   }
 
-  const errors: Array<ValidationError> = []
+  const errors: Array<ValidationIssue> = []
   const warnings: Array<string> = []
   const skippedBlockChecks = new Set<string>()
   const blockCache: SkillBlockCache = {}
@@ -487,6 +456,7 @@ async function runValidateCommandInternal(
   let validatedCount = 0
   const validatedFiles = new Set<string>()
   const artifacts = new Map<string, ReturnType<typeof readIntentArtifacts>>()
+  const treeDeclarations = new Map<string, boolean>()
 
   if (skillsDirs.length === 0) {
     console.log('No skills/ directory found — skipping validation.')
@@ -513,7 +483,15 @@ async function runValidateCommandInternal(
     }> = []
     let treeEntries: Map<string, IntentArtifactSkill> | undefined
     const declaresReferences = [skillsDir, validateContext.workspaceRoot].some(
-      (root) => root && treeDeclaresReferences(root),
+      (root) => {
+        if (!root) return false
+        let declares = treeDeclarations.get(root)
+        if (declares === undefined) {
+          declares = treeDeclaresReferences(root)
+          treeDeclarations.set(root, declares)
+        }
+        return declares
+      },
     )
     for (const filePath of skillFiles) {
       const rel = relative(process.cwd(), filePath)
@@ -624,7 +602,9 @@ async function runValidateCommandInternal(
       }
 
       warnings.push(
-        ...collectAgentSkillSpecWarnings({ fm, rel }).map(formatWarning),
+        ...collectAgentSkillSpecWarnings({ fm, rel }).map(
+          ({ file, message }) => `${file}: ${message}`,
+        ),
       )
 
       const skillDir = dirname(filePath)
@@ -809,10 +789,9 @@ async function runValidateCommandInternal(
           try {
             parseYaml(content)
           } catch (err) {
-            const detail = err instanceof Error ? err.message : String(err)
             errors.push({
               file: relative(process.cwd(), artifactPath),
-              message: `Invalid YAML in artifact file: ${detail}`,
+              message: `Invalid YAML in artifact file: ${errorMessage(err)}`,
             })
           }
         }
@@ -886,12 +865,6 @@ async function runValidateCommandInternal(
   printWarnings(warnings)
 }
 
-function validationErrorMessage(err: unknown): string {
-  if (isCliFailure(err)) return err.message
-  if (err instanceof Error) return err.message
-  return String(err)
-}
-
 function writeGithubValidationSummary({
   message,
   ok,
@@ -930,6 +903,16 @@ function writeGithubValidationSummary({
   }
 
   appendFileSync(summaryPath, lines.join('\n'))
+}
+
+export function resolveSkillsDir(
+  target: string,
+  fsCache: IntentFsCache,
+): string {
+  return (
+    resolveProjectContext({ cwd: process.cwd(), targetPath: target, fsCache })
+      .targetSkillsDir ?? resolve(process.cwd(), target)
+  )
 }
 
 export function collectDefaultSkillsDirs(

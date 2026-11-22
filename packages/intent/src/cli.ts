@@ -100,7 +100,7 @@ function createCli(
         import('./commands/support.js'),
         import('./commands/meta.js'),
       ])
-      await runMetaCommand(name, getMetaDir())
+      runMetaCommand(name, getMetaDir())
     })
 
   cli

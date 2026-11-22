@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   SkillSourcesParseError,
-  isSkillSourcesParseError,
   parseSkillSources,
 } from '../src/core/skill-sources.js'
 
@@ -9,7 +8,7 @@ function expectParseError(value: unknown): SkillSourcesParseError {
   try {
     parseSkillSources(value)
   } catch (err) {
-    if (isSkillSourcesParseError(err)) return err
+    if (err instanceof SkillSourcesParseError) return err
     throw err
   }
   throw new Error('Expected parseSkillSources to throw')

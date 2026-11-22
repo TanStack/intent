@@ -4,6 +4,7 @@ import { dirname, relative } from 'node:path'
 import { detectPackageManager } from '../discovery/package-manager.js'
 import { fail } from '../shared/cli-error.js'
 import { formatIntentCommand } from '../shared/command-runner.js'
+import { errorMessage } from '../shared/utils.js'
 import { ALL_HOOK_AGENTS, HOOK_AGENT_ADAPTERS } from './adapters.js'
 import {
   EDIT_TOOLS_BY_AGENT,
@@ -65,15 +66,20 @@ export function validateHookInstallOptions({
 
 export function buildHookRunnerScript(
   agent: HookAgent,
-  catalogCommand = formatIntentCommand(
-    detectPackageManager(),
-    'list --json --no-notices',
-  ),
-  loadCommand = formatIntentCommand(
-    detectPackageManager(),
-    'load <package>#<skill>',
-  ),
+  catalogCommand?: string,
+  loadCommand?: string,
 ): string {
+  if (catalogCommand === undefined || loadCommand === undefined) {
+    const packageManager = detectPackageManager()
+    catalogCommand ??= formatIntentCommand(
+      packageManager,
+      'list --json --no-notices',
+    )
+    loadCommand ??= formatIntentCommand(
+      packageManager,
+      'load <package>#<skill>',
+    )
+  }
   const editTools = [...EDIT_TOOLS_BY_AGENT[agent]].sort()
 
   return `#!/usr/bin/env node
@@ -428,31 +434,6 @@ function installAgentHook({
     }),
   )
 
-  return hookInstallResult({
-    agent,
-    configPath,
-    scope,
-    scriptPath,
-    scriptStatus,
-    configStatus,
-  })
-}
-
-function hookInstallResult({
-  agent,
-  configPath,
-  configStatus,
-  scope,
-  scriptPath,
-  scriptStatus,
-}: {
-  agent: HookAgent
-  configPath: string
-  configStatus: HookInstallStatus
-  scope: HookInstallScope
-  scriptPath: string
-  scriptStatus: HookInstallStatus
-}): HookInstallResult {
   return {
     agent,
     configPath,
@@ -480,86 +461,42 @@ function upsertAdapterHooks({
 }): Record<string, unknown> {
   switch (configKind) {
     case 'claude-settings':
-      return upsertClaudeHooks(config, project, scriptPath)
+      return upsertGateHooks(config, 'Bash|Write|Edit|MultiEdit|NotebookEdit', {
+        type: 'command',
+        command: 'node',
+        args: [
+          project
+            ? '${CLAUDE_PROJECT_DIR}/.intent/hooks/intent-claude-gate.mjs'
+            : scriptPath,
+        ],
+        timeout: 10,
+      })
     case 'codex-hooks':
-      return upsertCodexHooks(config, project, scriptPath)
+      return upsertGateHooks(config, 'Bash|apply_patch|Edit|Write', {
+        type: 'command',
+        command: project
+          ? 'node "$(git rev-parse --show-toplevel)/.intent/hooks/intent-codex-gate.mjs"'
+          : `node ${quoteShell(scriptPath)}`,
+        timeout: 10,
+      })
     case 'copilot-hooks':
       return upsertCopilotHooks(config, scriptPath)
   }
 }
 
-function upsertClaudeHooks(
+function upsertGateHooks(
   config: Record<string, unknown>,
-  project: boolean,
-  scriptPath: string,
+  matcher: string,
+  entry: Record<string, unknown>,
 ): Record<string, unknown> {
   const hooks = objectValue(config.hooks)
   hooks.SessionStart = upsertHookGroup(arrayValue(hooks.SessionStart), {
     matcher: 'startup|resume|clear|compact',
-    hooks: [
-      {
-        type: 'command',
-        command: 'node',
-        args: [
-          project
-            ? '${CLAUDE_PROJECT_DIR}/.intent/hooks/intent-claude-gate.mjs'
-            : scriptPath,
-        ],
-        timeout: 10,
-        statusMessage: CATALOG_STATUS_MESSAGE,
-      },
-    ],
+    hooks: [{ ...entry, statusMessage: CATALOG_STATUS_MESSAGE }],
   })
   hooks.PreToolUse = upsertHookGroup(arrayValue(hooks.PreToolUse), {
-    matcher: 'Bash|Write|Edit|MultiEdit|NotebookEdit',
-    hooks: [
-      {
-        type: 'command',
-        command: 'node',
-        args: [
-          project
-            ? '${CLAUDE_PROJECT_DIR}/.intent/hooks/intent-claude-gate.mjs'
-            : scriptPath,
-        ],
-        timeout: 10,
-        statusMessage: GATE_STATUS_MESSAGE,
-      },
-    ],
-  })
-  return { ...config, hooks }
-}
-
-function upsertCodexHooks(
-  config: Record<string, unknown>,
-  project: boolean,
-  scriptPath: string,
-): Record<string, unknown> {
-  const hooks = objectValue(config.hooks)
-  hooks.SessionStart = upsertHookGroup(arrayValue(hooks.SessionStart), {
-    matcher: 'startup|resume|clear|compact',
-    hooks: [
-      {
-        type: 'command',
-        command: project
-          ? 'node "$(git rev-parse --show-toplevel)/.intent/hooks/intent-codex-gate.mjs"'
-          : `node ${quoteShell(scriptPath)}`,
-        timeout: 10,
-        statusMessage: CATALOG_STATUS_MESSAGE,
-      },
-    ],
-  })
-  hooks.PreToolUse = upsertHookGroup(arrayValue(hooks.PreToolUse), {
-    matcher: 'Bash|apply_patch|Edit|Write',
-    hooks: [
-      {
-        type: 'command',
-        command: project
-          ? 'node "$(git rev-parse --show-toplevel)/.intent/hooks/intent-codex-gate.mjs"'
-          : `node ${quoteShell(scriptPath)}`,
-        timeout: 10,
-        statusMessage: GATE_STATUS_MESSAGE,
-      },
-    ],
+    matcher,
+    hooks: [{ ...entry, statusMessage: GATE_STATUS_MESSAGE }],
   })
   return { ...config, hooks }
 }
@@ -682,9 +619,7 @@ function parseJsonObject(
       return parsed as Record<string, unknown>
     }
   } catch (err) {
-    fail(
-      `Failed to parse ${formatPath(filePath)}: ${err instanceof Error ? err.message : String(err)}`,
-    )
+    fail(`Failed to parse ${formatPath(filePath)}: ${errorMessage(err)}`)
   }
 
   fail(`Failed to parse ${formatPath(filePath)}: expected a JSON object.`)

@@ -7,6 +7,7 @@ import {
 } from '../../shared/command-runner.js'
 import {
   coreOptionsFromGlobalFlags,
+  failureMessage,
   noticeOptionsFromGlobalFlags,
   printNotices,
   printWarnings,
@@ -23,7 +24,7 @@ import { setupInitialPermissions } from './permissions.js'
 import type { GlobalScanFlags } from '../support.js'
 import type { IntentCoreOptions } from '../../core/index.js'
 import type { ScanResult } from '../../shared/types.js'
-import type { PermissionPrompts } from './permissions.js'
+import type { PermissionPrompts, PermissionSetupResult } from './permissions.js'
 
 export const INSTALL_PROMPT = `You are an AI assistant helping a developer set up skill-to-task mappings for their project.
 
@@ -289,9 +290,7 @@ export async function runInstallCommand(
 
   if (!options.map) {
     const policy = readSkillSourcesConfig(process.cwd())
-    let permissions: Awaited<
-      ReturnType<typeof setupInitialPermissions>
-    > | null = null
+    let permissions: PermissionSetupResult | null = null
 
     if (policy.mode === 'absent' || options.review) {
       const isTTY = runtime.isTTY ?? process.stdin.isTTY === true
@@ -307,7 +306,6 @@ export async function runInstallCommand(
           review: options.review,
           root: process.cwd(),
           runtime: {
-            // Loaded on demand: @clack/prompts is only needed when prompting.
             prompts:
               runtime.permissionPrompts ??
               (
@@ -316,11 +314,7 @@ export async function runInstallCommand(
           },
         })
       } catch (error) {
-        const message =
-          error && typeof error === 'object' && 'message' in error
-            ? String(error.message)
-            : String(error)
-        fail(`Permissions: failed: ${message}`)
+        fail(`Permissions: failed: ${failureMessage(error)}`)
       }
       if (
         permissions.status === 'canceled' ||
@@ -334,9 +328,8 @@ export async function runInstallCommand(
       )
     }
 
-    const generated = buildIntentSkillGuidanceBlock(
-      detectIntentCommandPackageManager(),
-    )
+    const packageManager = detectIntentCommandPackageManager()
+    const generated = buildIntentSkillGuidanceBlock(packageManager)
 
     if (options.dryRun) {
       const targetPath = resolveIntentSkillsBlockTargetPath(process.cwd(), 1)
@@ -379,9 +372,8 @@ export async function runInstallCommand(
         console.log(`Guidance: ${result.status} ${target}.`)
       } else {
         printWriteResult(result)
-      }
-      if (!permissions)
         console.log('To change permissions, run intent install --review.')
+      }
       printPlacementTip(result.targetPath)
       if (permissions && (available || permissions.available)) {
         const packages =
@@ -394,22 +386,14 @@ export async function runInstallCommand(
           `Available: ${skillCount} ${skillCount === 1 ? 'skill' : 'skills'} from ${packageCount} ${packageCount === 1 ? 'package' : 'packages'}.`,
         )
         if (skillCount > 0) {
-          console.log(
-            `Next: ${formatIntentCommand(detectIntentCommandPackageManager(), 'list')}`,
-          )
+          console.log(`Next: ${formatIntentCommand(packageManager, 'list')}`)
         } else {
           console.log('To change permissions, run intent install --review.')
         }
       }
       return
     } catch (error) {
-      if (permissions) {
-        const message =
-          error && typeof error === 'object' && 'message' in error
-            ? String(error.message)
-            : String(error)
-        fail(`Guidance: failed: ${message}`)
-      }
+      if (permissions) fail(`Guidance: failed: ${failureMessage(error)}`)
       throw error
     }
   }

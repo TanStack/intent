@@ -32,6 +32,15 @@ function printLoadDebug(loaded: LoadedIntentSkill | ResolvedIntentSkill): void {
   ])
 }
 
+function orFail<T>(run: () => T): T {
+  try {
+    return run()
+  } catch (err) {
+    if (err instanceof IntentCoreError) fail(err.message)
+    throw err
+  }
+}
+
 export function runLoadCommand(
   use: string | undefined,
   options: LoadCommandOptions,
@@ -47,15 +56,7 @@ export function runLoadCommand(
   const coreOptions = coreOptionsFromGlobalFlags(options)
 
   if (options.path) {
-    let resolved: ResolvedIntentSkill
-    try {
-      resolved = resolveIntentSkill(use, coreOptions)
-    } catch (err) {
-      if (err instanceof IntentCoreError) {
-        fail(err.message)
-      }
-      throw err
-    }
+    const resolved = orFail(() => resolveIntentSkill(use, coreOptions))
     printLoadDebug(resolved)
 
     console.log(resolved.path)
@@ -65,15 +66,7 @@ export function runLoadCommand(
     return
   }
 
-  let loaded: LoadedIntentSkill
-  try {
-    loaded = loadIntentSkill(use, coreOptions)
-  } catch (err) {
-    if (err instanceof IntentCoreError) {
-      fail(err.message)
-    }
-    throw err
-  }
+  const loaded = orFail(() => loadIntentSkill(use, coreOptions))
   printLoadDebug(loaded)
 
   if (options.json) {

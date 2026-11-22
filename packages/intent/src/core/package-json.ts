@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
+import { errorMessage } from '../shared/utils.js'
 
 /**
  * Reads a project policy manifest, returning null only when the file is absent.
@@ -24,7 +25,7 @@ export function readPackageJson(
       return null
     }
     throw new Error(
-      `Failed to read Intent policy from ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+      `Failed to read Intent policy from ${filePath}: ${errorMessage(error)}`,
     )
   }
 

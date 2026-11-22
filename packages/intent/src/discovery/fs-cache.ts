@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import {
   createFsIdentityCache,
   findSkillFiles as findSkillFilesUncached,
+  isRecord,
   nodeReadFs,
 } from '../shared/utils.js'
 import type { ReadFs } from '../shared/utils.js'
@@ -34,10 +35,6 @@ export type IntentFsCache = {
   /** The filesystem currently used for reads (patched under Yarn PnP). */
   getReadFs: () => ReadFs
   exists: (path: string) => boolean
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export function createIntentFsCache(): IntentFsCache {

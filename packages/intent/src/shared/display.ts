@@ -1,7 +1,3 @@
-// ---------------------------------------------------------------------------
-// Shared display helpers for CLI output
-// ---------------------------------------------------------------------------
-
 import {
   formatRuntimeSkillLookupHint,
   isStableLoadPath,
@@ -15,10 +11,6 @@ export interface SkillDisplay {
   path?: string
 }
 
-function padColumn(text: string, width: number): string {
-  return text.length >= width ? text + '  ' : text.padEnd(width)
-}
-
 export function printTable(
   headers: Array<string>,
   rows: Array<Array<string>>,
@@ -27,13 +19,13 @@ export function printTable(
     (h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)) + 2,
   )
 
-  const headerLine = headers.map((h, i) => padColumn(h, widths[i]!)).join('')
+  const headerLine = headers.map((h, i) => h.padEnd(widths[i]!)).join('')
   const separator = widths.map((w) => '─'.repeat(w)).join('')
 
   console.log(headerLine)
   console.log(separator)
   for (const row of rows) {
-    console.log(row.map((cell, i) => padColumn(cell, widths[i]!)).join(''))
+    console.log(row.map((cell, i) => cell.padEnd(widths[i]!)).join(''))
   }
 }
 

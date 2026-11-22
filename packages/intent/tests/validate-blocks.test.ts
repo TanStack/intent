@@ -611,6 +611,65 @@ describe.each(['TypeScript 6', 'TypeScript 7'])('with %s', (compiler) => {
     ])
   })
 
+  it('uses a tracked declaration of a sibling package that is its own git repository', async () => {
+    write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n')
+    write('packages/client/package.json', '{"name":"@acme/client"}\n')
+    write('packages/client/src/index.ts', 'export const client = 1\n')
+    write(
+      'packages/adapter/package.json',
+      '{"name":"@acme/adapter","types":"types/index.d.ts"}\n',
+    )
+    write(
+      'packages/adapter/src/index.ts',
+      'export function openai(): void {}\nexport function gemini(): void {}\n',
+    )
+    write(
+      'packages/adapter/types/index.d.ts',
+      'export declare function openai(): void\n',
+    )
+    execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], {
+      cwd: root,
+    })
+    execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], {
+      cwd: join(root, 'packages/adapter'),
+    })
+    execFileSync('git', ['-c', 'core.fsmonitor=false', 'add', 'types'], {
+      cwd: join(root, 'packages/adapter'),
+    })
+    write(
+      'packages/client/skills/adapters/SKILL.md',
+      [
+        '---',
+        'name: adapters',
+        'description: Use when choosing an adapter.',
+        '---',
+        '```ts',
+        "import { openai, gemini } from '@acme/adapter'",
+        '```',
+        '',
+      ].join('\n'),
+    )
+    const findings = (
+      await checkSkillBlocks({
+        root,
+        packageDir: join(root, 'packages/client'),
+        library: '@acme/adapter',
+        skills: [
+          {
+            file: 'packages/client/skills/adapters/SKILL.md',
+            content: read('packages/client/skills/adapters/SKILL.md'),
+          },
+        ],
+      })
+    ).findings
+    expect(findings).toEqual([
+      expect.objectContaining({
+        line: 6,
+        message: expect.stringMatching(/TS2305: .*'gemini'/),
+      }),
+    ])
+  })
+
   it('skips typechecking with a reason when TypeScript or a type entry is unavailable', async () => {
     skill("```ts\nimport { retry } from '@acme/client'\n```\n")
     expect(

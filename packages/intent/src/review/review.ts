@@ -14,7 +14,13 @@ import {
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
-import { isDefaultSkillPath, parseFrontmatter } from '../shared/utils.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
+import {
+  errorMessage,
+  isDefaultSkillPath,
+  isRecord,
+  parseFrontmatter,
+} from '../shared/utils.js'
 
 type Snapshot = Record<string, string | null>
 type Outcome = 'updated' | 'no-change' | 'out-of-scope' | 'unresolved'
@@ -208,10 +214,6 @@ function safePath(root: string, path: string): string {
   return current
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
-}
-
 function isHash(value: unknown): value is string {
   return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
 }
@@ -235,6 +237,31 @@ function resolvedOutcome(value: unknown): value is ReviewRecord['outcome'] {
   )
 }
 
+function isReviewRecord(value: unknown): value is ReviewRecord {
+  return (
+    isRecord(value) &&
+    isHash(value.fingerprint) &&
+    isRecord(value.snapshot) &&
+    Object.values(value.snapshot).every(
+      (hash) => hash === null || isHash(hash),
+    ) &&
+    typeof value.head === 'string' &&
+    /^[a-f0-9]{40,64}$/.test(value.head) &&
+    resolvedOutcome(value.outcome) &&
+    hasEvidence(value)
+  )
+}
+
+function isReviewState(value: unknown): value is ReviewState {
+  return (
+    isRecord(value) &&
+    value.schemaVersion === 1 &&
+    typeof value.baseline === 'string' &&
+    /^[a-f0-9]{40,64}$/.test(value.baseline) &&
+    isRecord(value.items)
+  )
+}
+
 function readState(root: string): {
   state: ReviewState | null
   content: string | null
@@ -244,37 +271,17 @@ function readState(root: string): {
   const content = readFileSync(path, 'utf8')
   try {
     const value: unknown = JSON.parse(content)
-    if (
-      !isObject(value) ||
-      value.schemaVersion !== 1 ||
-      typeof value.baseline !== 'string' ||
-      !/^[a-f0-9]{40,64}$/.test(value.baseline) ||
-      !isObject(value.items)
-    )
-      throw new Error()
-    for (const [id, item] of Object.entries(value.items)) {
-      if (
-        !isObject(item) ||
-        !isHash(item.fingerprint) ||
-        !isObject(item.snapshot) ||
-        !Object.values(item.snapshot).every(
-          (hash) => hash === null || isHash(hash),
-        ) ||
-        typeof item.head !== 'string' ||
-        !/^[a-f0-9]{40,64}$/.test(item.head) ||
-        !resolvedOutcome(item.outcome) ||
-        !hasEvidence(item)
-      )
-        throw new Error()
-      for (const path of Object.keys(item.snapshot)) validatePath(path)
-      const record = item as unknown as ReviewRecord
+    if (!isReviewState(value)) throw new Error()
+    for (const [id, record] of Object.entries<unknown>(value.items)) {
+      if (!isReviewRecord(record)) throw new Error()
+      for (const path of Object.keys(record.snapshot)) validatePath(path)
       if (
         record.fingerprint !== reviewFingerprint(id, record.snapshot, []) &&
         record.fingerprint !== legacyReviewFingerprint(id, record.snapshot, [])
       )
         throw new Error()
     }
-    return { state: value as unknown as ReviewState, content }
+    return { state: value, content }
   } catch {
     throw new Error(
       `Invalid review state at ${statePath}. Restore or repair it before recording another review.`,
@@ -283,7 +290,7 @@ function readState(root: string): {
 }
 
 function repositoryName(value: unknown): string | undefined {
-  if (isObject(value)) return repositoryName(value.url)
+  if (isRecord(value)) return repositoryName(value.url)
   if (typeof value !== 'string') return undefined
   let path = value
   if (value.startsWith('git@github.com:')) {
@@ -316,7 +323,7 @@ function repositoryNames(root: string): Set<string> {
     const manifest: unknown = JSON.parse(
       readFileSync(safePath(root, 'package.json'), 'utf8'),
     )
-    const name = isObject(manifest)
+    const name = isRecord(manifest)
       ? repositoryName(manifest.repository)
       : undefined
     if (name) names.add(name)
@@ -367,9 +374,9 @@ export function reviewIgnorePatterns(
   path: string,
 ) {
   if (tree.review === undefined) return []
-  const ignore = isObject(tree.review) ? tree.review.ignore : undefined
+  const ignore = isRecord(tree.review) ? tree.review.ignore : undefined
   if (
-    !isObject(tree.review) ||
+    !isRecord(tree.review) ||
     (ignore !== undefined &&
       (!Array.isArray(ignore) ||
         ignore.some((entry) => typeof entry !== 'string' || !entry.trim())))
@@ -427,6 +434,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       ]),
     )
   const files = sorted(list())
+  const fileSet = new Set(files)
   const untracked = splitPaths(
     git(root, [
       'ls-files',
@@ -438,6 +446,8 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     ]),
   )
   const changed = sorted([...diff(), ...untracked])
+  const changedSet = new Set(changed)
+  const fsCache = createIntentFsCache()
   const names = repositoryNames(root)
   const covered = new Set<string>()
   const items: Array<ReviewItem> = []
@@ -471,7 +481,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
         try {
           return [file, fileHash(file)]
         } catch (error) {
-          problems.push(error instanceof Error ? error.message : String(error))
+          problems.push(errorMessage(error))
           return [file, null]
         }
       }),
@@ -508,7 +518,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     ]).filter((file) =>
       previous
         ? (current[file] ?? null) !== (previous.snapshot[file] ?? null)
-        : (changedSinceIntroduced?.has(file) ?? changed.includes(file)),
+        : (changedSinceIntroduced?.has(file) ?? changedSet.has(file)),
     )
     items.push({
       id,
@@ -532,7 +542,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
   const customRoots = existingArtifactDirs
     .filter((dir) => basename(dir) === '_artifacts')
     .map((dir) => dirname(dir))
-    .filter((dir) => dir !== '.' && !files.includes(`${dir}/package.json`))
+    .filter((dir) => dir !== '.' && !fileSet.has(`${dir}/package.json`))
   const declaredSkills = new Set<string>()
   const treeIgnorePatterns: Array<string> = []
   for (const dir of existingArtifactDirs) {
@@ -544,11 +554,11 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       // Missing or invalid trees remain unresolved in planning validation below.
       continue
     }
-    if (!isObject(tree)) continue
+    if (!isRecord(tree)) continue
     treeIgnorePatterns.push(...reviewIgnorePatterns(tree, treePath))
     if (Array.isArray(tree.skills)) {
       for (const entry of tree.skills) {
-        if (!isObject(entry) || typeof entry.path !== 'string') continue
+        if (!isRecord(entry) || typeof entry.path !== 'string') continue
         declaredSkills.add(
           typeof entry.package === 'string'
             ? `${entry.package}/${entry.path}`
@@ -596,12 +606,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       if (skillHash === null) continue
       frontmatter = parseFrontmatter(safePath(root, file))
     } catch (error) {
-      add(
-        'skill',
-        file,
-        [file],
-        [error instanceof Error ? error.message : String(error)],
-      )
+      add('skill', file, [file], [errorMessage(error)])
       continue
     }
     const sources = frontmatter?.sources
@@ -616,6 +621,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       const { packageRoot } = resolveProjectContext({
         cwd: root,
         targetPath: safePath(root, file),
+        fsCache,
       })
       const packageDir = relative(root, packageRoot ?? root).replaceAll(
         '\\',
@@ -635,7 +641,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
             throw new Error(`Source matched no available files: ${source}`)
           sourceFiles.push(...matches)
         } catch (error) {
-          problems.push(error instanceof Error ? error.message : String(error))
+          problems.push(errorMessage(error))
         }
       }
     }
@@ -649,7 +655,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     '.github/copilot-instructions.md',
   ].some(
     (path) =>
-      files.includes(path) &&
+      fileSet.has(path) &&
       fileHash(path) !== null &&
       readFileSync(safePath(root, path), 'utf8').includes(
         '<!-- intent-maintainer:start -->',
@@ -659,7 +665,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
     const dirs = existingArtifactDirs.length
       ? existingArtifactDirs
       : [
-          resolveProjectContext({ cwd: root }).isMonorepo
+          resolveProjectContext({ cwd: root, fsCache }).isMonorepo
             ? '_artifacts'
             : 'skills/_artifacts',
         ]
@@ -670,7 +676,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
       const problems: Array<string> = []
       for (const path of paths) {
         try {
-          if (!files.includes(path)) {
+          if (!fileSet.has(path)) {
             problems.push(
               existsSync(safePath(root, path))
                 ? `Planning record must be visible to Git: ${path}`
@@ -687,15 +693,13 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
             problems.push(`Planning record is empty: ${path}`)
           } else if (path.endsWith('.yaml')) {
             const parsed: unknown = parseYaml(content)
-            if (!isObject(parsed) || !Array.isArray(parsed.skills))
+            if (!isRecord(parsed) || !Array.isArray(parsed.skills))
               problems.push(
                 `Planning record requires an object with a skills array: ${path}`,
               )
           }
         } catch (error) {
-          problems.push(
-            `${path}: ${error instanceof Error ? error.message : String(error)}`,
-          )
+          problems.push(`${path}: ${errorMessage(error)}`)
         }
       }
       // The shared record must be reviewed again when its source or guidance changes.
@@ -705,7 +709,7 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
         [
           ...covered,
           ...skillFiles,
-          ...paths.filter((path) => files.includes(path)),
+          ...paths.filter((path) => fileSet.has(path)),
         ],
         problems,
       )
@@ -719,8 +723,8 @@ export function createReview(cwd: string, baseRef?: string): ReviewReport {
   for (const id of Object.keys(state?.items ?? {})) {
     if (!id.startsWith('skill:')) continue
     const path = id.slice('skill:'.length)
-    if (files.includes(path)) continue
-    if (fileHash(path) === null && !changed.includes(path)) {
+    if (fileSet.has(path)) continue
+    if (fileHash(path) === null && !changedSet.has(path)) {
       add('source', path, [path], [])
     }
   }
@@ -751,7 +755,7 @@ export function recordPendingReview(
 
 export function recordReview(cwd: string, input: unknown): number {
   if (
-    !isObject(input) ||
+    !isRecord(input) ||
     input.schemaVersion !== 1 ||
     typeof input.base !== 'string' ||
     !Array.isArray(input.items)
@@ -769,7 +773,7 @@ export function recordReview(cwd: string, input: unknown): number {
   const seen = new Set<string>()
   let count = 0
   for (const value of input.items) {
-    if (!isObject(value) || typeof value.id !== 'string' || seen.has(value.id))
+    if (!isRecord(value) || typeof value.id !== 'string' || seen.has(value.id))
       throw new Error('Invalid or duplicate review item.')
     seen.add(value.id)
     if (value.outcome === undefined || value.outcome === 'unresolved') continue

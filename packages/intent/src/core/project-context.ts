@@ -1,5 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { isWithinOrEqual } from '../shared/utils.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
   findWorkspaceRoot,
@@ -128,9 +129,4 @@ function resolveTargetSkillsDir(
   }
 
   return null
-}
-
-function isWithinOrEqual(path: string, parentDir: string): boolean {
-  const rel = relative(parentDir, path)
-  return rel === '' || (!rel.startsWith('..') && !rel.startsWith('/'))
 }

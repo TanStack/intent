@@ -1,6 +1,8 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
+import { errorMessage, isRecord, stringArray } from '../shared/utils.js'
+import type { Dirent } from 'node:fs'
 import type {
   IntentArtifactCoverageIgnore,
   IntentArtifactFile,
@@ -11,17 +13,8 @@ import type {
 
 type ArtifactKind = IntentArtifactFile['kind']
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
-}
-
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
-}
-
-function stringArray(value: unknown): Array<string> {
-  if (!Array.isArray(value)) return []
-  return value.filter((entry): entry is string => typeof entry === 'string')
 }
 
 function detectArtifactKind(fileName: string): ArtifactKind | null {
@@ -40,7 +33,7 @@ function readArtifactYaml(
   } catch (err) {
     warnings.push({
       artifactPath,
-      message: `Invalid YAML: ${err instanceof Error ? err.message : String(err)}`,
+      message: `Invalid YAML: ${errorMessage(err)}`,
     })
     return null
   }
@@ -137,7 +130,13 @@ function parseCoverageIgnores(
 
 export function readIntentArtifacts(root: string): IntentArtifactSet | null {
   const artifactsDir = join(root, '_artifacts')
-  if (!existsSync(artifactsDir)) return null
+  let entries: Array<Dirent>
+  try {
+    entries = readdirSync(artifactsDir, { withFileTypes: true })
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw err
+  }
 
   const warnings: Array<IntentArtifactWarning> = []
   const skillTrees: Array<IntentArtifactFile> = []
@@ -145,7 +144,7 @@ export function readIntentArtifacts(root: string): IntentArtifactSet | null {
   const skills: Array<IntentArtifactSkill> = []
   const ignoredPackages: Array<IntentArtifactCoverageIgnore> = []
 
-  for (const entry of readdirSync(artifactsDir, { withFileTypes: true })) {
+  for (const entry of entries) {
     if (!entry.isFile()) continue
 
     const kind = detectArtifactKind(entry.name)

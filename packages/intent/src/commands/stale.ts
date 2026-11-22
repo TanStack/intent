@@ -10,11 +10,11 @@ import {
   compileSkillSourcePolicy,
   readSkillSourcesConfig,
 } from '../core/source-policy.js'
-import { isCliFailure } from '../shared/cli-error.js'
 import {
   detectIntentCommandPackageManager,
   formatIntentCommand,
 } from '../shared/command-runner.js'
+import { failureMessage } from './support.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { StalenessReport } from '../shared/types.js'
 
@@ -24,16 +24,18 @@ export interface StaleCommandOptions {
   packageLabel?: string
 }
 
+type StaleTargetResolver = (
+  targetDir?: string,
+  fsCache?: IntentFsCache,
+) => Promise<{
+  reports: Array<StalenessReport>
+  workflowAdvisories?: Array<string>
+}>
+
 export async function runStaleCommand(
   targetDir: string | undefined,
   options: StaleCommandOptions,
-  resolveStaleTargets: (
-    targetDir?: string,
-    fsCache?: IntentFsCache,
-  ) => Promise<{
-    reports: Array<StalenessReport>
-    workflowAdvisories?: Array<string>
-  }>,
+  resolveStaleTargets: StaleTargetResolver,
 ): Promise<void> {
   if (options.githubReview) {
     await runGithubReview(targetDir, options, resolveStaleTargets)
@@ -62,6 +64,7 @@ export async function runStaleCommand(
     return
   }
 
+  let needsReview = false
   for (const report of reports) {
     const driftLabel = report.versionDrift
       ? ` [${report.versionDrift} drift]`
@@ -77,6 +80,7 @@ export async function runStaleCommand(
     if (stale.length === 0 && signals.length === 0) {
       console.log('  All skills up-to-date')
     } else {
+      needsReview = true
       for (const skill of stale) {
         console.log(`  ⚠ ${skill.name}: ${skill.reasons.join(', ')}`)
       }
@@ -99,13 +103,7 @@ export async function runStaleCommand(
     console.log()
   }
 
-  if (
-    reports.some(
-      (report) =>
-        report.skills.some((skill) => skill.needsReview) ||
-        report.signals.some((signal) => signal.needsReview),
-    )
-  ) {
+  if (needsReview) {
     const command = formatIntentCommand(
       detectIntentCommandPackageManager(targetDir),
       'meta generate-skill',
@@ -119,13 +117,7 @@ export async function runStaleCommand(
 async function runGithubReview(
   targetDir: string | undefined,
   options: StaleCommandOptions,
-  resolveStaleTargets: (
-    targetDir?: string,
-    fsCache?: IntentFsCache,
-  ) => Promise<{
-    reports: Array<StalenessReport>
-    workflowAdvisories?: Array<string>
-  }>,
+  resolveStaleTargets: StaleTargetResolver,
 ): Promise<void> {
   const {
     collectStaleReviewItems,
@@ -157,12 +149,7 @@ async function runGithubReview(
   } catch (err) {
     const item = createFailedStaleReviewItem(packageLabel)
     writeStaleReviewWorkflowFiles([item])
-    const message = isCliFailure(err)
-      ? err.message
-      : err instanceof Error
-        ? err.message
-        : String(err)
-    console.log(`Intent stale check failed: ${message}`)
+    console.log(`Intent stale check failed: ${failureMessage(err)}`)
     console.log('Wrote a review PR body so maintainers can inspect the logs.')
   }
 }

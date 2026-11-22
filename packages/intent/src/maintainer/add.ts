@@ -3,10 +3,9 @@ import { basename, dirname, join, relative } from 'node:path'
 import { stringify } from 'yaml'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
-import { parseFrontmatter } from '../shared/utils.js'
+import { isRecord, parseFrontmatter } from '../shared/utils.js'
 import {
   authoringMarker,
-  isObject,
   projectPath,
   readRecord,
   recordPath,
@@ -123,7 +122,7 @@ export function planAddSkills(
         slug: name,
         domain: options.domain,
         description: entry.purpose ?? entry.description,
-        ...(packageDir ? { packages: [manifestName] } : {}),
+        packages: packageDir ? [manifestName] : undefined,
         tasks,
         covers: [],
       })
@@ -177,7 +176,7 @@ function prepareAddition(
     name,
     slug: name,
     domain: options.domain,
-    ...(packageDir ? { package: packageDir } : {}),
+    package: packageDir,
     path: options.path ?? `skills/${name}/SKILL.md`,
   }
   const path = skillPath(project, entry, checked)
@@ -215,7 +214,7 @@ function prepareAddition(
         'To register an existing skill, supply its --path and --domain; edit its frontmatter directly before running sync.',
       )
     const parsed = existingFrontmatter ?? parseFrontmatter(path)
-    if (!isObject(parsed) || parsed.name !== name)
+    if (!isRecord(parsed) || parsed.name !== name)
       throw new Error(
         'Existing skill has invalid frontmatter or a different name.',
       )
@@ -253,7 +252,7 @@ function prepareAddition(
   entry.sources = stringList(frontmatter.sources ?? [], 'sources')
   entry.requires = stringList(frontmatter.requires ?? [], 'requires')
   if (
-    isObject(frontmatter.metadata) &&
+    isRecord(frontmatter.metadata) &&
     typeof frontmatter.metadata.purpose === 'string'
   )
     entry.purpose = frontmatter.metadata.purpose

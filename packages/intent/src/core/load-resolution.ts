@@ -1,12 +1,10 @@
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { resolveSkillEntry } from '../skills/resolver.js'
 import { scanIntentPackageAtRoot } from '../discovery/scanner.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
-import { getDeps, resolveDepDir } from '../shared/utils.js'
+import { getDeps } from '../shared/utils.js'
 import { warningMentionsPackage } from './excludes.js'
-import { resolveProjectContext } from './project-context.js'
 import type { ResolveSkillResult } from '../skills/resolver.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { ProjectContext } from './project-context.js'
@@ -83,35 +81,11 @@ function findVisibleDependencyDir(
   return null
 }
 
-function resolveDependencyPackageDir(
-  packageName: string,
-  fromDir: string,
-): string | null {
-  return (
-    findVisibleDependencyDir(packageName, fromDir) ??
-    resolveDepDir(packageName, fromDir)
-  )
-}
-
-function workspacePackageDeclaresDependency(
-  packageJson: Record<string, unknown>,
-  packageName: string,
-): boolean {
-  return getDeps(packageJson).includes(packageName)
-}
-
 function hasYarnPnpFile(dir: string | null): boolean {
   return (
     dir !== null &&
     (existsSync(join(dir, '.pnp.cjs')) || existsSync(join(dir, '.pnp.js')))
   )
-}
-
-function shouldSkipFastPathForYarnPnp(
-  context: ProjectContext,
-  cwd: string,
-): boolean {
-  return hasYarnPnpFile(cwd) || hasYarnPnpFile(context.workspaceRoot)
 }
 
 function getDirectLoadFastPathCandidateDirs(
@@ -126,7 +100,7 @@ function getDirectLoadFastPathCandidateDirs(
     addCandidateDir(
       candidates,
       seen,
-      resolveDependencyPackageDir(packageName, context.packageRoot ?? cwd),
+      findVisibleDependencyDir(packageName, context.packageRoot ?? cwd),
     )
     return candidates
   }
@@ -134,17 +108,17 @@ function getDirectLoadFastPathCandidateDirs(
   addCandidateDir(
     candidates,
     seen,
-    resolveDependencyPackageDir(
+    findVisibleDependencyDir(
       packageName,
       context.packageRoot ?? context.workspaceRoot,
     ),
   )
 
-  if (context.workspaceRoot && context.workspaceRoot !== context.packageRoot) {
+  if (context.workspaceRoot !== context.packageRoot) {
     addCandidateDir(
       candidates,
       seen,
-      resolveDependencyPackageDir(packageName, context.workspaceRoot),
+      findVisibleDependencyDir(packageName, context.workspaceRoot),
     )
   }
 
@@ -167,14 +141,12 @@ function getWorkspaceLoadFastPathCandidateDirs(
   }
 
   for (const pkg of workspacePackages) {
-    if (!workspacePackageDeclaresDependency(pkg.packageJson, packageName)) {
-      continue
-    }
+    if (!getDeps(pkg.packageJson).includes(packageName)) continue
 
     addCandidateDir(
       candidates,
       seen,
-      resolveDependencyPackageDir(packageName, pkg.dir),
+      findVisibleDependencyDir(packageName, pkg.dir),
     )
   }
 
@@ -251,12 +223,12 @@ function resolveFromPackageRoots(
 export function resolveSkillUseFastPath(
   parsedUse: SkillUse,
   options: IntentCoreOptions,
-  context = resolveProjectContext({ cwd: process.cwd() }),
-  cwd = context.cwd,
-  fsCache = createIntentFsCache(),
+  context: ProjectContext,
+  cwd: string,
+  fsCache: IntentFsCache,
 ): FastPathResolveResult | null {
   if (options.globalOnly) return null
-  if (shouldSkipFastPathForYarnPnp(context, cwd)) return null
+  if (hasYarnPnpFile(cwd) || hasYarnPnpFile(context.workspaceRoot)) return null
 
   const directResolved = resolveFromPackageRoots(
     getDirectLoadFastPathCandidateDirs(parsedUse.packageName, context, cwd),

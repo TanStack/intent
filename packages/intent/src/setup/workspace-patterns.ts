@@ -2,7 +2,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { parse as parseJsonc } from 'jsonc-parser/lib/esm/main.js'
 import { parse as parseYaml } from 'yaml'
-import { hasAnySkillFile } from '../shared/utils.js'
+import { errorMessage, hasAnySkillFile, isRecord } from '../shared/utils.js'
 import { readPackageJson } from '../core/package-json.js'
 import type { ParseError } from 'jsonc-parser/lib/esm/main.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
@@ -24,10 +24,6 @@ function normalizeWorkspacePatterns(patterns: Array<string>): Array<string> {
   return [
     ...new Set(patterns.map(normalizeWorkspacePattern).filter(Boolean)),
   ].sort(compareCodeUnits)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function parseWorkspacePatternList(
@@ -108,22 +104,13 @@ function readJsoncFile(path: string): unknown {
 
 function warnConfigError(path: string, err: unknown): void {
   const verb = err instanceof SyntaxError ? 'parse' : 'read'
-  console.error(
-    `Warning: failed to ${verb} ${path}: ${err instanceof Error ? err.message : err}`,
-  )
+  console.error(`Warning: failed to ${verb} ${path}: ${errorMessage(err)}`)
 }
 
 type WorkspacePatternSource = {
   fileName: string
   read: (path: string, fsCache?: IntentFsCache) => unknown
   getPatterns: (config: unknown) => Array<string> | null
-}
-
-export type WorkspaceInfo = {
-  root: string
-  patterns: Array<string>
-  packageDirs: Array<string>
-  packageDirsWithSkills: Array<string>
 }
 
 const workspacePatternSources: Array<WorkspacePatternSource> = [
@@ -245,23 +232,6 @@ export function findWorkspacePackages(
   return packageDirs
 }
 
-export function getWorkspaceInfo(root: string): WorkspaceInfo | null {
-  const patterns = readWorkspacePatterns(root)
-  if (!patterns) return null
-
-  const packageDirs = resolveWorkspacePackages(root, patterns)
-  const packageDirsWithSkills = packageDirs.filter((dir) => {
-    const skillsDir = join(dir, 'skills')
-    return existsSync(skillsDir) && hasAnySkillFile(skillsDir)
-  })
-  return {
-    root,
-    patterns,
-    packageDirs,
-    packageDirsWithSkills,
-  }
-}
-
 export function resolveWorkspacePackages(
   root: string,
   patterns: Array<string>,
@@ -338,7 +308,7 @@ function readChildDirectories(dir: string): Array<string> {
       .map((entry) => join(dir, entry.name))
   } catch (err: unknown) {
     console.error(
-      `Warning: could not read directory ${dir}: ${err instanceof Error ? err.message : err}`,
+      `Warning: could not read directory ${dir}: ${errorMessage(err)}`,
     )
     return []
   }
@@ -377,6 +347,12 @@ export function findWorkspaceRoot(
   return null
 }
 
-export function findPackagesWithSkills(root: string): Array<string> {
-  return getWorkspaceInfo(root)?.packageDirsWithSkills ?? []
+export function findPackagesWithSkills(
+  root: string,
+  fsCache?: IntentFsCache,
+): Array<string> {
+  return findWorkspacePackages(root, fsCache).filter((dir) => {
+    const skillsDir = join(dir, 'skills')
+    return existsSync(skillsDir) && hasAnySkillFile(skillsDir)
+  })
 }

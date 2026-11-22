@@ -15,7 +15,8 @@ import {
 } from 'node:path'
 import {
   detectGlobalNodeModules,
-  nodeReadFs,
+  isRecord,
+  isWithinOrEqual,
   parseFrontmatter,
   readScalarField,
   toPosixPath,
@@ -42,7 +43,7 @@ import type {
   VersionConflict,
 } from '../shared/types.js'
 
-type ScanOptionsWithFsCache = ScanOptions & {
+export type ScanOptionsWithFsCache = ScanOptions & {
   fsCache?: IntentFsCache
 }
 
@@ -132,7 +133,7 @@ function loadPnpApi(root: string): LoadedPnp | null {
   // reference becomes patched without routing a post-setup `require('node:fs')`
   // through Yarn's resolver hook (which rejects the `node:fs` specifier under
   // Yarn 1 PnP).
-  const readFs = requireFromHere('node:fs') as unknown as ReadFs
+  const readFs: ReadFs = requireFromHere('node:fs')
 
   try {
     // eslint-disable-next-line no-restricted-syntax -- sanctioned PnP runtime load
@@ -190,14 +191,7 @@ function getPnpDependencyLocator(
   return { name: dependencyName, reference: target }
 }
 
-// ---------------------------------------------------------------------------
-// Intent field validation
-// ---------------------------------------------------------------------------
-
-function validateIntentField(
-  _pkgName: string,
-  intent: unknown,
-): IntentConfig | null {
+function validateIntentField(intent: unknown): IntentConfig | null {
   if (!intent || typeof intent !== 'object') return null
   const pb = intent as Record<string, unknown>
 
@@ -226,35 +220,28 @@ function validateIntentField(
 function deriveIntentConfig(
   pkgJson: Record<string, unknown>,
 ): IntentConfig | null {
-  // Derive repo from repository field
+  const { repository } = pkgJson
   let repo: string | null = null
-  if (typeof pkgJson.repository === 'string') {
-    repo = pkgJson.repository
-  } else if (
-    pkgJson.repository &&
-    typeof pkgJson.repository === 'object' &&
-    typeof (pkgJson.repository as Record<string, unknown>).url === 'string'
-  ) {
-    repo = (pkgJson.repository as Record<string, unknown>).url as string
+  if (typeof repository === 'string') {
+    repo = repository
+  } else if (isRecord(repository) && typeof repository.url === 'string') {
     // Normalize git+https://github.com/foo/bar.git → foo/bar
-    repo = repo
+    repo = repository.url
       .replace(/^git\+/, '')
       .replace(/\.git$/, '')
       .replace(/^https?:\/\/github\.com\//, '')
   }
 
-  // Derive docs from homepage field
   const docs =
     typeof pkgJson.homepage === 'string' ? pkgJson.homepage : undefined
 
-  // Need at least a repo to be useful
   if (!repo) return null
 
-  // Derive requires from intent.requires if partially present
-  const intentPartial = pkgJson.intent as Record<string, unknown> | undefined
   const requires =
-    intentPartial && Array.isArray(intentPartial.requires)
-      ? intentPartial.requires.filter((r): r is string => typeof r === 'string')
+    isRecord(pkgJson.intent) && Array.isArray(pkgJson.intent.requires)
+      ? pkgJson.intent.requires.filter(
+          (r): r is string => typeof r === 'string',
+        )
       : undefined
 
   return {
@@ -264,10 +251,6 @@ function deriveIntentConfig(
     requires,
   }
 }
-
-// ---------------------------------------------------------------------------
-// Skill discovery within a package
-// ---------------------------------------------------------------------------
 
 /**
  * Real path of the package root that owns `skillsDir`, or null when it cannot
@@ -290,7 +273,7 @@ function readSkillEntry(
   realPackageRoot: string | null,
   childDir: string,
   skillFile: string,
-  readFs: ReadFs = nodeReadFs,
+  readFs: ReadFs,
 ): SkillEntry | null {
   if (!readFs.openSync || !readFs.fstatSync || !readFs.closeSync) return null
   if (realPackageRoot === null) return null
@@ -341,8 +324,8 @@ function discoverSkillByNameHint(
   skillsDir: string,
   packageName: string,
   skillNameHint: string,
-  readFs: ReadFs = nodeReadFs,
-  includeMetadata = true,
+  readFs: ReadFs,
+  includeMetadata: boolean,
 ): Array<SkillEntry> {
   const skills: Array<SkillEntry> = []
   const seen = new Set<string>()
@@ -417,11 +400,6 @@ function getPackageShortName(packageName: string): string {
   return packageName.split('/').pop() ?? packageName
 }
 
-function isWithinOrEqual(path: string, parentDir: string): boolean {
-  const rel = relative(parentDir, path)
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
-}
-
 function resolveSkillNameHintPath(
   skillsDir: string,
   hint: string,
@@ -459,10 +437,6 @@ function getSkillNameHints(
 
   return [skillNameHint, `${packageShortName}/${skillNameHint}`]
 }
-
-// ---------------------------------------------------------------------------
-// Topological sort on requires
-// ---------------------------------------------------------------------------
 
 function topoSort(packages: Array<IntentPackage>): Array<IntentPackage> {
   const byName = new Map(packages.map((p) => [p.name, p]))
@@ -502,43 +476,6 @@ function comparePackageVersions(a: string, b: string): number {
 
   return compareVersions(versionA, versionB)
 }
-
-function formatVariantWarning(
-  name: string,
-  variants: Array<InstalledVariant>,
-  chosen: IntentPackage,
-): string | null {
-  const uniqueVersions = new Set(variants.map((variant) => variant.version))
-  if (uniqueVersions.size <= 1) return null
-
-  const details = variants
-    .map((variant) => `${variant.version} at ${variant.packageRoot}`)
-    .join(', ')
-
-  return `Found ${variants.length} installed variants of ${name} across ${uniqueVersions.size} versions (${details}). Using ${chosen.version} from ${chosen.packageRoot}.`
-}
-
-function toVersionConflict(
-  packageName: string,
-  variants: Array<InstalledVariant>,
-  chosen: IntentPackage,
-): VersionConflict | null {
-  const uniqueVersions = new Set(variants.map((variant) => variant.version))
-  if (uniqueVersions.size <= 1) return null
-
-  return {
-    packageName,
-    chosen: {
-      version: chosen.version,
-      packageRoot: chosen.packageRoot,
-    },
-    variants,
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Main scanner
-// ---------------------------------------------------------------------------
 
 function getScanScope(options: ScanOptions): ScanScope {
   return options.scope ?? (options.includeGlobal ? 'local-and-global' : 'local')
@@ -675,12 +612,8 @@ export function scanForIntents(
         : undefined,
     },
   }
-  // Track registered package names to avoid duplicates across phases
   const packageIndexes = new Map<string, number>()
-  const packageVariants = new Map<
-    string,
-    Map<string, { version: string; packageRoot: string }>
-  >()
+  const packageVariants = new Map<string, Map<string, InstalledVariant>>()
   let pnpApi: PnpApi | null | undefined
 
   const getPackageKind = createPackageKindResolver(
@@ -700,10 +633,6 @@ export function scanForIntents(
     return pnpApi
   }
 
-  function getStats(): ScanResult['stats'] {
-    return fsCache.getStats()
-  }
-
   function rememberVariant(pkg: IntentPackage): void {
     let variants = packageVariants.get(pkg.name)
     if (!variants) {
@@ -717,7 +646,7 @@ export function scanForIntents(
   }
 
   function ensureGlobalNodeModules(): void {
-    if (!nodeModules.global.path && !explicitGlobalNodeModules) {
+    if (!nodeModules.global.path) {
       const detected = detectGlobalNodeModules(packageManager)
       nodeModules.global.path = detected.path
       nodeModules.global.source = detected.source
@@ -726,10 +655,6 @@ export function scanForIntents(
         ? existsSync(detected.path)
         : false
     }
-  }
-
-  function readPkgJson(dirPath: string): Record<string, unknown> | null {
-    return fsCache.readPackageJson(dirPath)
   }
 
   const { scanNodeModulesDir, scanTarget, tryRegister } =
@@ -745,7 +670,7 @@ export function scanForIntents(
       packageIndexes,
       packages,
       projectRoot,
-      readPkgJson,
+      readPkgJson: fsCache.readPackageJson,
       rememberVariant,
       validateIntentField,
       warnings,
@@ -762,7 +687,7 @@ export function scanForIntents(
     primeFsIdentity: fsCache.primeFsIdentity,
     packages,
     projectRoot,
-    readPkgJson,
+    readPkgJson: fsCache.readPackageJson,
     scanNodeModulesDir,
     tryRegister,
     warnings,
@@ -867,36 +792,35 @@ export function scanForIntents(
       notices: [],
       conflicts,
       nodeModules,
-      stats: getStats(),
+      stats: fsCache.getStats(),
     }
   }
 
   for (const pkg of packages) {
-    const variants = packageVariants.get(pkg.name)
-    if (!variants) continue
-
-    const conflict = toVersionConflict(pkg.name, [...variants.values()], pkg)
-    if (conflict) {
-      conflicts.push(conflict)
-    }
-
-    const warning = formatVariantWarning(pkg.name, [...variants.values()], pkg)
-    if (warning) {
-      warnings.push(warning)
-    }
+    const variants = [...(packageVariants.get(pkg.name)?.values() ?? [])]
+    const versions = new Set(variants.map((v) => v.version))
+    if (versions.size <= 1) continue
+    conflicts.push({
+      packageName: pkg.name,
+      chosen: { version: pkg.version, packageRoot: pkg.packageRoot },
+      variants,
+    })
+    const details = variants
+      .map((v) => `${v.version} at ${v.packageRoot}`)
+      .join(', ')
+    warnings.push(
+      `Found ${variants.length} installed variants of ${pkg.name} across ${versions.size} versions (${details}). Using ${pkg.version} from ${pkg.packageRoot}.`,
+    )
   }
-
-  // Sort by dependency order
-  const sorted = topoSort(packages)
 
   return {
     packageManager,
-    packages: sorted,
+    packages: topoSort(packages),
     warnings,
     notices: [],
     conflicts,
     nodeModules,
-    stats: getStats(),
+    stats: fsCache.getStats(),
   }
 }
 
@@ -932,10 +856,6 @@ export function scanIntentPackageAtRoot(
     fsCache.getFsIdentity,
   )
 
-  function readPkgJson(dirPath: string): Record<string, unknown> | null {
-    return fsCache.readPackageJson(dirPath)
-  }
-
   const { tryRegister } = createPackageRegistrar({
     comparePackageVersions,
     deriveIntentConfig,
@@ -957,7 +877,7 @@ export function scanIntentPackageAtRoot(
     packageIndexes,
     packages,
     projectRoot,
-    readPkgJson,
+    readPkgJson: fsCache.readPackageJson,
     rememberVariant() {},
     validateIntentField,
     warnings,

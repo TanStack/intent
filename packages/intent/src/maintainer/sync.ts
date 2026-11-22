@@ -3,12 +3,11 @@ import { dirname, relative } from 'node:path'
 import { applyEdits, modify, parse } from 'jsonc-parser'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
-import { parseFrontmatter } from '../shared/utils.js'
+import { isRecord, parseFrontmatter } from '../shared/utils.js'
 import { stringList } from './add.js'
 import { planDistribution } from './distribution.js'
 import {
   authoringMarker,
-  isObject,
   projectPath,
   readRecord,
   recordPath,
@@ -71,7 +70,7 @@ export function planMaintainerSync(project: MaintainerProject) {
     }
     const fm = parseFrontmatter(path)
     if (
-      !isObject(fm) ||
+      !isRecord(fm) ||
       typeof fm.description !== 'string' ||
       !fm.description.trim()
     )
@@ -100,7 +99,7 @@ export function planMaintainerSync(project: MaintainerProject) {
     }
     for (const [field, value] of Object.entries({
       description: fm.description,
-      purpose: isObject(fm.metadata) ? fm.metadata.purpose : undefined,
+      purpose: isRecord(fm.metadata) ? fm.metadata.purpose : undefined,
       sources,
       requires,
     })) {
@@ -111,7 +110,7 @@ export function planMaintainerSync(project: MaintainerProject) {
     if (readFileSync(path, 'utf8').includes(authoringMarker))
       problems.push(`${name}: skill still needs authoring.`)
     const candidates: Array<Record<string, unknown>> = map.skills.filter(
-      (skill: unknown) => isObject(skill) && skill.slug === name,
+      (skill: unknown) => isRecord(skill) && skill.slug === name,
     )
     const mapped =
       candidates.find((skill) => skill.domain === entry.domain) ?? candidates[0]
@@ -170,7 +169,7 @@ export function planMaintainerSync(project: MaintainerProject) {
     const manifest: unknown = parse(source, errors, {
       allowTrailingComma: true,
     })
-    if (errors.length || !isObject(manifest))
+    if (errors.length || !isRecord(manifest))
       throw new Error(`Invalid package.json: ${path}`)
     let content = source
     const indent = source.match(/\n([\t ]+)"/)?.[1] ?? '  '
@@ -224,6 +223,5 @@ export function planMaintainerSync(project: MaintainerProject) {
     problems.push('skill_spec.md still needs authored coverage and decisions.')
   const distribution = planDistribution(project, tree, entries)
   changes.push(...distribution.changes)
-  problems.push(...distribution.problems)
   return { changes, problems, skills, distribution }
 }

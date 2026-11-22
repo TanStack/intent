@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { rewriteSkillLoadPaths } from '../skills/paths.js'
 import { listNodeModulesPackageDirs } from '../shared/utils.js'
@@ -36,7 +35,7 @@ export interface CreatePackageRegistrarOptions {
    */
   exists: (path: string) => boolean
   rememberVariant: (pkg: IntentPackage) => void
-  validateIntentField: (pkgName: string, intent: unknown) => IntentConfig | null
+  validateIntentField: (intent: unknown) => IntentConfig | null
   warnings: Array<string>
 }
 
@@ -57,8 +56,6 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     nodeModulesDir: string,
     source: IntentPackage['source'] = 'local',
   ): void {
-    if (!existsSync(nodeModulesDir)) return
-
     const key = opts.getFsIdentity(nodeModulesDir)
     if (scannedNodeModulesDirs.has(key)) return
     scannedNodeModulesDirs.add(key)
@@ -100,7 +97,7 @@ export function createPackageRegistrar(opts: CreatePackageRegistrarOptions) {
     const version =
       typeof pkgJson.version === 'string' ? pkgJson.version : '0.0.0'
     const intent =
-      opts.validateIntentField(name, pkgJson.intent) ??
+      opts.validateIntentField(pkgJson.intent) ??
       opts.deriveIntentConfig(pkgJson)
     if (!intent) {
       opts.warnings.push(

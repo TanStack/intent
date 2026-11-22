@@ -1,17 +1,10 @@
-// ---------------------------------------------------------------------------
-// Intent config (lives in library package.json under "intent" key)
-// ---------------------------------------------------------------------------
-
+// Lives in a library's package.json under the "intent" key.
 export interface IntentConfig {
   version: number
   repo: string
   docs: string
   requires?: Array<string>
 }
-
-// ---------------------------------------------------------------------------
-// Scanner types
-// ---------------------------------------------------------------------------
 
 export interface ScanResult {
   packageManager: PackageManager
@@ -77,10 +70,6 @@ export interface SkillEntry {
   type?: string
   framework?: string
 }
-
-// ---------------------------------------------------------------------------
-// Staleness types
-// ---------------------------------------------------------------------------
 
 export interface StalenessReport {
   library: string
