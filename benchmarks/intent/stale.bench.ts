@@ -3,11 +3,13 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, bench, describe } from 'vitest'
 import {
   createBenchOptions,
+  createCliFixture,
   createCliRunner,
   createConsoleSilencer,
   createTempDir,
   writeFile,
   writeJson,
+  writePackage,
   writeSkill,
 } from './helpers.ts'
 
@@ -178,5 +180,188 @@ describe('intent stale', () => {
       }
     },
     createBenchOptions(setupWithArtifacts, teardown),
+  )
+})
+
+type StaleReport = {
+  skills: Array<unknown>
+  signals: Array<unknown>
+}
+
+async function expectReports(
+  output: Promise<string>,
+  count: number,
+): Promise<Array<StaleReport>> {
+  const reports = JSON.parse(await output) as Array<StaleReport>
+  if (
+    reports.length !== count ||
+    reports.some((report) => report.signals.length > 0)
+  ) {
+    throw new Error(`Unexpected stale reports: ${JSON.stringify(reports)}`)
+  }
+
+  return reports
+}
+
+const workspacePackages = 40
+
+const largeWorkspace = createCliFixture(
+  'stale-large-workspace',
+  async (root, capture) => {
+    writeJson(join(root, 'package.json'), {
+      name: 'intent-stale-large-workspace-benchmark',
+      private: true,
+      workspaces: ['packages/*'],
+    })
+    writeFile(
+      join(root, 'pnpm-workspace.yaml'),
+      "packages:\n  - 'packages/*'\n",
+    )
+
+    const artifactSkills: Array<{
+      package: string
+      slug: string
+      path: string
+    }> = []
+    for (let index = 0; index < workspacePackages; index++) {
+      const packageDir = `pkg-${index}`
+      const skills = ['core', 'cache', 'streaming', 'runtime'].map(
+        (skill) => `${packageDir}/${skill}`,
+      )
+      writeStalePackage(root, {
+        name: `@bench/${packageDir}`,
+        packageDir,
+        packageVersion: '2.1.0',
+        skillVersion: '2.0.0',
+        skills,
+      })
+      for (const slug of skills) {
+        artifactSkills.push({
+          package: `packages/${packageDir}`,
+          slug,
+          path: `packages/${packageDir}/skills/${slug}/SKILL.md`,
+        })
+      }
+    }
+    writeJson(join(root, '_artifacts', 'skill_tree.yaml'), {
+      skills: artifactSkills,
+    })
+
+    await expectReports(capture(['stale', '--json']), workspacePackages)
+    await expectReports(capture(['stale', 'packages/pkg-20', '--json']), 1)
+  },
+)
+
+describe('intent stale in a large workspace', () => {
+  beforeAll(largeWorkspace.setup)
+  afterAll(largeWorkspace.teardown)
+
+  bench(
+    'reports drift for every package with shared artifacts',
+    async () => {
+      await largeWorkspace.run(['stale', '--json'])
+    },
+    createBenchOptions(largeWorkspace.setup, largeWorkspace.teardown),
+  )
+
+  bench(
+    'checks only the targeted package',
+    async () => {
+      for (let index = 0; index < 10; index++) {
+        await largeWorkspace.run(['stale', 'packages/pkg-20', '--json'])
+      }
+    },
+    createBenchOptions(largeWorkspace.setup, largeWorkspace.teardown),
+  )
+})
+
+const namedSkills = 200
+
+const artifactNames = createCliFixture(
+  'stale-artifact-names',
+  async (root, capture) => {
+    writeJson(join(root, 'package.json'), {
+      name: '@bench/artifact-names',
+      version: '1.0.0',
+    })
+
+    const slugs = Array.from(
+      { length: namedSkills },
+      (_, index) => `skill-${index}`,
+    )
+    for (const slug of slugs) {
+      writeSkill(root, slug, {
+        description: `${slug} maintenance guide`,
+        libraryVersion: '1.0.0',
+      })
+    }
+    writeJson(join(root, '_artifacts', 'skill_tree.yaml'), {
+      skills: slugs.map((slug) => ({ slug })),
+    })
+
+    const [report] = await expectReports(capture(['stale', '--json']), 1)
+    if (report!.skills.length !== namedSkills) {
+      throw new Error(`Expected ${namedSkills} skills in the stale report`)
+    }
+  },
+)
+
+describe('intent stale with many artifact entries', () => {
+  beforeAll(artifactNames.setup)
+  afterAll(artifactNames.teardown)
+
+  bench(
+    'matches artifact entries to skills by name',
+    async () => {
+      await artifactNames.run(['stale', '--json'])
+    },
+    createBenchOptions(artifactNames.setup, artifactNames.teardown),
+  )
+})
+
+const installedPackages = 20
+
+const installedDependencies = createCliFixture(
+  'stale-installed-dependencies',
+  async (root, capture) => {
+    const dependencies: Record<string, string> = {}
+    for (let index = 0; index < installedPackages; index++) {
+      const name = `@bench/installed-${index}`
+      dependencies[name] = '1.0.0'
+      writePackage(join(root, 'node_modules'), name, '1.0.0', {
+        skills: ['core', 'core/cache', 'core/streaming', 'core/runtime'],
+      })
+    }
+    writeJson(join(root, 'package.json'), {
+      name: 'intent-stale-installed-dependencies-benchmark',
+      private: true,
+      dependencies,
+    })
+    writeFile(
+      join(root, 'pnpm-workspace.yaml'),
+      "packages:\n  - 'packages/*'\n",
+    )
+    writeJson(join(root, 'packages', 'app', 'package.json'), {
+      name: '@consumer/app',
+      version: '1.0.0',
+    })
+
+    await expectReports(capture(['stale', '--json']), installedPackages)
+  },
+)
+
+describe('intent stale for installed dependencies', () => {
+  beforeAll(installedDependencies.setup)
+  afterAll(installedDependencies.teardown)
+
+  bench(
+    'reports installed packages through the fallback scan',
+    async () => {
+      await installedDependencies.run(['stale', '--json'])
+    },
+    createBenchOptions(
+      installedDependencies.setup,
+      installedDependencies.teardown,
+    ),
   )
 })

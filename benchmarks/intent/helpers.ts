@@ -1,10 +1,11 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 
-let builtCliMainPromise: Promise<
-  (argv?: Array<string>) => Promise<number>
-> | null = null
+type CliMain = (argv?: Array<string>, runtime?: object) => Promise<number>
+
+let builtCliMainPromise: Promise<CliMain> | null = null
 
 type CliRunnerOptions = {
   cwd: string
@@ -50,6 +51,18 @@ export function createBenchOptions(
   }
 }
 
+export function createSlowBenchOptions(
+  setup: () => void | Promise<void>,
+  teardown: () => void | Promise<void>,
+) {
+  return {
+    warmupIterations: 3,
+    time: 3_000,
+    setup,
+    teardown,
+  }
+}
+
 export function createConsoleSilencer() {
   let snapshot: ConsoleSnapshot | null = null
 
@@ -82,7 +95,7 @@ export function createConsoleSilencer() {
 }
 
 export function createCliRunner(options: CliRunnerOptions) {
-  let main: ((argv?: Array<string>) => Promise<number>) | null = null
+  let main: CliMain | null = null
   let previousCwd = ''
   let previousGlobalNodeModules: string | undefined
 
@@ -116,12 +129,12 @@ export function createCliRunner(options: CliRunnerOptions) {
       previousGlobalNodeModules = undefined
       main = null
     },
-    async run(argv: Array<string>) {
+    async run(argv: Array<string>, runtime?: object) {
       if (!main) {
         throw new Error('CLI runner must be set up before running benchmarks')
       }
 
-      const exitCode = await main(argv)
+      const exitCode = await main(argv, runtime)
       if (exitCode !== 0) {
         throw new Error(
           `intent ${argv.join(' ')} failed with exit code ${exitCode}`,
@@ -131,9 +144,7 @@ export function createCliRunner(options: CliRunnerOptions) {
   }
 }
 
-async function loadBuiltCliMain(): Promise<
-  (argv?: Array<string>) => Promise<number>
-> {
+async function loadBuiltCliMain(): Promise<CliMain> {
   builtCliMainPromise ??= import('../../packages/intent/dist/cli.mjs').then(
     (module) => {
       if (typeof module.main !== 'function') {
@@ -142,11 +153,100 @@ async function loadBuiltCliMain(): Promise<
         )
       }
 
-      return module.main as (argv?: Array<string>) => Promise<number>
+      return module.main as CliMain
     },
   )
 
   return builtCliMainPromise
+}
+
+export function createCliFixture(
+  name: string,
+  write: (
+    root: string,
+    capture: (argv: Array<string>, runtime?: object) => Promise<string>,
+  ) => void | Promise<void>,
+) {
+  const consoleSilencer = createConsoleSilencer()
+  let fixture: {
+    root: string
+    runner: ReturnType<typeof createCliRunner>
+  } | null = null
+
+  function current() {
+    if (!fixture) {
+      throw new Error(`Fixture ${name} must be set up before use`)
+    }
+
+    return fixture
+  }
+
+  async function capture(
+    argv: Array<string>,
+    runtime?: object,
+  ): Promise<string> {
+    const silenced = console.log
+    const lines: Array<string> = []
+    console.log = (...values: Array<unknown>) => {
+      lines.push(values.join(' '))
+    }
+    try {
+      await current().runner.run(argv, runtime)
+    } finally {
+      console.log = silenced
+    }
+    return lines.join('\n')
+  }
+
+  function teardown(): void {
+    if (fixture) {
+      fixture.runner.teardown()
+      rmSync(fixture.root, { recursive: true, force: true })
+      fixture = null
+    }
+
+    consoleSilencer.restore()
+  }
+
+  return {
+    get root(): string {
+      return current().root
+    },
+    async setup(): Promise<void> {
+      if (fixture) return
+
+      consoleSilencer.silence()
+      const root = createTempDir(name)
+      fixture = { root, runner: createCliRunner({ cwd: root }) }
+      try {
+        await fixture.runner.setup()
+        await write(root, capture)
+      } catch (err) {
+        teardown()
+        throw err
+      }
+    },
+    teardown,
+    run(argv: Array<string>, runtime?: object): Promise<void> {
+      return current().runner.run(argv, runtime)
+    },
+  }
+}
+
+export function git(root: string, ...args: Array<string>): void {
+  execFileSync(
+    'git',
+    [
+      '-c',
+      'core.fsmonitor=false',
+      '-c',
+      'user.name=Benchmark',
+      '-c',
+      'user.email=benchmark@example.invalid',
+      ...args,
+    ],
+    { cwd: root, stdio: 'ignore' },
+  )
 }
 
 export function createTempDir(name: string): string {
@@ -251,4 +351,82 @@ export function writePackage(
       requires: skill.includes('/') ? [skill.split('/')[0]!] : undefined,
     })
   }
+}
+
+export function writeExampleLibrary(
+  packageRoot: string,
+  name: string,
+  dependency?: string,
+): void {
+  writeJson(join(packageRoot, 'package.json'), {
+    name,
+    version: '1.0.0',
+    repository: `https://github.com/example/${basename(name)}`,
+    keywords: ['tanstack-intent'],
+    files: ['dist', 'skills'],
+    devDependencies: {
+      '@tanstack/intent': 'workspace:*',
+    },
+  })
+  writeFile(
+    join(packageRoot, 'src', 'index.ts'),
+    [
+      ...(dependency
+        ? [
+            `import type { RetryOptions } from '${dependency}'`,
+            `export type { RetryOptions } from '${dependency}'`,
+          ]
+        : [
+            'export interface RetryOptions {',
+            '  attempts: number',
+            '  delay?: number',
+            '}',
+          ]),
+      'export interface ClientOptions {',
+      '  baseUrl: string',
+      '  retry?: RetryOptions',
+      '}',
+      'export interface ClientResponse<TData> {',
+      '  status: number',
+      '  data: TData',
+      '}',
+      'export interface Client {',
+      '  request: <TData>(path: string) => Promise<ClientResponse<TData>>',
+      '}',
+      'export declare function createClient(options: ClientOptions): Client',
+      '',
+    ].join('\n'),
+  )
+}
+
+export function writeExampleSkill(
+  packageRoot: string,
+  skillName: string,
+  library: string,
+  attempts: number | string,
+): void {
+  writeFile(
+    join(packageRoot, 'skills', skillName, 'SKILL.md'),
+    [
+      '---',
+      `name: ${JSON.stringify(skillName)}`,
+      `description: ${JSON.stringify(`Use when requesting ${skillName}.`)}`,
+      'sources:',
+      '  - "src/index.ts"',
+      '---',
+      '',
+      `# ${skillName}`,
+      '',
+      '```ts',
+      `import { createClient } from '${library}'`,
+      `import type { RetryOptions } from '${library}'`,
+      '',
+      `const retry: RetryOptions = { attempts: ${attempts}, delay: 250 }`,
+      "const client = createClient({ baseUrl: 'https://example.invalid', retry })",
+      `const response = await client.request<{ id: number }>('/${skillName}')`,
+      'response.data.id',
+      '```',
+      '',
+    ].join('\n'),
+  )
 }
