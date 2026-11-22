@@ -123,7 +123,7 @@ Generated commands do not pin a revision or match the application's installed de
 
 Intent preserves existing plugin version fields. Claude uses an explicit plugin version to decide whether an update is available: bump the authoritative plugin version when releasing changed content. Without a version in either the plugin or its marketplace entry, Git-based Claude installs use the source commit. Updating an npm package version alone does not update plugin metadata.
 
-Publish through the library's normal release process. Repository exports do not submit marketplace listings, publish releases, or update consumer installations. State the supported package versions in implementation skills and check them against the consumer's dependencies. Consumers manage updates and removal through their chosen installer.
+Repository exports do not submit marketplace listings, publish releases, or update consumer installations. State the supported package versions in implementation skills and check them against the consumer's dependencies. Consumers manage updates and removal through their chosen installer.
 
 ## Maintain and check
 
@@ -135,7 +135,7 @@ Publish through the library's normal release process. Repository exports do not 
 
 <!-- ::end:tabs -->
 
-Status accepts `--json` and an actual Git comparison base with `--base <ref>`. Sync copies descriptions, purpose, sources, and prerequisites from the registered skills into the tree. It also adds the package discovery keyword and includes each skill directory in existing `files` allowlists. An absent allowlist stays absent, preserving npm's default contents. Sync prints each path it synchronized, or `Nothing to synchronize.` when every file is current, and labels the consumer install commands when repository distribution is selected. Inspect the actual packed archive in the library's release checks.
+Status accepts `--json` and a Git comparison base with `--base <ref>`. Sync copies descriptions, purpose, sources, and prerequisites from the registered skills into the tree. It also adds the package discovery keyword and includes each skill directory in existing `files` allowlists. An absent allowlist stays absent, preserving npm's default contents. Sync prints each path it synchronized, or `Nothing to synchronize.` when every file is current, and labels the consumer install commands when repository distribution is selected. Inspect the packed archive in the library's release checks.
 
 `maintainer review --interactive` is the human path. It walks each pending item in the terminal, shows the current guidance and changed files, and records the chosen outcomes with reason and evidence. It requires a terminal outside CI.
 

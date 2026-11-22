@@ -36,7 +36,6 @@ export function createPermissionPrompts(
   },
 ): PermissionPrompts {
   const io = { input: stdin, output: stdout }
-  // Let Clack own search, scrolling, terminal sizing, and keyboard controls.
   const picker = { ...io, maxItems: 6 }
   const searchablePicker = {
     ...picker,
@@ -215,8 +214,7 @@ export function createPermissionPrompts(
                 parsed.mode === 'allow-all' && !selection.skills.includes('*')
               )
             const source = parsed.sources[0]!
-            if (source.kind === 'git' || 'pattern' in source)
-              return !selection.skills.includes('*')
+            if ('pattern' in source) return !selection.skills.includes('*')
             // A collection of exact skills does not grant future package skills.
             return (
               !policy.matchers.some(
@@ -421,7 +419,7 @@ export function createPermissionPrompts(
         const config = parseSkillSources([rule])
         if (config.mode !== 'explicit') return true
         const source = config.sources[0]!
-        if (source.kind === 'git' || 'pattern' in source) return true
+        if ('pattern' in source) return true
         const id = `${source.kind === 'workspace' ? 'workspace:' : ''}${source.id}#${source.skill}`
         // Keep undiscovered and excluded rules, and preserve unchanged raw entries.
         if (reviewedIds.has(id) && !selected.has(id)) return false

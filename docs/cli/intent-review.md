@@ -33,7 +33,7 @@ A justified no-op is a completed review. Missing evidence remains pending.
 | Option | Behavior |
 | --- | --- |
 | `[dir]` | Locate the Git working tree. The review covers that repository, including its packages. |
-| `--base <ref>` | Compare against an available Git commit or ref, such as the actual PR base. |
+| `--base <ref>` | Compare against an available Git commit or ref, such as the PR base. |
 | `--json` | Print the complete structured report for an agent or script. |
 | `--check` | Exit nonzero when review items remain. |
 
@@ -159,7 +159,7 @@ For a human terminal, run the interactive command from the library repository:
 
 <!-- ::end:tabs -->
 
-Inspect each item's current guidance and changed files, choose an outcome, and supply the reason and actual evidence. The changes view compares tracked files with the displayed Git base and includes untracked content. Use `--base <available-commit>` for a specific comparison. Edit and test guidance before starting; changes during review invalidate the affected outcomes.
+Inspect each item's current guidance and changed files, choose an outcome, and supply the reason and evidence. The changes view compares tracked files with the displayed Git base and includes untracked content. Use `--base <available-commit>` for a specific comparison. Edit and test guidance before starting; changes during review invalidate the affected outcomes.
 
 Choose **Leave pending** when more work is needed. Items with unresolved source mappings or planning problems cannot be completed. The final preview lists the proposed outcomes and evidence. Confirmation records through the same fingerprint checks as `--record`; cancellation records nothing. Evidence text is stored, not executed or independently verified.
 

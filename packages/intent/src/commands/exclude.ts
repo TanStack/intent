@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fail } from '../shared/cli-error.js'
+import { errorMessage } from '../shared/guards.js'
 import { compileExcludePatterns } from '../core/excludes.js'
 
 export interface ExcludeCommandOptions {
@@ -16,12 +17,8 @@ function normalizeAction(action: string | undefined): ExcludeAction {
   fail(`Unknown exclude action: ${action}. Expected list, add, or remove.`)
 }
 
-function getPackageJsonPath(cwd: string): string {
-  return join(cwd, 'package.json')
-}
-
 function readPackageJson(cwd: string): Record<string, unknown> {
-  const packageJsonPath = getPackageJsonPath(cwd)
+  const packageJsonPath = join(cwd, 'package.json')
   if (!existsSync(packageJsonPath)) {
     fail(`No package.json found in ${cwd}`)
   }
@@ -32,9 +29,7 @@ function readPackageJson(cwd: string): Record<string, unknown> {
       unknown
     >
   } catch (err) {
-    fail(
-      `Failed to parse ${packageJsonPath}: ${err instanceof Error ? err.message : String(err)}`,
-    )
+    fail(`Failed to parse ${packageJsonPath}: ${errorMessage(err)}`)
   }
 }
 
@@ -77,8 +72,11 @@ function setConfiguredExcludes(
 }
 
 function writePackageJson(cwd: string, pkg: Record<string, unknown>): void {
-  const packageJsonPath = getPackageJsonPath(cwd)
-  writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8')
+  writeFileSync(
+    join(cwd, 'package.json'),
+    `${JSON.stringify(pkg, null, 2)}\n`,
+    'utf8',
+  )
 }
 
 function normalizePattern(
@@ -103,9 +101,7 @@ function validatePattern(pattern: string): void {
   try {
     compileExcludePatterns([pattern])
   } catch (err) {
-    fail(
-      `Invalid exclude pattern "${pattern}": ${err instanceof Error ? err.message : String(err)}`,
-    )
+    fail(`Invalid exclude pattern "${pattern}": ${errorMessage(err)}`)
   }
 }
 

@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   formatRuntimeSkillLookupComment,
   formatRuntimeSkillLookupHint,
-  hasPackageManagerInternalPath,
   isAbsolutePath,
   isRuntimeSkillLookupComment,
   isStableLoadPath,
@@ -43,24 +42,6 @@ describe('skill path helpers', () => {
     expect(isAbsolutePath('\\\\server\\share\\project\\SKILL.md')).toBe(true)
     expect(
       isAbsolutePath('node_modules/@tanstack/query/skills/core/SKILL.md'),
-    ).toBe(false)
-  })
-
-  it('detects package-manager-internal paths', () => {
-    expect(
-      hasPackageManagerInternalPath(
-        'node_modules/.pnpm/@tanstack+query@1.0.0/node_modules/@tanstack/query/skills/core/SKILL.md',
-      ),
-    ).toBe(true)
-    expect(
-      hasPackageManagerInternalPath(
-        'node_modules\\.bun\\@tanstack-query\\skills\\core\\SKILL.md',
-      ),
-    ).toBe(true)
-    expect(
-      hasPackageManagerInternalPath(
-        'node_modules/@tanstack/query/skills/core/SKILL.md',
-      ),
     ).toBe(false)
   })
 

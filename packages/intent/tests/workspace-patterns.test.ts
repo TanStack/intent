@@ -12,10 +12,9 @@ import {
   findPackagesWithSkills,
   findWorkspacePackages,
   findWorkspaceRoot,
-  getWorkspaceInfo,
   readWorkspacePatterns,
   resolveWorkspacePackages,
-} from '../src/setup/workspace-patterns.js'
+} from '../src/core/workspace-patterns.js'
 
 const roots: Array<string> = []
 const cwdStack: Array<string> = []
@@ -362,13 +361,6 @@ describe('workspace helpers', () => {
     withCwd(nestedDir)
 
     expect(findWorkspaceRoot(process.cwd())).toBe(root)
-    expect(getWorkspaceInfo(root)?.packageDirs).toEqual([
-      join(root, 'packages', 'alpha'),
-      join(root, 'packages', 'beta'),
-    ])
-    expect(getWorkspaceInfo(root)?.packageDirsWithSkills).toEqual([
-      join(root, 'packages', 'alpha'),
-    ])
     expect(findPackagesWithSkills(root)).toEqual([
       join(root, 'packages', 'alpha'),
     ])

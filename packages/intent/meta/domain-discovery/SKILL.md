@@ -40,14 +40,14 @@ The lightweight path produces identical output artifacts (domain_map.yaml and sk
 
 These rules override any other reasoning. No exceptions.
 
-1. **Phases 2 and 4 are interactive interviews conducted with the maintainer.** You must ask the questions specified in each sub-section and wait for the maintainer's response before continuing. Documentation, source code, and other automated analysis are NOT substitutes for the maintainer's answers.
-2. **Every question in Phases 2 and 4 must be asked as an open-ended question and sent as a message to the maintainer.** You must then STOP and WAIT for their reply. Do not answer your own questions. Do not infer answers from documentation. Do not skip questions because you believe you already know the answer.
-3. **Never ask factual questions you can answer by searching the codebase.** Before asking any question, determine whether the answer is a deterministic fact (how many X exist, what versions are supported, which files implement Y) or a judgment call (which ones matter, what should we prioritize, what do developers struggle with). Factual questions must be answered by searching the code — grep, glob, read files. Only ask the maintainer for priorities, opinions, trade-offs, and implicit knowledge that cannot be found in code or docs. Asking the maintainer a question whose answer is sitting in the codebase wastes their time and erodes trust in the process.
+1. **Phases 2 and 4 are interactive interviews conducted with the maintainer.** You must ask the questions specified in each sub-section and wait for the maintainer's response before continuing. Documentation, source code, and other automated analysis are not substitutes for the maintainer's answers.
+2. **Every question in Phases 2 and 4 must be asked as an open-ended question and sent as a message to the maintainer.** You must then stop and wait for their reply. Do not answer your own questions. Do not infer answers from documentation. Do not skip questions because you believe you already know the answer.
+3. **Never ask factual questions you can answer by searching the codebase.** Before asking any question, determine whether the answer is a deterministic fact (how many X exist, what versions are supported, which files implement Y) or a judgment call (which ones matter, what should we prioritize, what do developers struggle with). Factual questions must be answered by searching the code — grep, glob, read files. Only ask the maintainer for priorities, opinions, trade-offs, and implicit knowledge that cannot be found in code or docs.
 4. **Do not convert open-ended questions into multiple-choice, yes/no, or confirmation prompts.** The question templates in each sub-section are open-ended by design. Present them as open-ended questions. The maintainer's unprompted answers surface knowledge that pre-structured options suppress.
 5. **Minimum question counts are enforced.** Each sub-section specifies a question count range (e.g. "2–4 questions"). You must ask at least the minimum number. Asking zero questions in any sub-section is a protocol violation.
 6. **STOP gates are mandatory.** At the boundaries marked `── STOP ──` below, you must halt execution and wait for the maintainer's response or acknowledgment before proceeding. Do not continue past a STOP gate in the same message.
 7. **If the maintainer asks to skip an interview phase**, explain the value of the phase and what will be lost. Proceed with skipping only if they confirm a second time.
-8. **Rich documentation makes interviews MORE valuable, not less.** When docs are comprehensive, the interview surfaces what docs miss: implicit knowledge, AI-specific failure modes, undocumented tradeoffs, and the maintainer's prioritization of what matters most. Never rationalize skipping interviews because documentation is thorough.
+8. **Rich documentation makes interviews more valuable, not less.** When docs are comprehensive, the interview surfaces what docs miss: implicit knowledge, AI-specific failure modes, undocumented tradeoffs, and the maintainer's prioritization of what matters most. Never rationalize skipping interviews because documentation is thorough.
 
 ---
 
@@ -202,7 +202,7 @@ Adapt from this bank of gap-targeted question templates:
 
 ### 4c — AI-agent-specific failure modes (2–4 questions)
 
-These target mistakes that AI coding agents make but human developers typically don't. Agent-specific failures are often the highest-value findings — in testing, maintainer answers to these questions produced the most critical failure modes.
+These target mistakes that AI coding agents make but human developers typically don't. Agent-specific failures are often the highest-value findings.
 
 - "What mistakes would an AI coding agent make that a human developer wouldn't? Think about: hallucinating APIs that don't exist, defaulting to language primitives instead of library abstractions, choosing the wrong adapter or integration path."
 - "When an agent generates code using your library, what's the first thing you'd check? What pattern would make you immediately say 'an AI wrote this'?"

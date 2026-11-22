@@ -4,11 +4,12 @@ import { basename, dirname, relative } from 'node:path'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { reviewIgnorePatterns } from '../review/review.js'
-import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
-import { isDefaultSkillPath, parseFrontmatter } from '../shared/utils.js'
+import { resolveWorkspacePackages } from '../core/workspace-patterns.js'
+import { errorMessage, isRecord } from '../shared/guards.js'
+import { isDefaultSkillPath } from '../shared/paths.js'
+import { parseFrontmatter } from '../shared/frontmatter.js'
 import { stringList } from './add.js'
 import {
-  isObject,
   projectPath,
   readRecord,
   recordPath,
@@ -150,9 +151,7 @@ export function findExistingSkills(
         skill.frontmatter = frontmatter
         skill.domain = inferDomain(frontmatter, mapped, id)
       } catch (error) {
-        skill.problems.push(
-          error instanceof Error ? error.message : String(error),
-        )
+        skill.problems.push(errorMessage(error))
       }
       return [skill]
     })
@@ -180,14 +179,14 @@ function inferDomain(
 ): string {
   const metadata = frontmatter.metadata
   if (
-    isObject(metadata) &&
+    isRecord(metadata) &&
     typeof metadata.domain === 'string' &&
     metadata.domain.trim()
   )
     return metadata.domain.trim()
   const name = basename(dirname(id))
-  const mapping = mapped.find((value) => isObject(value) && value.slug === name)
-  if (isObject(mapping) && typeof mapping.domain === 'string')
+  const mapping = mapped.find((value) => isRecord(value) && value.slug === name)
+  if (isRecord(mapping) && typeof mapping.domain === 'string')
     return mapping.domain
   const parent = basename(dirname(dirname(id)))
   return parent === 'skills' ? defaultDomain : parent

@@ -13,21 +13,15 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 
 /**
- * Regression guard for discussion #119: skill discovery in a real Yarn Berry
- * (v4) project that uses `nodeLinker: pnp` and has no `node_modules`, where
- * dependencies live inside `.yarn/cache/*.zip`. The project is generated with
- * `corepack` at test time and a skill-bearing dependency is installed as a
- * tarball so Yarn stores it in the zip cache (the shape that triggered #119).
- *
- * Reading inside the zip cache requires Yarn's libzip-patched `fs`. A synthetic
- * `.pnp.cjs` with a no-op `setup()` does not reproduce that, so this uses a real
- * Yarn install. The built CLI is run from the project cwd while Intent itself
- * lives outside the project's PnP graph — the exact `npx`/`dlx` invocation from
- * the report.
- *
- * On CI this test must run (it does not skip silently), so a #119 regression
- * always surfaces. Locally it is skipped only when corepack/Yarn Berry cannot be
- * set up (e.g. offline), to keep the suite runnable without network.
+ * Regression guard for discussion #119: a real Yarn Berry project with
+ * `nodeLinker: pnp` and no `node_modules`, where a skill-bearing dependency is
+ * installed from a tarball so Yarn keeps it inside `.yarn/cache/*.zip`.
+ * Reading that cache needs Yarn's libzip-patched `fs`, which a synthetic
+ * `.pnp.cjs` with a no-op `setup()` cannot reproduce, so the project is
+ * generated with `corepack` and installed for real. The built CLI runs from the
+ * project cwd while Intent lives outside the PnP graph, as `npx`/`dlx` do.
+ * On CI this always runs; locally it is skipped when corepack or Yarn Berry
+ * cannot be set up (offline).
  */
 
 const YARN_VERSION = '4.12.0'
@@ -57,8 +51,6 @@ function berryAvailable(): boolean {
   }
 }
 
-// On CI, always run so a regression is loud. Locally, skip when Berry is
-// unavailable (offline) instead of failing the suite.
 const shouldRun = isCI || berryAvailable()
 
 const tempDirs: Array<string> = []
@@ -77,8 +69,7 @@ function scaffoldBerryProject(): string {
   const dir = mkdtempSync(join(realTmpdir, 'intent-berry-corepack-'))
   tempDirs.push(dir)
 
-  // A skill-bearing package, packed to a tarball so Yarn stores it in the zip
-  // cache (the shape that triggered discussion #119).
+  // Packed to a tarball so Yarn stores it in the zip cache.
   const pkgSrc = join(dir, 'leaf-src')
   mkdirSync(join(pkgSrc, 'skills', 'core'), { recursive: true })
   writeJson(join(pkgSrc, 'package.json'), {

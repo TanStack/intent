@@ -57,13 +57,7 @@ Project-scoped hooks are installed for Claude Code and Codex. `intent install` c
 
 Cursor and generic `AGENTS.md` agents use the guidance block only.
 
-Hooks return the available Intent skill catalog as context for supported agent sessions and keep the edit gate active until they observe a supported `intent load` command.
-
-Hooks do not verify that:
-
-- The command succeeded.
-- The skill matched the task.
-- The agent applied the guidance.
+Hooks return the available Intent skill catalog as context for supported agent sessions and keep the edit gate active until they observe a supported `intent load` command. See [intent hooks](../cli/intent-hooks) for what hooks do not verify.
 
 To control what appears in the session catalog, configure `intent.skills` and `intent.exclude` in `package.json`.
 

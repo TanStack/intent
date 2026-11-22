@@ -23,7 +23,7 @@ import {
 } from '../src/core/index.js'
 import { rewriteLoadedSkillMarkdownDestinations } from '../src/core/markdown.js'
 import { checkStaleness } from '../src/staleness/check.js'
-import { nodeReadFs } from '../src/shared/utils.js'
+import { nodeReadFs } from '../src/shared/fs-identity.js'
 import type * as NodeFs from 'node:fs'
 import type * as NodePath from 'node:path'
 

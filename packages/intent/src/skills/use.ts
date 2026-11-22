@@ -24,6 +24,10 @@ export function isSkillUseParseError(
   return error instanceof SkillUseParseError
 }
 
+export function getPackageShortName(packageName: string): string {
+  return packageName.split('/').pop() ?? packageName
+}
+
 export function formatSkillUse(packageName: string, skillName: string): string {
   const pkg = packageName.trim()
   const skill = skillName.trim()

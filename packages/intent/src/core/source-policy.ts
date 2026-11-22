@@ -2,6 +2,7 @@ import { scanForIntents } from '../discovery/scanner.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { detectIntentAudience } from '../shared/environment.js'
 import { ALLOW_ALL_NOTICE } from '../shared/cli-output.js'
+import { isRecord } from '../shared/guards.js'
 import {
   compileExcludePatterns,
   compileWildcardPattern,
@@ -14,9 +15,10 @@ import {
 import { readPackageJson } from './package-json.js'
 import { parseSkillSources } from './skill-sources.js'
 import { resolveProjectContext } from './project-context.js'
+import type { ScanOptionsWithFsCache } from '../discovery/scanner.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { SkillUse } from '../skills/use.js'
-import type { IntentPackage, ScanOptions, ScanResult } from '../shared/types.js'
+import type { IntentPackage, ScanResult } from '../shared/types.js'
 import type { ExcludeMatcher } from './excludes.js'
 import type { ProjectContext } from './project-context.js'
 import type { SkillSourcesConfig } from './skill-sources.js'
@@ -25,8 +27,6 @@ import type {
   IntentCoreOptions,
   IntentHiddenSourceSummary,
 } from './types.js'
-
-export { ALLOW_ALL_NOTICE }
 
 export const MIGRATION_NOTICE =
   'intent.skills is not set — all discovered skill sources are surfaced. A future version will require an explicit intent.skills allowlist; add one to opt in to specific sources.'
@@ -64,10 +64,6 @@ interface SkillSourceMatcher {
 function compileSkillSourceMatcher(
   source: ExplicitSkillSource,
 ): SkillSourceMatcher {
-  if (source.kind === 'git') {
-    return { source, matchesPackage: () => false }
-  }
-
   const matchesName =
     'pattern' in source
       ? compileWildcardPattern(source.pattern)
@@ -205,14 +201,7 @@ export function applySourcePolicy(
   const { config, excludeMatchers } = options
   const audience = options.audience ?? 'human'
   const sourcePolicy = compileSkillSourcePolicy(config)
-  const seen = new Set<string>()
   const notices: Array<string> = []
-
-  const emit = (notice: string): void => {
-    if (seen.has(notice)) return
-    seen.add(notice)
-    notices.push(notice)
-  }
 
   const packages: Array<IntentPackage> = []
   const hiddenSources: Array<IntentHiddenSourceSummary> = []
@@ -238,7 +227,7 @@ export function applySourcePolicy(
   }
 
   if (hiddenSources.length > 0) {
-    emit(formatUnlistedNotice(hiddenSources, audience))
+    notices.push(formatUnlistedNotice(hiddenSources, audience))
   }
 
   if (config.mode === 'explicit') {
@@ -252,16 +241,16 @@ export function applySourcePolicy(
           source.skill &&
           !pkg.skills.some((skill) => skill.name === source.skill))
       ) {
-        emit(
+        notices.push(
           `"${source.raw}" is declared in intent.skills but was not discovered.`,
         )
       }
     }
   }
 
-  if (config.mode === 'absent') emit(MIGRATION_NOTICE)
-  else if (config.mode === 'allow-all') emit(ALLOW_ALL_NOTICE)
-  else if (config.mode === 'empty') emit(EMPTY_NOTE)
+  if (config.mode === 'absent') notices.push(MIGRATION_NOTICE)
+  else if (config.mode === 'allow-all') notices.push(ALLOW_ALL_NOTICE)
+  else if (config.mode === 'empty') notices.push(EMPTY_NOTE)
 
   return {
     hiddenSourceCount: hiddenSources.length,
@@ -280,10 +269,10 @@ export function readSkillSourcesConfig(
 ): SkillSourcesConfig {
   for (const dir of getConfigDirs(cwd, context)) {
     const intent = readPackageJson(dir, fsCache)?.intent
-    if (!intent || typeof intent !== 'object') continue
+    if (!isRecord(intent)) continue
 
     if ('skills' in intent) {
-      const skills = (intent as Record<string, unknown>).skills
+      const skills = intent.skills
       if (skills === null || skills === undefined) continue
       return parseSkillSources(skills)
     }
@@ -302,24 +291,22 @@ export interface PolicedScan {
 
 export function scanForPolicedIntents(params: {
   cwd: string
-  scanOptions: ScanOptions
+  scanOptions: ScanOptionsWithFsCache
   coreOptions: IntentCoreOptions
   context?: ProjectContext
+  config?: SkillSourcesConfig
+  excludePatterns?: Array<string>
 }): PolicedScan {
   const { cwd, scanOptions, coreOptions } = params
-  const fsCache =
-    (scanOptions as ScanOptions & { fsCache?: IntentFsCache }).fsCache ??
-    createIntentFsCache()
+  const fsCache = scanOptions.fsCache ?? createIntentFsCache()
   const context = params.context ?? resolveProjectContext({ cwd, fsCache })
   const audience = detectIntentAudience(coreOptions.audience)
   const cachedScanOptions = { ...scanOptions, fsCache }
   const scanResult = scanForIntents(cwd, cachedScanOptions)
-  const config = readSkillSourcesConfig(cwd, context, fsCache)
-  const excludePatterns = getEffectiveExcludePatterns(
-    coreOptions,
-    context,
-    fsCache,
-  )
+  const config = params.config ?? readSkillSourcesConfig(cwd, context, fsCache)
+  const excludePatterns =
+    params.excludePatterns ??
+    getEffectiveExcludePatterns(coreOptions, context, fsCache)
   const excludeMatchers = compileExcludePatterns(excludePatterns)
 
   const policy = applySourcePolicy(scanResult, {

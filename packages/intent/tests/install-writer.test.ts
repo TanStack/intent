@@ -21,11 +21,8 @@ import {
   preparePackageSkillsUpdate,
   writePreparedPackageSkillsUpdate,
 } from '../src/commands/install/package-json.js'
-import type {
-  IntentPackage,
-  ScanResult,
-  SkillEntry,
-} from '../src/shared/types.js'
+import { scanResult } from './fixtures/permissions.js'
+import type { IntentPackage, SkillEntry } from '../src/shared/types.js'
 
 const tempDirs: Array<string> = []
 
@@ -60,34 +57,6 @@ function pkg(overrides: Partial<IntentPackage>): IntentPackage {
     kind: 'npm',
     source: 'local',
     ...overrides,
-  }
-}
-
-function scanResult(packages: Array<IntentPackage>): ScanResult {
-  return {
-    packageManager: 'pnpm',
-    packages,
-    warnings: [],
-    notices: [],
-    conflicts: [],
-    nodeModules: {
-      local: {
-        path: 'node_modules',
-        detected: true,
-        exists: true,
-        scanned: true,
-      },
-      global: {
-        path: null,
-        detected: false,
-        exists: false,
-        scanned: false,
-      },
-    },
-    stats: {
-      packageJsonCacheHits: 0,
-      packageJsonReadCount: 0,
-    },
   }
 }
 

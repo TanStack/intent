@@ -4,8 +4,8 @@ import {
   getDeps,
   listNestedNodeModulesPackageDirs,
   resolveDepDir,
-} from '../shared/utils.js'
-import { findWorkspacePackages } from '../setup/workspace-patterns.js'
+} from '../shared/node-modules.js'
+import { findWorkspacePackages } from '../core/workspace-patterns.js'
 import type { IntentFsCache } from './fs-cache.js'
 import type { IntentPackage } from '../shared/types.js'
 
@@ -17,7 +17,7 @@ export interface CreateDependencyWalkerOptions {
   readPkgJson: (dirPath: string) => PackageJson | null
   getFsIdentity: (path: string) => string
   /** Marks a directory `resolveDepDir` returned as its own identity. */
-  primeFsIdentity?: (realPath: string) => void
+  primeFsIdentity: (realPath: string) => void
   scanNodeModulesDir: (nodeModulesDir: string) => void
   tryRegister: (dirPath: string, fallbackName: string) => boolean
   packages: Array<IntentPackage>
@@ -45,7 +45,7 @@ export function createDependencyWalker(opts: CreateDependencyWalkerOptions) {
       depDir = resolveDepDir(depName, fromDir, depDirResolution)
       byDepName.set(depName, depDir)
       // The result is already a real directory, so its identity is itself.
-      if (depDir) opts.primeFsIdentity?.(depDir)
+      if (depDir) opts.primeFsIdentity(depDir)
     }
 
     return depDir

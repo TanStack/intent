@@ -1,5 +1,5 @@
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
-import { toPosixPath } from '../shared/utils.js'
+import { toPosixPath } from '../shared/paths.js'
 
 /**
  * A character that does not occur in `text`, taken from the Unicode private
@@ -11,10 +11,6 @@ function pickPlaceholder(text: string): string {
   let codePoint = 0xe000
   while (text.includes(String.fromCharCode(codePoint))) codePoint++
   return String.fromCharCode(codePoint)
-}
-
-function resolveFromCwd(path: string): string {
-  return resolve(process.cwd(), path)
 }
 
 function splitDestinationSuffix(destination: string): {
@@ -305,7 +301,7 @@ export function rewriteLoadedSkillMarkdownDestinations({
 }): string {
   const context: MarkdownDestinationRewriteContext = {
     cwd,
-    resolvedPackageRoot: resolveFromCwd(packageRoot),
+    resolvedPackageRoot: resolve(cwd, packageRoot),
     skillDir: dirname(skillFilePath),
     rewrittenDestinations: new Map(),
   }

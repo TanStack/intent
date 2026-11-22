@@ -18,11 +18,16 @@ import {
 } from '../src/core/source-policy.js'
 import { setupInitialPermissions } from '../src/commands/install/permissions.js'
 import { ALLOW_ALL_NOTICE } from '../src/shared/cli-output.js'
+import {
+  permissionPrompts as prompts,
+  scanResult as scan,
+} from './fixtures/permissions.js'
 import type {
   PermissionPackage,
   PermissionPrompts,
+  PermissionSetupResult,
 } from '../src/commands/install/permissions.js'
-import type { IntentPackage, ScanResult } from '../src/shared/types.js'
+import type { IntentPackage } from '../src/shared/types.js'
 
 const tempDirs: Array<string> = []
 
@@ -52,48 +57,6 @@ function packageCandidate(
   }
 }
 
-function scan(packages: Array<IntentPackage>): ScanResult {
-  return {
-    packageManager: 'pnpm',
-    packages,
-    warnings: [],
-    notices: [],
-    conflicts: [],
-    nodeModules: {
-      local: {
-        path: 'node_modules',
-        detected: true,
-        exists: true,
-        scanned: true,
-      },
-      global: { path: null, detected: false, exists: false, scanned: false },
-    },
-    stats: { packageJsonCacheHits: 0, packageJsonReadCount: 0 },
-  }
-}
-
-function prompts({
-  confirmWrite = true,
-  selection = [],
-}: {
-  confirmWrite?: boolean | null
-  selection?: Array<string> | null
-} = {}): PermissionPrompts & { groups: Array<PermissionPackage> } {
-  const result = {
-    groups: [] as Array<PermissionPackage>,
-    selectPermissions: vi.fn(async (groups: Array<PermissionPackage>) => {
-      result.groups = groups
-      return selection
-    }),
-    reviewPermissions: vi.fn((_groups, selection) =>
-      Promise.resolve(selection),
-    ),
-    editPermissions: vi.fn((_groups, selection) => Promise.resolve(selection)),
-    confirmWrite: vi.fn(async () => confirmWrite),
-  }
-  return result
-}
-
 async function configure({
   dryRun = false,
   exclude = [],
@@ -114,7 +77,7 @@ async function configure({
   permissionPrompts: PermissionPrompts & {
     groups?: Array<PermissionPackage>
   }
-  result: Awaited<ReturnType<typeof setupInitialPermissions>>
+  result: PermissionSetupResult
 }> {
   const root = mkdtempSync(join(tmpdir(), 'intent-permissions-'))
   tempDirs.push(root)

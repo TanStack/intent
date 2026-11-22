@@ -7,11 +7,8 @@ import gt from 'semver/functions/gt.js'
 import parse from 'semver/functions/parse.js'
 import valid from 'semver/functions/valid.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
-import {
-  parseFrontmatter,
-  readScalarField,
-  toPosixPath,
-} from '../shared/utils.js'
+import { toPosixPath } from '../shared/paths.js'
+import { parseFrontmatter, readScalarField } from '../shared/frontmatter.js'
 import { readIntentArtifacts } from './artifact-coverage.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type {
@@ -21,10 +18,6 @@ import type {
   StalenessReport,
   StalenessSignal,
 } from '../shared/types.js'
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 interface SkillMeta {
   relName: string
@@ -81,10 +74,6 @@ function normalizeVersion(version: string): string | null {
   return coerce(version)?.version ?? null
 }
 
-// ---------------------------------------------------------------------------
-// Version resolution
-// ---------------------------------------------------------------------------
-
 const NPM_REGISTRY_FETCH_TIMEOUT_MS = 5_000
 
 async function fetchNpmVersion(packageName: string): Promise<string | null> {
@@ -109,10 +98,6 @@ async function fetchCurrentVersion(
   const version = fsCache.readPackageJson(packageDir)?.version
   return typeof version === 'string' ? version : fetchNpmVersion(packageName)
 }
-
-// ---------------------------------------------------------------------------
-// Sync state
-// ---------------------------------------------------------------------------
 
 interface SyncState {
   library_version?: string
@@ -178,21 +163,6 @@ export function readPackageName(
     : relative(process.cwd(), packageDir) || 'unknown'
 }
 
-// ---------------------------------------------------------------------------
-// Artifact signals
-// ---------------------------------------------------------------------------
-
-function normalizeFilePath(path: string): string {
-  return toPosixPath(resolve(path))
-}
-
-function getRelativePackageDir(
-  artifactRoot: string,
-  packageDir: string,
-): string {
-  return toPosixPath(relative(artifactRoot, packageDir))
-}
-
 function normalizeList(values: Array<string> | undefined): Array<string> {
   return [...new Set(values ?? [])].sort((a, b) => a.localeCompare(b))
 }
@@ -241,7 +211,7 @@ function resolveArtifactSkillPaths(
     candidatePaths.push(join(artifactRoot, artifact.package, artifact.path))
   }
 
-  return [...new Set(candidatePaths.map(normalizeFilePath))]
+  return [...new Set(candidatePaths.map((path) => toPosixPath(resolve(path))))]
 }
 
 function findMatchingSkill(
@@ -285,7 +255,7 @@ function buildArtifactSignals({
   if (!artifacts) return []
 
   const skillsByPath = new Map(
-    skillMetas.map((skill) => [normalizeFilePath(skill.filePath), skill]),
+    skillMetas.map((skill) => [toPosixPath(resolve(skill.filePath)), skill]),
   )
   const skillsByName = new Map(
     skillMetas.map((skill) => [skill.relName, skill]),
@@ -307,7 +277,7 @@ function buildArtifactSignals({
     artifactPath: warning.artifactPath,
   }))
 
-  const relPackageDir = getRelativePackageDir(artifactRoot, packageDir)
+  const relPackageDir = toPosixPath(relative(artifactRoot, packageDir))
 
   for (const artifact of artifacts.skills) {
     if (!artifactPackageMatches(artifact, library, relPackageDir)) {
@@ -396,18 +366,6 @@ function artifactCoversPackage(
   )
 }
 
-function artifactIgnoresPackage(
-  artifacts: IntentArtifactSet,
-  packageName: string,
-  relPackageDir: string,
-): boolean {
-  return artifacts.ignoredPackages.some(
-    (ignored) =>
-      ignored.packageName === packageName ||
-      ignored.packageName === relPackageDir,
-  )
-}
-
 export function buildWorkspaceCoverageSignals({
   artifactRoot,
   artifacts,
@@ -431,10 +389,13 @@ export function buildWorkspaceCoverageSignals({
     if (hasGeneratedSkill) continue
 
     const packageName = readPackageName(packageDir, fsCache)
-    const relPackageDir = getRelativePackageDir(artifactRoot, packageDir)
-    if (artifactIgnoresPackage(artifacts, packageName, relPackageDir)) {
-      continue
-    }
+    const relPackageDir = toPosixPath(relative(artifactRoot, packageDir))
+    const ignored = artifacts.ignoredPackages.some(
+      (ignore) =>
+        ignore.packageName === packageName ||
+        ignore.packageName === relPackageDir,
+    )
+    if (ignored) continue
 
     const hasArtifactCoverage = artifacts.skills.some((artifact) =>
       artifactCoversPackage(artifact, packageName, relPackageDir),
@@ -458,10 +419,6 @@ export function buildWorkspaceCoverageSignals({
   return signals
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
-
 export async function checkStaleness(
   packageDir: string,
   packageName?: string,
@@ -477,7 +434,6 @@ export async function checkStaleness(
   const skillsDir = join(packageDir, 'skills')
   const library = packageName ?? readPackageName(packageDir, fsCache)
 
-  // Find all skills
   const skillFiles = fsCache.findSkillFiles(skillsDir)
   const skillMetas: Array<SkillMeta> = skillFiles.map((filePath) => {
     const fm = parseFrontmatter(filePath)
@@ -495,27 +451,21 @@ export async function checkStaleness(
     }
   })
 
-  // Get the version from frontmatter (use first skill that has it)
   const skillVersion =
     skillMetas.find((s) => s.libraryVersion)?.libraryVersion ?? null
 
-  // Resolve current version: prefer local package.json, fall back to npm registry
   const currentVersion = await fetchCurrentVersion(packageDir, library, fsCache)
 
-  // Classify drift
   const versionDrift =
     skillVersion && currentVersion
       ? classifyVersionDrift(skillVersion, currentVersion)
       : null
 
-  // Read sync state
   const syncState = readSyncState(packageDir)
 
-  // Build per-skill staleness
   const skills: Array<SkillStaleness> = skillMetas.map((skill) => {
     const reasons: Array<string> = []
 
-    // Version drift
     if (
       currentVersion &&
       skill.libraryVersion &&
@@ -526,12 +476,9 @@ export async function checkStaleness(
       )
     }
 
-    // Source SHA changes (from sync-state)
     const storedShas = syncState?.skills?.[skill.relName]?.sources_sha ?? {}
-    // We only flag if there are stored SHAs but we can't check remote
-    // (actual remote checking requires GitHub API — deferred to agent)
+    // Remote SHA comparison needs the GitHub API; the agent does it.
     if (skill.sources && Object.keys(storedShas).length > 0) {
-      // Mark sources as needing review — agent will do the actual comparison
       for (const source of skill.sources) {
         if (!storedShas[source]) {
           reasons.push(`new source (${source})`)

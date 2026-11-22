@@ -11,6 +11,7 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { SpawnSyncReturns } from 'node:child_process'
 
 const thisDir = dirname(fileURLToPath(import.meta.url))
 const fixturesDir = join(thisDir, '..', 'fixtures', 'integration')
@@ -29,10 +30,6 @@ function getFreePort(): Promise<number> {
     })
   })
 }
-
-// ---------------------------------------------------------------------------
-// Verdaccio lifecycle
-// ---------------------------------------------------------------------------
 
 export interface Registry {
   url: string
@@ -138,10 +135,6 @@ export async function startRegistry(): Promise<Registry> {
   })
 }
 
-// ---------------------------------------------------------------------------
-// Publishing fixtures
-// ---------------------------------------------------------------------------
-
 export function publishFixtures(registryUrl: string): void {
   const host = new URL(registryUrl).host
   const npmrc = `//${host}/:_authToken=test-token\nregistry=${registryUrl}\n`
@@ -170,10 +163,6 @@ export function publishFixtures(registryUrl: string): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Project scaffolding
-// ---------------------------------------------------------------------------
-
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun'
 export type ProjectStructure = 'single' | 'monorepo-root' | 'monorepo-workspace'
 
@@ -201,23 +190,24 @@ export function scaffoldProject(opts: {
   writeFileSync(join(root, lockfiles[opts.pm]), '')
 
   if (opts.structure === 'single') {
-    writeJson(join(root, 'package.json'), {
+    const manifest: Record<string, unknown> = {
       name: 'test-project',
       private: true,
-      ...(opts.pnp ? { installConfig: { pnp: true } } : {}),
       dependencies: { [opts.dependency]: '1.0.0' },
-    })
+    }
+    if (opts.pnp) manifest.installConfig = { pnp: true }
+    writeJson(join(root, 'package.json'), manifest)
     install(root, opts.pm, opts.registryUrl, opts)
     return { root, cwd: root }
   }
 
-  // Monorepo
-  writeJson(join(root, 'package.json'), {
+  const manifest: Record<string, unknown> = {
     name: 'test-monorepo',
     private: true,
-    ...(opts.pm !== 'pnpm' ? { workspaces: ['packages/*'] } : {}),
-    ...(opts.pnp ? { installConfig: { pnp: true } } : {}),
-  })
+  }
+  if (opts.pm !== 'pnpm') manifest.workspaces = ['packages/*']
+  if (opts.pnp) manifest.installConfig = { pnp: true }
+  writeJson(join(root, 'package.json'), manifest)
   if (opts.pm === 'pnpm') {
     writeFileSync(
       join(root, 'pnpm-workspace.yaml'),
@@ -328,12 +318,12 @@ function formatInstallError(
     lines.push(`signal: ${processError.signal}`)
   }
 
-  const stdout = commandOutputToString(processError.stdout)
+  const stdout = processError.stdout?.toString().trim() ?? ''
   if (stdout) {
     lines.push(`stdout:\n${stdout}`)
   }
 
-  const stderr = commandOutputToString(processError.stderr)
+  const stderr = processError.stderr?.toString().trim() ?? ''
   if (stderr) {
     lines.push(`stderr:\n${stderr}`)
   }
@@ -345,23 +335,11 @@ function formatInstallError(
   return lines.join('\n')
 }
 
-function commandOutputToString(output: Buffer | string | undefined): string {
-  if (!output) {
-    return ''
-  }
-
-  return output.toString().trim()
-}
-
-// ---------------------------------------------------------------------------
-// CLI invocation
-// ---------------------------------------------------------------------------
-
 export interface CliResult {
   stdout: string
   stderr: string
   exitCode: number
-  parsed: any
+  parsed: unknown
 }
 
 const packageManagerAvailability = new Map<PackageManager, boolean>()
@@ -402,40 +380,54 @@ export function canSymlink(): boolean {
   return symlinkCapable
 }
 
+let yarnClassic: boolean | undefined
+
 export function isYarnClassic(): boolean {
+  if (yarnClassic !== undefined) return yarnClassic
+
   try {
     const version = execSync('yarn --version', {
       encoding: 'utf8',
       cwd: realTmpdir,
     }).trim()
-    return Number.parseInt(version.split('.')[0]!, 10) === 1
+    yarnClassic = Number.parseInt(version.split('.')[0]!, 10) === 1
   } catch {
-    return false
+    yarnClassic = false
   }
+
+  return yarnClassic
 }
 
-export function runScanner(
+type InvokeMethod = 'direct' | 'symlink'
+
+function runCli(
   cwd: string,
-  method: 'direct' | 'symlink' = 'direct',
+  args: Array<string>,
+  opts: { method?: InvokeMethod; json?: boolean },
 ): CliResult {
   let binPath = cliPath
   let linkDir: string | undefined
 
-  if (method === 'symlink') {
+  if (opts.method === 'symlink') {
     linkDir = mkdtempSync(join(realTmpdir, 'intent-link-'))
-    const linkPath = join(linkDir, 'intent-cli.mjs')
-    symlinkSync(cliPath, linkPath)
-    binPath = linkPath
+    binPath = join(linkDir, 'intent-cli.mjs')
+    symlinkSync(cliPath, binPath)
   }
 
   try {
-    const stdout = execFileSync('node', [binPath, 'list', '--json'], {
+    const stdout = execFileSync('node', [binPath, ...args], {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     })
-    return { stdout, stderr: '', exitCode: 0, parsed: JSON.parse(stdout) }
-  } catch (err: any) {
+    return {
+      stdout,
+      stderr: '',
+      exitCode: 0,
+      parsed: opts.json ? JSON.parse(stdout) : null,
+    }
+  } catch (error) {
+    const err = error as Partial<SpawnSyncReturns<string>>
     return {
       stdout: err.stdout ?? '',
       stderr: err.stderr ?? '',
@@ -449,8 +441,15 @@ export function runScanner(
   }
 }
 
+export function runScanner(
+  cwd: string,
+  method: InvokeMethod = 'direct',
+): CliResult {
+  return runCli(cwd, ['list', '--json'], { method, json: true })
+}
+
 export interface RunLoadOptions {
-  method?: 'direct' | 'symlink'
+  method?: InvokeMethod
   path?: boolean
   json?: boolean
 }
@@ -460,50 +459,11 @@ export function runLoad(
   use: string,
   options: RunLoadOptions = {},
 ): CliResult {
-  const method = options.method ?? 'direct'
-  let binPath = cliPath
-  let linkDir: string | undefined
-
-  if (method === 'symlink') {
-    linkDir = mkdtempSync(join(realTmpdir, 'intent-link-'))
-    const linkPath = join(linkDir, 'intent-cli.mjs')
-    symlinkSync(cliPath, linkPath)
-    binPath = linkPath
-  }
-
-  const args: Array<string> = [binPath, 'load', use]
+  const args = ['load', use]
   if (options.path) args.push('--path')
   if (options.json) args.push('--json')
-
-  try {
-    const stdout = execFileSync('node', args, {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    return {
-      stdout,
-      stderr: '',
-      exitCode: 0,
-      parsed: options.json ? JSON.parse(stdout) : null,
-    }
-  } catch (err: any) {
-    return {
-      stdout: err.stdout ?? '',
-      stderr: err.stderr ?? '',
-      exitCode: err.status ?? 1,
-      parsed: null,
-    }
-  } finally {
-    if (linkDir) {
-      rmSync(linkDir, { recursive: true, force: true })
-    }
-  }
+  return runCli(cwd, args, options)
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function writeJson(filePath: string, data: unknown): void {
   mkdirSync(dirname(filePath), { recursive: true })

@@ -1,11 +1,9 @@
 // Static-discovery invariant: this module only inspects strings. It never
 // resolves, requires, or executes any discovered package.
 
-type SkillSource =
-  | ({ raw: string; kind: 'npm' | 'workspace' } & (
-      { id: string; skill?: string } | { pattern: string }
-    ))
-  | { raw: string; id: string; kind: 'git'; ref: string }
+type SkillSource = { raw: string; kind: 'npm' | 'workspace' } & (
+  { id: string; skill?: string } | { pattern: string }
+)
 
 /**
  * `absent` (key missing, v0 upgrade path) and `empty` (`[]`) are deliberately
@@ -30,12 +28,6 @@ export class SkillSourcesParseError extends Error {
     this.name = 'SkillSourcesParseError'
     this.issues = issues
   }
-}
-
-export function isSkillSourcesParseError(
-  error: unknown,
-): error is SkillSourcesParseError {
-  return error instanceof SkillSourcesParseError
 }
 
 /**

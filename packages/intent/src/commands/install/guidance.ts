@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { formatIntentCommand } from '../../shared/command-runner.js'
 import { repositoryWritePath } from '../../shared/write-path.js'
+import { errorMessage } from '../../shared/guards.js'
 import { writeChanges } from '../../maintainer/files.js'
 import { parseIntentInvocation } from '../../hooks/policy.js'
 import { isGeneratedMappingSkill } from '../../skills/categories.js'
@@ -128,9 +129,7 @@ function parseSkillsList(block: string): {
     return { errors: [], mappings: parsed.tanstackIntent }
   } catch (err) {
     return {
-      errors: [
-        `Managed block contains invalid YAML: ${err instanceof Error ? err.message : String(err)}`,
-      ],
+      errors: [`Managed block contains invalid YAML: ${errorMessage(err)}`],
       mappings: [],
     }
   }
@@ -229,7 +228,7 @@ export function verifyIntentSkillsBlockFile({
       try {
         parsedId = parseSkillUse(mapping.id)
       } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err))
+        errors.push(errorMessage(err))
       }
 
       if (containsLocalPathValue(mapping.id)) {
@@ -464,7 +463,9 @@ export function planIntentSkillsBlock({
   }
 
   const existingTarget = findExistingConfigWithManagedBlock(root, namespace)
-  const targetPath = resolveIntentSkillsBlockTargetPath(root, 1, namespace)!
+  const targetPath =
+    existingTarget?.filePath ??
+    resolveIntentSkillsBlockTargetPath(root, 1, namespace)!
 
   if (existingTarget) {
     const nextContent = replaceManagedBlock(

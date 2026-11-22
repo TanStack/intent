@@ -4,9 +4,12 @@ import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolveProjectContext } from '../core/project-context.js'
-import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
-import { parseFrontmatter, readScalarField } from '../shared/utils.js'
+import { createIntentFsCache } from '../discovery/fs-cache.js'
+import { resolveWorkspacePackages } from '../core/workspace-patterns.js'
+import { errorMessage, isRecord } from '../shared/guards.js'
+import { parseFrontmatter, readScalarField } from '../shared/frontmatter.js'
 import type TS from 'typescript'
+import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type * as NativeApi from 'typescript7/unstable/async'
 import type * as NativeAst from 'typescript7/unstable/ast'
 import type * as NativeIs from 'typescript7/unstable/ast/is'
@@ -36,17 +39,22 @@ interface CodeBlock {
   expectError?: Array<string>
 }
 
+interface CodeFence {
+  start: number
+  end: number
+  language: string
+  properties: Array<string>
+  code: string
+}
+
+// Indexed by the opening fence's indentation (0 to 3 spaces).
+const fenceDedents = [/^/, /^ ?/, /^ {0,2}/, /^ {0,3}/]
+
 // Scan whole fences before selecting languages: a Markdown example can contain
 // shorter fences, closing fences may be longer, and EOF also closes a fence.
-function codeFences(content: string) {
+function codeFences(content: string): Array<CodeFence> {
   const lines = content.split(/\r?\n/)
-  const fences: Array<{
-    start: number
-    end: number
-    language: string
-    properties: Array<string>
-    code: string
-  }> = []
+  const fences: Array<CodeFence> = []
   for (let start = 0; start < lines.length; start++) {
     const opening = /^( {0,3})(`{3,}|~{3,})(.*)$/.exec(lines[start]!)
     if (!opening || (opening[2]![0] === '`' && opening[3]!.includes('`')))
@@ -62,7 +70,7 @@ function codeFences(content: string) {
       )
         break
     }
-    const dedent = new RegExp(`^ {0,${opening[1]!.length}}`)
+    const dedent = fenceDedents[opening[1]!.length]!
     const [language, ...properties] = opening[3]!.trim().split(/\s+/)
     fences.push({
       start,
@@ -140,7 +148,7 @@ function loadTypeScript(root: string): typeof TS | null {
     try {
       ts = load('typescript') as typeof TS
     } catch {
-      continue // Try the next location.
+      continue
     }
     if (hasCompilerApi(ts)) return ts
     // TypeScript 7 exports no compiler API. Its documented side-by-side
@@ -175,9 +183,7 @@ async function loadNativeTypeScript(
         is: await entry('ast/is'),
         scanner: await entry('ast/scanner'),
       }
-    } catch {
-      // Try the next location.
-    }
+    } catch {}
   }
   return null
 }
@@ -251,12 +257,12 @@ function nativeMessage(diagnostic: NativeDiagnostic, indent = 0): string {
   ].join('')
 }
 
-const errorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : String(error)
-
-function extractCodeBlocks(file: string, content: string): Array<CodeBlock> {
+function extractCodeBlocks(
+  file: string,
+  fences: Array<CodeFence>,
+): Array<CodeBlock> {
   const blocks: Array<CodeBlock> = []
-  for (const fence of codeFences(content)) {
+  for (const fence of fences) {
     const language = fence.language
     if (!checkedLanguages.has(language)) continue
     if (fence.properties.includes('no-check')) continue
@@ -460,11 +466,12 @@ async function splitExamples(
 
 export function skillLinks(
   content: string,
+  fences = codeFences(content),
 ): Array<{ target: string; path: string; line: number }> {
   const links: Array<{ target: string; path: string; line: number }> = []
   // Blank out fenced examples, keeping newlines so line numbers still match.
   const lines = content.split(/\r?\n/)
-  for (const fence of codeFences(content))
+  for (const fence of fences)
     for (
       let index = fence.start;
       index <= fence.end && index < lines.length;
@@ -472,16 +479,16 @@ export function skillLinks(
     )
       lines[index] = ''
   const prose = lines.join('\n')
+  let line = 1
+  let scanned = 0
   for (const match of prose.matchAll(markdownLink)) {
+    for (; scanned < match.index; scanned++)
+      if (prose.charCodeAt(scanned) === 10) line++
     const target = match[1] ?? match[2]!
     if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) continue
     const path = target.replace(/[#?].*$/, '')
     if (!path) continue
-    links.push({
-      target,
-      path,
-      line: prose.slice(0, match.index).split('\n').length,
-    })
+    links.push({ target, path, line })
   }
   return links
 }
@@ -491,10 +498,11 @@ function checkSkillLinks(
   packageDir: string,
   file: string,
   content: string,
+  fences: Array<CodeFence>,
 ): Array<SkillBlockFinding> {
   const findings: Array<SkillBlockFinding> = []
   const absolute = resolve(root, file)
-  for (const { target, path, line } of skillLinks(content)) {
+  for (const { target, path, line } of skillLinks(content, fences)) {
     const resolved = resolve(dirname(absolute), path)
     const outside = relative(packageDir, resolved).startsWith('..')
     if (outside || !existsSync(resolved))
@@ -510,22 +518,12 @@ function checkSkillLinks(
   return findings
 }
 
-// The file that declares the library's public types. A declared entry that
-// Git tracks is hand-written and used as-is; a missing or ignored one is
-// build output, so the matching source file stands in for it.
-function libraryEntry(packageDir: string): string | null {
-  let manifest: Record<string, unknown> = {}
-  try {
-    manifest = JSON.parse(
-      readFileSync(join(packageDir, 'package.json'), 'utf8'),
-    )
-  } catch {
-    // Fall through to the conventional source entry.
-  }
+// The entry the manifest declares for the library's public types.
+function declaredEntry(manifest: Record<string, unknown>): string | undefined {
   const exportsRoot = isRecord(manifest.exports)
     ? (manifest.exports['.'] ?? manifest.exports)
     : manifest.exports
-  const declared = [
+  return [
     manifest.types,
     manifest.typings,
     isRecord(exportsRoot) ? exportsRoot.types : undefined,
@@ -542,6 +540,16 @@ function libraryEntry(packageDir: string): string | null {
     manifest.module,
     manifest.main,
   ].find((value): value is string => typeof value === 'string')
+}
+
+// The file that declares the library's public types. A declared entry that
+// Git tracks is hand-written and used as-is; a missing or ignored one is
+// build output, so the matching source file stands in for it.
+function libraryEntry(
+  packageDir: string,
+  manifest: Record<string, unknown>,
+): string | null {
+  const declared = declaredEntry(manifest)
   const candidates: Array<string> = []
   if (declared) {
     const path = resolve(packageDir, declared)
@@ -587,7 +595,10 @@ function libraryEntry(packageDir: string): string | null {
 // Every workspace package mapped to its own entry, so an example that imports
 // a sibling package (an adapter, a framework binding) is checked against it
 // instead of silently resolving to nothing.
-function workspacePaths(root: string): Record<string, Array<string>> {
+function workspacePaths(
+  root: string,
+  fsCache: IntentFsCache,
+): Record<string, Array<string>> {
   const context = resolveProjectContext({ cwd: root })
   const workspaceRoot = context.workspaceRoot ?? root
   const paths: Record<string, Array<string>> = {}
@@ -595,15 +606,12 @@ function workspacePaths(root: string): Record<string, Array<string>> {
     workspaceRoot,
     context.workspacePatterns,
   )) {
-    let name: unknown
-    try {
-      name = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name
-    } catch {
-      continue
-    }
-    const entry = typeof name === 'string' ? libraryEntry(dir) : null
+    const manifest = fsCache.readPackageJson(dir)
+    if (!manifest || typeof manifest.name !== 'string') continue
+    const { name } = manifest
+    const entry = libraryEntry(dir, manifest)
     if (!entry) continue
-    paths[name as string] = [slash(entry)]
+    paths[name] = [slash(entry)]
     paths[`${name}/*`] = [
       slash(join(dirname(entry), '*')),
       slash(join(dir, '*')),
@@ -625,24 +633,9 @@ function isTracked(packageDir: string, path: string): boolean {
   }
 }
 
-function packageName(packageDir: string): string | undefined {
-  try {
-    const name: unknown = JSON.parse(
-      readFileSync(join(packageDir, 'package.json'), 'utf8'),
-    ).name
-    return typeof name === 'string' ? name : undefined
-  } catch {
-    return undefined
-  }
-}
-
 // TypeScript normalizes every path it hands back to forward slashes, so the
 // virtual files and path mappings are keyed the same way on Windows.
 const slash = (path: string) => path.replace(/\\/g, '/')
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 export interface SkillBlockCache {
   workspacePaths?: Record<string, Array<string>>
@@ -657,16 +650,30 @@ export async function checkSkillBlocks(
     skills: Array<{ file: string; content: string }>
     references?: Array<{ file: string; content: string }>
     cache?: SkillBlockCache
+    fsCache?: IntentFsCache
   },
   ts?: typeof TS | null,
 ): Promise<SkillBlockCheck> {
-  const { root, packageDir, library, cache = {} } = options
-  const findings = options.skills.flatMap((skill) =>
-    checkSkillLinks(root, packageDir, skill.file, skill.content),
-  )
-  const blocks = [...options.skills, ...(options.references ?? [])].flatMap(
-    (skill) => extractCodeBlocks(skill.file, skill.content),
-  )
+  const {
+    root,
+    packageDir,
+    library,
+    cache = {},
+    fsCache = createIntentFsCache(),
+  } = options
+  const findings: Array<SkillBlockFinding> = []
+  const blocks: Array<CodeBlock> = []
+  for (const skill of options.skills) {
+    const fences = codeFences(skill.content)
+    findings.push(
+      ...checkSkillLinks(root, packageDir, skill.file, skill.content, fences),
+    )
+    blocks.push(...extractCodeBlocks(skill.file, fences))
+  }
+  for (const reference of options.references ?? [])
+    blocks.push(
+      ...extractCodeBlocks(reference.file, codeFences(reference.content)),
+    )
   const result = (skipped?: string): SkillBlockCheck => ({
     blocks: blocks.length,
     findings,
@@ -686,8 +693,9 @@ export async function checkSkillBlocks(
     return result(
       `TypeScript ${ts.version} has no compiler API that Intent can use; install @typescript/typescript6 beside it`,
     )
-  const entry = libraryEntry(packageDir)
-  const ownsLibrary = packageName(packageDir) === library
+  const manifest = fsCache.readPackageJson(packageDir) ?? {}
+  const entry = libraryEntry(packageDir, manifest)
+  const ownsLibrary = manifest.name === library
   if (ownsLibrary && !entry)
     return result(
       `no type entry found for ${library} in ${relative(root, packageDir) || '.'}`,
@@ -701,7 +709,7 @@ export async function checkSkillBlocks(
   const compilerOptions = {
     ...exampleCompilerOptions,
     paths: {
-      ...(cache.workspacePaths ??= workspacePaths(root)),
+      ...(cache.workspacePaths ??= workspacePaths(root, fsCache)),
       // A skill documenting another package (metadata.library) resolves that
       // package through the workspace or node_modules, not this package's entry.
       ...(ownsLibrary
@@ -967,6 +975,7 @@ export async function describeSkillExamples(
   root: string,
   files: Array<string>,
 ): Promise<Map<string, string>> {
+  const fsCache = createIntentFsCache()
   const groups = new Map<
     string,
     { packageDir: string; library: string; files: Array<string> }
@@ -978,20 +987,12 @@ export async function describeSkillExamples(
       targetPath: absolute,
     })
     if (!packageRoot) continue
-    let library: unknown = readScalarField(
-      parseFrontmatter(absolute),
-      'library',
-    )
+    let library = readScalarField(parseFrontmatter(absolute), 'library')
     if (!library) {
-      try {
-        library = JSON.parse(
-          readFileSync(join(packageRoot, 'package.json'), 'utf8'),
-        ).name
-      } catch {
-        continue
-      }
+      const name = fsCache.readPackageJson(packageRoot)?.name
+      if (typeof name !== 'string') continue
+      library = name
     }
-    if (typeof library !== 'string') continue
     const key = `${packageRoot}\0${library}`
     const group = groups.get(key) ?? {
       packageDir: packageRoot,
@@ -1014,6 +1015,7 @@ export async function describeSkillExamples(
       library: group.library,
       skills,
       cache,
+      fsCache,
     })
     for (const [file, summary] of summarizeSkillExamples(result, skills))
       summaries.set(file, summary)
@@ -1030,7 +1032,8 @@ export function summarizeSkillExamples(
   const summaries = new Map<string, string>()
   if (result.skipped) return summaries
   for (const skill of skills) {
-    if (!extractCodeBlocks(skill.file, skill.content).length) continue
+    if (!extractCodeBlocks(skill.file, codeFences(skill.content)).length)
+      continue
     const errors = result.findings.filter(
       (finding) => finding.file === skill.file && finding.severity === 'error',
     )

@@ -130,7 +130,7 @@ function normalizePermissions(selected: Array<string>): Array<string> {
       const config = parseSkillSources([value])
       if (config.mode !== 'explicit') return true
       const source = config.sources[0]!
-      if (source.kind === 'git' || 'pattern' in source) return true
+      if ('pattern' in source) return true
       const others = parseSkillSources(
         values.filter(
           (other) =>
@@ -340,9 +340,9 @@ export async function setupInitialPermissions({
       status: unchanged
         ? 'unchanged'
         : writePreparedPackageSkillsUpdate(update),
-      ...(review
-        ? { available: { skills: enabled.length, packages: packageCount } }
-        : {}),
+      available: review
+        ? { skills: enabled.length, packages: packageCount }
+        : undefined,
     }
   }
 }

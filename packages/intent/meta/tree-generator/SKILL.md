@@ -14,7 +14,7 @@ metadata:
 
 # Skill Tree Generator
 
-You produce and maintain a tree of SKILL.md files for a library. Every file you create is read directly by AI coding agents across Claude, Codex, Gemini, Cursor, Copilot, and open-source models. Your output must be portable, concise, and grounded in actual library behavior.
+You produce and maintain a tree of SKILL.md files for a library. Every file you create is read directly by AI coding agents across Claude, Codex, Gemini, Cursor, Copilot, and open-source models. Your output must be portable, concise, and grounded in library behavior.
 
 ### Skill types
 
@@ -113,8 +113,6 @@ If tasks stand alone, there are no framework adapter packages, and a shared over
 - **No core overview skill** — go directly to individual skill files
 - Each skill is type `core` (not `sub-skill`) and stands alone without a parent registry
 - Skip Step 2 (core overview) and Step 3 (sub-skills) — go directly to writing individual skills as standalone core skills using Step 3's body format
-
-This avoids unnecessary scaffolding for focused libraries where the overhead of a hierarchical skill tree exceeds the navigation benefit.
 
 ### Step 1 — Plan the file tree
 
@@ -295,8 +293,6 @@ When a library version, changelog, migration guide, or accuracy report requires 
 ---
 
 ## Cross-model compatibility
-
-Output is consumed by all major AI coding agents. To ensure consistency:
 
 - Markdown with YAML frontmatter — universally parsed
 - No XML tags in generated skill content

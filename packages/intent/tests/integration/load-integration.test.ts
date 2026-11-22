@@ -49,11 +49,7 @@ describe.each(PACKAGE_MANAGERS)('intent load via installed bin (%s)', (pm) => {
 
       const result = runLoad(cwd, SKILL_USE)
 
-      if (result.exitCode !== 0) {
-        throw new Error(
-          `intent load failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-        )
-      }
+      expect(result.exitCode, result.stderr).toBe(0)
       expectSkillContent(result.stdout)
     },
     60_000,
@@ -72,11 +68,7 @@ describe('intent load resolution variants', () => {
 
     const result = runLoad(cwd, SKILL_USE, { path: true })
 
-    if (result.exitCode !== 0) {
-      throw new Error(
-        `intent load --path failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-      )
-    }
+    expect(result.exitCode, result.stderr).toBe(0)
     expect(result.stdout.trim()).toMatch(/skills[/\\]core[/\\]SKILL\.md\s*$/)
   }, 60_000)
 
@@ -91,18 +83,13 @@ describe('intent load resolution variants', () => {
 
     const result = runLoad(cwd, SKILL_USE, { json: true })
 
-    if (result.exitCode !== 0) {
-      throw new Error(
-        `intent load --json failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-      )
-    }
+    expect(result.exitCode, result.stderr).toBe(0)
     expect(result.parsed).toMatchObject({
       package: '@test-intent/skills-leaf',
       skill: 'core',
       version: '1.0.0',
+      content: expect.stringContaining('# Core Skill'),
     })
-    expect(typeof result.parsed.content).toBe('string')
-    expect(result.parsed.content).toContain('# Core Skill')
   }, 60_000)
 
   it.skipIf(!canSymlink())(
@@ -118,11 +105,7 @@ describe('intent load resolution variants', () => {
 
       const result = runLoad(cwd, SKILL_USE, { method: 'symlink' })
 
-      if (result.exitCode !== 0) {
-        throw new Error(
-          `intent load via symlink failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-        )
-      }
+      expect(result.exitCode, result.stderr).toBe(0)
       expectSkillContent(result.stdout)
     },
     60_000,
@@ -139,11 +122,7 @@ describe('intent load resolution variants', () => {
 
     const result = runLoad(cwd, SKILL_USE)
 
-    if (result.exitCode !== 0) {
-      throw new Error(
-        `intent load in monorepo-workspace failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-      )
-    }
+    expect(result.exitCode, result.stderr).toBe(0)
     expectSkillContent(result.stdout)
   }, 60_000)
 })

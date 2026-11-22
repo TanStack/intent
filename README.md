@@ -22,7 +22,7 @@
 	<a href="https://www.npmjs.com/package/@tanstack/intent" target="\_parent">
 	  <img alt="" src="https://img.shields.io/npm/dm/@tanstack/intent.svg" alt="npm downloads" />
 	</a>
-- <a href="https://github.com/TanStack/intent" target="\_parent">
+	<a href="https://github.com/TanStack/intent" target="\_parent">
 	  <img alt="" src="https://img.shields.io/github/stars/TanStack/intent.svg?style=social&label=Star" alt="GitHub stars" />
 	</a>
 	<a href="https://bundlephobia.com/result?p=@tanstack/react-intent@latest" target="\_parent">
@@ -72,14 +72,14 @@ A CLI for library maintainers to generate, validate, and ship [Agent Skills](htt
         <picture>
           <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TanStack/tanstack.com/main/src/images/coderabbit-dark.svg" height="40" />
           <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/TanStack/tanstack.com/main/src/images/coderabbit-light.svg" height="40" />
-          <img src=https://raw.githubusercontent.com/TanStack/tanstack.com/main/src/images/coderabbit-light.svg" height="40" alt="CodeRabbit" />
+          <img src="https://raw.githubusercontent.com/TanStack/tanstack.com/main/src/images/coderabbit-light.svg" height="40" alt="CodeRabbit" />
         </picture>
       </a>
     </td>
     <td>
       <a href="https://www.cloudflare.com?utm_source=tanstack">
         <picture>
-          <source media="(prefers-color-scheme: dark)" srcset=https://raw.githubusercontent.com/TanStack/tanstack.com/main/src/images/cloudflare-white.svg" height="60" />
+          <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TanStack/tanstack.com/main/src/images/cloudflare-white.svg" height="60" />
           <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/TanStack/tanstack.com/main/src/images/cloudflare-black.svg" height="60" />
           <img src="https://raw.githubusercontent.com/TanStack/tanstack.com/main/src/images/cloudflare-black.svg" height="60" alt="Cloudflare" />
         </picture>

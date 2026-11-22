@@ -34,23 +34,21 @@ let registry: Registry | undefined
 const tempDirs: Array<string> = []
 
 function expectLeafCoreSkill(parsed: CliResult['parsed']): void {
-  expect(parsed.packages).toEqual(
-    expect.arrayContaining([
+  expect(parsed).toMatchObject({
+    packages: expect.arrayContaining([
       expect.objectContaining({
         name: '@test-intent/skills-leaf',
         version: '1.0.0',
       }),
     ]),
-  )
-  expect(parsed.skills).toEqual(
-    expect.arrayContaining([
+    skills: expect.arrayContaining([
       expect.objectContaining({
         packageName: '@test-intent/skills-leaf',
         skillName: 'core',
         type: 'core',
       }),
     ]),
-  )
+  })
 }
 
 beforeAll(async () => {
@@ -106,8 +104,11 @@ describe('symlink invocation', () => {
       const result = runScanner(cwd, 'symlink')
 
       expect(result.exitCode).toBe(0)
-      expect(result.parsed.packages).toHaveLength(1)
-      expect(result.parsed.packages[0].name).toBe('@test-intent/skills-leaf')
+      expect(result.parsed).toMatchObject({
+        packages: [
+          expect.objectContaining({ name: '@test-intent/skills-leaf' }),
+        ],
+      })
     },
     60_000,
   )
@@ -131,11 +132,7 @@ describe.skipIf(!isYarnClassic())('Yarn PnP', () => {
 
     const result = runScanner(cwd)
 
-    if (result.exitCode !== 0) {
-      throw new Error(
-        `intent list failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-      )
-    }
+    expect(result.exitCode, result.stderr).toBe(0)
     expectLeafCoreSkill(result.parsed)
   }, 60_000)
 
@@ -156,11 +153,7 @@ describe.skipIf(!isYarnClassic())('Yarn PnP', () => {
 
     const result = runScanner(cwd)
 
-    if (result.exitCode !== 0) {
-      throw new Error(
-        `intent list failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-      )
-    }
+    expect(result.exitCode, result.stderr).toBe(0)
     expectLeafCoreSkill(result.parsed)
   }, 60_000)
 
@@ -182,11 +175,7 @@ describe.skipIf(!isYarnClassic())('Yarn PnP', () => {
 
     const result = runScanner(cwd)
 
-    if (result.exitCode !== 0) {
-      throw new Error(
-        `intent list failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-      )
-    }
+    expect(result.exitCode, result.stderr).toBe(0)
     expectLeafCoreSkill(result.parsed)
   }, 60_000)
 })

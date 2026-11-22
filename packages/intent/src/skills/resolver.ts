@@ -1,5 +1,5 @@
 import { warningMentionsPackage } from '../core/excludes.js'
-import { parseSkillUse } from './use.js'
+import { getPackageShortName, parseSkillUse } from './use.js'
 import type {
   IntentPackage,
   ScanResult,
@@ -77,10 +77,6 @@ export function isResolveSkillUseError(
 export interface ResolveSkillEntryResult {
   skill: SkillEntry | null
   suggestedSkills: Array<string>
-}
-
-function getPackageShortName(packageName: string): string {
-  return packageName.split('/').pop() ?? packageName
 }
 
 function getPackagePrefixedSkillAlias(

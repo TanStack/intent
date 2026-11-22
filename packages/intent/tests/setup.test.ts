@@ -37,7 +37,6 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'setup-test-'))
   metaDir = join(root, 'meta')
 
-  // Create mock templates
   mkdirSync(join(metaDir, 'templates', 'workflows'), { recursive: true })
 
   writeFileSync(
@@ -107,7 +106,7 @@ describe('runEditPackageJson', () => {
     )
   })
 
-  it('is idempotent — re-running does not duplicate entries', () => {
+  it('does not duplicate entries on a second run', () => {
     writePkg({ name: 'test-pkg', files: ['dist'] }, 2)
 
     runEditPackageJson(root)
@@ -172,7 +171,6 @@ describe('runEditPackageJson', () => {
   })
 
   it('skips !skills/_artifacts in monorepo packages', () => {
-    // Simulate monorepo by creating a parent package.json
     const monoRoot = mkdtempSync(join(tmpdir(), 'mono-root-'))
     const pkgDir = join(monoRoot, 'packages', 'my-lib')
     mkdirSync(pkgDir, { recursive: true })
@@ -455,7 +453,7 @@ describe('runSetupGithubActions', () => {
     }
   })
 
-  it('handles missing templates directory gracefully', () => {
+  it('returns no workflows when the templates directory is missing', () => {
     const emptyMeta = join(root, 'empty-meta')
     mkdirSync(emptyMeta)
     const result = runSetupGithubActions(root, emptyMeta)
@@ -585,14 +583,6 @@ describe('runSetupGithubActions', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// Monorepo-aware commands
-// ---------------------------------------------------------------------------
-
-/**
- * Helper: create a monorepo layout with pnpm-workspace.yaml,
- * workspace packages, and optional SKILL.md files.
- */
 function createMonorepo(opts?: {
   usePackageJsonWorkspaces?: boolean
   packages?: Array<{ name: string; hasSkills?: boolean }>
@@ -652,7 +642,6 @@ describe('runEditPackageJsonAll', () => {
     expect(results[0]!.package).toBe(join('packages', 'lib-a'))
     expect(results[0]!.result.added).toContain('files: "skills"')
 
-    // lib-b should not have been modified
     const libBPkg = JSON.parse(
       readFileSync(join(monoRoot, 'packages', 'lib-b', 'package.json'), 'utf8'),
     )
@@ -697,7 +686,6 @@ describe('runEditPackageJsonAll', () => {
     expect(Array.isArray(results)).toBe(true)
     expect(results).toHaveLength(0)
 
-    // Root package.json should NOT have been modified
     const rootPkg = JSON.parse(
       readFileSync(join(monoRoot, 'package.json'), 'utf8'),
     )

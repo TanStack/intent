@@ -1,12 +1,14 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fail } from '../shared/cli-error.js'
+import { errorMessage } from '../shared/guards.js'
+import { parseFrontmatter } from '../shared/frontmatter.js'
 import { rewriteLoadedSkillMarkdownDestinations } from '../core/markdown.js'
 
-export async function runMetaCommand(
+export function runMetaCommand(
   name: string | undefined,
   metaDir: string,
-): Promise<void> {
+): void {
   if (!existsSync(metaDir)) {
     fail('Meta-skills directory not found.')
   }
@@ -33,17 +35,19 @@ export async function runMetaCommand(
         }),
       )
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      fail(`Failed to read meta-skill "${name}": ${msg}`)
+      fail(`Failed to read meta-skill "${name}": ${errorMessage(err)}`)
     }
 
     return
   }
 
-  const { parseFrontmatter } = await import('../shared/utils.js')
   const entries = readdirSync(metaDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .filter((entry) => existsSync(join(metaDir, entry.name, 'SKILL.md')))
+    .map((entry) => ({
+      name: entry.name,
+      skillFile: join(metaDir, entry.name, 'SKILL.md'),
+    }))
+    .filter((entry) => existsSync(entry.skillFile))
 
   if (entries.length === 0) {
     console.log('No meta-skills found.')
@@ -53,8 +57,7 @@ export async function runMetaCommand(
   console.log('Meta-skills (for library maintainers):\n')
 
   for (const entry of entries) {
-    const skillFile = join(metaDir, entry.name, 'SKILL.md')
-    const fm = parseFrontmatter(skillFile)
+    const fm = parseFrontmatter(entry.skillFile)
     let description = ''
     if (typeof fm?.description === 'string') {
       description = fm.description.replace(/\s+/g, ' ').trim()

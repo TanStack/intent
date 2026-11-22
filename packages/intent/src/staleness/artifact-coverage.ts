@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
+import { errorMessage, isRecord, stringArray } from '../shared/guards.js'
 import type {
   IntentArtifactCoverageIgnore,
   IntentArtifactFile,
@@ -11,17 +12,8 @@ import type {
 
 type ArtifactKind = IntentArtifactFile['kind']
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
-}
-
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
-}
-
-function stringArray(value: unknown): Array<string> {
-  if (!Array.isArray(value)) return []
-  return value.filter((entry): entry is string => typeof entry === 'string')
 }
 
 function detectArtifactKind(fileName: string): ArtifactKind | null {
@@ -40,7 +32,7 @@ function readArtifactYaml(
   } catch (err) {
     warnings.push({
       artifactPath,
-      message: `Invalid YAML: ${err instanceof Error ? err.message : String(err)}`,
+      message: `Invalid YAML: ${errorMessage(err)}`,
     })
     return null
   }

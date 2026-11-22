@@ -1167,17 +1167,15 @@ describe('loadIntentSkill — kind-mismatch late gate', () => {
       description: 'Query data fetching patterns',
     })
 
-    let thrown: unknown
-    try {
-      loadIntentSkill('@tanstack/query#fetching', { cwd: root, debug: true })
-    } catch (err) {
-      thrown = err
-    }
-
-    expect(thrown).toBeInstanceOf(IntentCoreError)
-    expect((thrown as IntentCoreError).code).toBe('package-not-listed')
-    expect((thrown as Error).message).toBe(
-      'Cannot load skill use "@tanstack/query#fetching": package "@tanstack/query" is not listed in intent.skills.',
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root, debug: true }),
+    ).toThrow(
+      expect.objectContaining({
+        name: 'IntentCoreError',
+        code: 'package-not-listed',
+        message:
+          'Cannot load skill use "@tanstack/query#fetching": package "@tanstack/query" is not listed in intent.skills.',
+      }),
     )
   })
 
@@ -1195,21 +1193,15 @@ describe('loadIntentSkill — kind-mismatch late gate', () => {
       description: 'Query data fetching patterns',
     })
 
-    let thrown: unknown
-    try {
-      const result = loadIntentSkill('@tanstack/query#fetching', {
-        cwd: root,
-        debug: true,
-      })
-      thrown = result
-    } catch (err) {
-      thrown = err
-    }
-
-    expect(thrown).toBeInstanceOf(IntentCoreError)
-    expect((thrown as IntentCoreError).code).toBe('package-not-listed')
-    expect((thrown as Error).message).toBe(
-      'Cannot load skill use "@tanstack/query#fetching": package "@tanstack/query" is not listed in intent.skills.',
+    expect(() =>
+      loadIntentSkill('@tanstack/query#fetching', { cwd: root, debug: true }),
+    ).toThrow(
+      expect.objectContaining({
+        name: 'IntentCoreError',
+        code: 'package-not-listed',
+        message:
+          'Cannot load skill use "@tanstack/query#fetching": package "@tanstack/query" is not listed in intent.skills.',
+      }),
     )
   })
 

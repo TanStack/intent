@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { toPosixPath } from '../shared/utils.js'
+import { toPosixPath } from '../shared/paths.js'
 import { formatIntentCommand } from '../shared/command-runner.js'
 import type { SkillUse } from './use.js'
 import type { SkillEntry } from '../shared/types.js'
@@ -22,10 +22,6 @@ function getPathSegments(path: string): Array<string> {
 
 function isPackageManagerInternalSegment(segment: string): boolean {
   return segment === '.pnpm' || segment === '.bun' || segment === '.yarn'
-}
-
-export function hasPackageManagerInternalPath(path: string): boolean {
-  return getPathSegments(path).some(isPackageManagerInternalSegment)
 }
 
 export function isStableLoadPath(path: string): boolean {

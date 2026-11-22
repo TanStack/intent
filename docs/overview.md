@@ -28,7 +28,7 @@ Intent provides tooling for two workflows:
 - Ship skills in the same release pipeline as code
 - Review version, source, artifact, and package coverage signals
 
-## Keep the workflow boundaries clear
+## Workflow stages
 
 | Stage | Who runs it | Result |
 | --- | --- | --- |

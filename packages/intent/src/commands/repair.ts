@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { relative, resolve } from 'node:path'
+import { relative } from 'node:path'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { writeChanges } from '../maintainer/files.js'
@@ -8,7 +8,7 @@ import { repositoryWritePath } from '../shared/write-path.js'
 import { renderRepairPatch } from '../shared/patch.js'
 import { planExampleRepairs } from '../validate/blocks.js'
 import { planFrontmatterRepair } from '../validate/repairs.js'
-import { collectDefaultSkillsDirs } from './validate.js'
+import { collectDefaultSkillsDirs, resolveSkillsDir } from './validate.js'
 import type { FileChange } from '../maintainer/files.js'
 
 export interface RepairCommandOptions {
@@ -30,13 +30,7 @@ export async function runRepairCommand(
   const directories =
     dir === undefined
       ? collectDefaultSkillsDirs(context, findSkillFiles, fsCache)
-      : [
-          resolveProjectContext({
-            cwd: process.cwd(),
-            targetPath: dir,
-            fsCache,
-          }).targetSkillsDir ?? resolve(dir),
-        ]
+      : [resolveSkillsDir(dir, fsCache)]
   if (dir !== undefined && !existsSync(directories[0]!))
     fail(`Skills directory not found: ${dir}`)
   const paths = [...new Set(directories.flatMap(findSkillFiles))]

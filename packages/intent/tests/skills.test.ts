@@ -1,7 +1,7 @@
 import { join, relative, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runValidateCommand } from '../src/commands/validate.js'
-import { findSkillFiles } from '../src/shared/utils.js'
+import { findSkillFiles } from '../src/shared/skill-files.js'
 
 const META_DIR = join(__dirname, '..', 'meta')
 

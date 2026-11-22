@@ -1,4 +1,7 @@
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
+import { isRecord } from '../shared/guards.js'
+import { isWithinOrEqual } from '../shared/paths.js'
+import { getPackageShortName } from '../skills/use.js'
 import { resolveProjectContext } from './project-context.js'
 import { readPackageJson } from './package-json.js'
 import type { ProjectContext } from './project-context.js'
@@ -23,20 +26,12 @@ function normalizeExcludePatterns(value: unknown): Array<string> {
     .filter(Boolean)
 }
 
-function isWithinOrEqual(path: string, parentDir: string): boolean {
-  const rel = relative(parentDir, path)
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
-}
-
 function readPackageExcludes(
   dir: string,
   fsCache?: IntentFsCache,
 ): Array<string> {
-  const pkg = readPackageJson(dir, fsCache)
-  const intent = pkg?.intent
-  if (!intent || typeof intent !== 'object') return []
-
-  return normalizeExcludePatterns((intent as Record<string, unknown>).exclude)
+  const intent = readPackageJson(dir, fsCache)?.intent
+  return isRecord(intent) ? normalizeExcludePatterns(intent.exclude) : []
 }
 
 export function getConfigDirs(
@@ -155,8 +150,7 @@ function skillNameVariants(
   packageName: string,
   skillName: string,
 ): Array<string> {
-  const shortName = packageName.split('/').pop() ?? packageName
-  const prefix = `${shortName}/`
+  const prefix = `${getPackageShortName(packageName)}/`
   if (skillName.startsWith(prefix)) {
     return [skillName, skillName.slice(prefix.length)]
   }

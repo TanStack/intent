@@ -102,7 +102,7 @@ Selecting skills for repository distribution requires registered, authored skill
 
 <!-- ::end:tabs -->
 
-Use the actual registered names; each must be a tree entry whose `SKILL.md` exists. When the repository, plugin name, or selection cannot be resolved, setup reports every missing input in one error. This records the selection in the skill tree. `maintainer sync` generates plugin metadata pointing to the existing package directories and prints consumer commands for `npx skills add` and `gh skill add`. Consumers can also use the native Claude or Cursor plugin flow. No second copy of the skill text is created, and later skills are not added automatically.
+Use the registered names; each must be a tree entry whose `SKILL.md` exists. When the repository, plugin name, or selection cannot be resolved, setup reports every missing input in one error. This records the selection in the skill tree. `maintainer sync` generates plugin metadata pointing to the existing package directories and prints consumer commands for `npx skills add` and `gh skill add`. Consumers can also use the native Claude or Cursor plugin flow. No second copy of the skill text is created, and later skills are not added automatically.
 
 To explicitly record package-only distribution or turn off earlier repository exports:
 

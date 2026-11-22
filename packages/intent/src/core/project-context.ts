@@ -1,10 +1,11 @@
 import { existsSync, statSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { isWithinOrEqual } from '../shared/paths.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
   findWorkspaceRoot,
   readWorkspacePatterns,
-} from '../setup/workspace-patterns.js'
+} from './workspace-patterns.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 
 export type ProjectContext = {
@@ -64,14 +65,14 @@ export function resolveProjectContext({
 
 function findOwningPackageRoot(
   startPath: string,
-  fsCache?: IntentFsCache,
+  fsCache: IntentFsCache,
 ): string | null {
-  let cache = fsCache ? packageRootCaches.get(fsCache) : undefined
-  if (fsCache && !cache) {
+  let cache = packageRootCaches.get(fsCache)
+  if (!cache) {
     cache = new Map()
     packageRootCaches.set(fsCache, cache)
   }
-  const cachedStart = cache?.get(startPath)
+  const cachedStart = cache.get(startPath)
   if (cachedStart !== undefined) return cachedStart
 
   let dir = toSearchDir(startPath)
@@ -79,14 +80,14 @@ function findOwningPackageRoot(
   const visited: Array<string> = [startPath]
 
   while (dir !== prev) {
-    const cached = cache?.get(dir)
+    const cached = cache.get(dir)
     if (cached !== undefined) {
-      for (const visitedDir of visited) cache?.set(visitedDir, cached)
+      for (const visitedDir of visited) cache.set(visitedDir, cached)
       return cached
     }
     visited.push(dir)
     if (existsSync(join(dir, 'package.json'))) {
-      for (const visitedDir of visited) cache?.set(visitedDir, dir)
+      for (const visitedDir of visited) cache.set(visitedDir, dir)
       return dir
     }
 
@@ -96,7 +97,7 @@ function findOwningPackageRoot(
     dir = dirname(dir)
   }
 
-  for (const visitedDir of visited) cache?.set(visitedDir, null)
+  for (const visitedDir of visited) cache.set(visitedDir, null)
   return null
 }
 
@@ -128,9 +129,4 @@ function resolveTargetSkillsDir(
   }
 
   return null
-}
-
-function isWithinOrEqual(path: string, parentDir: string): boolean {
-  const rel = relative(parentDir, path)
-  return rel === '' || (!rel.startsWith('..') && !rel.startsWith('/'))
 }

@@ -35,7 +35,6 @@ describe('findMetaDir', () => {
   it('resolves from the flat dist/ layout used by the published package', () => {
     const pkgDir = join(root, 'pkg')
     const metaDir = seedMeta(pkgDir)
-    // Bundled module lives flat at <pkg>/dist/support-*.mjs.
     const startDir = join(pkgDir, 'dist')
     mkdirSync(startDir, { recursive: true })
     expect(findMetaDir(startDir)).toBe(metaDir)
@@ -44,7 +43,6 @@ describe('findMetaDir', () => {
   it('resolves from the deep src/commands/ layout used in source', () => {
     const pkgDir = join(root, 'pkg')
     const metaDir = seedMeta(pkgDir)
-    // Source module lives at <pkg>/src/commands/support.ts (two levels deep).
     const startDir = join(pkgDir, 'src', 'commands')
     mkdirSync(startDir, { recursive: true })
     expect(findMetaDir(startDir)).toBe(metaDir)
@@ -62,13 +60,11 @@ describe('findMetaDir', () => {
     const metaDir = seedMeta(pkgDir)
     const startDir = join(pkgDir, 'dist')
     mkdirSync(startDir, { recursive: true })
-    // A file (not a directory) named `meta` next to startDir must not short-circuit.
     writeFileSync(join(startDir, 'meta'), '')
     expect(findMetaDir(startDir)).toBe(metaDir)
   })
 
   it('resolves through a symlinked install path (pnpm-style)', () => {
-    // Real package lives in a pnpm-style store; the consumer reaches it via a symlink.
     const storePkg = join(
       root,
       'store',

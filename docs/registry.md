@@ -50,7 +50,7 @@ This adds the `tanstack-intent` keyword and registered skill directories to exis
 
 <!-- ::end:tabs -->
 
-Save the report under `.intent/`, assess the pending items, and annotate completed outcomes with their reasons and actual evidence. Record the report with `intent maintainer review --record <report.json>`, then run `intent maintainer check`. This checks skill structure, registration, generated files, and pending reviews together. See the [source-review reference](./cli/intent-review) for report fields and recording.
+Save the report under `.intent/`, assess the pending items, and annotate completed outcomes with their reasons and evidence. Record the report with `intent maintainer review --record <report.json>`, then run `intent maintainer check`. This checks skill structure, registration, generated files, and pending reviews together. See the [source-review reference](./cli/intent-review) for report fields and recording.
 
 ### 4. Publish
 

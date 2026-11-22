@@ -53,9 +53,9 @@ If no skills match, exit silently.
 
 ### Using `intent stale`
 
-There is no separate sync script — `intent stale [dir] [--json]` is the real,
-existing staleness signal (see `docs/cli/intent-stale.md`). It is **read-only**:
-it reports drift, it does not write anything. For a given library:
+`intent stale [dir] [--json]` is the staleness signal (see
+`docs/cli/intent-stale.md`). It is **read-only**: it reports drift, it does
+not write anything. For a given library:
 
 ```bash
 intent stale packages/query --json
@@ -67,11 +67,11 @@ This reports:
   currently published version), classified `major`/`minor`/`patch`.
 - Missing source SHAs recorded in that package's `skills/sync-state.json`
   (a conservative signal — it flags gaps in the stored SHA record, not
-  actual remote content differences; see the doc's Notes section).
+  remote content differences; see the doc's Notes section).
 
 `intent stale` does not classify "needs regeneration" vs "version bump only"
 the way a dedicated sync tool might — that classification is this skill's own
-job, done in Step 2 below using the actual source diff, not `intent stale`'s
+job, done in Step 2 below using the source diff, not `intent stale`'s
 output alone.
 
 ---
@@ -119,10 +119,9 @@ For skills classified as needing content updates:
 
 For version bump only:
 
-There is no write-capable script for this. Edit `library_version` directly
-in each affected skill's frontmatter, then update the recorded SHA(s) for
-that library in its `skills/sync-state.json` (see Step 5) to reflect the new
-synced state.
+Edit `library_version` directly in each affected skill's frontmatter, then
+update the recorded SHA(s) for that library in its `skills/sync-state.json`
+(see Step 5) to reflect the new synced state.
 
 ---
 
@@ -145,13 +144,10 @@ second-order dependency are not automatically re-checked.
 
 ## Step 5 — Mark skills as synced
 
-There is no write-capable script for this either. After updating a skill,
-edit that library's `skills/sync-state.json` directly: update
-`library_version` and the affected skill's `skills[skillName].sources_sha`
-map with the new source file SHA(s) from the commit that triggered this run.
-(That is the real current shape read by `intent stale` — it has no separate
-tree-generator SHA or sync-timestamp field, despite what an earlier version
-of this doc implied.)
+After updating a skill, edit that library's `skills/sync-state.json`
+directly: update `library_version` and the affected skill's
+`skills[skillName].sources_sha` map with the new source file SHA(s) from the
+commit that triggered this run.
 
 ---
 
@@ -219,9 +215,8 @@ Exit silently (no PR, no notification, no issue) when ANY of these are true:
 
 ### GitHub API usage
 
-This skill (not a separate script) uses the `gh` CLI directly for GitHub API
-access — fetching source diffs in Step 2 and opening PRs in Step 6. It
-requires:
+This skill uses the `gh` CLI directly for GitHub API access — fetching
+source diffs in Step 2 and opening PRs in Step 6. It requires:
 
 - `gh` CLI installed and authenticated
 - Read access to upstream TanStack package repos (query, router, db, form,

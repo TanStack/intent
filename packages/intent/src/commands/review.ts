@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createReview, recordReview } from '../review/review.js'
 import { fail, isCliFailure } from '../shared/cli-error.js'
+import { errorMessage, isRecord } from '../shared/guards.js'
 import { writeStaleReviewWorkflowFiles } from '../staleness/workflow-review.js'
 
 export interface ReviewCommandOptions {
@@ -34,12 +35,9 @@ export function runReviewCommand(
       const input: unknown = JSON.parse(
         readFileSync(resolve(options.record), 'utf8'),
       )
-      if (
-        typeof input === 'object' &&
-        input !== null &&
-        Array.isArray((input as { items?: unknown }).items)
-      ) {
-        const items = (input as { items: Array<unknown> }).items
+      const items: Array<unknown> | null =
+        isRecord(input) && Array.isArray(input.items) ? input.items : null
+      if (items) {
         const annotated = items.filter(
           (item) =>
             typeof item === 'object' &&
@@ -121,7 +119,7 @@ export function runReviewCommand(
           type: 'review-check-failed',
           library: options.packageLabel ?? 'workspace',
           subject: 'intent review',
-          reasons: [error instanceof Error ? error.message : String(error)],
+          reasons: [errorMessage(error)],
         },
       ])
       console.log(
@@ -129,6 +127,6 @@ export function runReviewCommand(
       )
       return
     }
-    fail(error instanceof Error ? error.message : String(error))
+    fail(errorMessage(error))
   }
 }
