@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, bench, describe } from 'vitest'
 import {
   createBenchOptions,
+  createCliFixture,
   createCliRunner,
   createConsoleSilencer,
   createTempDir,
@@ -204,5 +205,63 @@ describe('intent load', () => {
       })
     },
     createBenchOptions(setup, teardown),
+  )
+})
+
+const manySkills = createCliFixture('load-many-skills', (root) => {
+  writeJson(join(root, 'package.json'), {
+    name: 'intent-load-many-skills-benchmark',
+    private: true,
+    dependencies: {
+      '@bench/catalog': '1.0.0',
+    },
+  })
+  writePackage(join(root, 'node_modules'), '@bench/catalog', '1.0.0', {
+    skills: Array.from({ length: 200 }, (_, index) => `topic-${index}`),
+  })
+})
+
+describe('intent load from a package with many skills', () => {
+  beforeAll(manySkills.setup)
+  afterAll(manySkills.teardown)
+
+  bench(
+    'loads one skill without reading its siblings',
+    async () => {
+      for (let index = 0; index < 10; index++) {
+        await manySkills.run(['load', '@bench/catalog#topic-150', '--path'])
+      }
+    },
+    createBenchOptions(manySkills.setup, manySkills.teardown),
+  )
+})
+
+const workspacePackage = createCliFixture('load-workspace-package', (root) => {
+  writeJson(join(root, 'package.json'), {
+    name: 'intent-workspace-package-load-benchmark',
+    private: true,
+    workspaces: ['packages/*'],
+  })
+  writeFile(join(root, 'pnpm-workspace.yaml'), "packages:\n  - 'packages/*'\n")
+
+  for (let index = 0; index < 120; index++) {
+    writePackage(join(root, 'packages'), `workspace-pkg-${index}`, '1.0.0', {
+      skills: index === 60 ? ['guide'] : undefined,
+    })
+  }
+})
+
+describe('intent load of a workspace package', () => {
+  beforeAll(workspacePackage.setup)
+  afterAll(workspacePackage.teardown)
+
+  bench(
+    'loads a workspace package skill from a large workspace',
+    async () => {
+      for (let index = 0; index < 10; index++) {
+        await workspacePackage.run(['load', 'workspace-pkg-60#guide', '--path'])
+      }
+    },
+    createBenchOptions(workspacePackage.setup, workspacePackage.teardown),
   )
 })
