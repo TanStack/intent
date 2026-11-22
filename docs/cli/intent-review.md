@@ -33,7 +33,7 @@ A justified no-op is a completed review. Missing evidence remains pending.
 | Option | Behavior |
 | --- | --- |
 | `[dir]` | Locate the Git working tree. The review covers that repository, including its packages. |
-| `--base <ref>` | Compare against an available Git commit or ref, such as the actual PR base. |
+| `--base <ref>` | Compare against an available Git commit or ref, such as the PR base. |
 | `--json` | Print the complete structured report for an agent or script. |
 | `--check` | Exit nonzero when review items remain. |
 
@@ -159,7 +159,7 @@ For a human terminal, run the interactive command from the library repository:
 
 <!-- ::end:tabs -->
 
-Inspect each item's current guidance and changed files, choose an outcome, and supply the reason and actual evidence. The changes view compares tracked files with the displayed Git base and includes untracked content. Use `--base <available-commit>` for a specific comparison. Edit and test guidance before starting; changes during review invalidate the affected outcomes.
+Inspect each item's current guidance and changed files, choose an outcome, and supply the reason and evidence. The changes view compares tracked files with the displayed Git base and includes untracked content. Use `--base <available-commit>` for a specific comparison. Edit and test guidance before starting; changes during review invalidate the affected outcomes.
 
 Choose **Leave pending** when more work is needed. Items with unresolved source mappings or planning problems cannot be completed. The final preview lists the proposed outcomes and evidence. Confirmation records through the same fingerprint checks as `--record`; cancellation records nothing. Evidence text is stored, not executed or independently verified.
 
@@ -233,7 +233,7 @@ For a planning item, the reason and evidence must cover all three documents. Pre
 
 ### Saved state
 
-`--record` writes `.intent/review-state.json` containing the baseline, source/guidance hashes, reviewed revision, outcomes, reasons, and evidence, creating the directory when it is missing. It does not commit, publish, or change skill versions. `.intent/` is reserved for Intent's working files and is excluded from unmapped-change items: review state and working reports, `.intent/skill-distribution.json` written by `maintainer sync`, and the temporary `.intent/maintainer.lock` and `.intent/review-state.json.lock` that serialize writes.
+`--record` writes `.intent/review-state.json` containing the baseline, source/guidance hashes, reviewed revision, outcomes, reasons, and evidence, creating the directory when it is missing. `.intent/` is reserved for Intent's working files and is excluded from unmapped-change items: review state and working reports, `.intent/skill-distribution.json` written by `maintainer sync`, and the temporary `.intent/maintainer.lock` and `.intent/review-state.json.lock` that serialize writes.
 
 Identical recorded content suppresses repeat reminders. Later edits reopen review. The saved state does not replace the planning documents, execute evidence strings, or verify the truth of a recorded conclusion.
 

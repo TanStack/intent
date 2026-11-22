@@ -3,7 +3,7 @@ id: intent-repair
 title: intent repair
 ---
 
-`intent repair` handles mechanical skill maintenance before validation and source review. It does not call an agent, typecheck the library, execute examples, change version claims, or record review outcomes.
+`intent repair` handles mechanical skill maintenance before validation and source review. It does not call an agent or record review outcomes.
 
 Run the CLI from your repository:
 

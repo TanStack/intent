@@ -22,7 +22,7 @@
 	<a href="https://www.npmjs.com/package/@tanstack/intent" target="\_parent">
 	  <img alt="" src="https://img.shields.io/npm/dm/@tanstack/intent.svg" alt="npm downloads" />
 	</a>
-- <a href="https://github.com/TanStack/intent" target="\_parent">
+	<a href="https://github.com/TanStack/intent" target="\_parent">
 	  <img alt="" src="https://img.shields.io/github/stars/TanStack/intent.svg?style=social&label=Star" alt="GitHub stars" />
 	</a>
 	<a href="https://bundlephobia.com/result?p=@tanstack/react-intent@latest" target="\_parent">

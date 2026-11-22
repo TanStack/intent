@@ -50,7 +50,7 @@ This adds the `tanstack-intent` keyword and registered skill directories to exis
 
 <!-- ::end:tabs -->
 
-Save the report under `.intent/`, assess the pending items, and annotate completed outcomes with their reasons and actual evidence. Record the report with `intent maintainer review --record <report.json>`, then run `intent maintainer check`. This checks skill structure, registration, generated files, and pending reviews together. See the [source-review reference](./cli/intent-review) for report fields and recording.
+Save the report under `.intent/`, assess the pending items, and annotate completed outcomes with their reasons and evidence. Record the report with `intent maintainer review --record <report.json>`, then run `intent maintainer check`. This checks skill structure, registration, generated files, and pending reviews together. See the [source-review reference](./cli/intent-review) for report fields and recording.
 
 ### 4. Publish
 
@@ -72,7 +72,7 @@ Use `maintainer review` and `stale` as separate checks as the library changes. `
 
 <!-- ::end:tabs -->
 
-Uses Git changes and recorded content fingerprints to identify skills, planning records, and unmapped source areas that need semantic review. Record completed outcomes with their evidence in `.intent/review-state.json`; missing evidence remains pending.
+Uses Git changes and recorded content fingerprints to identify skills, planning records, and unmapped source areas that need semantic review. Record completed outcomes with their evidence in `.intent/review-state.json`.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -89,9 +89,6 @@ Reports conservative package and release signals: version drift, missing stored 
 <!-- ::end:tabs -->
 
 Copies the generated CI workflow into your repository. Pull requests validate skills and check recorded source reviews when maintainer guidance or review state exists. Release and manual runs use recorded review state when available, with conservative `stale` signals as the fallback.
-
-> [!NOTE]
-> Maintainers use `maintainer setup`, `add`, `status`, `sync`, `review`, and `check` throughout the workflow. Consumers choose their installer: Intent for installed package guidance, or the generated GitHub/plugin commands for selected repository skills. See [repository distribution](./cli/intent-maintainer#choose-repository-distribution).
 
 ## Requesting a library
 

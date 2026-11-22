@@ -121,7 +121,7 @@ Reason generation:
 
 The existing `--github-review` workflow mode writes `review-items.json` and, when there are items, `pr-body.md`. Its Agent Review instructions route to `generate-skill` and its conditional review-signals reference. The command itself does not create a remote PR or edit skills; the installed GitHub workflow handles the review reminder.
 
-Version drift and missing stored source SHAs do not prove that guidance is wrong. Review actual source changes before editing. Missing evidence stays unresolved, and an evidence-backed no-op may leave a signal flagged. Failed checks require logs; workflow advisories are separate maintenance items. Neither is a reason to rewrite skills.
+Version drift and missing stored source SHAs do not prove that guidance is wrong. Review the source changes before editing. Missing evidence stays unresolved, and an evidence-backed no-op may leave a signal flagged. Failed checks require logs; workflow advisories are separate maintenance items. Neither is a reason to rewrite skills.
 
 ### `stale` and `review` serve different checks
 
