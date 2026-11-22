@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { ResolveSkillUseError, resolveSkillUse } from '../skills/resolver.js'
 import { formatSkillUse, parseSkillUse } from '../skills/use.js'
@@ -10,6 +10,11 @@ import { rewriteLoadedSkillMarkdownDestinations } from './markdown.js'
 import { resolveSkillUseFastPath } from './load-resolution.js'
 import { resolveProjectContext } from './project-context.js'
 import {
+  SKILL_OPTIONS_FILE,
+  appendProjectOptions,
+  readRecordedOptions,
+} from './skill-options.js'
+import {
   checkLoadAllowed,
   isSourcePermitted,
   packageNotListedRefusal,
@@ -20,6 +25,7 @@ import type { ResolveSkillResult } from '../skills/resolver.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type { ReadFs } from '../shared/utils.js'
 import type { ScanOptions, ScanScope } from '../shared/types.js'
+import type { ProjectContext } from './project-context.js'
 import type {
   IntentCoreErrorCode,
   IntentCoreOptions,
@@ -267,6 +273,8 @@ function resolveIntentSkillInCwd(
   use: string,
   options: IntentCoreOptions = {},
 ): {
+  fsCache: IntentFsCache
+  projectContext: ProjectContext
   realPackageRoot: string
   realResolvedPath: string
   readFs: ReadFs
@@ -318,22 +326,26 @@ function resolveIntentSkillInCwd(
       const lateRefusal = packageNotListedRefusal(use, parsedUse.packageName)
       throw new IntentCoreError(lateRefusal.code, lateRefusal.message)
     }
-    return toResolvedIntentSkill(
-      cwd,
-      use,
-      fastPathResolved,
-      fsCache.getReadFs(),
-      options.debug
-        ? createLoadedSkillDebug({
-            cwd,
-            excludes: excludePatterns,
-            resolution: 'fast-path',
-            resolved: fastPathResolved,
-            scan: fsCache.getStats(),
-            scope,
-          })
-        : undefined,
-    )
+    return {
+      fsCache,
+      projectContext,
+      ...toResolvedIntentSkill(
+        cwd,
+        use,
+        fastPathResolved,
+        fsCache.getReadFs(),
+        options.debug
+          ? createLoadedSkillDebug({
+              cwd,
+              excludes: excludePatterns,
+              resolution: 'fast-path',
+              resolved: fastPathResolved,
+              scan: fsCache.getStats(),
+              scope,
+            })
+          : undefined,
+      ),
+    }
   }
 
   const { scan: scanResult, droppedNames } = scanForPolicedIntents({
@@ -358,22 +370,26 @@ function resolveIntentSkillInCwd(
     throw err
   }
 
-  return toResolvedIntentSkill(
-    cwd,
-    use,
-    resolved,
-    fsCache.getReadFs(),
-    options.debug
-      ? createLoadedSkillDebug({
-          cwd,
-          excludes: excludePatterns,
-          resolution: 'full-scan',
-          resolved,
-          scan: scanResult.stats,
-          scope,
-        })
-      : undefined,
-  )
+  return {
+    fsCache,
+    projectContext,
+    ...toResolvedIntentSkill(
+      cwd,
+      use,
+      resolved,
+      fsCache.getReadFs(),
+      options.debug
+        ? createLoadedSkillDebug({
+            cwd,
+            excludes: excludePatterns,
+            resolution: 'full-scan',
+            resolved,
+            scan: scanResult.stats,
+            scope,
+          })
+        : undefined,
+    ),
+  }
 }
 
 export function resolveIntentSkill(
@@ -395,9 +411,43 @@ export function loadIntentSkill(
     packageRoot: resolved.realPackageRoot,
     skillFilePath: resolved.realResolvedPath,
   })
+  const optionsFile = join(
+    dirname(resolved.realResolvedPath),
+    SKILL_OPTIONS_FILE,
+  )
+  if (!resolved.readFs.existsSync(optionsFile)) {
+    return { ...resolved.result, content }
+  }
+
+  const optionsPath = resolved.readFs.realpathSync.native(optionsFile)
+  const { packageName, skillName } = resolved.result
+  const skillUse = formatSkillUse(packageName, skillName)
+  const projectOptions = isResolvedPathInsidePackageRoot(
+    optionsPath,
+    resolved.realPackageRoot,
+  )
+    ? appendProjectOptions(
+        content,
+        resolved.readFs.readFileSync(optionsPath, 'utf8'),
+        skillUse,
+        readRecordedOptions(
+          cwd,
+          resolved.projectContext,
+          resolved.fsCache,
+          packageName,
+          skillName,
+        ),
+      )
+    : {
+        content,
+        warnings: [
+          `Ignored ${SKILL_OPTIONS_FILE} for "${skillUse}": the file is outside the package`,
+        ],
+      }
 
   return {
     ...resolved.result,
-    content,
+    content: projectOptions.content,
+    warnings: [...resolved.result.warnings, ...projectOptions.warnings],
   }
 }

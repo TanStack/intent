@@ -7,6 +7,7 @@ Configure Intent in the `intent` object in `package.json`:
 
 - **`skills`** permits packages or individual skills.
 - **`exclude`** blocks packages or skills after permissions are evaluated.
+- **`options`** records this project's choices for skills that declare options.
 
 ```json
 {
@@ -28,6 +29,7 @@ Configure Intent in the `intent` object in `package.json`:
 | --- | --- |
 | `intent.skills` | Uses the nearest non-null declaration between the current directory and the workspace or project root. A nearer declaration replaces its parent; omitted or null values inherit. |
 | `intent.exclude` | Combines arrays from the root through the current directory, then adds excludes passed by the caller. |
+| `intent.options` | Merges each skill's choices from the root through the current directory. A nearer package replaces a single choice and inherits the rest. |
 
 ## `intent.skills`
 
@@ -164,3 +166,46 @@ Use `intent exclude` to manage this list from the CLI:
 | `@scope/pkg#*` | The whole package, using the `#*` shortcut. |
 
 Each segment supports exact names and `*` wildcards only. Excludes apply to both npm and workspace sources with matching names, regardless of source kind.
+
+## `intent.options`
+
+Some skills give different guidance depending on choices your project has made, such as which framework it uses. A skill declares those choices in an `options.json` file beside its `SKILL.md`. `intent.options` records your project's answers, so every agent session loads the skill with the same choices.
+
+```json
+{
+  "intent": {
+    "options": {
+      "@acme/client#setup": {
+        "framework": "tanstack-start"
+      }
+    }
+  }
+}
+```
+
+Each key is a skill in `<package>#<skill>` form. Each value maps an option name to one of the choices the skill declares.
+
+When a skill has an `options.json` file, `intent load` appends a `## Project options` section to its content. The section lists each recorded choice. For an option you have not recorded, it lists the skill's default with the question and the available choices:
+
+```text
+## Project options
+
+Choices this project made for `@acme/client#setup`, from `intent.options` in `package.json`. Follow the guidance that matches them.
+
+- framework: tanstack-start
+- fragmentColocation: yes (default, not recorded). Set up fragment colocation? Choices: yes, no.
+```
+
+Intent reads `options.json` as data. It does not run code from the package. A skill without `options.json` loads unchanged, even when `intent.options` has an entry for it.
+
+### Option warnings
+
+`intent load` prints a warning on stderr and continues in these cases:
+
+| Situation | Result |
+| --- | --- |
+| A recorded value is not one of the declared choices | The skill's default applies. |
+| A recorded option is not declared by the skill | The entry is ignored. |
+| The skill's `options.json` is invalid or links outside its package | The skill loads without the section. |
+
+Maintainers can find the file format under [Options file](../cli/intent-validate#options-file).

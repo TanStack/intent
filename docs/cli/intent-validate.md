@@ -143,6 +143,25 @@ A skill without reference files needs no `references` key. A skill without a tre
 
 Upgrade impact: a repository that already has reference files fails validation when a reference file is not linked directly from its `SKILL.md`, begins with frontmatter, or contains a code example that does not typecheck, or when a matching `skill_tree.yaml` entry does not list the skill's reference files.
 
+### Options file
+
+A skill can ship an `options.json` file beside its `SKILL.md` to declare choices that a consuming project records in [`intent.options`](../concepts/configuration). When the file exists, it is checked with its skill.
+
+```json
+{
+  "framework": {
+    "question": "Which framework does this app use?",
+    "choices": ["nextjs", "tanstack-start", "other"],
+    "default": "other"
+  }
+}
+```
+
+- The file is a JSON object; each key is an option name
+- `question` is a non-empty string
+- `choices` is a non-empty array of non-empty strings
+- `default` is one of `choices`; it applies when a project has not recorded a choice
+
 ### Artifacts
 
 When `<dir>/_artifacts` exists, Intent also checks:
