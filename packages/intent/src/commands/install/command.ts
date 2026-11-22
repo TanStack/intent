@@ -7,7 +7,6 @@ import {
 } from '../../shared/command-runner.js'
 import {
   coreOptionsFromGlobalFlags,
-  failureMessage,
   noticeOptionsFromGlobalFlags,
   printNotices,
   printWarnings,
@@ -140,6 +139,12 @@ export interface InstallCommandOptions extends GlobalScanFlags {
 export interface InstallCommandRuntime {
   isTTY?: boolean
   permissionPrompts?: PermissionPrompts
+}
+
+function thrownMessage(error: unknown): string {
+  return error && typeof error === 'object' && 'message' in error
+    ? String(error.message)
+    : String(error)
 }
 
 function formatTargetPath(targetPath: string): string {
@@ -314,7 +319,7 @@ export async function runInstallCommand(
           },
         })
       } catch (error) {
-        fail(`Permissions: failed: ${failureMessage(error)}`)
+        fail(`Permissions: failed: ${thrownMessage(error)}`)
       }
       if (
         permissions.status === 'canceled' ||
@@ -393,7 +398,7 @@ export async function runInstallCommand(
       }
       return
     } catch (error) {
-      if (permissions) fail(`Guidance: failed: ${failureMessage(error)}`)
+      if (permissions) fail(`Guidance: failed: ${thrownMessage(error)}`)
       throw error
     }
   }

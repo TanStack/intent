@@ -561,14 +561,12 @@ function declaredEntry(manifest: Record<string, unknown>): string | undefined {
 function libraryEntry(
   packageDir: string,
   manifest: Record<string, unknown>,
-  tracked?: Set<string>,
 ): string | null {
   const declared = declaredEntry(manifest)
   const candidates: Array<string> = []
   if (declared) {
     const path = resolve(packageDir, declared)
-    if (existsSync(path) && (tracked?.has(path) || isTracked(packageDir, path)))
-      return path
+    if (existsSync(path) && isTracked(packageDir, path)) return path
     const name = declared
       .split('/')
       .at(-1)!
@@ -614,25 +612,14 @@ function workspacePaths(root: string): Record<string, Array<string>> {
   const context = resolveProjectContext({ cwd: root })
   const workspaceRoot = context.workspaceRoot ?? root
   const paths: Record<string, Array<string>> = {}
-  const packages = resolveWorkspacePackages(
+  for (const dir of resolveWorkspacePackages(
     workspaceRoot,
     context.workspacePatterns,
-  ).flatMap((dir) => {
+  )) {
     const manifest = readManifest(dir)
-    if (!manifest || typeof manifest.name !== 'string') return []
-    return [{ dir, name: manifest.name, manifest }]
-  })
-  // One git call answers for most declared entries. A package that is its own
-  // repository is not listed by it, so libraryEntry asks from that package.
-  const tracked = trackedFiles(
-    workspaceRoot,
-    packages.flatMap(({ dir, manifest }) => {
-      const declared = declaredEntry(manifest)
-      return declared ? [resolve(dir, declared)] : []
-    }),
-  )
-  for (const { dir, name, manifest } of packages) {
-    const entry = libraryEntry(dir, manifest, tracked)
+    if (!manifest || typeof manifest.name !== 'string') continue
+    const { name } = manifest
+    const entry = libraryEntry(dir, manifest)
     if (!entry) continue
     paths[name] = [slash(entry)]
     paths[`${name}/*`] = [
@@ -641,28 +628,6 @@ function workspacePaths(root: string): Record<string, Array<string>> {
     ]
   }
   return paths
-}
-
-// The absolute paths among `paths` that Git tracks from `cwd`; none when Git
-// cannot answer there. Git prints paths relative to `cwd`, so each is resolved
-// back against it.
-function trackedFiles(cwd: string, paths: Array<string>): Set<string> {
-  if (paths.length === 0) return new Set()
-  try {
-    const listed = execFileSync(
-      'git',
-      ['-c', 'core.fsmonitor=false', 'ls-files', '-z', '--', ...paths],
-      { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-    )
-    return new Set(
-      listed
-        .split('\0')
-        .filter(Boolean)
-        .map((path) => resolve(cwd, path)),
-    )
-  } catch {
-    return new Set()
-  }
 }
 
 function isTracked(packageDir: string, path: string): boolean {

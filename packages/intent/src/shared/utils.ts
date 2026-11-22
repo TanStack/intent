@@ -137,6 +137,9 @@ export function createFsIdentityCache(
   return getIdentity
 }
 
+/**
+ * Recursively find all SKILL.md files under a directory.
+ */
 export function findSkillFiles(
   dir: string,
   fs: ReadFs = nodeReadFs,

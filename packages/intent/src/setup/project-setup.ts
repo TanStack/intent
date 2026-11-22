@@ -244,9 +244,16 @@ function applyTemplate(content: string, vars: TemplateVars): string {
       vars.WATCH_PATHS,
     )
   }
-  return content.replace(/\{\{([A-Z_]+)\}\}/g, (match, key: string) =>
-    key in vars ? vars[key as keyof TemplateVars] : match,
-  )
+  return content
+    .replace(/\{\{PACKAGE_NAME\}\}/g, vars.PACKAGE_NAME)
+    .replace(/\{\{PACKAGE_LABEL\}\}/g, vars.PACKAGE_LABEL)
+    .replace(/\{\{PAYLOAD_PACKAGE\}\}/g, vars.PAYLOAD_PACKAGE)
+    .replace(/\{\{REPO\}\}/g, vars.REPO)
+    .replace(/\{\{DOCS_PATH\}\}/g, vars.DOCS_PATH)
+    .replace(/\{\{SRC_PATH\}\}/g, vars.SRC_PATH)
+    .replace(/\{\{WATCH_PATHS\}\}/g, vars.WATCH_PATHS)
+    .replace(/\{\{INTENT_WORKFLOW_REF\}\}/g, vars.INTENT_WORKFLOW_REF)
+    .replace(/\{\{INTENT_ARTIFACTS\}\}/g, vars.INTENT_ARTIFACTS)
 }
 
 export function runEditPackageJson(root: string): EditPackageJsonResult {

@@ -1,8 +1,7 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { errorMessage, isRecord, stringArray } from '../shared/utils.js'
-import type { Dirent } from 'node:fs'
 import type {
   IntentArtifactCoverageIgnore,
   IntentArtifactFile,
@@ -130,13 +129,7 @@ function parseCoverageIgnores(
 
 export function readIntentArtifacts(root: string): IntentArtifactSet | null {
   const artifactsDir = join(root, '_artifacts')
-  let entries: Array<Dirent>
-  try {
-    entries = readdirSync(artifactsDir, { withFileTypes: true })
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
-    throw err
-  }
+  if (!existsSync(artifactsDir)) return null
 
   const warnings: Array<IntentArtifactWarning> = []
   const skillTrees: Array<IntentArtifactFile> = []
@@ -144,7 +137,7 @@ export function readIntentArtifacts(root: string): IntentArtifactSet | null {
   const skills: Array<IntentArtifactSkill> = []
   const ignoredPackages: Array<IntentArtifactCoverageIgnore> = []
 
-  for (const entry of entries) {
+  for (const entry of readdirSync(artifactsDir, { withFileTypes: true })) {
     if (!entry.isFile()) continue
 
     const kind = detectArtifactKind(entry.name)
