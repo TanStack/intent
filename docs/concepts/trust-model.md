@@ -41,6 +41,13 @@ When no effective policy exists, `intent install` follows this flow:
 2. Enable all sources, choose packages or scopes, or select individual skills. Package and scope selections stay compact and include future matching skills. A whole scope requires an explicit selection.
 3. Confirm the current skill count, saved rules, and destination file. Optional individual review opens skill lists only for the selected packages you choose to inspect. It can add exclusions while retaining broad rules; unreviewed packages keep their selection. Only affirmative confirmation saves permissions and exclusions atomically, then installs guidance. An empty selection explicitly confirms disabling all skills.
 
+| Outcome | Files changed |
+| --- | --- |
+| No skills discovered, or all excluded | None. |
+| Cancel any prompt | None. |
+| Run first-time setup without a TTY | None; the command fails. |
+| Save permissions, then fail to write or verify guidance | Confirmed permissions remain saved; the guidance failure is reported separately. |
+
 The completion summary reports skills available under the saved policy. It does not prove that an agent loaded or applied them. See [Default install](../cli/intent-install#default-install) for picker controls and permission choices.
 
 ## Revisiting permissions

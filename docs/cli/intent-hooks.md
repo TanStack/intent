@@ -42,7 +42,7 @@ Hooks do not verify that:
 - The agent received the returned content.
 - The model applied the guidance.
 
-Hook output is an edit gate and observation signal. See [Lifecycle boundaries](../concepts/trust-model#lifecycle-boundaries).
+Hook output is an edit gate and observation signal, not proof of activation or correct agent behavior. See [Lifecycle boundaries](../concepts/trust-model#lifecycle-boundaries).
 
 ## Hook support
 

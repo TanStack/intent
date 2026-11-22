@@ -52,6 +52,10 @@ The nearest configured `intent.skills` list applies, including inherited workspa
 
 Workspace patterns and individual skills also use the `workspace:` prefix, such as `workspace:@scope/*` and `workspace:@scope/internal#testing`. Package patterns support `*`; individual-skill entries require an exact package and skill name. Git sources are not supported.
 
+- **No configured list:** all discovered sources appear, with a migration notice. This is the existing-project upgrade path; a future version will require explicit permissions.
+- **An empty list (`[]`):** no sources are permitted, with an informational notice.
+- **All sources (`["*"]`):** all discovered sources appear, with a notice that unvetted skills may enter agent guidance.
+
 Permissions select sources and skill names. They do not freeze skill content when dependencies update. See [Configuration](../concepts/configuration) and [Trust model](../concepts/trust-model).
 
 ### Exclusions
@@ -153,7 +157,7 @@ JSON includes diagnostics in the object instead of printing separate warning or 
 
 - **Invalid permissions or unreadable policy files:** Intent stops and reports the problem. Fix the reported package.json or `intent.skills` entry before retrying.
 - **Unsupported runnable identifier:** generated commands accept only ASCII letters, numbers, `_`, `.`, `/`, `@`, `#`, and `-`. Identifiers cannot start with `#`; leading and trailing whitespace is rejected rather than trimmed. Rename the package or skill to generate runnable guidance. `--json` can still expose permitted identifiers as data.
-- **Unreadable or out-of-package skill metadata:** discovery skips skill files whose real path cannot be resolved or lies outside the package root, with a warning. Symlinks within the resolved package root remain supported.
+- **Unreadable or out-of-package skill metadata:** discovery skips skill files whose real path cannot be resolved or lies outside the package root, with a warning. It checks the opened file's identity before reading and uses that descriptor for the full metadata read, including large frontmatter, so later pathname replacement cannot redirect the read. Symlinks within the resolved package root remain supported.
 - **Deno without `node_modules`:** this discovery mode is unsupported.
 
 ## Related

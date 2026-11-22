@@ -26,7 +26,7 @@ Run `maintainer setup` from the library repository:
 This registers existing package-owned skills, copies the CI workflow when missing, and creates missing planning records and an `intent-maintainer` block in `AGENTS.md`, or updates the file that already contains an Intent maintainer or consumer block. It preserves surrounding instructions and a separate `intent-skills` consumer block. Review this setup diff and keep it in the repository so later agent sessions receive the same authoring and review procedure.
 
 > [!NOTE]
-> Setup creates skeletons for missing records; their task knowledge still needs authoring. Registration preserves existing skill text and reports invalid or conflicting candidates. Review inferred domains and complete the records before running the maintainer check.
+> Setup preserves existing records and instructions. It creates skeletons for missing records; their task knowledge still needs authoring. Registration preserves existing skill text and reports invalid or conflicting candidates. Review inferred domains and complete the records before running the maintainer check.
 
 ## Create the first useful batch
 
@@ -116,7 +116,7 @@ A repository discovery skill can help developers decide whether the library fits
 
 ## Keep guidance current during library work
 
-Continue requesting library changes normally. `intent maintainer review` uses Git changes and content fingerprints to find work that has not been reviewed. Intent identifies candidates; the agent and maintainer decide whether the guidance should change. A new file does not automatically require a new skill.
+Continue requesting library changes normally. `intent maintainer review` uses Git changes and content fingerprints to find work that has not been reviewed. Intent identifies candidates; the agent and maintainer decide whether the guidance should change. A new file does not automatically require a new skill. A justified `no-change` outcome records why accurate guidance stayed unchanged, while missing evidence remains pending.
 
 Before handoff, run sync so the metadata matches the final files, review the pending items in your terminal, then run the combined check:
 
@@ -153,7 +153,7 @@ Run the same synchronization command after skill edits:
 `maintainer setup` already copies `check-skills.yml` to the workspace root's `.github/workflows/` directory and skips an existing destination file. The copy is a short caller for Intent's reusable workflows, pinned to the commit of the Intent release that copied it and granting each job only the permissions it needs; Dependabot or Renovate can propose pin updates for review. Setup uses the immutable SHA packaged with the installed release; it does not resolve mutable tags. CI runs the copy of `@tanstack/intent` your lockfile pins, so keep it in `devDependencies`. The workflow validates skills and recorded source reviews on pull requests. After a release or manual run, it writes a read-only review report when recorded review state or conservative staleness signals require attention. Review-reminder PRs are optional: set the repository Actions variable `INTENT_REVIEW_PULL_REQUESTS=true` to enable a separate publisher job that never executes Intent or checks out the library. See [setup commands](../cli/intent-setup).
 
 > [!NOTE]
-> `intent setup` copies CI templates on its own; `intent maintainer setup` also initializes the maintainer workflow.
+> `intent setup` copies CI templates on its own; `intent maintainer setup` also initializes the maintainer workflow. To replace an older generated workflow, move or delete it before rerunning `setup`; Intent skips existing files.
 
 Publish through the library's normal release process. Skills in the package's published `skills/` directory version with that library release. Consumers install the library, configure permitted skill sources with consumer [`intent install`](../cli/intent-install#default-install), discover the installed skills with [`intent list`](../cli/intent-list), and load matching guidance with `intent load`.
 

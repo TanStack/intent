@@ -42,7 +42,7 @@ id: intent-load
 - Prints the scanner-reported path when `--path` is passed
 - Prints debug details to stderr when `--debug` is passed
 
-A successful load proves that Intent resolved the selected skill under current policy and returned its content. See [Lifecycle boundaries](../concepts/trust-model#lifecycle-boundaries).
+A successful load proves that Intent resolved the selected skill under current policy and returned its content. It does not prove that the skill was relevant to the task, reached an agent's active context, or was followed correctly. See [Lifecycle boundaries](../concepts/trust-model#lifecycle-boundaries).
 
 The package can be scoped or unscoped. The skill can include slash-separated sub-skill names.
 

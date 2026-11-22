@@ -33,7 +33,7 @@ Intent provides tooling for two workflows:
 | Stage | Who runs it | Result |
 | --- | --- | --- |
 | Maintainer enablement | Library maintainer | `maintainer setup` creates missing records and installs persistent authoring instructions. |
-| Authoring and maintenance | Library maintainer and coding agent | `meta generate-skill` guides a focused batch; `maintainer review` records review outcomes. |
+| Authoring and maintenance | Library maintainer and coding agent | `meta generate-skill` guides a focused batch; `maintainer review` records evidence-backed outcomes for later source changes. |
 | Package publishing | Library release process | `maintainer sync` updates package and selected repository exports; `setup` optionally adds CI. |
 | Consumer setup | Developer using the published library | Consumer `install` configures permitted skill sources and skill-loading guidance; `list` and `load` use skills from installed dependencies. |
 

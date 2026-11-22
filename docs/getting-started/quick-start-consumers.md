@@ -13,7 +13,7 @@ Add `@tanstack/intent` as a development dependency and commit your lockfile befo
 
 <!-- ::end:tabs -->
 
-Then run setup. The command tabs use the latest published CLI, not the version in your lockfile. Generated guidance uses the detected package manager's runner; check its command if you need the installed version.
+Then run setup. The command tabs use the latest published CLI, not the version in your lockfile. Generated guidance uses the detected package manager's runner; check its command if you need the installed version. The dependency pins the CLI used by CI when configured to run the installed CLI.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -25,6 +25,14 @@ Run this in an interactive terminal. On first use, Intent helps you choose which
 
 1. **Choose what to enable.** Pick **Enable all**, **Choose packages or scopes**, or **Choose individual skills**. Package and skill lists support search.
 2. **Confirm and finish.** Check the saved rules and destination `package.json`. Choose **Continue with all selected skills** to save, or **Review individual skills** to pick which selected packages to inspect before confirming. Intent writes permissions and guidance, verifies the guidance, and shows a command to list available skills.
+
+**Enable all** saves `"*"`. A package choice saves `"@tanstack/ai"`; a whole scope saves `"@tanstack/*"`. These rules include future matching skills. Individual choices use `"@tanstack/ai#skill"`. Unchecking a skill during review adds an exclusion while keeping its broad rule.
+
+Skill instructions can change when dependencies update. Update notifications are not available yet. See **About skill access and updates** in the installer for details.
+
+Selecting nothing requires explicit confirmation to disable all skills. If no skills are found, or all are excluded, Intent explains the next step and leaves permissions and guidance unchanged. Install a package that ships skills or review your exclusions, then run `install` again.
+
+Canceling before confirmation writes neither file. `--dry-run` previews the flow without writing. First-run setup requires a terminal; noninteractive execution fails without writes when permissions have not been configured.
 
 If an `intent-skills` block already exists, Intent updates that file in place.
 If no block exists, `AGENTS.md` is the default target.

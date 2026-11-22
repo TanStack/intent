@@ -233,7 +233,7 @@ For a planning item, the reason and evidence must cover all three documents. Pre
 
 ### Saved state
 
-`--record` writes `.intent/review-state.json` containing the baseline, source/guidance hashes, reviewed revision, outcomes, reasons, and evidence, creating the directory when it is missing. `.intent/` is reserved for Intent's working files and is excluded from unmapped-change items: review state and working reports, `.intent/skill-distribution.json` written by `maintainer sync`, and the temporary `.intent/maintainer.lock` and `.intent/review-state.json.lock` that serialize writes.
+`--record` writes `.intent/review-state.json` containing the baseline, source/guidance hashes, reviewed revision, outcomes, reasons, and evidence, creating the directory when it is missing. It does not commit, publish, or change skill versions. `.intent/` is reserved for Intent's working files and is excluded from unmapped-change items: review state and working reports, `.intent/skill-distribution.json` written by `maintainer sync`, and the temporary `.intent/maintainer.lock` and `.intent/review-state.json.lock` that serialize writes.
 
 Identical recorded content suppresses repeat reminders. Later edits reopen review. The saved state does not replace the planning documents, execute evidence strings, or verify the truth of a recorded conclusion.
 

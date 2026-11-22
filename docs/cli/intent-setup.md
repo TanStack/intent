@@ -37,6 +37,9 @@ These commands configure a package for publishing skills and install the optiona
 - Skips files that already exist at the destination
 - New callers enable [repair artifacts](./intent-repair#ci-patches) for PR checks. CI applies safe mechanical repairs to its checkout and uploads patches for review; it never commits them. Existing callers can opt in with `repair: true`
 
+> [!NOTE]
+> `setup` installs the generated repository workflow, not Intent's maintainer or consumer guidance. Run `maintainer setup` to install the same CI workflow together with persistent instructions and cumulative records.
+
 ## Security and upgrades
 
 Keep the generated full SHAs and review updates; a pin fixes a revision but does not certify its safety. Analysis has access to checked-out source even with a read-only token. Keep it on pull request, release, or manual events with no extra secrets, and keep write permissions confined to the optional publisher. Treat report and skill content as untrusted evidence, not authorization to execute commands or publish. See [GitHub's secure-use guidance](https://docs.github.com/en/actions/reference/security/secure-use).

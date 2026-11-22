@@ -72,7 +72,7 @@ Use `maintainer review` and `stale` as separate checks as the library changes. `
 
 <!-- ::end:tabs -->
 
-Uses Git changes and recorded content fingerprints to identify skills, planning records, and unmapped source areas that need semantic review. Record completed outcomes with their evidence in `.intent/review-state.json`.
+Uses Git changes and recorded content fingerprints to identify skills, planning records, and unmapped source areas that need semantic review. Record completed outcomes with their evidence in `.intent/review-state.json`; missing evidence remains pending.
 
 <!-- ::start:tabs variant="package-manager" mode="local-install" -->
 
@@ -89,6 +89,9 @@ Reports conservative package and release signals: version drift, missing stored 
 <!-- ::end:tabs -->
 
 Copies the generated CI workflow into your repository. Pull requests validate skills and check recorded source reviews when maintainer guidance or review state exists. Release and manual runs use recorded review state when available, with conservative `stale` signals as the fallback.
+
+> [!NOTE]
+> Maintainers use `maintainer setup`, `add`, `status`, `sync`, `review`, and `check` throughout the workflow. Consumers choose their installer: Intent for installed package guidance, or the generated GitHub/plugin commands for selected repository skills. See [repository distribution](./cli/intent-maintainer#choose-repository-distribution).
 
 ## Requesting a library
 
