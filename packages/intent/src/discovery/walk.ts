@@ -5,7 +5,7 @@ import {
   listNestedNodeModulesPackageDirs,
   resolveDepDir,
 } from '../shared/utils.js'
-import { findWorkspacePackages } from '../setup/workspace-patterns.js'
+import { findWorkspacePackages } from '../core/workspace-patterns.js'
 import type { IntentFsCache } from './fs-cache.js'
 import type { IntentPackage } from '../shared/types.js'
 

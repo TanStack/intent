@@ -26,7 +26,7 @@ import {
   findWorkspacePackages,
   findWorkspaceRoot,
   readWorkspacePatterns,
-} from '../setup/workspace-patterns.js'
+} from '../core/workspace-patterns.js'
 import { compareVersions, normalizeVersion } from '../shared/version.js'
 import { getPackageShortName } from '../skills/use.js'
 import { createIntentFsCache } from './fs-cache.js'

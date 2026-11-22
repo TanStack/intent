@@ -8,7 +8,7 @@ import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
   findWorkspacePackages,
   findWorkspaceRoot,
-} from '../setup/workspace-patterns.js'
+} from '../core/workspace-patterns.js'
 import type { IntentCoreOptions } from '../core/index.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 import type {

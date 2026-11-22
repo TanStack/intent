@@ -9,7 +9,7 @@ import {
   findPackagesWithSkills,
   findWorkspaceRoot,
   readWorkspacePatterns,
-} from './workspace-patterns.js'
+} from '../core/workspace-patterns.js'
 import type { FileChange } from '../maintainer/files.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 

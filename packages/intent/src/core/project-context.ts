@@ -5,7 +5,7 @@ import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
   findWorkspaceRoot,
   readWorkspacePatterns,
-} from '../setup/workspace-patterns.js'
+} from './workspace-patterns.js'
 import type { IntentFsCache } from '../discovery/fs-cache.js'
 
 export type ProjectContext = {

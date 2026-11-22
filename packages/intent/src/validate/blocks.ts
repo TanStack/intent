@@ -5,7 +5,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
-import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
+import { resolveWorkspacePackages } from '../core/workspace-patterns.js'
 import {
   errorMessage,
   isRecord,

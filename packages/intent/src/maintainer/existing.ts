@@ -4,7 +4,7 @@ import { basename, dirname, relative } from 'node:path'
 import { resolveProjectContext } from '../core/project-context.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import { reviewIgnorePatterns } from '../review/review.js'
-import { resolveWorkspacePackages } from '../setup/workspace-patterns.js'
+import { resolveWorkspacePackages } from '../core/workspace-patterns.js'
 import {
   errorMessage,
   isDefaultSkillPath,

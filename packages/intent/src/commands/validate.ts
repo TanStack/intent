@@ -10,7 +10,7 @@ import { parseDocument, parse as parseYaml } from 'yaml'
 import { fail } from '../shared/cli-error.js'
 import { errorMessage, isRecord, readScalarField } from '../shared/utils.js'
 import { resolveProjectContext } from '../core/project-context.js'
-import { findWorkspacePackages } from '../setup/workspace-patterns.js'
+import { findWorkspacePackages } from '../core/workspace-patterns.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
   checkSkillBlocks,
