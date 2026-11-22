@@ -3892,6 +3892,54 @@ describe('cli commands', () => {
     })
   })
 
+  describe('validate options file', () => {
+    function writeOptionsFixture(options: unknown): void {
+      const root = mkdtempSync(join(realTmpdir, 'intent-cli-validate-options-'))
+      tempDirs.push(root)
+      writeJson(join(root, 'package.json'), {
+        name: '@acme/library',
+        devDependencies: { '@tanstack/intent': '^0.0.18' },
+        keywords: ['tanstack-intent'],
+        files: ['skills'],
+      })
+      const skillDir = join(root, 'skills', 'core')
+      mkdirSync(skillDir, { recursive: true })
+      writeFileSync(
+        join(skillDir, 'SKILL.md'),
+        '---\nname: core\ndescription: Core guidance\n---\n\nGuide.\n',
+      )
+      writeJson(join(skillDir, 'options.json'), options)
+      process.chdir(root)
+    }
+
+    it('rejects an option whose default is not one of its choices', async () => {
+      writeOptionsFixture({
+        framework: {
+          question: 'Which framework does this app use?',
+          choices: ['nextjs', 'other'],
+          default: 'remix',
+        },
+      })
+
+      expect(await main(['validate'])).toBe(1)
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain(
+        `${join('skills', 'core', 'options.json')}: Option "framework": "default" must be one of "choices"`,
+      )
+    })
+
+    it('accepts a well-formed options file', async () => {
+      writeOptionsFixture({
+        framework: {
+          question: 'Which framework does this app use?',
+          choices: ['nextjs', 'other'],
+          default: 'other',
+        },
+      })
+
+      expect(await main(['validate'])).toBe(0)
+    })
+  })
+
   it('skips cleanly when validate is run without a skills directory', async () => {
     const root = mkdtempSync(join(realTmpdir, 'intent-cli-missing-skills-'))
     tempDirs.push(root)

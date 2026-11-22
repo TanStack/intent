@@ -150,8 +150,8 @@ export function isPackageExcluded(
   )
 }
 
-// A prefixed skill is loadable by its short alias too; an exclude must match either form.
-function skillNameVariants(
+// A prefixed skill is loadable by its short alias too; config keyed by skill must match either form.
+export function skillNameVariants(
   packageName: string,
   skillName: string,
 ): Array<string> {

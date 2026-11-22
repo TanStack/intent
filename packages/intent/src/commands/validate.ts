@@ -10,6 +10,7 @@ import { parseDocument, parse as parseYaml } from 'yaml'
 import { fail, isCliFailure } from '../shared/cli-error.js'
 import { readScalarField } from '../shared/utils.js'
 import { resolveProjectContext } from '../core/project-context.js'
+import { SKILL_OPTIONS_FILE, parseSkillOptions } from '../core/skill-options.js'
 import { findWorkspacePackages } from '../setup/workspace-patterns.js'
 import { createIntentFsCache } from '../discovery/fs-cache.js'
 import {
@@ -629,6 +630,15 @@ async function runValidateCommandInternal(
 
       const skillDir = dirname(filePath)
       const skillName = basename(skillDir)
+      const optionsPath = join(skillDir, SKILL_OPTIONS_FILE)
+      if (existsSync(optionsPath)) {
+        const file = relative(process.cwd(), optionsPath)
+        for (const message of parseSkillOptions(
+          readFileSync(optionsPath, 'utf8'),
+        ).errors) {
+          errors.push({ file, message })
+        }
+      }
       const referenceFiles = findReferenceFiles(skillDir)
       const linked = new Set(
         referenceFiles.length

@@ -1306,3 +1306,200 @@ describe('loadIntentSkill — kind-mismatch late gate', () => {
     )
   })
 })
+
+describe('loadIntentSkill — project options', () => {
+  const use = '@apollo/client#apollo-client'
+  const options = {
+    framework: {
+      question: 'Which framework does this app use?',
+      choices: ['nextjs', 'tanstack-start', 'other'],
+      default: 'other',
+    },
+    fragmentColocation: {
+      question: 'Set up fragment colocation?',
+      choices: ['yes', 'no'],
+      default: 'yes',
+    },
+  }
+
+  function writeApolloSkill(optionsFile?: string): string {
+    const skillDir = join(
+      root,
+      'node_modules',
+      '@apollo',
+      'client',
+      'skills',
+      'apollo-client',
+    )
+    writeInstalledIntentPackage(root, {
+      name: '@apollo/client',
+      version: '4.0.0',
+      skillName: 'apollo-client',
+      description: 'Apollo Client guidance',
+    })
+    if (optionsFile !== undefined) {
+      writeFileSync(join(skillDir, 'options.json'), optionsFile)
+    }
+    return skillDir
+  }
+
+  it('appends recorded choices and defaults to the loaded content', () => {
+    writeApolloSkill(JSON.stringify(options))
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      intent: { options: { [use]: { framework: 'tanstack-start' } } },
+    })
+
+    const result = loadIntentSkill(use, { cwd: root })
+
+    expect(result.content).toBe(
+      [
+        '---',
+        'name: "apollo-client"',
+        'description: "Apollo Client guidance"',
+        '---',
+        '',
+        'Skill content here.',
+        '',
+        '## Project options',
+        '',
+        'Choices this project made for `@apollo/client#apollo-client`, from `intent.options` in `package.json`. Follow the guidance that matches them.',
+        '',
+        '- framework: tanstack-start',
+        '- fragmentColocation: yes (default, not recorded). Set up fragment colocation? Choices: yes, no.',
+        '',
+      ].join('\n'),
+    )
+    expect(result.warnings).toEqual([])
+  })
+
+  it('lets the nearest workspace package override a recorded choice', () => {
+    const appDir = join(root, 'packages', 'app')
+    writeApolloSkill(JSON.stringify(options))
+    writeJson(join(root, 'package.json'), {
+      name: 'monorepo',
+      private: true,
+      workspaces: ['packages/*'],
+      intent: {
+        options: { [use]: { framework: 'nextjs', fragmentColocation: 'no' } },
+      },
+    })
+    writeJson(join(appDir, 'package.json'), {
+      name: 'app',
+      intent: { options: { [use]: { framework: 'tanstack-start' } } },
+    })
+
+    const { content } = loadIntentSkill(use, { cwd: appDir })
+
+    expect(content).toContain('- framework: tanstack-start\n')
+    expect(content).toContain('- fragmentColocation: no\n')
+  })
+
+  it('reads choices recorded under the short skill name', () => {
+    const pkgDir = join(root, 'node_modules', '@apollo', 'client')
+    writeJson(join(pkgDir, 'package.json'), {
+      name: '@apollo/client',
+      version: '4.0.0',
+      intent: {
+        version: 1,
+        repo: 'apollographql/apollo-client',
+        docs: 'docs/',
+      },
+    })
+    writeSkillMd({
+      dir: join(pkgDir, 'skills', 'client', 'setup'),
+      frontmatter: { name: 'setup', description: 'Apollo Client setup' },
+    })
+    writeJson(
+      join(pkgDir, 'skills', 'client', 'setup', 'options.json'),
+      options,
+    )
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      intent: {
+        options: { '@apollo/client#setup': { framework: 'nextjs' } },
+      },
+    })
+
+    const { content } = loadIntentSkill('@apollo/client#setup', { cwd: root })
+
+    expect(content).toContain('for `@apollo/client#client/setup`')
+    expect(content).toContain('- framework: nextjs\n')
+  })
+
+  it('uses the default and warns when a recorded choice is not declared', () => {
+    writeApolloSkill(JSON.stringify(options))
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      intent: { options: { [use]: { framework: 'remix' } } },
+    })
+
+    const result = loadIntentSkill(use, { cwd: root })
+
+    expect(result.content).toContain(
+      '- framework: other (default, not recorded).',
+    )
+    expect(result.warnings).toEqual([
+      'intent.options for "@apollo/client#apollo-client": "framework" is "remix", which is not one of: nextjs, tanstack-start, other. Using the default.',
+    ])
+  })
+
+  it('warns about a recorded option the skill does not declare', () => {
+    writeApolloSkill(JSON.stringify(options))
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      intent: { options: { [use]: { codegen: 'client-preset' } } },
+    })
+
+    const result = loadIntentSkill(use, { cwd: root })
+
+    expect(result.content).not.toContain('codegen')
+    expect(result.warnings).toEqual([
+      'intent.options for "@apollo/client#apollo-client": "codegen" is not an option of this skill.',
+    ])
+  })
+
+  it('loads the skill without options and warns when the options file is invalid', () => {
+    writeApolloSkill(
+      JSON.stringify({ framework: { question: 'Which framework?' } }),
+    )
+
+    const result = loadIntentSkill(use, { cwd: root })
+
+    expect(result.content).not.toContain('Project options')
+    expect(result.warnings).toEqual([
+      'Ignored options.json for "@apollo/client#apollo-client": Option "framework": "choices" must be a non-empty array of non-empty strings',
+    ])
+  })
+
+  it('ignores an options file that links outside the package', () => {
+    const skillDir = writeApolloSkill()
+    writeJson(join(root, 'outside', 'options.json'), options)
+    symlinkSync(
+      join(root, 'outside', 'options.json'),
+      join(skillDir, 'options.json'),
+    )
+
+    const result = loadIntentSkill(use, { cwd: root })
+
+    expect(result.content).not.toContain('Project options')
+    expect(result.warnings).toEqual([
+      'Ignored options.json for "@apollo/client#apollo-client": the file is outside the package',
+    ])
+  })
+
+  it('returns the skill file unchanged when it has no options file', () => {
+    writeApolloSkill()
+    writeJson(join(root, 'package.json'), {
+      name: 'app',
+      intent: { options: { [use]: { framework: 'nextjs' } } },
+    })
+
+    const result = loadIntentSkill(use, { cwd: root })
+
+    expect(result.content).toBe(
+      '---\nname: "apollo-client"\ndescription: "Apollo Client guidance"\n---\n\nSkill content here.\n',
+    )
+    expect(result.warnings).toEqual([])
+  })
+})

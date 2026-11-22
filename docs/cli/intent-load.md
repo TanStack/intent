@@ -39,6 +39,7 @@ id: intent-load
 ### Output
 
 - Prints raw `SKILL.md` content by default
+- Appends a `## Project options` section when the skill ships an `options.json` file; see [Configuration](../concepts/configuration)
 - Prints the scanner-reported path when `--path` is passed
 - Prints debug details to stderr when `--debug` is passed
 
