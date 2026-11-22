@@ -104,8 +104,7 @@ function deriveWorkspacePackageName(
 function readPackageJson(root: string): Record<string, unknown> {
   const pkgPath = join(root, 'package.json')
   try {
-    const parsed: unknown = JSON.parse(readFileSync(pkgPath, 'utf8'))
-    return isRecord(parsed) ? parsed : {}
+    return JSON.parse(readFileSync(pkgPath, 'utf8')) as Record<string, unknown>
   } catch (err: unknown) {
     const isNotFound =
       err &&
@@ -165,7 +164,7 @@ function buildWatchPaths(root: string, packageDirs: Array<string>): string {
       paths.add(`${relDir}/src/**`)
     }
 
-    const { intent } = readPackageJson(packageDir)
+    const intent = readPackageJson(packageDir).intent
     const docs =
       isRecord(intent) && typeof intent.docs === 'string'
         ? intent.docs
