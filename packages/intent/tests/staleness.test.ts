@@ -1,23 +1,10 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { checkStaleness } from '../src/staleness/index.js'
 
-// ---------------------------------------------------------------------------
-// Fixture helpers
-// ---------------------------------------------------------------------------
-
 let tmpDir: string
-
-function setupDir(): string {
-  const dir = join(
-    tmpdir(),
-    `intent-stale-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  )
-  mkdirSync(dir, { recursive: true })
-  return dir
-}
 
 function writeSkill(
   dir: string,
@@ -58,14 +45,9 @@ function writeArtifact(
 
 function requireFirstSkill(report: Awaited<ReturnType<typeof checkStaleness>>) {
   const skill = report.skills[0]
-  expect(skill).toBeDefined()
   if (!skill) throw new Error('Expected at least one skill in staleness report')
   return skill
 }
-
-// ---------------------------------------------------------------------------
-// Mock fetch for npm registry
-// ---------------------------------------------------------------------------
 
 const originalFetch = globalThis.fetch
 
@@ -81,19 +63,13 @@ function mockFetchNotOk(): void {
 }
 
 beforeEach(() => {
-  tmpDir = setupDir()
+  tmpDir = mkdtempSync(join(tmpdir(), 'intent-stale-test-'))
 })
 
 afterEach(() => {
   globalThis.fetch = originalFetch
-  if (existsSync(tmpDir)) {
-    rmSync(tmpDir, { recursive: true, force: true })
-  }
+  rmSync(tmpDir, { recursive: true, force: true })
 })
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('checkStaleness', () => {
   it('returns empty skills when no skills directory exists', async () => {
@@ -242,7 +218,7 @@ describe('checkStaleness', () => {
     expect(requireFirstSkill(report).needsReview).toBe(false)
   })
 
-  it('handles npm fetch failure gracefully', async () => {
+  it('returns null versions when the registry fetch rejects', async () => {
     writeSkill(tmpDir, 'core', {
       name: 'core',
       description: 'Core',
@@ -362,7 +338,7 @@ describe('checkStaleness', () => {
     expect(report.versionDrift).toBe('major')
   })
 
-  it('handles malformed SKILL.md without crashing', async () => {
+  it('treats a SKILL.md without frontmatter as one unversioned skill', async () => {
     const skillDir = join(tmpDir, 'skills', 'broken')
     mkdirSync(skillDir, { recursive: true })
     writeFileSync(join(skillDir, 'SKILL.md'), 'no frontmatter here')
@@ -408,11 +384,9 @@ describe('checkStaleness', () => {
       library_version: '2.0.0',
     })
 
-    // npm returns an older published version
     mockFetchVersion('2.5.0')
 
     const report = await checkStaleness(tmpDir, '@example/lib')
-    // Local package.json should take precedence
     expect(report.currentVersion).toBe('3.0.0')
     expect(report.versionDrift).toBe('major')
   })

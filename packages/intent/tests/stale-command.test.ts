@@ -7,19 +7,27 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   INTENT_CHECK_SKILLS_WORKFLOW_VERSION,
   getCheckSkillsWorkflowAdvisories,
 } from '../src/commands/support.js'
 import { runStaleCommand } from '../src/commands/stale.js'
+import type { MockInstance } from 'vitest'
 
 describe('runStaleCommand', () => {
-  const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+  const originalCwd = process.cwd()
+  let logSpy: MockInstance<typeof console.log>
   const tempDirs: Array<string> = []
 
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
   afterEach(() => {
-    logSpy.mockClear()
+    logSpy.mockRestore()
+    vi.unstubAllEnvs()
+    process.chdir(originalCwd)
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -166,55 +174,38 @@ describe('runStaleCommand', () => {
   it('writes GitHub review files for stale review signals', async () => {
     const root = mkdtempSync(join(tmpdir(), 'intent-stale-github-review-'))
     tempDirs.push(root)
-    const originalCwd = process.cwd()
-    const previousOutput = process.env.GITHUB_OUTPUT
-    const previousSummary = process.env.GITHUB_STEP_SUMMARY
     process.chdir(root)
-    process.env.GITHUB_OUTPUT = join(root, 'github-output')
-    process.env.GITHUB_STEP_SUMMARY = join(root, 'github-summary')
+    vi.stubEnv('GITHUB_OUTPUT', join(root, 'github-output'))
+    vi.stubEnv('GITHUB_STEP_SUMMARY', join(root, 'github-summary'))
 
-    try {
-      await runStaleCommand(
-        undefined,
-        { githubReview: true, packageLabel: '@tanstack/router' },
-        () =>
-          Promise.resolve({
-            reports: [
-              {
-                library: '@tanstack/router',
-                currentVersion: null,
-                skillVersion: null,
-                versionDrift: null,
-                skills: [],
-                signals: [
-                  {
-                    type: 'missing-package-coverage',
-                    library: '@tanstack/react-start-rsc',
-                    packageName: '@tanstack/react-start-rsc',
-                    reasons: ['workspace package is not represented'],
-                    needsReview: true,
-                  },
-                ],
-              },
-            ],
-            workflowAdvisories: [
-              'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
-            ],
-          }),
-      )
-    } finally {
-      process.chdir(originalCwd)
-      if (previousOutput === undefined) {
-        delete process.env.GITHUB_OUTPUT
-      } else {
-        process.env.GITHUB_OUTPUT = previousOutput
-      }
-      if (previousSummary === undefined) {
-        delete process.env.GITHUB_STEP_SUMMARY
-      } else {
-        process.env.GITHUB_STEP_SUMMARY = previousSummary
-      }
-    }
+    await runStaleCommand(
+      undefined,
+      { githubReview: true, packageLabel: '@tanstack/router' },
+      () =>
+        Promise.resolve({
+          reports: [
+            {
+              library: '@tanstack/router',
+              currentVersion: null,
+              skillVersion: null,
+              versionDrift: null,
+              skills: [],
+              signals: [
+                {
+                  type: 'missing-package-coverage',
+                  library: '@tanstack/react-start-rsc',
+                  packageName: '@tanstack/react-start-rsc',
+                  reasons: ['workspace package is not represented'],
+                  needsReview: true,
+                },
+              ],
+            },
+          ],
+          workflowAdvisories: [
+            'Intent workflow update available: run `npx @tanstack/intent@latest setup`.',
+          ],
+        }),
+    )
 
     expect(readFileSync(join(root, 'github-output'), 'utf8')).toContain(
       'has_review=true',
@@ -236,32 +227,15 @@ describe('runStaleCommand', () => {
   it('turns GitHub review stale check failures into review items', async () => {
     const root = mkdtempSync(join(tmpdir(), 'intent-stale-github-failed-'))
     tempDirs.push(root)
-    const originalCwd = process.cwd()
-    const previousOutput = process.env.GITHUB_OUTPUT
-    const previousSummary = process.env.GITHUB_STEP_SUMMARY
     process.chdir(root)
-    process.env.GITHUB_OUTPUT = join(root, 'github-output')
-    process.env.GITHUB_STEP_SUMMARY = join(root, 'github-summary')
+    vi.stubEnv('GITHUB_OUTPUT', join(root, 'github-output'))
+    vi.stubEnv('GITHUB_STEP_SUMMARY', join(root, 'github-summary'))
 
-    try {
-      await runStaleCommand(
-        undefined,
-        { githubReview: true, packageLabel: '@tanstack/router' },
-        () => Promise.reject(new Error('boom')),
-      )
-    } finally {
-      process.chdir(originalCwd)
-      if (previousOutput === undefined) {
-        delete process.env.GITHUB_OUTPUT
-      } else {
-        process.env.GITHUB_OUTPUT = previousOutput
-      }
-      if (previousSummary === undefined) {
-        delete process.env.GITHUB_STEP_SUMMARY
-      } else {
-        process.env.GITHUB_STEP_SUMMARY = previousSummary
-      }
-    }
+    await runStaleCommand(
+      undefined,
+      { githubReview: true, packageLabel: '@tanstack/router' },
+      () => Promise.reject(new Error('boom')),
+    )
 
     const items = JSON.parse(
       readFileSync(join(root, 'review-items.json'), 'utf8'),

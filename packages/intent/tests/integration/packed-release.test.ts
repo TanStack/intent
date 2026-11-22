@@ -34,6 +34,28 @@ function run(args: Array<string>) {
   })
 }
 
+function initRepo(dir: string): void {
+  execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], {
+    cwd: dir,
+  })
+  execFileSync(
+    'git',
+    [
+      '-c',
+      'core.fsmonitor=false',
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@example.invalid',
+      'commit',
+      '--allow-empty',
+      '-qm',
+      'fixture',
+    ],
+    { cwd: dir },
+  )
+}
+
 beforeAll(() => {
   root = realpathSync(mkdtempSync(join(tmpdir(), 'intent-packed-release-')))
   const packed = JSON.parse(
@@ -303,23 +325,7 @@ describe('packed release', () => {
   })
 
   it('sets up and registers a skill through the packed CLI and includes it in the owning npm package', () => {
-    execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], { cwd })
-    execFileSync(
-      'git',
-      [
-        '-c',
-        'core.fsmonitor=false',
-        '-c',
-        'user.name=Fixture',
-        '-c',
-        'user.email=fixture@example.invalid',
-        'commit',
-        '--allow-empty',
-        '-qm',
-        'fixture',
-      ],
-      { cwd },
-    )
+    initRepo(cwd)
     writeFileSync(
       join(cwd, 'package.json'),
       '{"name":"consumer","version":"1.0.0","files":["dist"]}\n',
@@ -581,23 +587,7 @@ Existing fixture guidance, pending source review.
   })
 
   it('requires the planning records after maintainer setup in the packed CLI', () => {
-    execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], { cwd })
-    execFileSync(
-      'git',
-      [
-        '-c',
-        'core.fsmonitor=false',
-        '-c',
-        'user.name=Fixture',
-        '-c',
-        'user.email=fixture@example.invalid',
-        'commit',
-        '--allow-empty',
-        '-qm',
-        'fixture',
-      ],
-      { cwd },
-    )
+    initRepo(cwd)
     expect(run(['install', '--maintainer']).status).toBe(0)
     const missingRecords = JSON.parse(run(['review', '--json']).stdout)
     expect(
@@ -611,23 +601,7 @@ Existing fixture guidance, pending source review.
   it.each(['skills', '.agents/knowledge'])(
     'installs the maintainer workflow and reviews sources under %s with the packed CLI',
     (skillRoot) => {
-      execFileSync('git', ['-c', 'core.fsmonitor=false', 'init', '-q'], { cwd })
-      execFileSync(
-        'git',
-        [
-          '-c',
-          'core.fsmonitor=false',
-          '-c',
-          'user.name=Fixture',
-          '-c',
-          'user.email=fixture@example.invalid',
-          'commit',
-          '--allow-empty',
-          '-qm',
-          'fixture',
-        ],
-        { cwd },
-      )
+      initRepo(cwd)
       const installed = run(['install', '--maintainer'])
       expect(installed.status, installed.stderr).toBe(0)
       expect(readFileSync(join(cwd, 'AGENTS.md'), 'utf8')).toContain(
