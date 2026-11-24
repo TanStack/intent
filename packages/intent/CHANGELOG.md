@@ -1,5 +1,13 @@
 # @tanstack/intent
 
+## 0.5.7
+
+### Patch Changes
+
+- [#358](https://github.com/TanStack/intent/pull/358) [`3d01b9f`](https://github.com/TanStack/intent/commit/3d01b9f157f5c6918b5c6ec7e573b6a78f5e087d) - Remove unused internal helpers, duplicate path and type guards, and dead branches. Move workspace resolution into `core` and split shared utilities by job. Exports and behavior do not change.
+
+- [#358](https://github.com/TanStack/intent/pull/358) [`3d01b9f`](https://github.com/TanStack/intent/commit/3d01b9f157f5c6918b5c6ec7e573b6a78f5e087d) - Shorten the wording of the bundled `domain-discovery`, `generate-skill`, `tree-generator`, and `skill-staleness-check` skills. Instructions do not change.
+
 ## 0.5.6
 
 ### Patch Changes
